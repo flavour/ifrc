@@ -18,7 +18,7 @@ def s3_menu_postp():
     menu_selected = []
     group_id = s3mgr.get_session("pr", "group")
     if group_id:
-        group = db.pr_group
+        group = s3db.pr_group
         query = (group.id == group_id)
         record = db(query).select(group.id, group.name, limitby=(0, 1)).first()
         if record:
@@ -28,7 +28,7 @@ def s3_menu_postp():
                                       args=[record.id])])
     person_id = s3mgr.get_session("pr", "person")
     if person_id:
-        person = db.pr_person
+        person = s3db.pr_person
         query = (person.id == person_id)
         record = db(query).select(person.id, limitby=(0, 1)).first()
         if record:
@@ -292,7 +292,7 @@ def contact():
     # Load Model
     s3mgr.load("pr_address")
 
-    table = db.pr_contact
+    table = s3db.pr_contact
 
     table.pe_id.label = T("Person/Group")
     table.pe_id.readable = True

@@ -963,8 +963,10 @@ class S3ProjectDRRModel(S3Model):
             title_update = T("Edit Project Organization"),
             title_search = T("Search Project Organizations"),
             title_upload = T("Import Project Organizations"),
+            title_report = T("Funding Report"),
             subtitle_create = T("Add Organization to Project"),
             subtitle_list = T("Project Organizations"),
+            subtitle_report = T("Funding"),
             label_list_button = LIST_PROJECT_ORG,
             label_create_button = ADD_PROJECT_ORG,
             label_delete_button = T("Remove Organization from Project"),
@@ -1152,7 +1154,7 @@ class S3ProjectDRRModel(S3Model):
                                       "activity_id$multi_activity_type_id"
                                      ],
                         report_cols=[
-                                      "bnf_type",
+                                      (T("Beneficiary Type"), "bnf_type"),
                                      ],
                         report_fact=["number"],
                         report_method=["sum"])
