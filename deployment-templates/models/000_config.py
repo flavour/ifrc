@@ -15,6 +15,7 @@
 FINISHED_EDITING_CONFIG_FILE = False # change to True after you finish editing this file
 
 # Database settings
+#deployment_settings.database.db_type = "postgres"
 deployment_settings.database.db_type = "sqlite"
 deployment_settings.database.host = "localhost"
 deployment_settings.database.port = None # use default
@@ -30,19 +31,19 @@ deployment_settings.auth.hmac_key = "akeytochange"
 # registered in order to secure the deployment
 # Should users be allowed to register themselves?
 deployment_settings.security.self_registration = True
-deployment_settings.auth.registration_requires_verification = False
-deployment_settings.auth.registration_requires_approval = False
+deployment_settings.auth.registration_requires_verification = True
+deployment_settings.auth.registration_requires_approval = True
 
 # Uncomment this to request the Mobile Phone when a user registers
-deployment_settings.auth.registration_requests_mobile_phone = True
+deployment_settings.auth.registration_requests_mobile_phone = False
 # Uncomment this to have the Mobile Phone selection during registration be mandatory
 #deployment_settings.auth.registration_mobile_phone_mandatory = True
 # Uncomment this to request the Organisation when a user registers
-#deployment_settings.auth.registration_requests_organisation = True
+deployment_settings.auth.registration_requests_organisation = True
 # Uncomment this to have the Organisation selection during registration be mandatory
-#deployment_settings.auth.registration_organisation_mandatory = True
+deployment_settings.auth.registration_organisation_mandatory = True
 # Uncomment this to have the Organisation input hidden unless the user enters a non-whitelisted domain
-#deployment_settings.auth.registration_organisation_hidden = True
+deployment_settings.auth.registration_organisation_hidden = True
 # Uncomment this to request an image when users register
 #deployment_settings.auth.registration_requests_image = True
 # Uncomment this to direct newly-registered users to their volunteer page to be able to add extra details
@@ -56,11 +57,15 @@ deployment_settings.auth.openid = False
 deployment_settings.auth.always_notify_approver = True
 
 # Base settings
-deployment_settings.base.system_name = T("Sahana Eden Humanitarian Management Platform")
-deployment_settings.base.system_name_short = T("Sahana Eden")
+deployment_settings.base.system_name = T("Resource Mapping System")
+deployment_settings.base.system_name_short = T("Resource Mapping System")
 
 # Set this to the Public URL of the instance
 deployment_settings.base.public_url = "http://127.0.0.1:8000"
+#deployment_settings.base.public_url = "http://rms.aidiq.com"
+#deployment_settings.base.public_url = "http://rmsdev.aidiq.com"
+#deployment_settings.base.public_url = "http://rms.ifrc.org"
+#deployment_settings.base.public_url = "http://rmsdev.ifrc.info"
 
 # Switch to "False" in Production for a Performance gain
 # (need to set to "True" again when Table definitions are changed)
@@ -87,7 +92,7 @@ deployment_settings.base.migrate = True
 # 20+ Demo (Data required for a default demo)
 #     Each subsequent Demos can take any unique number >= 20
 #     The actual demo will be defined by the file demo_folders.cfg
-deployment_settings.base.prepopulate = 1
+deployment_settings.base.prepopulate = 25
 
 
 # Set this to True to use Content Delivery Networks to speed up Internet-facing sites
@@ -109,57 +114,44 @@ deployment_settings.mail.server = "127.0.0.1:25"
 #deployment_settings.mail.tls = True
 #deployment_settings.mail.login = "username:password"
 # From Address
-deployment_settings.mail.sender = "'Sahana' <sahana@your.org>"
+deployment_settings.mail.sender = "'RMS' <sahana@rms.ifrc.org>"
 # Default email address to which requests to approve new user accounts gets sent
 # This can be overridden for specific domains/organisations via the auth_domain table
-deployment_settings.mail.approver = "useradmin@your.org"
+deployment_settings.mail.approver = "useradmin@ifrc.org"
 # Daily Limit on Sending of emails
 #deployment_settings.mail.limit = 1000
-
 # Frontpage settings
 # RSS feeds
-deployment_settings.frontpage.rss = [
-    {"title": "Eden",
-     # Trac timeline
-     "url": "http://eden.sahanafoundation.org/timeline?ticket=on&changeset=on&milestone=on&wiki=on&max=50&daysback=90&format=rss"
-    },
-    {"title": "Twitter",
-     # @SahanaFOSS
-     "url": "http://twitter.com/statuses/user_timeline/96591754.rss"
-     # Hashtag
-     #url: "http://search.twitter.com/search.atom?q=%23eqnz"
-    }
-]
-
+deployment_settings.frontpage.rss = []
 # L10n settings
 #deployment_settings.L10n.default_country_code = 1
 # Languages used in the deployment (used for Language Toolbar & GIS Locations)
 # http://www.loc.gov/standards/iso639-2/php/code_list.php
 deployment_settings.L10n.languages = OrderedDict([
-    ("ar", "العربية"),
-    ("zh-cn", "中文 (简体)"),
-    ("zh-tw", "中文 (繁體)"),
-    ("en", "English"),
-    ("fr", "Français"),
-    ("de", "Deutsch"),
-    ("el", "ελληνικά"),
-    ("it", "Italiano"),
-    ("ja", "日本語"),
-    ("ko", "한국어"),
-    ("pt", "Português"),
-    ("pt-br", "Português (Brasil)"),
-    ("ru", "русский"),
-    ("es", "Español"),
-    ("tl", "Tagalog"),
-    ("ur", "اردو"),
-    ("vi", "Tiếng Việt"),
+    #("ar", "العربية"),
+    #("zh-cn", "中文 (简体)"),
+    #("zh-tw", "中文 (繁體)"),
+    ("en-gb", "English"),
+    #("fr", "Français"),
+    #("de", "Deutsch"),
+    #("el", "ελληνικά"),
+    #("it", "Italiano"),
+    #("ja", "日本語"),
+    #("ko", "한국어"),
+    #("pt", "Português"),
+    #("pt-br", "Português (Brasil)"),
+    #("ru", "русский"),
+    #("es", "Español"),
+    #("tl", "Tagalog"),
+    #("ur", "اردو"),
+    #("vi", "Tiếng Việt"),
 ])
 # Default language for Language Toolbar (& GIS Locations in future)
-deployment_settings.L10n.default_language = "en"
+deployment_settings.L10n.default_language = "en-gb"
 # Display the language toolbar
-deployment_settings.L10n.display_toolbar = True
+deployment_settings.L10n.display_toolbar = False
 # Default timezone for users
-deployment_settings.L10n.utc_offset = "UTC +0000"
+deployment_settings.L10n.utc_offset = "UTC +0700"
 # Uncomment these to use US-style dates in English (localisations can still convert to local format)
 #deployment_settings.L10n.date_format = T("%m-%d-%Y")
 #deployment_settings.L10n.time_format = T("%H:%M:%S")
@@ -178,14 +170,18 @@ deployment_settings.L10n.religions = {
     "other":T("other")
 }
 # Make last name in person/user records mandatory
-#deployment_settings.L10n.mandatory_lastname = True
+deployment_settings.L10n.mandatory_lastname = True
+# Show thousands separators in certain numeric fields
+deployment_settings.L10n.thousands_separator = True
 
 # Finance settings
-#deployment_settings.fin.currencies = {
-#    "USD" :T("United States Dollars"),
-#    "EUR" :T("Euros"),
-#    "GBP" :T("Great British Pounds")
-#}
+deployment_settings.fin.currencies = {
+    "USD" :T("United States Dollars"),
+    "CHF" :T("Swiss Francs"),
+    "EUR" :T("Euros"),
+    "GBP" :T("Great British Pounds"),
+    "CAD" :T("Canadian Dollars")
+}
 #deployment_settings.fin.currency_default = "USD" # Dollars
 #deployment_settings.fin.currency_writable = False # False currently breaks things
 
@@ -208,7 +204,7 @@ deployment_settings.L10n.religions = {
 #deployment_settings.gis.building_name = False
 # Display Resources recorded to Admin-Level Locations on the map
 # @ToDo: Move into gis_config?
-deployment_settings.gis.display_L0 = False
+deployment_settings.gis.display_L0 = True
 # Currently unused
 #deployment_settings.gis.display_L1 = True
 
@@ -218,13 +214,11 @@ deployment_settings.gis.display_L0 = False
 # @ToDo: Move to 1st_run to avoid confusion
 deployment_settings.gis.location_hierarchy = OrderedDict([
     ("L0", T("Country")),
-    ("L1", T("State")),
-     #("L2", "%s / %s / %s" % (T("County"), T("District")),
+    ("L1", "%s / %s" % (T("State"), T("Province"))),
+    ("L2", "%s / %s" % (T("County"), T("District"))),
     ("L3", "%s / %s / %s" % (T("City"), T("Town"), T("Village"))),
-    #("L2", T("City")),
-    #("L3", T("Town")),
-    #("L4", T("Neighborhood")),
-    #("L4", T("Village")),
+    ("L4", "%s / %s" % (T("Village"), T("Suburb"))),
+    #("L5", T("Neighbourhood")),  # Currently not supported by testSuite
 ])
 # Maximum hierarchy level to allow for any map configuration.
 deployment_settings.gis.max_allowed_hierarchy_level = "L4"
@@ -236,15 +230,15 @@ deployment_settings.gis.default_symbology = "US"
 deployment_settings.gis.default_config_values = Storage(
     name = "Site Map Configuration",
     # Where the map is centered:
-    lat = "22.593723263",
-    lon = "5.28516253",
+    lat = "4.9",
+    lon = "125",
     # How close to zoom in initially -- larger is closer.
-    zoom = 2,
+    zoom = 3,
     zoom_levels = 22,
     projection_id = 1,
     marker_id = 1,
     map_height = 600,
-    map_width = 1000,
+    map_width = 980,
     # Rough bounds for locations, used by onvalidation to filter out lon, lat
     # which are obviously wrong (e.g. missing minus sign) or far outside the
     # intended region.
@@ -253,8 +247,9 @@ deployment_settings.gis.default_config_values = Storage(
     max_lon = 180,
     max_lat = 90,
     # Optional source of map tiles.
-    #wmsbrowser_name = "Web Map Service",
+    wmsbrowser_name = "Web Map Service",
     #wmsbrowser_url = "http://geo.eden.sahanafoundation.org/geoserver/wms?service=WMS&request=GetCapabilities",
+    wmsbrowser_url = "http://preview.grid.unep.ch:8080/geoserver/ows?service=WMS&request=GetCapabilities",
     search_level = "L0",
     # Should locations that link to a hierarchy location be required to link
     # at the deepest level? (False means they can have a hierarchy location of
@@ -282,7 +277,7 @@ deployment_settings.gis.mouse_position = "normal"
 # Print Service URL: http://eden.sahanafoundation.org/wiki/BluePrintGISPrinting
 #deployment_settings.gis.print_service = "/geoserver/pdf/"
 # Do we have a spatial DB available? (currently unused. Will support PostGIS & Spatialite.)
-deployment_settings.gis.spatialdb = False
+deployment_settings.gis.spatialdb = True
 # GeoServer (Currently used by GeoExplorer. Will allow REST control of GeoServer.)
 # NB Needs to be publically-accessible URL for querying via client JS
 #deployment_settings.gis.geoserver_url = "http://localhost/geoserver"
@@ -312,13 +307,13 @@ deployment_settings.security.archive_not_delete = True
 # 6: Apply Controller, Function, Table & Organisation ACLs
 # 7: Apply Controller, Function, Table, Organisation & Facility ACLs
 #
-#deployment_settings.security.policy = 6 # Organisation-ACLs
+deployment_settings.security.policy = 6 # Organisation-ACLs
 #acl = deployment_settings.aaa.acl
 #deployment_settings.aaa.default_uacl =  acl.READ   # User ACL
 #deployment_settings.aaa.default_oacl =  acl.CREATE | acl.READ | acl.UPDATE # Owner ACL
 
 # Lock-down access to Map Editing
-#deployment_settings.security.map = True
+deployment_settings.security.map = True
 # Allow non-MapAdmins to edit hierarchy locations? Defaults to True if not set.
 # (Permissions can be set per-country within a gis_config)
 #deployment_settings.gis.edit_Lx = False
@@ -359,7 +354,7 @@ deployment_settings.security.archive_not_delete = True
 #deployment_settings.req.type_hrm_label = T("Volunteers")
 # Allow the status for requests to be set manually,
 # rather than just automatically from commitments and shipments
-#deployment_settings.req.status_writable = False
+deployment_settings.req.status_writable = True
 #deployment_settings.req.quantities_writable = True
 #deployment_settings.req.show_quantity_transit = False
 #deployment_settings.req.multiple_req_items = False
@@ -405,26 +400,28 @@ deployment_settings.security.archive_not_delete = True
 #    msg_list_empty = T("No Requests for Volunteers"))
 
 # Inventory Management
-#deployment_settings.inv.collapse_tabs = False
+deployment_settings.inv.collapse_tabs = True
 # Use the term 'Order' instead of 'Shipment'
 #deployment_settings.inv.shipment_name = "order"
 
 # Human Resource Management
-#deployment_settings.hrm.email_required = False
+deployment_settings.hrm.email_required = True
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
 #deployment_settings.hrm.skill_types = True
 
 # Project Tracking
 # Uncomment this to use settings suitable for a global/regional organisation (e.g. DRR)
-#deployment_settings.project.drr = True
+deployment_settings.project.drr = True
+# Uncomment this to label project activities as project communities
+deployment_settings.project.community_activity = True
 
 # Save Search Widget
-#deployment_settings.save_search.widget = False
+deployment_settings.save_search.widget = False
 
 # Terms of Service to be able to Register on the system
 #deployment_settings.options.terms_of_service = T("Terms of Service\n\nYou have to be eighteen or over to register as a volunteer.")
 # Should we use internal Support Requests?
-#deployment_settings.options.support_requests = True
+deployment_settings.options.support_requests = True
 
 # Comment/uncomment modules here to disable/enable them
 # Modules menu is defined in 01_menu.py
@@ -466,20 +463,21 @@ deployment_settings.modules = OrderedDict([
             name_nice = T("Map"),
             description = T("Situation Awareness & Geospatial Analysis"),
             restricted = True,
-            module_type = 6,     # 6th item in the menu
+            module_type = 1,     # 1st item in the menu
         )),
     ("pr", Storage(
             name_nice = T("Person Registry"),
             description = T("Central point to record details on People"),
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu (access to controller is possible to all still)
-            module_type = 10
+            module_type = None,
         )),
     ("org", Storage(
-            name_nice = T("Organizations"),
+            name_nice = T("Staff & Volunteers"),
+            #name_nice = T("Organizations"),
             description = T('Lists "who is doing what & where". Allows relief agencies to coordinate their activities'),
             restricted = True,
-            module_type = 1
+            module_type = None,
         )),
     # All modules below here should be possible to disable safely
     ("hrm", Storage(
@@ -492,7 +490,7 @@ deployment_settings.modules = OrderedDict([
             name_nice = T("Documents"),
             description = T("A library of digital resources, such as photos, documents and reports"),
             restricted = True,
-            module_type = 10,
+            module_type = None,
         )),
     ("msg", Storage(
             name_nice = T("Messaging"),
@@ -508,10 +506,11 @@ deployment_settings.modules = OrderedDict([
             module_type = None, # Not displayed
         )),
     ("inv", Storage(
-            name_nice = T("Warehouse"),
+
+            name_nice = T("Warehouses"),
             description = T("Receiving and Sending Items"),
             restricted = True,
-            module_type = 4
+            module_type = 3
         )),
     #("proc", Storage(
     #        name_nice = T("Procurement"),
@@ -523,15 +522,15 @@ deployment_settings.modules = OrderedDict([
             name_nice = T("Assets"),
             description = T("Recording and Assigning Assets"),
             restricted = True,
-            module_type = 5,
+            module_type = 4,
         )),
     # Vehicle depends on Assets
-    ("vehicle", Storage(
-            name_nice = T("Vehicles"),
-            description = T("Manage Vehicles"),
-            restricted = True,
-            module_type = 10,
-        )),
+    #("vehicle", Storage(
+    #        name_nice = T("Vehicle Management"),
+    #        description = T("Manage Vehicles"),
+    #        restricted = True,
+    #        module_type = 10,
+    #    )),
     ("req", Storage(
             name_nice = T("Requests"),
             description = T("Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested."),
@@ -542,60 +541,46 @@ deployment_settings.modules = OrderedDict([
             name_nice = T("Projects"),
             description = T("Tracking of Projects, Activities and Tasks"),
             restricted = True,
-            module_type = 2
+            module_type = 6
         )),
     ("survey", Storage(
-            name_nice = T("Surveys"),
-            description = T("Create, enter, and manage surveys."),
+            name_nice = T("Assessments"),
+            description = T("Design, deploy & analyze surveys."),
             restricted = True,
             module_type = 5,
         )),
-    ("cr", Storage(
-            name_nice = T("Shelters"),
-            description = T("Tracks the location, capacity and breakdown of victims in Shelters"),
-            restricted = True,
-            module_type = 10
-        )),
-    ("hms", Storage(
-            name_nice = T("Hospitals"),
-            description = T("Helps to monitor status of hospitals"),
-            restricted = True,
-            module_type = 10
-        )),
-    ("irs", Storage(
-            name_nice = T("Incidents"),
-            description = T("Incident Reporting System"),
-            restricted = False,
-            module_type = 10
-        )),
-    #("impact", Storage(
-    #        name_nice = T("Impacts"),
-    #        description = T("Used by Assess"),
-    #        restricted = True,
-    #        module_type = None,
+    #("cr", Storage(
+    #        name_nice = T("Shelter Registry"),
+    #        description = T("Tracks the location, capacity and breakdown of victims in Shelters"),
+    #        restricted = False,
+    #        module_type = 10,
     #    )),
-    # Assess currently depends on CR, IRS & Impact
-    # Deprecated by Surveys module
-    #("assess", Storage(
-    #        name_nice = T("Assessments"),
-    #        description = T("Rapid Assessments & Flexible Impact Assessments"),
+    #("hms", Storage(
+    #        name_nice = T("Hospitals"),
+    #        description = T("Helps to monitor status of hospitals"),
     #        restricted = True,
     #        module_type = 10,
     #    )),
-    # Scenario depends on HRM
-    ("scenario", Storage(
-            name_nice = T("Scenarios"),
-            description = T("Define Scenarios for allocation of appropriate Resources (Human, Assets & Facilities)."),
-            restricted = True,
-            module_type = 10,
-        )),
-    # Event depends on HRM
-    ("event", Storage(
+    ("irs", Storage(
             name_nice = T("Events"),
-            description = T("Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities)."),
+            description = T("Situational Awareness"),
             restricted = True,
-            module_type = 10,
+            module_type = 10
         )),
+    # Scenario depends on HRM
+    #("scenario", Storage(
+    #        name_nice = T("Scenarios"),
+    #        description = T("Define Scenarios for allocation of appropriate Resources (Human, Assets & Facilities)."),
+    #        restricted = True,
+    #        module_type = 10,
+    #    )),
+    # Event depends on HRM
+    #("event", Storage(
+    #        name_nice = T("Events"),
+    #        description = T("Activate Events from Scenario templates for allocation of appropriate Resources (Human, Assets & Facilities)."),
+    #        restricted = True,
+    #        module_type = 10,
+    #    )),
     # NB Budget module depends on Project Tracking Module
     # @ToDo: Rewrite in a modern style
     #("budget", Storage(
@@ -625,44 +610,31 @@ deployment_settings.modules = OrderedDict([
     #        restricted = False,
     #        module_type = 10,
     #    )),
-    ("dvi", Storage(
-           name_nice = T("Disaster Victim Identification"),
-           description = T("Disaster Victim Identification"),
-           restricted = True,
-           module_type = 10,
-           #access = "|DVI|",      # Only users with the DVI role can see this module in the default menu & access the controller
-           #audit_read = True,     # Can enable Audit for just an individual module here
-           #audit_write = True
-       )),
-    ("mpr", Storage(
-           name_nice = T("Missing Person Registry"),
-           description = T("Helps to report and search for missing persons"),
-           restricted = False,
-           module_type = 10,
-       )),
-    #("fire", Storage(
-    #       name_nice = T("Fire Stations"),
-    #       description = T("Fire Station Management"),
+    #("dvi", Storage(
+    #       name_nice = T("Disaster Victim Identification"),
+    #       description = T("Disaster Victim Identification"),
     #       restricted = True,
-    #       module_type = 1,
+    #       module_type = 10,
+    #       #access = "|DVI|",      # Only users with the DVI role can see this module in the default menu & access the controller
+    #       #audit_read = True,     # Can enable Audit for just an individual module here
+    #       #audit_write = True
     #   )),
-    #("patient", Storage(
-    #        name_nice = T("Patient Tracking"),
-    #        description = T("Tracking of Patients"),
-    #        restricted = True,
-    #        module_type = 10
-    #    )),
+    #("mpr", Storage(
+    #       name_nice = T("Missing Person Registry"),
+    #       description = T("Helps to report and search for missing persons"),
+    #       restricted = False,
+    #       module_type = 10,
+    #   )),
     #("ocr", Storage(
     #       name_nice = T("Optical Character Recognition"),
     #       description = T("Optical Character Recognition for reading the scanned handwritten paper forms."),
     #       restricted = False,
     #       module_type = 10
     #   )),
-    # This module has very limited functionality
-    #("flood", Storage(
-    #        name_nice = T("Flood Alerts"),
-    #        description = T("Flood Alerts show water levels in various parts of the country"),
-    #        restricted = False,
+    #("patient", Storage(
+    #        name_nice = T("Patient Tracking"),
+    #        description = T("Tracking of Patients"),
+    #        restricted = True,
     #        module_type = 10
     #    )),
 ])

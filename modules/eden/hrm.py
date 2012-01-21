@@ -175,11 +175,11 @@ class S3HRModel(S3Model):
                         name="human_resource_search_map",
                         label=T("Map"),
                       ),
-                      S3SearchSkillsWidget(
-                        name="human_resource_search_skills",
-                        label=T("Skills"),
-                        field=["skill_id"]
-                      ),
+                      # S3SearchSkillsWidget(
+                        # name="human_resource_search_skills",
+                        # label=T("Skills"),
+                        # field=["skill_id"]
+                      # ),
                       # This currently breaks Requests from being able to save since this form is embedded inside the S3SearchAutocompleteWidget
                       #S3SearchMinMaxWidget(
                       #  name="human_resource_search_date",

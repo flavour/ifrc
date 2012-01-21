@@ -97,71 +97,6 @@ if populate > 0:
         if not db(table.id > 0).select(table.id, limitby=(0, 1)).first():
             table.insert( pin = "" )
 
-    # Budget Module
-    if deployment_settings.has_module("budget") and deployment_settings.has_module("project"):
-        table = db.budget_parameter
-        if not db(table.id > 0).select(table.id, limitby=(0, 1)).first():
-            table.insert() # Only defaults are fine
-
-    # Assessment
-    if deployment_settings.has_module("assess"):
-        table = db.assess_baseline_type
-        if not db(table.id > 0).select(table.id, limitby=(0, 1)).first():
-            table.insert( name = "# of population")
-            table.insert( name = "# of households" )
-            table.insert( name = "# of children under 5" )
-            table.insert( name = "# of children" )
-            table.insert( name = "# of cattle" )
-            table.insert( name = "Ha. of fields" )
-
-    # Impacts
-    if deployment_settings.has_module("assess"):
-        table = db.impact_type
-        if not db(table.id > 0).select(table.id, limitby=(0, 1)).first():
-            table.insert( name = "# of People Affected" )
-            table.insert( name = "# People Needing Food",
-                          sector_id = \
-                              s3_get_db_field_value(tablename = "org_sector",
-                                                    fieldname = "id",
-                                                    look_up_value = "Food",
-                                                    look_up_field = "abrv"))
-            table.insert( name = "# People at Risk From Vector-Borne Diseases",
-                          sector_id = \
-                              s3_get_db_field_value(tablename = "org_sector",
-                                                    fieldname = "id",
-                                                    look_up_value = "Health",
-                                                    look_up_field = "abrv"))
-            table.insert( name = "# People without Access to Safe Drinking-Water",
-                          sector_id = \
-                              s3_get_db_field_value(tablename = "org_sector",
-                                                    fieldname = "id",
-                                                    look_up_value = "WASH",
-                                                    look_up_field = "abrv"))
-            table.insert( name = "# Houses Damaged",
-                          sector_id = \
-                              s3_get_db_field_value(tablename = "org_sector",
-                                                    fieldname = "id",
-                                                    look_up_value = "Shelter",
-                                                    look_up_field = "abrv"))
-            table.insert( name = "# Houses Flooded",
-                          sector_id = \
-                              s3_get_db_field_value(tablename = "org_sector",
-                                                    fieldname = "id",
-                                                    look_up_value = "Shelter",
-                                                    look_up_field = "abrv"))
-            table.insert( name = "Water Level still high?",
-                          sector_id = \
-                              s3_get_db_field_value(tablename = "org_sector",
-                                                    fieldname = "id",
-                                                    look_up_value = "Shelter",
-                                                    look_up_field = "abrv"))
-            table.insert( name = "Ha. Fields Flooded",
-                          sector_id = \
-                              s3_get_db_field_value(tablename = "org_sector",
-                                                    fieldname = "id",
-                                                    look_up_value = "Agriculture",
-                                                    look_up_field = "abrv"))
-
     # GIS Module
     table = db.gis_marker
     # Can't do sub-folders :/
@@ -195,6 +130,18 @@ if populate > 0:
             width = 20,
             image = "gis_marker.image.marker_green.png"
         )
+        assessment = table.insert(
+            name = "assessment",
+            height = 27,
+            width = 16,
+            image = "gis_marker.image.Assessment.png"
+        )
+        asset = table.insert(
+            name = "asset",
+            height = 27,
+            width = 16,
+            image = "gis_marker.image.Asset.png"
+        )
         person = table.insert(
             name = "person",
             height = 50,
@@ -215,9 +162,9 @@ if populate > 0:
         )
         office = table.insert(
             name = "office",
-            height = 40,
-            width = 40,
-            image = "gis_marker.image.Emergency_Operations_Center_S1.png"
+            height = 27,
+            width = 16,
+            image = "gis_marker.image.Office.png"
         )
         shelter = table.insert(
             name = "shelter",
@@ -260,6 +207,18 @@ if populate > 0:
             height = 50,
             width = 50,
             image = "gis_marker.image.Hydro_Meteor_Tsunami_ch.png"
+        )
+        project = table.insert(
+            name = "project",
+            height = 27,
+            width = 16,
+            image = "gis_marker.image.Project.png"
+        )
+        incident = table.insert(
+            name = "incident",
+            height = 27,
+            width = 16,
+            image = "gis_marker.image.Incident.png"
         )
         church = table.insert(
             name = "church",
@@ -333,11 +292,29 @@ if populate > 0:
             width = 44,
             image = "gis_marker.image.Water_Supply_Infrastructure_Theme_S1.png"
         )
-        volunteer = table.insert(
-            name = "volunteer",
+        table.insert(
+            name = "volunteer2",
             height = 40,
             width = 39,
+            image = "gis_marker.image.Volunteer2.png"
+        )
+        volunteer = table.insert(
+            name = "volunteer",
+            height = 27,
+            width = 16,
             image = "gis_marker.image.Volunteer.png"
+        )
+        staff = table.insert(
+            name = "staff",
+            height = 27,
+            width = 16,
+            image = "gis_marker.image.Staff.png"
+        )
+        warehouse = table.insert(
+            name = "warehouse",
+            height = 27,
+            width = 16,
+            image = "gis_marker.image.Warehouse.png"
         )
     table = db.gis_symbology
     if not db(table.id > 0).select(table.id, limitby=(0, 1)).first():
@@ -464,6 +441,16 @@ if populate > 0:
             gps_marker = "Airport",
         )
         table.insert(
+            uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-ASSESSMENT",
+            name = "Assessment",
+            marker_id = assessment,
+        )
+        table.insert(
+            uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-ASSET",
+            name = "Asset",
+            marker_id = asset,
+        )
+        table.insert(
             uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-BRIDGE",
             name = "Bridge",
             symbology_id = site_symbology,
@@ -495,7 +482,9 @@ if populate > 0:
         table.insert(
             uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-INCIDENT",
             name = "Incident",
+            marker_id = incident,
             gps_marker = "Danger Area",
+            resource = "irs_ireport"
         )
         table.insert(
             uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-OFFICE",
@@ -523,6 +512,7 @@ if populate > 0:
         table.insert(
             uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-PROJECT",
             name = "Project",
+            marker_id = project,
         )
         table.insert(
             uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-SCHOOL",
@@ -547,7 +537,7 @@ if populate > 0:
             uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-STAFF",
             name = "Staff",
             symbology_id = site_symbology,
-            marker_id = person,
+            marker_id = staff,
             gps_marker = "Contact, Dreadlocks",
             resource = "hrm_human_resource",
             filter_field = "type",
@@ -577,7 +567,7 @@ if populate > 0:
             uuid = "www.sahanafoundation.org/GIS-FEATURE-CLASS-WAREHOUSE",
             name = "Warehouse",
             symbology_id = site_symbology,
-            marker_id = office,
+            marker_id = warehouse,
             gps_marker = "Building",
         )
         table.insert(
@@ -590,28 +580,13 @@ if populate > 0:
     table = db.gis_layer_feature
     if not db(table.id > 0).select(table.id, limitby=(0, 1)).first():
         table.insert(
-            name = "Incident Reports",
+            name = "Events",
             module = "irs",
             resource = "ireport",
-            popup_label = "Incident",
+            popup_label = "Event",
             popup_fields = "name/category",
             # Default (but still better to define here as otherwise each feature needs to check it's feature_class)
-            marker_id = marker_red
-        )
-        table.insert(
-            name = "Hospitals",
-            module = "hms",
-            resource = "hospital",
-            popup_label = "Hospital",
-            marker_id = hospital
-        )
-        table.insert(
-            name = "Shelters",
-            module = "cr",
-            resource = "shelter",
-            popup_label = "Shelter",
-            popup_fields = "name/organisation_id/capacity",
-            marker_id = shelter
+            marker_id = incident
         )
         table.insert(
             name = "Offices",
@@ -623,36 +598,6 @@ if populate > 0:
             popup_fields = "name/organisation_id",
             marker_id = office
         )
-        #table.insert(
-        #    name = "Requests",
-        #    module = "rms",
-        #    resource = "req",
-        #    popup_label = "Request",
-        #    marker_id = marker_yellow
-        #)
-        table.insert(
-            name = "Assessments",
-            module = "assess",
-            resource = "rat",
-            popup_label = "Assessment",
-            popup_fields = "date/staff_id",
-            marker_id = marker_green
-        )
-        table.insert(
-            name = "Activities",
-            module = "project",
-            resource = "activity",
-            popup_label = "Activity",
-            popup_fields = "name/organisation_id/sector_id",
-            marker_id = activity
-        )
-        #table.insert(
-        #    name = "People",
-        #    module = "pr",
-        #    resource = "person",
-        #    popup_label = "Person",
-        #    marker_id = person
-        #)
         table.insert(
             name = "Staff",
             module = "hrm",
@@ -661,7 +606,7 @@ if populate > 0:
             filter = "human_resource.type=1&human_resource.status=1",
             popup_label = "Staff",
             popup_fields = "person_id/job_title/organisation_id",
-            marker_id = person
+            marker_id = staff
         )
         table.insert(
             name = "Volunteers",
@@ -671,7 +616,8 @@ if populate > 0:
             filter = "human_resource.type=2&human_resource.status=1",
             popup_label = "Volunteer",
             popup_fields = "person_id/job_title/organisation_id",
-            marker_id = volunteer
+            marker_id = volunteer,
+            visible = False
         )
         table.insert(
             name = "Warehouses",
@@ -681,7 +627,7 @@ if populate > 0:
             filter = "office.type=5&office.obsolete=False",
             popup_label = "Warehouse",
             popup_fields = "name/organisation_id",
-            marker_id = office
+            marker_id = warehouse
         )
         table.insert(
             name = "Assets",
@@ -689,16 +635,26 @@ if populate > 0:
             resource = "asset",
             popup_label = "Asset",
             popup_fields = "item_id/number", # Would like Status & Condition here, but currently they're a Join away
+            visible = False
         )
         table.insert(
-            name = "Vehicles",
-            module = "asset",
-            resource = "asset",
-            filter = "asset.type=1",
-            popup_label = "Vehicle",
-            popup_fields = "item_id/number", # Would like Status & Condition here, but currently they're a Join away
-            marker_id = vehicle
+            name = "Project Communities",
+            module = "project",
+            resource = "activity",
+            popup_label = "Project Communities",
+            #popup_fields = "",
+            marker_id = project,
+            visible = False
         )
+        #table.insert(
+        #    name = "Vehicles",
+        #    module = "asset",
+        #    resource = "asset",
+        #    filter = "asset.type=1",
+        #    popup_label = "Vehicle",
+        #    popup_fields = "item_id/number", # Would like Status & Condition here, but currently they're a Join away
+        #    marker_id = vehicle
+        #)
     table = db.gis_layer_bing
     if not db(table.id > 0).select(table.id, limitby=(0, 1)).first():
         # Populate table with single default Record

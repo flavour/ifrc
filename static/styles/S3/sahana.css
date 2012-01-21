@@ -1,140 +1,16 @@
-@charset "UTF-8";
+﻿@charset "UTF-8";
 
 /*
 Sahana - Default Theme - Stylesheet
------------------------------------------------------------------------------------
-designer : Prabhath Sirisena - prabhath@vesess.com - http://nidahas.com
-updated : Priyanga Fonseka  - jo@opensource.lk
-updated for SahanaPy : Fran Boon  - fran@aidiq.com
-updated : Po-Wen Chi  - pwchi@pwchi.info
-Some content used from: http://matthewjamestaylor.com/blog/perfect-full-page.htm
-Updated from Web2Py base.css
-
-Selectors are listed in their order of appearance in the html, where applicable.
-----------------------------------------------------------------------------------
-
-  |---- Neutralizing Styles
-  |---- Basic Page Formatting Styles
-  |---- Header
-    +---- menu_auth
-  |---- menu_modules
-  |---- Content ( Home, Result, Module specific styles )
-  |---- Footer
-  |---- Form Layout Styles
-  |---- Popup Form Styles
-  |---- Popup Menu Styles
-  |---- Message Display Styles
-
 */
 
-/* Neutralizing Styles
-   ------------------------------------------------------------------------------- */
-/* Neutralize styling: Elements we want to clean out entirely */
-html,
-body,
-form,
-fieldset,
-textarea {
-    margin: 0;
-    padding: 0;
-    font: 100%/125% Arial, Helvetica, sans-serif;
+/*** General ***/
+ul, ol {
+    padding-left: 1em;
 }
 
-/* Neutralize styling: Elements with a vertical margin */
-h1, h2, h3, h4, h5, h6, p, pre,
-blockquote, ul, ol, dl,
-address {
-    margin: 0 0 1em 0;
-    padding: 0;
-}
-
-/* Apply left margin: Only to the few elements that need it */
-dd, blockquote {
-    margin-left: 1em;
-}
-/* Breaks CSS dropdown menus
-li {
-    margin-left: 1em;
-}
-*/
-
-/* Over-ride Ext */
-ol, ul {
-    list-style: disc inside none;
-}
-/* Except here */
-ul.x-tree-node-ct,
-ul.x-tree-root-ct {
-    list-style: none outside none;
-}
-
-/* normalize monospace sizing
- * en.wikipedia.org/wiki/MediaWiki_talk:Common.css/Archive_11#Teletype_style_fix_for_Chrome
- */
-pre, code, kbd, samp {
-    font-family: monospace, sans-serif;
-}
-pre {
-  padding: 15px;
-  /* www.pathf.com/blogs/2008/05/formatting-quoted-code-in-blog-posts-css21-white-space-pre-wrap/ */
-  white-space: pre; /* CSS2 */
-  white-space: pre-wrap; /* CSS 2.1 */
-  white-space: pre-line; /* CSS 3 (and 2.1 as well, actually) */
-  word-wrap: break-word; /* IE */
-}
-
-textarea {
-    overflow: auto;  /* thnx ivannikolic! www.sitepoint.com/blogs/2010/08/20/ie-remove-textarea-scrollbars/ */
-}
-/* always force a scrollbar in non-IE */
-html {
-    overflow-y: scroll;
-}
-
-/* make buttons play nice in IE:
-   www.viget.com/inspire/styling-the-button-element-in-internet-explorer/ */
-button {
-    width: auto;
-    overflow: visible;
-}
-
-/* bicubic resizing for non-native sized IMG:
-   code.flickr.com/blog/2008/11/12/on-ui-quality-the-little-things-client-side-image-resizing/ */
-.ext-ie7 img {
-    -ms-interpolation-mode: bicubic;
-}
-
-/*
- * Non-semantic helper classes
- */
-
-/* for image replacement */
-.ir {
-    display: block;
-    text-indent: -999em;
-    overflow: hidden;
-    background-repeat: no-repeat;
-}
-
-/* Hide for both screenreaders and browsers
-   css-discuss.incutio.com/wiki/Screenreader_Visibility */
-.hidden {
+.hide {
     display: none;
-    visibility: hidden;
-}
-
-/* Hide only visually, but have it available for screenreaders
-   www.webaim.org/techniques/css/invisiblecontent/
-   Solution from: j.mp/visuallyhidden - Thanks Jonathan Neal! */
-.visuallyhidden {
-    position: absolute !important;
-    clip: rect(1px 1px 1px 1px); /* IE6, IE7 */
-    clip: rect(1px, 1px, 1px, 1px);
-}
-
-/* Hide visually and from screenreaders, but maintain layout */
-.invisible {
-    visibility: hidden;
 }
 
 /* CSS floats */
@@ -155,494 +31,176 @@ button {
     text-align: right !important;
 }
 
-/* >> The Magnificent CLEARFIX: Updated to prevent margin-collapsing on child elements << j.mp/bestclearfix */
-.clearfix:before,
-.clearfix:after {
-    content: "\0020";
-    display: block;
-    height: 0;
-    visibility: hidden;
-}
-.clearfix:after {
-    clear: both;
-}
-/* Fix clearfix: blueprintcss.lighthouseapp.com/projects/15318/tickets/5-extra-margin-padding-bottom-of-page */
-.clearfix {
-    zoom: 1;
+/* Main Sections */
+/*
+#single-col {
+    margin: 30px 20px 30px 65px;
+} */
+/* Too many overrides by ID needed
+#home a {
+    color: #891735;
+}*/
+#dashboard {
+    float: left;
 }
 
-/* Hides from IE-mac */
-* html .clearfix {
-    height: 1%;
-}
-
-
-/* Basic Page Formatting Styles
-   ------------------------------------------------------------------------------- */
-body {
-    font-size: 0.8em;
-    color: #000;
-    background: #fff;
-    /*min-width: 1024px;*/
-    /*overflow:auto;  /* annoying always visible scrollbar in chrome */
-}
-
-/* Miscellaneous conveniences: */
-form label {
-    cursor: pointer;
-}
-fieldset {
-    border: none;
-}
-input, select, textarea {
-    font-size: 100%;
-}
-.hide {
-    display: none;
-}
-.mini {
-    font-size: 80%;
-}
-.wide {
-    width: 100%;
-}
-
-/* Input fields should give visual feedback when focussed */
-input:focus,
-select:focus,
-textarea:focus {
-    background-color: #ffffcc;
-}
-
-/* Links should ALWAYS be unvisited */
-a {
-    color: #039;
-    text-decoration: underline;
-    outline: 0;
-}
-a:hover {
-    color: #c00;
-    text-decoration: none;
-    background-color: #ffffcc;
-    outline: 0;
-}
-a:active,
-a:focus {
-    outline: 0;
-}
-a img {
-    border: none;
-}
-
-/* Popup text for represents of Long text fields */
-.popup {
-    display:none;
-    position:absolute;
-    border-style: solid;
-    background-color: #ffffcc;
-    padding: 5px;
-    margin: 0 20px 0 -50px;
-}
-
-table {
-    border-collapse: collapse;
-}
-
-/* Now to layout elements... */
-/* Unused in default Sahana THeme
-#header {
-    border-bottom: #069 1px solid;
-    padding: 0 1em;
-    height: 70px;
+#sub-dashboard {
     position: relative;
-    background: url(../../YOURLOGOHERE) #336699 no-repeat left top;
+    width: 810px;
+    margin: 50px 0 0 -15px;
+    padding: 0;
+    float: left;
 }
-*/
-/* response.menu_modules */
-#menu_modules {
-    position: fixed;
-    height: 36px;
-    background: #CACACA  url(../../img/BFTBmenu_back.png) repeat-x;
-    border-top: 1px solid #2a323f;
-    /* alternate gradient
-    background-image: -webkit-gradient(
-        linear,
-        left bottom,
-        left top,
-        color-stop(0.08, rgb(52,58,69)),
-        color-stop(0.98, rgb(73,82,97)),
-        color-stop(0.99, rgb(88,96,108))
-    );
-    background-image: -moz-linear-gradient(
-        center bottom,
-        rgb(52,58,69) 8%,
-        rgb(73,82,97) 98%,
-        rgb(88,96,108) 99%
-    );
-    */
-    padding-top: 0px;
-    z-index: 25;
-    min-width: 800px;
-    width: 100%;
-}
-#modulenav {
-    position: relative;
-    margin: 0px;
-    padding-right: 0.7%;
-}
-#modulenav,
-#modulenav li,
-#modulenav ul {
+
+/* Side Menu */
+#left-col .sub-menu {
+    margin-top: 10px;
     list-style: none;
 }
-#modulenav li div a {
-    color: #fff;
+#left-col .sub-menu li {
+    padding: 5px 0;
 }
-#modulenav a {
-    text-decoration: none;
+#left-col .sub-menu li ul {
+    list-style: none;
 }
-#modulenav a:hover {
-    color: #fff;
-    background: none;
-}
-#modulenav li li a {
+#left-col .sub-menu a {
     display: block;
-    font-weight: normal;
-    padding: 5px 5px 5px 5px;
-}
-#modulenav li li a:hover {
-    background: #414a59;
-    color: #fff;
-}
-#modulenav li {
-    float: left;
     position: relative;
-    text-align: left;
-    cursor: default;
-    border-width: 1px 0;
+    font-size: 1.05em;
+    font-weight: bold;
+    color: #000;
+    line-height:1em;
 }
-
-/*.fleft .submenu {
-        min-width: 190px;
+#left-col .sub-menu a:hover {
+    color: #dc032e;
 }
-.fleft .submenu li{
-        width: 95px;
-}*/
-/*
-#modulenav li:last-child ul.submenu {
-        width: auto;
+#left-col .sub-menu li > a.highlight {
+    color: #891735;
 }
-*/
-.submenu {
-    z-index: 9999;
-}
-/* Menu Buttons */
-#modulenav li div {
-    text-align: center;
-    background: url(../../img/BFTBmenu_side.png) right 10px no-repeat;
-    text-shadow: 0px 1px 1px #58606c;
-}
-#modulenav li div a{
-    display:inline-block;
-    padding: 8px 10px 5px 15px;
-}
-#modulenav li div.hovered,
-#modulenav li div:hover {
-    background: #3177bc url(../../img/BFTBmenu_hilight.png) repeat-x;
-    /* alternate gradient
-    background-image: -webkit-gradient(
-        linear,
-        left bottom,
-        left top,
-        color-stop(0.08, rgb(63,109,184)),
-        color-stop(0.98, rgb(92,155,204)),
-        color-stop(0.99, rgb(126,176,216))
-    );
-    background-image: -moz-linear-gradient(
-        center bottom,
-        rgb(63,109,184) 8%,
-        rgb(92,155,204) 98%,
-        rgb(126,176,216) 99%
-    );
-    */
-}
-
-/* Menu Popups */
-#modulenav li ul {
-    display: none;
+#left-col .sub-menu .highlight:after {
+    content: url(../../img/ifrc/sidenav_tab.png);
     position: absolute;
-    top: 100%;
-    left: 0;
-    font-weight: normal;
-    text-align: left;
-    background: #fff;
-    border: #dedede 1px solid;
-   -moz-border-radius: 5px;
-   -webkit-border-radius: 5px;
-   -moz-box-shadow: 1px 1px 5px #232a34;
-   -webkit-box-shadow: 1px 1px 5px #232a34;
+    top: -3px;
+    right: -18px;
 }
-#modulenav li>ul {
-    top: auto;
-    left: auto;
-}
-#modulenav li li {
-/*     display: inline-block; */
-    display: block;
-    float: none;
-    border: 0;
-    vertical-align: middle;
-}
-#modulenav li:hover ul {
-    display: block;
-}
-#modulenav li.over ul {
-    display: block;
+#left-col .menu-extention a.highlight:after {
+    content: "";
 }
 
-.S3menulogo {
-    background: url(../../img/S3menu_logo.png) left top no-repeat;
-    text-shadow: none;
-    padding: none;
-    width: 35px;
-    height: 28px;
-    display: inline-block;
-    position: absolute;
-    top: 3px;
-    left: 2px;
-}
-.S3menuHome {
-    padding-left: 20px;
-}
+#left-col .sub-menu .menu-extention{margin:0px;padding:0 10px;list-style:none;}
+#left-col .sub-menu .menu-extention li{padding:3px 0;}
+#left-col .sub-menu .menu-extention a{font-size:0.9em;font-weight:normal;}
 
-/* Sidebar / response.menu_options */
-#menu_options {
-    margin:10px 0px 0px 0px;
-    /*padding:5px;*/
-    background:#e7ebed;
-    /*border: 1px solid #bbb;*/
-    border-radius:0px 5px 5px 0px;
-    overflow:auto;
-}
 
-#subnav li, #subnav ul li {
-    list-style:none;
-    clear:both;
-}
-#subnav div a{
-    display:block;
-    padding:5px;
-    background:#37404c;
-    font-weight:bold;
-}
-#subnav ul li {
-    border-bottom:1px solid #b4c0c7;
-}
-
-#subnav ul li a{
-    display:block;
-    padding:2px 2px 3px 10px;
-    text-decoration:none;
-}
-#subnav div a{
-    color:white;
-    font-size:1.05em;
-    text-decoration:none;
-}
-#subnav div a:hover{
-    background:#112038;
-    color:white;
-}
-
-.menu_separator hr {
-    width: 90%;
-    height: 1px;
-}
-
-/* Width of page */
-.swidth {
-	width: 640px;
-}
-
-/* Column container */
-.colmask {
-    position: relative;  /* This fixes the IE7 overflow hidden bug */
-    clear: both;
-    float: left;
-    width: 100%;         /* width of whole page */
-    overflow: hidden;    /* This chops off any overhanging divs */
-    z-index: 0;          /* This keeps drop down menus visible on maps */
-    margin-top: 42px;
-}
-
-/* common column settings */
-.col3left {
-    float: left;
-    width: 33%;
-    position: relative;
-}
-.col3mid, .col3right {
-    float: right;
-    width: 33%;
-    position: relative;
-}
-.col2left {
-    float: left;
-    width: 49%;
-    position: relative;
-}
-.col2right {
-    float: right;
-    width: 49%;
-    position: relative;
-}
-.col1, .col2, .col3 {
-    float: left;
-    position: relative;
-    padding: 0 0 3px 0;
-    overflow: hidden;
-}
-
-/* Full page settings */
-.fullpage {
-    background: #fff;    /* page background colour */
-    padding-top: 1px;
-    overflow: visible;
-}
-.fullpage .col1 {
-    width: 99%;         /* page width minus left and right padding */
-    left: 0.5%;         /* page left padding */
-    min-width: 800px;
-}
-
-.aside {
-    float:left;
-    width:200px;
-    /*margin-left: 100%;*/
-}
-.rightside {
-    margin-left:200px;
-}
-
-/* common styles */
-#content {
-    background: #f0f3f4;
-    border: 1px solid #bbb;
-    margin: 10px 5px;
-    padding: 0px;
-    margin-bottom: 2px;
-    padding:10px 30px 10px 30px;
-   -moz-border-radius: 10px 10px 10px 10px;
-   -webkit-border-radius: 10px 10px 10px 10px;
-   overflow: auto;
-}
-#content h1,
-#content h2 {
-    color: #112038;
-    font-size: 16px;
-    font-weight: bolder;
-    background: #cfdde7;
-    padding: 10px 5px 5px 5px;
-    border-bottom: 1px solid #bbb;
-}
-#content h2:first-child {
-    background-image: -webkit-gradient(
-        linear,
-        left bottom,
-        left top,
-        color-stop(0.16, rgb(188,204,217)),
-        color-stop(0.57, rgb(212,225,235))
-    );
-    background-image: -moz-linear-gradient(
-        center bottom,
-        rgb(188,204,217) 16%,
-        rgb(212,225,235) 57%
-    );
-    margin:-10px -30px 10px -30px;
-    background-color:#cfdde7;
-    text-shadow: 0px 1px 1px #e3edf4;
-    border:1px solid #aecbe0;
-    border-top:1px solid #e1eaf1;
-    border-bottom:1px solid #9cb2c1;
-    padding-left:10px;
-    -moz-border-radius: 10px 10px 0px 0px;
-    -webkit-border-radius: 10px 10px 0px 0px;
-}
-#content h3 {
-    color: #2a485d;
-    font-size: 14px;
-    font-weight: bolder;
-    padding: 5px 5px 2px 5px;
-    border-bottom: 1px #006699 solid;
-    margin-bottom: 10px;
-}
-#content h4 {
-    color: #375d78;
-    margin-top: 10px;
-    font-size: 13px;
-    font-weight: bolder;
-    padding: 2px 2px 1px 2px;
-    border-bottom: 1px #003366 dotted;
-    margin-bottom: 10px;
-}
-
-/* other styles */
-/*#home { border: 10px #fff solid; }*/
-#home p {
-    text-align: center;
-    text-align: justify;
-    line-height: 1.25;
-}
-#footer {
-    margin: 0 auto;
-    clear: both;
-    float: left;
+/* Breadcrumbs */
+.breadcrumbs {
     width: 100%;
-    text-align: center;
-    border-top: #fff 1px solid;
+    float: left;/* Needs disabling to stop overlap with notifications, but this breaks other stuff */
 }
-#socialmedia_share {
-    float: left;
-    margin-top: 7px;
-    margin-left: 20px;
-    style: block;
-}
-.socialmedia_element {
-    float: left;
-    margin-right: 8px;
-}
-#poweredby {
-    float: right;
-    margin-right: 20px;
-}
-#poweredby a{
-    color: #2A485D;
-    text-decoration: none;
+/*
+#single-col .breadcrumbs{
+    margin: -30px 0px 20px 0px;
+} */
 
+.breadcrumbs ul{
+    overflow: auto;
+    margin-bottom: 40px;
+    padding: 0;
+    font-size: 0.9em;
+    list-style: none;
+    border-bottom: 1px #000 dashed;
 }
-/* Twitter bugfix */
-#twttrHubFrame {
-    left: -9999em;
-}
-a.help, a:link.help {
-    color: #fff;
-    text-decoration: none;
-    margin-right: 10px;
-}
-a:hover.help {
-    background-color: #336699;
-    text-decoration: underline;
-}
-a:visited.help {
-    font-weight: normal;
-    color: #666;
-}
-p {
-    padding: 5px;
+.breadcrumbs ul li{
+    float: left;
     margin: 0;
+    padding: 5px 5px 0 0;
+}
+.breadcrumbs ul li a{
+    color: #891735;
+}
+.breadcrumbs ul li a:hover {
+    color: #dc032e;
+}
+.breadcrumbs ul li a:after {
+    content: "»";
+    font-size: 1.5em;
+    color: #000;
+    padding-left: 5px;
+}
+.breadcrumbs ul li a.highlight:after {
+    content: "";
 }
 
+/* Form Elements */
+/* input[type=text],
+input[type=password],
+input[type=url],
+input[type=email],
+input.text,
+input.title,
+textarea {
+    height: 20px;
+    border: 0px solid #bbb;
+    color: #000;
+} */
 
+#rheader {
+    margin-bottom: 0.75em;
+}
+
+#rheader table td,
+#rheader table th {
+    border: 0;
+    padding: 5px;
+}
+
+/* Map Fixes */
+#map_panel table td {
+    border: 0;
+}
+#gis-map-window table td {
+    border: 0;
+}
+#legend table td {
+    border: 0;
+    text-align: center;
+}
+
+table.x-toolbar-ct {
+    margin-bottom: 0;
+}
+td.x-toolbar-left table {
+    margin-bottom: 0;
+}
+/* GIS */
+/* Over-ride Ext */
+div#map_wrapper ol, ul {
+    list-style: disc inside none;
+}
+div#gis-map-window ol, ul {
+    list-style: disc inside none;
+}
+div#map_wrapper td {
+    padding: 0;
+}
+div#gis-map-window td {
+    padding: 0;
+}
+div#map_wrapper span a {
+    /* For Catalogue Tabs */
+    color: #fff;
+}
+div#map_wrapper  td:first-child {
+    background: none repeat scroll 0 0 transparent;
+}
+div#gis-map-window  td:first-child {
+    background: none repeat scroll 0 0 transparent;
+}
+/* Except here */
+ul.x-tree-node-ct,
+ul.x-tree-root-ct {
+    list-style: none outside none;
+}
 /* Form Layout styles */
 p.legend {
     margin-bottom: 1em;
@@ -679,7 +237,6 @@ div.form-container form select {
     margin: 2px 0 2px 0;
 }
 div.form-container form input[type="checkbox"],
-
 div.form-container form input[type="radio"] {
     padding: 1px;
     margin: 2px 5px;
@@ -722,6 +279,7 @@ div.form-container form fieldset input.errorfield {
     border-color: #c00;
     background-color: #fef;
 }
+/*
 div.form-container form fieldset input:focus,
 div.form-container form fieldset input.errorfield:focus,
 div.form-container form fieldset textarea:focus {
@@ -734,7 +292,7 @@ div.form-container form input.errorfield:focus,
 div.form-container form textarea:focus {
     background-color: #ffc;
     /* border-color: #ffc; */
-}
+/*} */
 div.form-container form td.w2p_fl,
 div.item-container form td.w2p_fl {
     font-weight: bold;
@@ -801,15 +359,11 @@ input[disabled='disabled'] {
     cursor: default;
 }
 
-/* Tabular data view */
-div#table-container {
+/* Tabular data view
+div#table-container { */
+   /*overflow: auto;*/
    display: block;
-   width: 100%;
-   overflow: auto;
-}
-div#table-container table {
-   display: block;
-   overflow: auto;
+   overflow: visible;
 }
 div#table-container thead th {
 	text-align: left;
@@ -843,7 +397,6 @@ div#table-container td.totals_header {
     margin-bottom: 10px;
     margin-right: 10px;
 }
-
 /* dataTables Styling */
 /* Bring in line with export formats */
 #table-container {
@@ -851,7 +404,7 @@ div#table-container td.totals_header {
     min-width: 640px;
     /* min-width: 700px; */
 }
-.dataTable {
+table.dataTable {
     /* min-width: 700px; */
     width: 100%;
 }
@@ -865,7 +418,7 @@ div.dataTables_filter {
     width: auto;
     float: left;
     /* margin-left: 50px; */
-    margin-bottom:4px;
+    margin-bottom: 4px;
 }
 
 div.dataTables_processing {
@@ -876,7 +429,7 @@ div.dataTables_processing {
 div.dataTables_info  {
 	width: auto;
     float: right;
-    margin: 2px 0 4px 10px;
+    margin: 7px 0 4px 10px;
 }
 div.dataTables_length {
     float: right;
@@ -903,6 +456,10 @@ span.dataTable-btn {
 
 span.dataTable-btn:hover {
 	background-color: #EFEFEF;
+}
+
+.sorting_disabled {
+    background: no-repeat scroll right center transparent;
 }
 
 table.importItem{
@@ -938,11 +495,6 @@ div#map {
     font-weight: bold;
 }
 
-/* For Key - ugly! */
-.red {
-    color: red;
-}
-
 /* Help Popup */
 .tooltip,
 .tooltipbody,
@@ -951,7 +503,7 @@ div#map {
     position: static;
     text-transform: uppercase;
     height: 20px;
-    width: 50px;
+    width: 20px;
     background-image: url(../../img/help_off.gif);
 }
 .tooltip span,
@@ -965,7 +517,19 @@ div#map {
 .stickytip:hover,
 .ajaxtip:hover {
     background-color: transparent;
+    height: 20px;
+    width: 20px;
     background-image: url(../../img/help_on.gif);
+}
+
+/* Popup text for represents of Long text fields */
+.popup {
+    display:none;
+    position:absolute;
+    border-style: solid;
+    background-color: #ffffcc;
+    padding: 5px;
+    margin: 0 20px 0 -50px;
 }
 
 /* Form Popup */
@@ -987,6 +551,7 @@ div.confirmation {
     padding-top: 1.0em;
     padding-bottom: 1.0em;
     cursor: pointer;
+    clear: left; /* Added to avoid merging with breadcrumbs */
 }
 .confirmation p em {
     color: #070;
@@ -1004,6 +569,7 @@ div.confirmation {
     padding-top: 1.0em;
     padding-bottom: 1.0em;
     cursor: pointer;
+    clear: left; /* Added to avoid merging with breadcrumbs */
 }
 .error p em {
     color: #c00;
@@ -1021,6 +587,7 @@ div.confirmation {
     padding-top: 1.0em;
     padding-bottom: 1.0em;
     cursor: pointer;
+    clear: left; /* Added to avoid merging with breadcrumbs */
 }
 .information p em {
     color: #748d8e;
@@ -1038,6 +605,7 @@ div.confirmation {
     padding-top: 1.0em;
     padding-bottom: 1.0em;
     cursor: pointer;
+    clear: left; /* Added to avoid merging with breadcrumbs */
 }
 .warning p em {
     color: #c00;
@@ -1049,23 +617,6 @@ div.confirmation {
     padding: 0 0 0 10px;
 }
 
-/* Resource header
-div#rheader {
-    display: table-cell;
-}*/
-div#rheader table {
-    /* width: 100%; */
-}
-div#rheader th {
-    /* text-align: right; */
-    /* width: 10%; */
-    font-weight: bold;
-}
-div#rheader td {
-    text-align: left;
-    padding: 1px 25px 1px 10px;
-    /* width: 20%; */
-}
 /* Widget */
 tr#select_from_registry_row td {
    padding: 8px;
@@ -1094,7 +645,7 @@ div.tabs {
     margin: 5px 0px 0px 0px;
     /* margin-bottom: 5px; */
     text-align: left;
-    border-bottom:1px solid #3286e2;
+    border-bottom:1px solid #590f12;
 }
 div.tabs span {
     padding: 1px 3px 3px 3px;
@@ -1105,10 +656,10 @@ span.tab_last,
 span.tab_other {
     border-width: 2px 1px 0px 3px;
     border-style: solid;
-    border-color: #3286e2;
+    border-color: #590f12;
     padding-right: 3px;
     margin-right: 3px;
-    background:#3286e2;
+    background: #590f12;
     /* border-bottom: 1px solid #bbb; */
 }
 /* span.tab_last {
@@ -1120,14 +671,14 @@ div.tabs span.tab_here {
 	display: inline;
     position: relative;
     bottom: -1px;
-    background: #f0f3f4;
+    background: #f4edd4;
     border-width: 2px 1px 0 3px;
     border-style: solid;
-    border-color: #6699cc;
+    border-color: #590f12;
     padding: 3px 6px 2px 5px;
     margin-right: 5px;
     font-weight: bold;
-    border-bottom:2px solid #f0f3f4;
+    border-bottom:2px solid #f4edd4;
 }
 form div.tabs span.tab_here{
     border-bottom:2px solid #ffffff;
@@ -1143,21 +694,21 @@ span.tab_other a:hover, span.tab_last a:hover {
     background:transparent;
 }
 span.tab_other:hover, span.tab_last:hover {
-    background:#164b8b;
-    border-color:#164b8b;
+    background:#c6bea7;
+    border-color:#c6bea7;
 }
 span.tab_here a {
-    color: #006699;
+    color: #000000;
     text-decoration: None;
 }
 span.tab_prev_active {
     border: 1px solid #6699cc;
-    color: #006699;
+    color: #000000;
     border-bottom: 0;
 }
 span.tab_next_active {
     border: 1px solid #6699cc;
-    color: #006699;
+    color: #000000;
     border-bottom: 0;
 }
 span.tab_prev_inactive {
@@ -1184,7 +735,8 @@ span.tab_next_inactive a {
 
 /* Component */
 div#component {
-	padding: 10px;
+    padding: 0;
+	/*padding: 10px;
 	border-color: #6699CC;
     border-style: solid;
     border-width: 1px;
@@ -1209,16 +761,40 @@ div#last_update {
 }
 
 /* Action Buttons */
+.add-btn {
+    background: url("../../img/ifrc/button_plus_end.png") no-repeat scroll right top transparent;
+    display: block;
+    float: left;
+    height: 36px;
+    margin: 0 24px 25px 0;
+    padding-right: 30px;
+    text-decoration: none;
+}
+
+.add-btn span {
+    background: url("../../img/ifrc/button_red_start.png") no-repeat scroll 0 0 transparent;
+    color: #FFFFFF;
+    display: block;
+    font-size: 1.25em;
+    font-weight: bold;
+    line-height: 36px;
+    padding: 2px 15px 5px 18px;
+    cursor: pointer;
+}
+
 .delete-btn,
 .action-btn {
-    cursor:pointer;
+    cursor: pointer;
     text-decoration: none;
-    font-weight:bold;
-    color: #ffffff;
-    background-color: #3286e2;
-    border:1px solid #4c95e6;
+    font-weight: bold;
+    font-size: 11pt;
+    font-family: "Helvetica Neue",Arial,Helvetica,sans-serif;
+    color: #fff;
+    line-height: 1.5;
+    background-color: #590f12;
+    border: 1px solid #c6bea7;
     border-bottom: 2px solid #164b8b;
-    border-top: 1px solid #5f9eeb;
+    border-top: 1px solid #f4edd4;
     padding: 2px 4px 2px 4px;
     margin: 2px;
     z-index: 500;
@@ -1226,11 +802,12 @@ div#last_update {
     -moz-border-radius:2px;
     -webkit-border-radius:2px;
 }
+
 .delete-btn:hover,
 .action-btn:hover {
     text-decoration: none;
     color: #fff;
-    background-color: #164b8b;
+    background-color: #dc032e;
 }
 .cancel-btn {
     padding-left: 10px;
@@ -1246,7 +823,10 @@ div#last_update {
 
 /* Used to diplay the list-add with the list-add-btn */
 #list-btn-add {
-	margin-bottom: 10px
+	margin-bottom: 10px;
+}
+#list-btn-add + h3 {
+    clear: both;
 }
 #list-add {
     display: none
@@ -1341,224 +921,15 @@ div#last_update {
     margin: 0 0 10px 0;
 }
 
-/* Home page specific */
-
-#home h2 {
-	padding-top: 8px;
-	padding-bottom: 8px;
-	font-size: 1.4em;
-	margin-bottom: 5px;
-}
-
-.menu_box {
-	border: 1px solid #006699;
-	padding: 10px;
-	margin-top: 10px;
-	width: auto;
-}
-
-#menu_box_1 {
-	width: auto;
-	float: left;
-}
-
-#menu_box_2 {
-	float: left;
-}
-
-#login_box {
-	width: 470px;
-	float: left;
-        clear: left;
-}
-
-#home #login_box div {
-	padding: 0px
-}
-
-#home #login_box input[size="62"] {
-	width: 300px;
-}
-
-.menu_div, .div_arrow {
-	float: left;
-	width: auto;
-}
-
-#facility_box {
-	width: auto;
-	float: right;
-        text-align: center;
-        clear: left;
-}
-
-#facility_box img {
-	margin: 0;
-        margin-left: 2px;
-}
-
-#manage_facility_box {
-	/* If inside menu_box_2
-    width: 240px;
-	margin-left: 10px;
-	padding-bottom: 40px; */
-    width: 470px;
-}
-
-#manage_facility_box a {
-	margin-left: 20px;
-}
-
-#org_box {
-	/* If inside menu_box_2
-    width: 240px;
-	margin-left: 10px;
-	padding-bottom: 40px; */
-    width: 470px;
-    clear: left;
-}
-
-#org_box #list_wrapper {
-    margin-top: 10px;
-}
-
-#org_box #list_filter {
-    margin: 0px;
-}
-#org_box #list_processing {
-    margin-top: 5px;
-}
-
-.div_arrow	{
-    padding: 0 15px;
-    text-align:left;
-    margin-top: 100px;
-}
-#content .menu_box h3  {
-    border-bottom: 0px;
-    font-size: 1.6em;
-    text-align: center;
-}
-.menu-btn-r {
-    margin: 0px;
-    padding: 15px 15px 15px 15px;
-    overflow: hidden;
-    background: url(../../img/menu_box-r.png) no-repeat scroll top right;
-    display: block;
-    white-space:nowrap;
-    text-align: center;
-    font-size: 1.3em;
-}
-.menu-btn-l {
-    margin-top:4px;
-    overflow: hidden;
-    background: url(../../img/menu_box-lstretch.png) no-repeat;
-    display: block;
-    /*float: left;*/
-    height: 50px;
-    text-decoration: none;
-}
-
-#login_form,
-#register_form {
-    clear: both;
-    padding: 10px 0 10px 0;
-}
-#about{
-    clear: both;
-}
-
-/* RSS Feed */
-#feed-control {
-    clear: both;
-}
-.gfg-title {
-    text-align: left;
-    padding: 0 0 0 10px;
-}
-.gfg-subtitle {
-    padding: 0 0 0 5px;
-}
-
-/* Ext button (e.g. on Bulk Upload form */
-#show-dialog-btn { border: 1px solid #efefef;
-                   margin: 10px;
-                   padding: 10px; }
-
-/* Request (req) Application */
-.req_status_none {
-    color: red;
-    font-weight: bold;
-}
-.req_status_partial {
-    color: darkorange;
-    font-weight: bold;
-}
-.req_status_complete {
-    color: green;
-    font-weight: bold;
-}
-
-/* Styles added for the layout of the survey questionnaire form */
-tr.survey_section th{
-    color: #003399;
-    font-size: 150%;
-    text-align: center;
-}
-
-tr.survey_question th{
-    color: #112038;
+/* Survey Module */
+tr.survey_question th {
     font-size: 90%;
-    font-weight: bold;
     vertical-align: top;
+    padding: 4px 10px 4px 5px;
 }
 
-div.survey_map-legend td{
-    vertical-align: top;
-}
-/* Big Buttons (e.g. RMS) */
-div.question-container {
-    text-align:center;
-    width:8em;
-    background-color:#F3F6FF;
-    border: solid 3px #bbb;
-    padding:1.5em;
-    font-size:large;
-    overflow: auto;
-}
-
-/*
- * Media queries for responsive design
- */
-
-@media all and (orientation:portrait) {
-  /* Style adjustments for portrait mode goes here */
-
-}
-
-@media all and (orientation:landscape) {
-  /* Style adjustments for landscape mode goes here */
-
-}
-
-/* Grade-A Mobile Browsers (Opera Mobile, iPhone Safari, Android Chrome)
-   Consider this: www.cloudfour.com/css-media-query-for-mobile-is-fools-gold/ */
-@media screen and (max-device-width: 480px) {
-
-
-  /* Uncomment if you don't want iOS and WinMobile to mobile-optimize the text for you
-     j.mp/textsizeadjust
-  html { -webkit-text-size-adjust:none; -ms-text-size-adjust:none; } */
-}
-
-/* For the less-enabled mobile browsers like Opera Mini */
-@media handheld {
-    * {
-      float: none;       /* Screens are not big enough to account for floats */
-      font-size: 80%;    /* Slightly reducing font size to reduce need to scroll */
-      background: #fff;  /*  As much contrast as possible */
-      color: #000;
-    }
+#export_btn {
+    padding: 0px;
 }
 
 /*
@@ -1588,7 +959,7 @@ body {
 }
 
 /* Trim margins */
-#content   {
+#wrapper {
     background-color:transparent;
     width: 100%;
     float: none !important;
@@ -1599,8 +970,8 @@ body {
 }
 
 /* Simple styling with fontsize specified in points */
-#content h1,
-#content h2 {
+#wrapper h1,
+#wrapper h2 {
 	background: white;
 	color: black;
 	font-size: 16pt;
@@ -1609,7 +980,7 @@ body {
     margin: 0;
 }
 
-#content h3 {
+#wrapper h3 {
 	background: white;
 	color: black;
 	font-size: 14pt;

@@ -1,107 +1,81 @@
 # -*- coding: utf-8 -*-
 
 """
-    Global menus
+    Global menus & breadcrumbs
 """
 
 if auth.permission.format in ("html"):
-
+    # =========================================================================
     # Language Menu (available in all screens)
-    s3.menu_lang = [ T("Language"), True, "#"]
-    _menu_lang = []
-    for language in s3.l10n_languages.keys():
-        _menu_lang.append([s3.l10n_languages[language], False,
-                        URL(args=request.args,
-                            vars={"_language":language})])
-    s3.menu_lang.append(_menu_lang)
+    #s3.menu_lang = [ T("Language"), True, "#"]
+    #_menu_lang = []
+    #for language in s3.l10n_languages.keys():
+    #    _menu_lang.append([s3.l10n_languages[language], False, language])
+    #s3.menu_lang.append(_menu_lang)
 
+    # -------------------------------------------------------------------------
     # Help Menu (available in all screens)
-    s3.menu_help = [ T("Help"), True, "#",
-            [
-                [T("Contact us"), False,
-                URL(c="default", f="contact")],
-                [T("About"), False, URL(c="default", f="about")],
-            ]
-        ]
+    #s3.menu_help = [ T("Help"), True, "#",
+    #        [
+    #            [T("Contact us"), False,
+    #             URL(c="default", f="contact")],
+    #            [T("About"), False, URL(c="default", f="about")],
+    #        ]
+    #    ]
 
+    # -------------------------------------------------------------------------
     # Auth Menu (available in all screens)
     if not auth.is_logged_in():
 
         login_next = URL(args=request.args, vars=request.vars)
         if request.controller == "default" and \
-        request.function == "user" and \
-        "_next" in request.get_vars:
-            login_next = request.get_vars["_next"]
+           request.function == "user" and \
+           "_next" in request.get_vars:
+               login_next = request.get_vars["_next"]
 
         self_registration = deployment_settings.get_security_self_registration()
 
         if self_registration:
-            s3.menu_auth = [T("Login"), True,
-                            URL(c="default", f="user/login",
-                                vars=dict(_next=login_next)),
-                    [
-                        [T("Login"), False,
-                        URL(c="default", f="user/login", vars=dict(_next=login_next))],
-                        [T("Register"), False,
-                        URL(c="default", f="user/register", vars=dict(_next=login_next))],
-                        [T("Lost Password"), False,
-                        URL(c="default", f="user/retrieve_password")]
-                    ]
-                ]
+            s3.menu_auth = [[T("Register"),
+                             URL(c="default", f="user/register")],
+                            [T("Sign In"),
+                             URL(c="default", f="user/login",
+                                 vars=dict(_next=login_next))],
+                            [T("Lost Password"),
+                             URL(c="default", f="user/retrieve_password")]
+                            ]
         else:
-            s3.menu_auth = [T("Login"), True,
-                            URL(c="default", f="user/login", vars=dict(_next=login_next)),
-                    [
-                        [T("Lost Password"), False,
-                        URL(c="default", f="user/retrieve_password")]
-                    ]
-                ]
+            s3.menu_auth = [[T("Sign In"),
+                             URL(c="default", f="user/login",
+                                 vars=dict(_next=login_next))],
+                            [T("Lost Password"),
+                             URL(c="default", f="user/retrieve_password")]
+                            ]
     else:
-        s3.menu_auth = [auth.user.email, True, None,
-                [
-                    [T("Logout"), False,
-                    URL(c="default", f="user/logout")],
-                    [T("User Profile"), False,
-                    URL(c="default", f="user/profile")],
-                    [T("Personal Data"), False,
-                    URL(c="pr", f="person",
-                        vars={"person.uid" : auth.user.person_uuid})],
-                    [T("Contact Details"), False,
-                    URL(c="pr", f="person",
-                        args="contact",
-                        vars={"person.uid" : auth.user.person_uuid})],
-                    #[T("Subscriptions"), False,
-                    # URL(c="pr", f="person",
-                    #     args="pe_subscription",
-                    #     vars={"person.uid" : auth.user.person_uuid})],
-                    [T("Change Password"), False,
-                    URL(c="default", f="user/change_password")],
-                    ["----", False, None],
-                    [{"name": T("Rapid Data Entry"),
-                    "id": "rapid_toggle",
-                    "value": session.s3.rapid_data_entry is True},
-                    False, URL(c="default", f="rapid")]
-                ]
-            ]
+        s3.menu_auth = [[T("Sign Out"), URL(c="default",
+                                            f="user/logout")],
+                        [T("Change Password"), URL(c="default",
+                                                   f="user/change_password")],
+                        ]
 
 
-
+    # -------------------------------------------------------------------------
     # Menu for Admin module
     # (defined here as used in several different Controller files)
     admin_menu_messaging = [
                 [T("Email Settings"), False,
-                URL(c="msg", f="email_settings", args=[1, "update"])],
+                 URL(c="msg", f="email_settings", args=[1, "update"])],
                 [T("SMS Settings"), False,
-                URL(c="msg", f="setting", args=[1, "update"])],
+                 URL(c="msg", f="setting", args=[1, "update"])],
                 [T("Twitter Settings"), False,
-                URL(c="msg", f="twitter_settings", args=[1, "update"])],
+                 URL(c="msg", f="twitter_settings", args=[1, "update"])],
         ]
     admin_menu_options = [
-        [T("Settings"), False, URL(c="admin", f="settings"),
-            admin_menu_messaging,
-            # Hidden until useful again
-            #[T("Edit Themes"), False, URL(c="admin", f="theme")]
-        ],
+        #[T("Settings"), False, URL(c="admin", f="settings"),
+        #    admin_menu_messaging,
+        #    # Hidden until useful again
+        #    #[T("Edit Themes"), False, URL(c="admin", f="theme")]
+        #],
         [T("User Management"), False, URL(c="admin", f="user"), [
             [T("Users"), False, URL(c="admin", f="user")],
             [T("Roles"), False, URL(c="admin", f="role")],
@@ -130,92 +104,97 @@ if auth.permission.format in ("html"):
         [T("Portable App"), False, URL(c="admin", f="portable")],
     ]
 
+    # -------------------------------------------------------------------------
     # Modules Menu (available in all Controllers)
-    # NB This is just a default menu - most deployments will customise this
+    # NB This is hardcoded for IFRC
     s3.menu_modules = []
     # Home always 1st
-    _module = deployment_settings.modules["default"]
-    s3.menu_modules.append([_module.name_nice, False,
-                            URL(c="default", f="index")])
+    #_module = deployment_settings.modules["default"]
+    #s3.menu_modules.append([_module.name_nice, False,
+    #                        URL(c="default", f="index")])
 
     # Modules to hide due to insufficient permissions
-    hidden_modules = auth.permission.hidden_modules()
+    #hidden_modules = auth.permission.hidden_modules()
 
     # The Modules to display at the top level (in order)
-    for module_type in [1, 2, 3, 4, 5, 6]:
-        for module in deployment_settings.modules:
-            if module in hidden_modules:
-                continue
-            _module = deployment_settings.modules[module]
-            if (_module.module_type == module_type):
-                if not _module.access:
-                    s3.menu_modules.append([_module.name_nice, False,
-                                            aURL(c=module, f="index")])
-                else:
-                    authorised = False
-                    groups = re.split("\|", _module.access)[1:-1]
-                    for group in groups:
-                        if s3_has_role(group):
-                            authorised = True
-                    if authorised == True:
-                        s3.menu_modules.append([_module.name_nice, False,
-                                                URL(c=module, f="index")])
+    #for module_type in [1, 2, 3, 4, 5, 6]:
+    #    for module in deployment_settings.modules:
+    #        if module in hidden_modules:
+    #            continue
+    #        _module = deployment_settings.modules[module]
+    #        if (_module.module_type == module_type):
+    #            if not _module.access:
+    #                s3.menu_modules.append([_module.name_nice, False,
+    #                                        aURL(c=module, f="index")])
+    #            else:
+    #                authorised = False
+    #                groups = re.split("\|", _module.access)[1:-1]
+    #                for group in groups:
+    #                    if s3_has_role(group):
+    #                        authorised = True
+    #                if authorised == True:
+    #                    s3.menu_modules.append([_module.name_nice, False,
+    #                                            URL(c=module, f="index")])
 
     # Modules to display off the 'more' menu
-    modules_submenu = []
-    for module in deployment_settings.modules:
-        if module in hidden_modules:
-            continue
-        _module = deployment_settings.modules[module]
-        if (_module.module_type == 10):
-            if not _module.access:
-                modules_submenu.append([_module.name_nice, False,
-                                        aURL(c=module, f="index")])
-            else:
-                authorised = False
-                groups = re.split("\|", _module.access)[1:-1]
-                for group in groups:
-                    if s3_has_role(group):
-                        authorised = True
-                if authorised == True:
-                    modules_submenu.append([_module.name_nice, False,
-                                            URL(c=module, f="index")])
-    if modules_submenu:
-        # Only show the 'more' menu if there are entries in the list
-        module_more_menu = ([T("more"), False, "#"])
-        module_more_menu.append(modules_submenu)
-        s3.menu_modules.append(module_more_menu)
+    #modules_submenu = []
+    #for module in deployment_settings.modules:
+    #    if module in hidden_modules:
+    #        continue
+    #    _module = deployment_settings.modules[module]
+    #    if (_module.module_type == 10):
+    #        if not _module.access:
+    #            modules_submenu.append([_module.name_nice, False,
+    #                                    aURL(c=module, f="index")])
+    #        else:
+    #            authorised = False
+    #            groups = re.split("\|", _module.access)[1:-1]
+    #            for group in groups:
+    #                if s3_has_role(group):
+    #                    authorised = True
+    #            if authorised == True:
+    #                modules_submenu.append([_module.name_nice, False,
+    #                                        URL(c=module, f="index")])
+    #if modules_submenu:
+    #    # Only show the 'more' menu if there are entries in the list
+    #    module_more_menu = ([T("more"), False, "#"])
+    #    module_more_menu.append(modules_submenu)
+    #    s3.menu_modules.append(module_more_menu)
 
     # Admin always last
     if s3_has_role(ADMIN):
         _module = deployment_settings.modules["admin"]
-        s3.menu_admin = [_module.name_nice, True,
-                        URL(c="admin", f="index"), [
-                            [T("Settings"), False, URL(c="admin", f="settings")],
-                            [T("Users"), False, URL(c="admin", f="user")],
-                            [T("Database"), False, URL(c="appadmin", f="index")],
-                            [T("Import"), False, URL(c="admin", f="import_file")],
-                            [T("Synchronization"), False, URL(c="sync", f="index")],
-                            [T("Tickets"), False, URL(c="admin", f="errors")],
-                        ]]
-    else:
-        s3.menu_admin = []
+        s3.menu_admin = [_module.name_nice,
+                         URL(c="admin", f="index"), [
+                            # This menu isn't shown in IFRC Theme yet
+                            #[T("Settings"), URL(c="admin", f="settings")],
+                            [T("Users"), URL(c="admin", f="user")],
+                            [T("Database"), URL(c="appadmin", f="index")],
+                            [T("Import"), URL(c="admin", f="import_file")],
+                            [T("Synchronization"), URL(c="sync", f="index")],
+                            [T("Tickets"), URL(c="admin", f="errors")],
+                         ]]
+    #else:
+    #    s3.menu_admin = []
 
+    # -------------------------------------------------------------------------
     # Build overall menu out of components
-    response.menu = s3.menu_modules
-    response.menu.append(s3.menu_help)
-    response.menu.append(s3.menu_auth)
-    if deployment_settings.get_L10n_display_toolbar():
-        response.menu.append(s3.menu_lang)
-    if deployment_settings.get_gis_menu():
-        # Do not localize this string.
-        s3.gis_menu_placeholder = "GIS menu placeholder"
-        # Add a placeholder for the regions menu, which cannot be constructed
-        # until the gis_config table is available. Put it near the language menu.
-        response.menu.append(s3.gis_menu_placeholder)
+    #response.menu = s3.menu_modules
+    #response.menu.append(s3.menu_help)
+    #response.menu.append(s3.menu_auth)
+    response.menu = s3.menu_auth
+    #if deployment_settings.get_gis_menu():
+    #    # Do not localize this string.
+    #    s3.gis_menu_placeholder = "GIS menu placeholder"
+    #    # Add a placeholder for the regions menu, which cannot be constructed
+    #    # until the gis_config table is available. Put it near the language menu.
+    #    response.menu.append(s3.gis_menu_placeholder)
     if s3.menu_admin:
         response.menu.append(s3.menu_admin)
-
+    # this check is handled by s3tools for personal menu,
+    # language select isn't rendered like other menu items in ifrc
+    #if deployment_settings.get_L10n_display_toolbar():
+    #    response.menu.append(s3.menu_lang)
 
     # Menu helpers ============================================================
     def s3_menu(controller, postp=None, prep=None):
@@ -224,7 +203,7 @@ if auth.permission.format in ("html"):
             picks up from 01_menu, called from controllers
 
             @postp - additional postprocessor,
-                    assuming postp acts on response.menu_options
+                     assuming postp acts on response.menu_options
             @prep  - pre-processor
             @ToDo: FIXIT - alter here when you alter controller name
         """
@@ -238,6 +217,9 @@ if auth.permission.format in ("html"):
             menu = menu_config["menu"]
 
             # role hooks
+            if s3_has_role(AUTHENTICATED) and "on_auth" in menu_config:
+                menu.extend(menu_config["on_auth"])
+
             if s3_has_role(ADMIN) and "on_admin" in menu_config:
                 menu.extend(menu_config["on_admin"])
 
@@ -249,6 +231,18 @@ if auth.permission.format in ("html"):
             for condition in conditions:
                 if menu_config[condition]():
                     menu.extend(menu_config["conditional%s" % condition[9:]])
+
+            needle = request["wsgi"]["environ"]["PATH_INFO"]
+            for i in xrange(len(menu)):
+                if str(menu[i][2]) in needle:
+                    menu[i][1] = True
+                    if len(menu[i]) >= 4:
+                        # if has submenus to it
+                        for j in xrange(len(menu[i][3])):
+                            if str(menu[i][3][j][2]) == needle:
+                                menu[i][3][j][1] = True
+                                break
+                    break
 
             response.menu_options = menu
 
@@ -437,6 +431,25 @@ if auth.permission.format in ("html"):
         }
 
     # -------------------------------------------------------------------------
+    org_menu = [T("Organizations"), False, aURL(c="org", f="organisation"), [
+                    [T("New"), False, aURL(p="create", c="org", f="organisation",
+                                           args="create")],
+                    [T("List All"), False, aURL(c="org", f="organisation")],
+                    [T("Search"), False, aURL(c="org", f="organisation",
+                                              args="search")],
+                    #[T("Import"), False, aURL(p="create", c="org", f="organisation",
+                    #                          args="import")]
+                ]]
+    office_menu = [T("Offices"), False, aURL(c="org", f="office"), [
+                    [T("New"), False, aURL(p="create", c="org", f="office",
+                                           args="create")],
+                    [T("List All"), False, aURL(c="org", f="office")],
+                    [T("Search"), False, aURL(c="org", f="office",
+                                              args="search")],
+                    [T("Import"), False, aURL(p="create", c="org", f="office",
+                                              args="import")]
+                ]]
+
     hrm_menu = {
         "menu": [],
 
@@ -513,6 +526,8 @@ if auth.permission.format in ("html"):
                 [T("List All"), False, aURL(c="hrm",
                                             f="group")],
             ]],
+            org_menu,
+            office_menu,
             [T("Job Role Catalog"), False, aURL(c="hrm",
                                                 f="job_role"), [
                 [T("New Job Role"), False, aURL(c="hrm",
@@ -521,17 +536,15 @@ if auth.permission.format in ("html"):
                 [T("List All"), False, aURL(c="hrm",
                                             f="job_role")],
             ]],
-            [T("Skill Catalog"), False, URL(c="hrm",
-                                            f="skill"), [
-                [T("New Skill"), False, aURL(p="create",
-                                             c="hrm",
-                                             f="skill",
-                                             args="create")],
-                [T("List All"), False, aURL(c="hrm",
-                                            f="skill")],
-                #[T("Skill Provisions"), False, aURL(c="hrm",
-                #                                    f="skill_provision")],
-            ]],
+            #[T("Skill Catalog"), False, URL(c="hrm",
+            #                                f="skill"), [
+            #    [T("New Skill"), False, aURL(p="create",
+            #                                 c="hrm",
+            #                                 f="skill",
+            #                                 args="create")],
+            #    [T("List All"), False, aURL(f="skill")],
+            #    #[T("Skill Provisions"), False, aURL(f="skill_provision")],
+            #]],
             [T("Training Events"), False, URL(c="hrm",
                                               f="training_event"), [
                 [T("New Training Event"), False, aURL(p="create",
@@ -560,20 +573,16 @@ if auth.permission.format in ("html"):
                                                        args="create")],
                 [T("List All"), False, aURL(c="hrm",
                                             f="course")],
-                [T("Course Certificates"), False, aURL(c="hrm",
-                                                       f="course_certificate")],
+                #[T("Course Certificates"), False, aURL(c="hrm",
+                #                                       f="course_certificate")],
             ]],
-            [T("Certificate Catalog"), False, URL(c="hrm",
-                                                  f="certificate"), [
-                [T("New Certificate"), False, aURL(p="create",
-                                                   c="hrm",
-                                                   f="certificate",
-                                                   args="create")],
-                [T("List All"), False, aURL(c="hrm",
-                                            f="certificate")],
-                [T("Skill Equivalence"), False, aURL(c="hrm",
-                                                     f="certificate_skill")],
-            ]],
+            # [T("Certificate Catalog"), False, URL(f="certificate"), [
+                # [T("New Certificate"), False, aURL(p="create",
+                                                   # f="certificate",
+                                                   # args="create")],
+                # [T("List All"), False, aURL(f="certificate")],
+                # [T("Skill Equivalence"), False, aURL(f="certificate_skill")],
+            # ]],
             # Add the "personal" section to the menu (right)
             [T("Personal Profile"), True, aURL(c="hrm",
                                                f="person",
@@ -594,35 +603,6 @@ if auth.permission.format in ("html"):
             @NOTE: subject to change depending on changes in S3Menu / requirements
     """
     s3_menu_dict = {
-
-        # ASSESS Controller
-        # ---------------------------------------------------------------------
-        "assess": {
-            "menu": [
-                [T("Rapid Assessments"), False, aURL(f="rat"), [
-                    [T("New"), False, aURL(p="create", f="rat", args="create")],
-                    [T("List All"), False, aURL(f="rat")],
-                    #[T("Search"), False, URL(f="rat", args="search")],
-                ]],
-                [T("Impact Assessments"), False, aURL(f="assess"), [
-                    #[T("New"), False, aURL(p="create", f="assess", args="create")],
-                    [T("New"), False, aURL(p="create", f="basic_assess")],
-                    [T("List All"), False, aURL(f="assess")],
-                    [T("Mobile"), False, aURL(f="mobile_basic_assess")],
-                    #[T("Search"), False, aURL(f="assess", args="search")],
-                ]],
-                [T("Baseline Data"), False, URL(f="#"), [
-                    [T("Population"), False, aURL(f="population")],
-                ]],
-            ],
-
-            "on_admin": [
-                [T("Edit Options"), False, URL(f="#"), [
-                    [T("List / Add Baseline Types"), False, aURL(f="baseline_type")],
-                    [T("List / Add Impact Types"), False, aURL(f="impact_type")],
-                ]],
-            ]
-        },
 
         # ASSET Controller
         # ---------------------------------------------------------------------
@@ -646,82 +626,6 @@ if auth.permission.format in ("html"):
                     [T("List All"), False, aURL(c="asset", f="item")],
                 ]],
             ]
-        },
-
-        # BUDGET Controller
-        # ---------------------------------------------------------------------
-        "budget": {
-            "menu": [
-                [T("Parameters"), False, aURL(f="parameters")],
-                [T("Items"), False, aURL(f="item"), [
-                    [T("New"), False, aURL(p="create", f="item", args="create")],
-                    [T("List"), False, aURL(f="item")],
-                ]],
-                [T("Kits"), False, aURL(f="kit"), [
-                    [T("New"), False, aURL(p="create", f="kit", args="create")],
-                    [T("List"), False, aURL(f="kit")],
-                ]],
-                [T("Bundles"), False, aURL(f="bundle"), [
-                    [T("New"), False, aURL(p="create", f="bundle", args="create")],
-                    [T("List"), False, aURL(f="bundle")],
-                ]],
-                [T("Staff"), False, aURL(f="staff"), [
-                    [T("New"), False, aURL(p="create", f="staff", args="create")],
-                    [T("List"), False, aURL(f="staff")],
-                ]],
-                [T("Locations"), False, aURL(f="location"), [
-                    [T("New"), False, aURL(p="create", f="location", args="create")],
-                    [T("List"), False, aURL(f="location")],
-                ]],
-                [T("Projects"), False, aURL(f="project"), [
-                    [T("New"), False, aURL(p="create", f="project", args="create")],
-                    [T("List"), False, aURL(f="project")],
-                ]],
-                [T("Budgets"), False, aURL(f="budget"), [
-                    [T("New"), False, aURL(p="create", f="budget", args="create")],
-                    [T("List"), False, aURL(f="budget")],
-                ]]
-            ],
-        },
-
-        # BUILDING Controller
-        # ---------------------------------------------------------------------
-        "building": {
-            "menu": [
-                [T("NZSEE Level 1"), False, aURL(f="nzseel1"), [
-                    [T("Submit New (triage)"), False, aURL(p="create", f="nzseel1",
-                                                        args="create",
-                                                        vars={"triage":1})],
-                    [T("Submit New (full form)"), False, aURL(p="create", f="nzseel1",
-                                                            args="create")],
-                    [T("Search"), False, aURL(f="nzseel1", args="search")],
-                    [T("List"), False, aURL(f="nzseel1")],
-                ]],
-                [T("NZSEE Level 2"), False, aURL(f="nzseel2"), [
-                    [T("Submit New"), False, aURL(p="create", f="nzseel2",
-                                                args="create")],
-                    [T("Search"), False, aURL(f="nzseel2", args="search")],
-                    [T("List"), False, aURL(f="nzseel2")],
-                ]],
-                [T("Report"), False, aURL(f="index"),
-                [
-                [T("Snapshot"), False, aURL(f="report")],
-                [T("Assessment timeline"), False, aURL(f="timeline")],
-                [T("Assessment admin level"), False, aURL(f="adminLevel")],
-                ]
-                ]
-            ]
-        },
-
-        # CLIMATE Controller
-        # ---------------------------------------------------------------------
-        "climate": {
-            "menu": [
-                [T("Home"), False, aURL(f="index")],
-                [T("Station Parameters"), False, aURL(f="station_parameter")],
-                [T("Saved Queries"), False, aURL(f="save_query")],
-                [T("Purchase Data"), False, aURL(f="purchase")],
-            ],
         },
 
         # CR / Shelter Registry Controller
@@ -751,30 +655,6 @@ if auth.permission.format in ("html"):
             ]
         },
 
-        # DELPHI / Delphi Decision Maker
-        # ---------------------------------------------------------------------
-        "delphi": {
-            "menu": [
-                [T("Active Problems"), False, aURL(f="problem"), [
-                    [T("New"), False, aURL(p="create", f="problem",
-                                           args="create")],
-                    [T("List All"), False, aURL(f="problem")],
-                ]],
-                [T("Groups"), False, aURL(f="group"), [
-                    [T("New"), False, aURL(p="create", f="group",
-                                           args="create")],
-                    [T("List All"), False, aURL(f="group")],
-                ]],
-                #[T("Solutions"), False, aURL(f="solution")],
-            ],
-
-            "on_admin": [
-                #[T("Groups"), False, URL(f="group")],
-                #[T("Group Memberships"), False, URL(f="membership")],
-                #[T("Problem Administration"), False, URL(f="problem")],
-            ]
-        },
-
         # DOC / Document Library
         # ---------------------------------------------------------------------
         "doc": {
@@ -794,169 +674,53 @@ if auth.permission.format in ("html"):
                 ]]],
         },
 
-        # DVI / Disaster Victim Identification
-        # ---------------------------------------------------------------------
-        "dvi": {
-            "menu": [
-                #[T("Home"), False, URL(f="index")],
-                [T("Body Recovery"), False, aURL(f="recreq"),[
-                    [T("New Request"),
-                    False, aURL(p="create", f="recreq",
-                                args="create")],
-                    [T("List Current"),
-                    False, aURL(f="recreq",
-                                vars={"recreq.status":"1,2,3"})],
-                    [T("List All"),
-                    False, aURL(f="recreq")],
-                ]],
-                [T("Dead Bodies"), False, aURL(f="body"),[
-                    [T("New"),
-                    False, aURL(p="create", f="body",
-                                args="create")],
-                    [T("Search"),
-                    False, aURL(f="body",
-                                args="search")],
-                    [T("List all"),
-                    False, aURL(f="body")],
-                    [T("List unidentified"),
-                    False, aURL(f="body",
-                                vars=dict(status="unidentified"))],
-                    [T("Report by Age/Gender"),
-                    False, aURL(f="body",
-                                args=["report"],
-                                vars=dict(rows="age_group",
-                                        cols="gender",
-                                        fact="pe_label",
-                                        aggregate="count"))],
-                ]],
-                [T("Missing Persons"), False, aURL(f="person"), [
-                    [T("List all"), False, aURL(f="person")],
-                ]],
-                [T("Morgues"), False, aURL(f="morgue"),[
-                    [T("New"),
-                    False, aURL(p="create", f="morgue",
-                                args="create")],
-                    [T("List All"),
-                    False, aURL(f="morgue")],
-                ]],
-                [T("Help"), False, URL(f="index")]
-            ]
-        },
-
-        # DVR / Disaster Victim Registry
-        # ---------------------------------------------------------------------
-        "dvr": {
-            "menu": [
-                [T("Add Disaster Victims"), False,  aURL(f="index"),[
-                    [T("Add new Group"), False, aURL(p="create", f="index")],
-                    [T("Add new Individual"), False, aURL(p="create", f="index")]
-                ]],
-                [T("Edit Disaster Victims"), False,  aURL(f="index"),[
-                    [T("Search and Edit Group"), False, aURL(f="index")],
-                    [T("Search and Edit Individual"), False, aURL(f="index")]
-                ]],
-                [T("List Groups"), False,  aURL(f="index"),[
-                    [T("List Groups/View Members"), False, aURL(f="index")]
-                ]],
-                [T("Reports"), False,  aURL(f="index"),[
-                    [T("Drill Down by Group"), False, aURL(f="index")],
-                    [T("Drill Down by Shelter"), False, aURL(f="index")],
-                    [T("Drill Down by Incident"), False, aURL(f="index")]
-                ]],
-            ]
-        },
-
         # EVENT / Event Module
         # ---------------------------------------------------------------------
         "event": {
             "menu": [
-                    [T("Scenarios"), False, aURL(c="scenario", f="scenario"), [
-                        [T("New Scenario"), False, aURL(p="create", c="scenario",
-                                                        f="scenario",
-                                                        args="create")],
-                        [T("View All"), False, aURL(c="scenario", f="scenario")]
-                    ]],
-                    [T("Events"), False, aURL(c="event", f="event"), [
-                        [T("New Event"), False, aURL(p="create", c="event",
-                                                     f="event",
-                                                     args="create")],
-                        [T("View All"), False, aURL(c="event", f="event")]
-                    ]],
-                ]   \
-                if deployment_settings.has_module("scenario") else \
-                [
-                    [T("Events"), False, aURL(c="event", f="event"), [
-                        [T("New Event"), False, aURL(p="create", c="event",
-                                                     f="event",
-                                                     args="create")],
-                        [T("View All"), False, aURL(c="event", f="event")]
-                    ]]
-                ],
-        },
-
-        # FIRE
-        # ---------------------------------------------------------------------
-        "fire": {
-            "menu": [
-                [T("Fire Stations"), False, aURL(c="fire", f="station"),
-                [
-                    [T("New"), False, aURL(p="create", c="fire", f="station",
-                                           args="create")],
-                    [T("List All"), False, aURL(c="fire", f="station")],
-                    [T("Search"), False, aURL(c="fire", f="station",
-                                              args="search")],
-                    [T("Import Stations"), False, aURL(c="fire", f="station",
-                                                       args="import")],
-                    [T("Import Vehicles"), False, aURL(c="fire",
-                                                       f="station_vehicle",
-                                                       args="import")],
-                ]],
-                [T("Water Sources"), False, aURL(c="fire", f="water_source"),
-                [
-                    [T("New"), False, aURL(p="create", c="fire",
-                                           f="water_source",
-                                           args="create")],
-                    [T("List All"), False, aURL(c="fire", f="water_source")],
-                    [T("Search"), False, aURL(c="fire", f="water_source",
-                                              args="search")],
-                    [T("Import"), False, aURL(c="fire", f="water_source",
-                                              args="import")],
-                ]],
-                [T("Hazard Points"), False, aURL(c="fire", f="hazard_point"),
-                [
-                    [T("New"), False, aURL(p="create", c="fire",
-                                           f="hazard_point",
-                                           args="create")],
-                    [T("List All"), False, aURL(c="fire", f="hazard_point")],
-                    [T("Search"), False, aURL(c="fire", f="hazard_point",
-                                              args="search")],
-                    [T("Import"), False, aURL(c="fire", f="hazard_point",
-                                              args="import")],
-                ]],
-            ]
+                        [T("Scenarios"), False, aURL(c="scenario", f="scenario"), [
+                            [T("New Scenario"), False, aURL(p="create", c="scenario",
+                                                            f="scenario",
+                                                            args="create")],
+                            [T("View All"), False, aURL(c="scenario", f="scenario")]
+                        ]],
+                        [T("Events"), False, aURL(c="event", f="event"), [
+                            [T("New Event"), False, aURL(p="create", c="event", f="event",
+                                                         args="create")],
+                            [T("View All"), False, aURL(c="event", f="event")]
+                        ]],
+                    ]   \
+                    if deployment_settings.has_module("scenario") else \
+                    [
+                        [T("Events"), False, aURL(c="event", f="event"), [
+                            [T("New Event"), False, aURL(p="create", c="event", f="event",
+                                                         args="create")],
+                            [T("View All"), False, aURL(c="event", f="event")]
+                        ]]
+                    ],
         },
 
         # GIS / GIS Controllers
         # ---------------------------------------------------------------------
         "gis": {
             "menu": [
-                [T("Locations"), False, aURL(f="location"), [
-                    [T("New Location"), False, aURL(p="create", f="location",
-                                                    args="create")],
-                    [T("New Location Group"), False, aURL(p="create", f="location",
-                                                        args="create",
-                                                        vars={"group": 1})],
-                    [T("List All"), False, aURL(f="location")],
-                    [T("Search"), False, aURL(f="location", args="search")],
-                    #[T("Geocode"), False, aURL(f="geocode_manual")],
-                ]],
-                [T("Fullscreen Map"), False, aURL(f="map_viewing_client")],
-                # Currently not got geocoding support
-                #[T("Bulk Uploader"), False, aURL(c="doc", f="bulk_upload")]
+                #[T("Locations"), False, aURL(f="location"), [
+                #    [T("New Location"), False, aURL(p="create", f="location",
+                #                                    args="create")],
+                #    [T("New Location Group"), False, aURL(p="create", f="location",
+                #                                          args="create",
+                #                                          vars={"group": 1})],
+                #    [T("List All"), False, aURL(f="location")],
+                #    [T("Search"), False, aURL(f="location", args="search")],
+                #    #[T("Geocode"), False, aURL(f="geocode_manual")],
+                #]],
+                #[T("Fullscreen Map"), False, aURL(f="map_viewing_client")],
+                ## Currently not got geocoding support
+                ##[T("Bulk Uploader"), False, aURL(c="doc", f="bulk_upload")]
             ],
 
-            "condition1": lambda: not deployment_settings.get_security_map() or s3_has_role(MAP_ADMIN),
-            "conditional1": [[T("Service Catalogue"), False, URL(f="map_service_catalogue")]]
+            #"condition1": lambda: not deployment_settings.get_security_map() or s3_has_role(MAP_ADMIN),
+            #"conditional1": [[T("Service Catalogue"), False, URL(f="map_service_catalogue")]]
         },
 
         # HMS / Hospital Status Assessment and Request Management System
@@ -1061,20 +825,19 @@ if auth.permission.format in ("html"):
         # ---------------------------------------------------------------------
         "irs": {
             "menu": [
-                [T("Incident Reports"), False, aURL(f="ireport"),[
+                [T("Events"), False, aURL(f="ireport"),[
                     [T("New"), False, aURL(p="create", f="ireport", args="create")],
                     [T("List All"), False, aURL(f="ireport")],
-                    [T("Open Incidents"), False, aURL(f="ireport", vars={"open":1})],
                     [T("Timeline"), False, aURL(f="ireport", args="timeline")],
                     #[T("Search"), False, aURL(f="ireport", args="search")]
                 ]],
             ],
 
-            "on_admin": [[T("Incident Categories"), False, aURL(f="icategory"),[
+            "on_admin": [[T("Event Categories"), False, aURL(f="icategory"),[
                     [T("New"), False, aURL(p="create", f="icategory", args="create")],
                     [T("List All"), False, aURL(f="icategory")],
                 ]],
-                ["Ushahidi " + T("Import"), False, aURL(f="ireport", args="ushahidi")]
+                #["Ushahidi " + T("Import"), False, aURL(f="ireport", args="ushahidi")]
             ]
         },
 
@@ -1106,23 +869,6 @@ if auth.permission.format in ("html"):
                 ]
         },
 
-        # MPR / Missing Person Registry
-        # ---------------------------------------------------------------------
-        "mpr": {
-            "menu": [
-                [T("Missing Persons"),
-                False, aURL(f="person"), [
-                    [T("New"),
-                    False, aURL(p="create", f="person",
-                                args="create")],
-                    [T("Search"),
-                    False, aURL(f="index")],
-                    [T("List All"),
-                    False, aURL(f="person")],
-                ]],
-            ],
-        },
-
         # MSG / Messaging Controller
         # ---------------------------------------------------------------------
         "msg": {
@@ -1148,30 +894,7 @@ if auth.permission.format in ("html"):
 
         # ORG / Organization Registry
         # ---------------------------------------------------------------------
-        "org": {
-            "menu": [
-                    [T("Organizations"), False, aURL(c="org", f="organisation"), [
-                        [T("New"), False,
-                        aURL(p="create", c="org", f="organisation",
-                            args="create")],
-                        [T("List All"), False, aURL(c="org", f="organisation")],
-                        [T("Search"), False, aURL(c="org", f="organisation",
-                                                args="search")],
-                        [T("Import"), False, aURL(c="org", f="organisation",
-                                                args="import")]
-                    ]],
-                    [T("Offices"), False, aURL(c="org", f="office"), [
-                        [T("New"), False,
-                        aURL(p="create", c="org", f="office",
-                            args="create")],
-                        [T("List All"), False, aURL(c="org", f="office")],
-                        [T("Search"), False, aURL(c="org", f="office",
-                                                args="search")],
-                        [T("Import"), False, aURL(c="org", f="office",
-                                                args="import")]
-                    ]],
-                ],
-        },
+        "org": hrm_menu,
 
         # PATIENT / Patient Tracking Module
         # ---------------------------------------------------------------------
@@ -1187,7 +910,7 @@ if auth.permission.format in ("html"):
         },
 
         # PR / VITA Person Registry
-        # ----------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         "pr": {
             "menu": pr_menu
         },
@@ -1198,14 +921,12 @@ if auth.permission.format in ("html"):
             "menu": [
                 [T("Home"), False, aURL(f="index")],
                 [T("Procurement Plans"), False, aURL(f="plan"),[
-                    [T("New"), False, aURL(p="create", f="plan",
-                                           args="create")],
+                    [T("New"), False, aURL(p="create", f="plan", args="create")],
                     [T("List All"), False, aURL(f="plan")],
                     #[T("Search"), False, aURL(f="plan", args="search")]
                 ]],
                 [T("Suppliers"), False, aURL(f="supplier"),[
-                    [T("New"), False, aURL(p="create", f="supplier",
-                                           args="create")],
+                    [T("New"), False, aURL(p="create", f="supplier", args="create")],
                     [T("List All"), False, aURL(f="supplier")],
                     #[T("Search"), False, aURL(f="supplier", args="search")]
                 ]],
@@ -1258,26 +979,23 @@ if auth.permission.format in ("html"):
             ]
         },
 
-        # VOL / Volunteer
-        # ---------------------------------------------------------------------
-        "vol": {
-            "menu": [],
-            "condition1": lambda: (auth.user is not None) and deployment_settings.has_module("hrm"),
-            "conditional1": [
-                [T("My Details"), False, aURL(f="person", args="")]
-            ],
-
-            "condition2": lambda: (auth.user is not None) and (deployment_settings.has_module("project")),
-            "conditional2": [
-                [T("My Tasks"), False, aURL(f="task", args="")],
-            ]
-        },
-
         # ADMIN
         # ---------------------------------------------------------------------
         "admin": {
             "menu": admin_menu_options
         },
+        "appadmin": {
+            "menu": admin_menu_options
+        },
+
+        "default": {
+            "menu": [
+                [T("Site"), False, aURL(c="default"),
+                [
+                    [T("Sign in"), True, aURL(c="default", f="user", args="login")],
+                ]
+            ]]
+        }
 
     }
 
@@ -1285,13 +1003,145 @@ if auth.permission.format in ("html"):
     s3_menu_dict["supply"] = s3_menu_dict["inv"]
     s3_menu_dict["scenario"] = s3_menu_dict["event"]
 
+    # =========================================================================
+    # Breadcrumbs
+    # =========================================================================
+    def get_menu_label_and_state(menu_dict, # yikes
+                                 controller,
+                                 function,
+                                 args = None,
+                                 vars = None
+                                ):
+        """ Support Breadcrumbs """
+
+        # Look at the menu for this Controller
+        menu_spec = menu_dict[controller]["menu"]
+        if not menu_spec:
+            try:
+                # e.g. HRM
+                menu_spec = menu_dict[controller]["conditional1"]
+            except KeyError:
+                # e.g. GIS
+                pass
+        # Go through each entry in turn to find a match
+        # Main menu
+        for menu_item in menu_spec:
+            (label, active, url) = menu_item[:3]
+            if url:
+                url_parts = url.split("/")[1:]
+                # Check we're in the correct function
+                url_app, url_controller, url_function = url_parts[:3]
+                if vars:
+                    _url_args = url_parts[3:]
+                    if _url_args:
+                        url_args, url_vars = _url_args[len(_url_args) - 1].split("?")
+                    elif "?" in url_function:
+                        url_function, url_vars = url_function.split("?")
+                        url_args = None
+                    else:
+                        url_vars = None
+                        url_args = None
+                elif args:
+                    url_args = url_parts[3:]
+                    url_vars = None
+                else:
+                    url_args = None
+                    url_vars = None
+
+                if url_function == function:
+                    if not args or url_args == args:
+                        if not vars or url_vars == vars:
+                            # We found the correct menu entry
+                            return label, active
+            # Try the submenus
+            try:
+                submenus = menu_item[3]
+            except IndexError:
+                # No Submenus defined for this main menu
+                pass
+            else:
+                for submenu_item in submenus:
+                    if submenu_item:
+                        (sub_label, sub_active, sub_url) = submenu_item[:3]
+                        if sub_url:
+                            sub_url_parts = sub_url.split("/")[1:]
+                            # Check we're in the correct function
+                            sub_url_app, sub_url_con, sub_url_func = sub_url_parts[:3]
+                            if vars:
+                                _sub_url_args = sub_url_parts[3:]
+                                if _sub_url_args and "?" in _sub_url_args:
+                                    sub_url_args, sub_url_vars = _sub_url_args[len(_sub_url_args) - 1].split("?")
+                                elif "?" in sub_url_func:
+                                    sub_url_func, sub_url_vars = sub_url_func.split("?")
+                                    sub_url_args = None
+                                else:
+                                    sub_url_vars = None
+                                    sub_url_args = None
+                            elif args:
+                                sub_url_args = sub_url_parts[3:]
+                                sub_url_vars = None
+                            else:
+                                sub_url_args = None
+                                sub_url_vars = None
+                            if sub_url_func == function:
+                                if not args or sub_url_args == args:
+                                    if not vars or sub_url_vars == vars:
+                                        # We found the correct menu entry
+                                        return sub_label, sub_active
+
+        return ("", False)
+
+    # -------------------------------------------------------------------------
+    def define_breadcrumbs():
+        breadcrumbs = [(deployment_settings.modules["default"].name_nice, True,
+                        "/%s" % request.application)]
+        if request.controller != "default":
+            try:
+                controllerLabel = deployment_settings.modules[request.controller].name_nice
+            except KeyError:
+                controllerLabel = "."
+            breadcrumbs.append(
+                (controllerLabel,
+                 True,
+                 "/%s/%s" % (request.application, request.controller)
+                )
+            )
+        if request.function != "index":
+            breadcrumbs.append(
+                (get_menu_label_and_state(s3_menu_dict,
+                                          request.controller,
+                                          request.function) + \
+                 (URL(c=request.controller,
+                      f=request.function),)
+                )
+            )
+        if request.args(0):
+            try:
+                # Ignore this argument if it's the ID of a record
+                int(request.args[0])
+            except ValueError:
+                breadcrumbs.append(
+                    (get_menu_label_and_state(s3_menu_dict,
+                                              request.controller,
+                                              request.function,
+                                              request.args,
+                                              request.vars) + \
+                     (URL(c=request.controller,
+                          f=request.function,
+                          args = request.args),)
+                    )
+                )
+        return breadcrumbs
+
+    breadcrumbs = define_breadcrumbs()
+
 else:
-    # Non-interactive
     s3_menu = lambda *args, **vars: None
     s3.menu_lang = []
     s3.menu_help = []
     s3.menu_auth = []
     s3.menu_modules = []
     response.menu = []
+    breadcrumbs = []
 
 # END =========================================================================

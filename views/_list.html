@@ -33,4 +33,5 @@
  {{=XML(response.s3.rfooter)}}
 </div>
 {{pass}}
+{{try:}}{{=dashboard}}{{except:}}{{pass}}
 {{include "dataTables.html"}}

@@ -294,7 +294,7 @@ class S3OrganisationModel(S3Model):
                                      vars=dict(format="popup"))
 
         # @ToDo: Deployment_setting
-        organisation_dropdown_not_ac = False
+        organisation_dropdown_not_ac = True
         if organisation_dropdown_not_ac:
             help = T("If you don't see the Organization in the list, you can add a new one by clicking link 'Add Organization'.")
             widget = None
@@ -390,8 +390,8 @@ class S3OrganisationModel(S3Model):
                        list_fields = ["id",
                                       "name",
                                       "acronym",
-                                      "type",
-                                      "sector_id",
+                                      #"type",
+                                      #"sector_id",
                                       "country",
                                       "website"
                                     ])

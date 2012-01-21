@@ -254,8 +254,8 @@ class S3ProjectModel(S3Model):
                                         writable=False if drr else True,
                                         label = T("Budget")),
                                   sector_id(
-                                            readable=False,
-                                            writable=False,
+                                            #readable=False,
+                                            #writable=False,
                                             widget=lambda f, v: \
                                             CheckboxesWidget.widget(f, v, cols=3)),
 
@@ -319,13 +319,13 @@ class S3ProjectModel(S3Model):
                        super_entity="doc_entity",
                        deduplicate=self.project_project_deduplicate,
                        onvalidation=self.project_project_onvalidation,
-                       onaccept=self.project_project_onaccept,
+                       #onaccept=self.project_project_onaccept,
                        create_next=URL(c="project", f="project",
                                        args=["[id]", next]),
                        list_fields=["id",
                                     "name",
-                                    "organisation_id",
-                                    #"countries_id",
+                                    #"organisation_id",
+                                    "countries_id",
                                     "start_date",
                                     "end_date",
                                    ])
@@ -586,7 +586,7 @@ class S3ProjectModel(S3Model):
                                       comment = s3_popup_comment(c="project",
                                                                  f="activity",
                                                                  title=ADD_ACTIVITY,
-                                                                 tooltip=T("If you don't see the activity in the list, you can add a new one by clicking link 'Add Activity'.")),
+                                                                 tooltip=T("If you don't see the community in the list, you can add a new one by clicking link 'Add Community'.")),
                                       ondelete = "CASCADE")
 
         # Components
@@ -780,7 +780,7 @@ class S3ProjectModel(S3Model):
             request = current.request
             response = current.response
             s3 = response.s3
-        
+
             calendar = r.record.calendar
 
             # Add core Simile Code
@@ -917,6 +917,8 @@ class S3ProjectDRRModel(S3Model):
         activity_id = self.project_activity_id
         #multi_activity_type_id = self.project_multi_activity_type_id
 
+        pca = self.settings.get_project_community_activity()
+
         messages = current.messages
         NONE = messages.NONE
 
@@ -924,10 +926,11 @@ class S3ProjectDRRModel(S3Model):
         # Project Organisation
         #
         project_organisation_roles = {
-            1: T("Lead Implementer"), # T("Host National Society")
-            2: T("Partner"), # T("Partner National Society")
+            1: T("Host National Society"),
+            2: T("Partner National Society"),
             3: T("Donor"),
-            4: T("Customer"), # T("Beneficiary")?
+            #4: T("Customer"), # T("Beneficiary")?
+            5: T("Partner")
         }
         project_organisation_lead_role = 1
 
@@ -1107,6 +1110,8 @@ class S3ProjectDRRModel(S3Model):
                                   *s3.meta_fields())
 
         # Field configuration?
+        if pca:
+            table.activity_id.label = T("Community")
 
         # CRUD Strings
         ADD_BNF = T("Add Beneficiaries")

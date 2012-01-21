@@ -215,7 +215,7 @@ def person():
             (T("Address"), "address"),
             (T("Contact Details"), "contact"),
             (T("Identity"), "identity"),
-            (T("Groups"), "group_membership"),
+            (T("Teams"), "group_membership"),
             (T("Images"), "pimage")]
     if deployment_settings.has_module("dvi") or \
        deployment_settings.has_module("mpr"):
@@ -235,8 +235,7 @@ def person():
         tabs.append((T("Training"), "training"))
     # Configuration tabs
     if deployment_settings.get_save_search_widget():
-        tabs = tabs + [#(T("Subscriptions"), "pe_subscription"),
-                       (T("Saved Searches"), "save_search"),
+        tabs = tabs + [(T("Saved Searches"), "save_search"),
                        (T("Subscription Details"), "subscription")]
     tabs.append((T("Map Settings"), "config"))
 

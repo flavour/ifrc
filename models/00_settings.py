@@ -536,13 +536,14 @@ s3mgr.ROWSPERPAGE = 20
 from gluon.storage import Messages
 s3.messages = Messages(T)
 system_name = deployment_settings.get_system_name_short()
-s3.messages.confirmation_email_subject = "%s %s" % (system_name,
-                                                    T("access granted"))
-s3.messages.confirmation_email = "%s %s %s %s. %s." % (T("Welcome to the"),
-                                                       system_name,
-                                                       T("Portal at"),
-                                                       s3.base_url,
-                                                       T("Thanks for your assistance"))
+s3.messages.confirmation_email_subject = T("Resource Mapping System account has been activated")
+s3.messages.confirmation_email = "%s %s. %s %s/%s/default/help\n\n%s,\n\n%s" % (T("Your request for Red Cross and Red Crescent Resource Mapping System (RMS) has been approved and you can now access the system at"),
+                                                 deployment_settings.get_base_public_url(),
+                                                 T("If you have any questions or need support, please see"),
+                                                 deployment_settings.get_base_public_url(),
+                                                 request.application,
+                                                 T("With best regards"),
+                                                 T("RMS Team"))
 
 # Valid Extensions for Image Upload fields
 IMAGE_EXTENSIONS = ["png", "PNG", "jpg", "JPG", "jpeg", "JPEG", "gif", "GIF", "tif", "TIF", "tiff", "TIFF", "bmp", "BMP", "raw", "RAW"]

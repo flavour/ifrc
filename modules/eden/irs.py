@@ -54,6 +54,7 @@ class S3IRSModel(S3Model):
 
         location_id = self.gis_location_id
 
+
         datetime_represent = S3DateTime.datetime_represent
 
         # ---------------------------------------------------------------------
@@ -299,23 +300,23 @@ class S3IRSModel(S3Model):
                                   *s3.meta_fields())
 
         # CRUD strings
-        ADD_INC_REPORT = T("Add Incident Report")
-        LIST_INC_REPORTS = T("List Incident Reports")
+        ADD_INC_REPORT = T("Add Event")
+        LIST_INC_REPORTS = T("List Events")
         s3.crud_strings[tablename] = Storage(
             title_create = ADD_INC_REPORT,
-            title_display = T("Incident Report Details"),
+            title_display = T("Event Details"),
             title_list = LIST_INC_REPORTS,
-            title_update = T("Edit Incident Report"),
-            title_search = T("Search Incident Reports"),
-            subtitle_create = T("Add New Incident Report"),
-            subtitle_list = T("Incident Reports"),
+            title_update = T("Edit Event"),
+            title_search = T("Search Events"),
+            subtitle_create = T("Add New Event"),
+            subtitle_list = T("Events"),
             label_list_button = LIST_INC_REPORTS,
             label_create_button = ADD_INC_REPORT,
-            label_delete_button = T("Delete Incident Report"),
-            msg_record_created = T("Incident Report added"),
-            msg_record_modified = T("Incident Report updated"),
-            msg_record_deleted = T("Incident Report deleted"),
-            msg_list_empty = T("No Incident Reports currently registered"))
+            label_delete_button = T("Delete Event"),
+            msg_record_created = T("Event added"),
+            msg_record_modified = T("Event updated"),
+            msg_record_deleted = T("Event deleted"),
+            msg_list_empty = T("No Events currently registered"))
 
         self.configure(tablename,
                        super_entity = ("sit_situation", "doc_entity"),
@@ -962,11 +963,11 @@ def irs_rheader(r, tabs=[]):
 
         tabs = [(T("Report Details"), None),
                 (T("Photos"), "image"),
-                (T("Documents"), "document"),
-                (T("Vehicles"), "vehicle"),
-                (T("Staff"), "human_resource"),
-                (T("Tasks"), "task"),
-                (T("Dispatch"), "dispatch"),
+                # (T("Documents"), "document"),
+                # (T("Vehicles"), "vehicle"),
+                # (T("Staff"), "human_resource"),
+                # (T("Tasks"), "task"),
+                # (T("Dispatch"), "dispatch"),
                ]
 
         rheader_tabs = s3_rheader_tabs(r, tabs)

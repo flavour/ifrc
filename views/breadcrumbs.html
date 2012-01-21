@@ -1,0 +1,6 @@
+{{ if len(breadcrumbs) > 1: }}
+<div class='breadcrumbs'>{{ index = 0 }}
+    <ul>{{ for breadcrumb in breadcrumbs: }} {{ index += 1 }}
+        <li><a class='{{="ancestor" if index < len(breadcrumbs) else "highlight"}}' href='{{=breadcrumb[2]}}'>{{=breadcrumb[0]}}</a></li>{{ pass }}
+    </ul>
+</div>{{ pass }}

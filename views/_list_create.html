@@ -38,9 +38,9 @@
 <div id='rfooter'>
 {{=XML(response.s3.rfooter)}}
 </div>
-{{pass}}
 </div>
-
+{{pass}}
+{{try:}}{{=dashboard}}{{except:}}{{pass}}
 {{include "dataTables.html"}}
 <script type="text/javascript">//<![CDATA[
 $(document).ready(function(){

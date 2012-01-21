@@ -19,13 +19,14 @@ function s3_debug(message, value) {
   <script src="http://extjs.cachefly.net/ext-3.3.1/src/locale/ext-lang-{{=response.s3.language}}.js" type="text/javascript"></script>
 
   <link href="http://extjs.cachefly.net/ext-3.3.1/resources/css/ext-all.css" rel="stylesheet" type="text/css" />
-  <link href="http://extjs.cachefly.net/ext-3.3.1/resources/css/xtheme-gray.css" rel="stylesheet" type="text/css" />
+  <!--<link href="http://extjs.cachefly.net/ext-3.3.1/resources/css/xtheme-gray.css" rel="stylesheet" type="text/css" />-->
 {{else:}}
   <script src="/{{=request.application}}/static/scripts/web2py/jquery-1.6.4.js" type="text/javascript"></script> 
   <script src="/{{=request.application}}/static/scripts/ext/adapter/jquery/ext-jquery-adapter-debug.js" type="text/javascript"></script>
   <script src="/{{=request.application}}/static/scripts/ext/ext-all-debug.js" type="text/javascript"></script>
 
   <link href="/{{=request.application}}/static/scripts/ext/resources/css/ext-all.css" rel="stylesheet" type="text/css" />
-  <link href="/{{=request.application}}/static/scripts/ext/resources/css/xtheme-gray.css" rel="stylesheet" type="text/css" />	
-{{pass}}	
+  <!--<link href="/{{=request.application}}/static/scripts/ext/resources/css/xtheme-gray.css" rel="stylesheet" type="text/css" />-->
+{{pass}}
+  <link href="/{{=request.application}}/static/scripts/ext/resources/css/xtheme-ifrc.css" rel="stylesheet" type="text/css" />	
 {{=s3_include_debug()}}

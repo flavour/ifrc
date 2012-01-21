@@ -42,105 +42,114 @@ from gluon.storage import Storage
 # =============================================================================
 class S3Menu(DIV):
     """
-        MENUS3 reimplementation -
-            * Currently a copy of existing MENUS3
+        MENU implementation -
             * breadcrumbs support
             * greater control / flexibility
-            * future - side menu
-    """
-    tag = "div"
 
+        @author Abhishek Mishra
+        @author Fran Boon
+    """
+
+    # -------------------------------------------------------------------------
     def __init__(self, data, **args):
         self.data = data
         self.attributes = args
 
+    # -------------------------------------------------------------------------
     def serialize(self, data, level=0):
-        if level == 0:
-            # Top-level menu
-            div = UL(**self.attributes)
-            for i in range(len(data)):
-                (name, right, link) = data[i][:3]
-                if link == False:
-                    continue
-                if not link:
-                    link = "#null"
-                if right:
-                    class_ = "fright"
-                else:
-                    class_ = "fleft"
-                if len(data[i]) > 3 and data[i][3]:
-                    # Submenu
-                    ul_inner = self.serialize(data[i][3], level+1)
-                    in_ul = LI(DIV(A(name,
-                                     _href=link),
-                                   _class="hoverable"),
-                                ul_inner,
-                                _class=class_ if ("" or self.attributes["_id"]) != "subnav" else " ")
-                else:
-                    if (i == 0) and (self.attributes["_id"] == "modulenav"):
-                        # 1st item, so display logo
-                        in_ul = LI(DIV(SPAN(A(_href=link),
-                                            _class="S3menulogo"),
-                                       SPAN(A(name,
-                                              _href=link),
-                                              _class="S3menuHome"),
-                                       _class="hoverable"),
-                                   _class=class_)
-                    else:
-                        in_ul = LI(DIV(A(name, _href=link),
-                                       _class="hoverable"),
-                                   _class=class_ if ("" or self.attributes["_id"]) != "subnav" else " ")
-                div.append(in_ul)
-        else:
-            # Submenu
-            div = UL(_class="submenu")
+        """
+            NOTE on right:
+                personal-menu is the one on top right besides login,
+                a presence of right in module level menu indicates a personal-menu
+
+                nav is the big menu below the logo,
+                an absence of right in module level menu indicates nav items
+
+                main-sub-menu is the left side menu
+                a right = True indicates a highlight here (set by 01_menu)
+
+                extension are submenus under main-sub-menu
+                a right = True indicates highlight here (set by 01_menu)
+        """
+        _type = self.attributes["_type"]
+        if _type == "personal-menu":
+            items = []
+            data = [x for x in data if x[1]]
+            for item in data:
+                (name, link) = item[:2]
+                items.append(LI(A(name,
+                                  _href=link)
+                                )
+                            )
+
+            deployment_settings = current.deployment_settings
+            if deployment_settings.get_L10n_display_toolbar():
+                menu_langs = self.attributes["_menu_langs"]
+                current_lang = current.T.accepted_language
+                langopts = [ OPTION(x[0], _value=x[2]) for x in menu_langs[3] ]
+                langselect = SELECT(langopts,
+                                    _name="_language",
+                                    _title="Language Selection",
+                                    value=current_lang,
+                                    _onchange="$('#personal-menu div form').submit();"
+                                )
+                langform = FORM(langselect,
+                                _name="_language",
+                                _action="",
+                                _method="get")
+                return DIV([UL(items), langform], _class="pmenu-wrapper")
+            else:
+                return DIV(UL(items))
+        elif _type == "nav":
+            _highlight = "" or self.attributes["_highlight"]
+            items = []
             for item in data:
                 (name, right, link) = item[:3]
-                # Eval link if meant to be lazily evaluated. Needed by hrm menu definition
-                if type(link) == type(lambda:None):
-                    link = link()
+                if not right:
+                    import re
+                    _link = link
+                    if "default" not in _highlight:
+                        _highlight = re.match("(.*/).*$", _highlight).group(1)
+                        _link = re.match("(.*/).*$", link).group(1)
+                    _class = "highlight" if str(_link) in _highlight else " "
+                    items.append(LI(
+                        A(name, _href=link, _class=_class)
+                    ))
+            return UL(items, **self.attributes)
+        elif _type == "main-sub-menu":
+            items = []
+            for item in data:
+                (name, right, link) = item[:3]
+                if link:
+                    # Lack of link => lack of permissions
+                    items.append(LI(A(name,
+                                      _href=link,
+                                      _class="highlight" if right==True else " ")
+                                    )
+                                )
+                if len(item) > 3:
+                    sub = item[3]
+                    append = S3Menu(sub,
+                                    _type="extension",
+                                    _class="menu-extention").serialize(sub)
+                    items.append(append)
+            return UL(items, **self.attributes)
+        elif _type == "extension":
+            items = []
+            for item in data:
+                (name, right, link) = item[:3]
+                if link:
+                    # Lack of link => lack of permissions
+                    items.append(LI(A("%s" % name,
+                                      _href=link,
+                                      _class="highlight" if right==True else " ")
+                                    )
+                                )
+            return UL(items, **self.attributes)
+        else:
+            return UL()
 
-                if link == False:
-                    continue
-                elif not link:
-                    link = "#null"
-                if name == "----":
-                    # Horizontal line as separator
-                    li = LI(HR(), _class="menu_separator")
-                elif isinstance(name, dict) and "id" in name:
-                    if "name" in name:
-                        _name = name["name"]
-                    else:
-                        _name = ""
-                    _id = name["id"]
-                    if "value" in name:
-                        _value = name["value"]
-                    else:
-                        _value = False
-                    if "request_type" in name:
-                        _request_type = name["request_type"]
-                    else:
-                        _request_type = "ajax"
-                    if link:
-                        if _request_type == "ajax":
-                            _onchange="var val=$('#%s:checked').length; $.getS3('%s'+'?val='+val, null, false, null, false, false);" % (_id, link)
-                        else:
-                            # Just load the page. Use this if the changed menu
-                            # item should alter the contents of the page, and
-                            # it's simpler just to load it.
-                            _onchange="location.href='%s'" % link
-                    else:
-                        _onchange=None
-                    li = LI(A(INPUT(_type="checkbox",
-                                    _id=_id,
-                                    value=_value,
-                                    _onchange=_onchange),
-                              " %s" % _name, _nowrap="nowrap"))
-                else:
-                        li = LI(A(name, _href=link))
-                div.append(li)
-        return div
-
+    # -------------------------------------------------------------------------
     def xml(self):
         return self.serialize(self.data, 0).xml()
 
@@ -223,7 +232,7 @@ def s3_rheader_tabs(r, tabs=[]):
         Constructs a DIV of component links for a S3RESTRequest
 
         @param tabs: the tabs as list of tuples (title, component_name, vars),
-                     where vars is optional
+            where vars is optional
     """
 
     rheader_tabs = S3ComponentTabs(tabs)

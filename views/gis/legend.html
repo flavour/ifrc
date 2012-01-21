@@ -1,29 +1,56 @@
 <div id='legend'>
     <table align='center'>
         <tr>
-            <!--@ToDo Have the list pulled from Active Layers, Images from Feature Class (& display inside Ext window) -->
-            <!--<td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Emergency_Teams_S1.png" % request.application, _height="30", _width="30")}}</td>-->
-            <!--<td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Edu_Schools_S1.png" % request.application, _height="25", _width="31")}}</td>-->
-            <td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.E_Med_Hospital_S1.png" % request.application, _height="30", _width="30")}}</td>
-            <td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Emergency_Shelters_S1.png" % request.application, _height="30", _width="30")}}</td>
-            <td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Emergency_Operations_Center_S1.png" % request.application, _height="30", _width="30")}}</td>
-            <td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Volunteer.png" % request.application, _height="30", _width="30")}}</td>
-            <!--<td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.marker_red.png" % request.application)}}</td>-->
-            <!--<td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.marker_yellow.png" % request.application)}}</td>-->
-            <!--<td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.marker_green.png" % request.application)}}</td>-->
-            <td style='padding:1px; text-align:center;'>{{=IMG(_src="/%s/static/img/Cluster.png" % request.application)}}</td>
-        </tr>
-        <tr>
-            <!--<td style='padding:5px;'>{{=T("Activities")}}</td>-->
-            <!--<td style='padding:5px;'>{{=T("Schools")}}</td>-->
-            <td style='padding:5px;'>{{=T("Hospitals")}}</td>
-            <td style='padding:5px;'>{{=T("Shelters")}}</td>
-            <td style='padding:5px;'>{{=T("Offices & Warehouses")}}</td>
-            <td style='padding:5px;'>{{=T("Volunteers")}}</td>
-            <!--<td style='padding:5px;'>{{=T("Incidents")}}</td>-->
-            <!--<td style='padding:5px;'>{{=T("Requests")}}</td>-->
-            <!--<td style='padding:5px;'>{{=T("Assessments")}}</td>-->
-            <td style='padding:5px;' align='center'>{{=T("Multiple")}}<br />({{=T("click for more details")}})</td>
+            <td style='padding-right:150px;'><table><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Incident.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Event")}}</td>
+                </tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Staff.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Staff")}}</td>
+                </tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Volunteer.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Volunteer")}}</td>
+                </tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Office.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Office")}}</td>
+                </tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Warehouse.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Warehouse")}}</td>
+                </tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Asset.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Asset")}}</td>
+                <!--</tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Assessment.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Assessment")}}</td>-->
+                </tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/markers/gis_marker.image.Project.png" % request.application, _height="27", _width="16")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Project Community")}}</td>
+                </tr><tr>
+                    <td style='padding:1px;'>{{=IMG(_src="/%s/static/img/ifrc/cluster.png" % request.application, _height="15", _width="15")}}</td>
+                    <td style='padding:5px; text-align:left'>{{=T("Multiple")}}</td>
+            </tr></table></td>
+            <td><table>
+            <tr>
+            <!--http://gdata2.sci.gsfc.nasa.gov/daac-bin/wms_trmm?SERVICE=WMS&VERSION=1.1.1&REQUEST=GETLEGENDGRAPHIC&LAYER=TRMM_3B42_V6_10_DAY&FORMAT=IMAGE/PNG-->
+            <td><img src="/{{=request.application}}/static/img/gis/TRMM_3B42_V6_10_DAY.png" width="353" height="47"></td>
+            </tr>
+            <tr>
+            <td style='padding:5px;' align='center'>Precipitation - last 10 days accumulated (mm)</td>
+            </tr>
+            <tr>
+            <!--http://gdata2.sci.gsfc.nasa.gov/daac-bin/wms_trmm?SERVICE=WMS&VERSION=1.1.1&REQUEST=GETLEGENDGRAPHIC&LAYER=TRMM_3B42_V6_DAILY&FORMAT=IMAGE/PNG-->
+            <td><img src="/{{=request.application}}/static/img/gis/TRMM_3B42_V6_DAILY.png" width="350" height="41"></td>
+            </tr>
+            <tr>
+            <td style='padding:5px;' align='center'>Precipitation - last 1 day (mm)</td>
+            </tr>
+            </table>
+            </td><td><table><tr>
+            <!--http://127.0.0.1:8080/geoserver/wms?REQUEST=GETLEGENDGRAPHIC&VERSION=1.1.1&FORMAT=image/png&LAYER=ifrc:populationDensity-->
+            <td style='padding:1px; text-align:center;'><img src="/{{=request.application}}/static/img/gis/GPWv3.png" width="60" height="110"></td>
+            </tr><tr>
+            <td style='padding:5px;' align='center'>Population Density 2010<br />(Persons per km<sup>2</sup>)</td>
+            </tr></table></td>
         </tr>
     </table>
 </div>

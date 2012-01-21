@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from __future__ import print_function
 
 # Copyright (c) 2011, Roger Lew [see LICENSE.txt]

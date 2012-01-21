@@ -13,58 +13,21 @@ resourcename = request.function
 if module not in deployment_settings.modules:
     raise HTTP(404, body="Module disabled: %s" % module)
 
-roles = session.s3.roles or []
 if session.s3.hrm is None:
     session.s3.hrm = Storage()
 session.s3.hrm.mode = request.vars.get("mode", None)
 
-# =============================================================================
-def org_filter():
-    """
-        Find the Organisation(s) this user is entitled to view
-        i.e. they have the organisation access role or a site access role
-    """
+# Hack the menu dict with the correct Personal Profile
+if auth.permission.format in ("html"):
+    s3_menu_dict[module]["conditional2"][0] = [ T("Personal Profile"),
+                                                  True,
+                                                  aURL(c="hrm",
+                                                       f="person",
+                                                       args=[str(s3_logged_in_person())],
+                                                       vars=dict(mode="personal"))
+                                                ]
 
-    table = s3db.org_organisation
-    orgs = db(table.owned_by_organisation.belongs(roles)).select(table.id)
-    orgs = [org.id for org in orgs]
-
-    stable = s3db.org_site
-    siteorgs = db(stable.owned_by_facility.belongs(roles)).select(stable.organisation_id)
-    for org in siteorgs:
-        if org.organisation_id not in orgs:
-            orgs.append(org.organisation_id)
-
-    if orgs:
-        session.s3.hrm.orgs = orgs
-    else:
-        session.s3.hrm.orgs = None
-
-# =============================================================================
-@auth.requires_login()
-def s3_menu_prep():
-    """ Application Menu """
-
-    # Module Name
-    try:
-        module_name = deployment_settings.modules[module].name_nice
-    except:
-        module_name = T("Human Resources Management")
-    response.title = module_name
-
-    # Automatically choose an organisation
-    if session.s3.hrm.orgs is None:
-        org_filter()
-
-    # Set mode
-    if session.s3.hrm.mode != "personal":
-        if (ADMIN in roles or session.s3.hrm.orgs) or \
-           deployment_settings.get_security_policy() in (1, 2):
-            session.s3.hrm.mode = None
-    else:
-        session.s3.hrm.mode = "personal"
-
-s3_menu(module, prep=s3_menu_prep)
+s3_menu(module, prep=hr_menu_prep)
 
 # =============================================================================
 def index():
@@ -82,6 +45,7 @@ def index():
     tablename = "hrm_human_resource"
     table = s3db.hrm_human_resource
 
+    roles = session.s3.roles or []
     if ADMIN not in roles:
         orgs = session.s3.hrm.orgs or [None]
         org_filter = (table.organisation_id.belongs(orgs))
@@ -134,6 +98,7 @@ def index():
 
         module_name = deployment_settings.modules[module].name_nice
         output["title"] = module_name
+        output["dashboard"] = hrm_dashboard
 
     return output
 
@@ -214,18 +179,19 @@ def human_resource():
         human_resource_search._S3Search__advanced.pop(1)
         s3mgr.configure(tablename,
                         search_method = human_resource_search)
-        # Fix the breadcrumb
-        #breadcrumbs[2] = (T("Volunteers"), False,
-        #                  URL(c=request.controller,
-        #                      f=request.function,
-        #                      args=request.args,
-        #                      vars=request.vars))
-        #if "create" in request.args:
-        #    breadcrumbs[3] = (T("New Volunteer"), True,
-        #                      URL(c=request.controller,
-        #                          f=request.function,
-        #                          args=request.args,
-        #                          vars=request.vars))
+        if auth.permission.format in ("html"):
+            # Fix the breadcrumb
+            breadcrumbs[2] = (T("Volunteers"), False,
+                              URL(c=request.controller,
+                                  f=request.function,
+                                  args=request.args,
+                                  vars=request.vars))
+            if "create" in request.args:
+                breadcrumbs[3] = (T("New Volunteer"), True,
+                                  URL(c=request.controller,
+                                      f=request.function,
+                                      args=request.args,
+                                      vars=request.vars))
 
     elif group == "staff":
         #s3mgr.configure(table._tablename, insertable=False)
@@ -258,12 +224,13 @@ def human_resource():
         human_resource_search._S3Search__advanced.pop(1)
         s3mgr.configure(tablename,
                         search_method = human_resource_search)
-        # Fix the breadcrumb
-        #breadcrumbs[2] = (T("Staff"), False,
-        #                  URL(c=request.controller,
-        #                      f=request.function,
-        #                      args=request.args,
-        #                      vars=request.vars))
+        if auth.permission.format in ("html"):
+            # Fix the breadcrumb
+            breadcrumbs[2] = (T("Staff"), False,
+                              URL(c=request.controller,
+                                  f=request.function,
+                                  args=request.args,
+                                  vars=request.vars))
 
     s3mgr.configure(tablename,
                     list_fields = list_fields)
@@ -311,6 +278,7 @@ def human_resource():
                                    vars = {"hrm_id": "[id]"}),
                         "_class": "action-btn",
                         "label": str(T("Send Notification"))})
+            output["dashboard"] = hrm_dashboard
         elif r.representation == "plain":
             # Map Popups
             output = hrm_map_popup(r)
@@ -406,6 +374,14 @@ def person():
 
         @ToDo: Volunteers should be redirected to vol/person?
     """
+
+    if auth.permission.format in ("html"):
+        # Fix the breadcrumb
+        breadcrumbs.pop(2)
+        #(T("Human Resources"), False,
+        #                  URL(c=request.controller,
+        #                      f=request.function,
+        #                      args=request.args))
 
     if deployment_settings.has_module("asset"):
         # Assets as component of people
@@ -556,11 +532,11 @@ def person():
         tabs = [(T("Person Details"), None),
                 (address_tab_name, "address"),
                 (T("Contact Details"), "contact"),
-                (T("Skills"), "competency"),
+                #(T("Skills"), "competency"),
                 #(T("Credentials"), "credential"),
-                (T("Certificates"), "certification"),
+                #(T("Certificates"), "certification"),
                 (T("Trainings"), "training"),
-                (T("Mission Record"), "experience"),
+                #(T("Mission Record"), "experience"),
                 (T("Positions"), "human_resource"),
                 (T("Teams"), "group_membership")]
         if deployment_settings.has_module("asset"):
@@ -584,13 +560,16 @@ def person():
                 (address_tab_name, "address"),
                 (T("Contact Data"), "contact"),
                 (T("Skills"), "competency"),
-                (T("Credentials"), "credential"),
+                #(T("Credentials"), "credential"),
                 (T("Trainings"), "training"),
-                (T("Mission Record"), "experience"),
+                #(T("Mission Record"), "experience"),
                 (T("Teams"), "group_membership")]
 
         if deployment_settings.has_module("asset"):
             tabs.append((T("Assets"), "asset"))
+
+    # Upload for configuration (add replace option)
+    response.s3.importerPrep = lambda: dict(ReplaceOption=T("Remove existing data before import"))
 
     # Import pre-process
     def import_prep(data, group=group):
@@ -673,6 +652,13 @@ def person():
                 address_hide(s3db.pr_address)
         return True
     response.s3.prep = prep
+
+    # Post-process
+    def postp(r, output):
+        if isinstance(output, dict):
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
 
     # REST Interface
     if session.s3.hrm.orgname and mode is None:
@@ -822,6 +808,7 @@ def group():
                         "_class": "action-btn",
                         "label": str(T("Send Notification"))})
 
+            output["dashboard"] = hrm_dashboard
         return output
     response.s3.postp = postp
 
@@ -851,6 +838,13 @@ def job_role():
         return True
     response.s3.prep = prep
 
+    # Post-process
+    def postp(r, output):
+        if r.interactive:
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
+
     output = s3_rest_controller()
     return output
 
@@ -864,6 +858,13 @@ def skill():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
+
+    # Post-process
+    def postp(r, output):
+        if r.interactive:
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
 
     output = s3_rest_controller()
     return output
@@ -933,6 +934,13 @@ def course():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
+    # Post-process
+    def postp(r, output):
+        if r.interactive:
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
+
     output = s3_rest_controller()
     return output
 
@@ -944,6 +952,13 @@ def course_certificate():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
+
+    # Post-process
+    def postp(r, output):
+        if r.interactive:
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
 
     output = s3_rest_controller()
     return output
@@ -959,6 +974,13 @@ def certificate():
         return True
     response.s3.prep = prep
 
+    # Post-process
+    def postp(r, output):
+        if r.interactive:
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
+
     output = s3_rest_controller()
     return output
 
@@ -971,6 +993,13 @@ def certificate_skill():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
+    # Post-process
+    def postp(r, output):
+        if r.interactive:
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
+
     output = s3_rest_controller()
     return output
 
@@ -982,6 +1011,13 @@ def training():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
+
+    # Post-process
+    def postp(r, output):
+        if r.interactive:
+            output["dashboard"] = hrm_dashboard
+        return output
+    response.s3.postp = postp
 
     if ADMIN not in session.s3.roles and \
        EDITOR not in session.s3.roles:

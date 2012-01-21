@@ -43,7 +43,7 @@
         {{else:}}
         {{pass}}
     </div>
-    <div style='width:55%; float:right;min-width:500px;' id='table-container'>
+    <div style='width:55%; float:right;min-width:400px;' id='table-container'>
         {{try:}}
             {{if r.method == "search":}}
                 <h4>{{=T("Search for Staff or Volunteers")}}</h4>
@@ -65,6 +65,7 @@
     </div>
 </div>
 </div>
+{{=dashboard}}
 {{if session.s3.debug:}}
 <script src="/{{=request.application}}/static/scripts/S3/s3.search.js" type="text/javascript" charset="utf-8"></script>
 {{else:}}
