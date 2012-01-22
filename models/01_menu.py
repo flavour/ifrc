@@ -718,6 +718,7 @@ if auth.permission.format in ("html"):
                 #                                          vars={"group": 1})],
                 #    [T("List All"), False, aURL(f="location")],
                 #    [T("Search"), False, aURL(f="location", args="search")],
+                #    [T("Import"), False, aURL(f="location", args="import")],
                 #    #[T("Geocode"), False, aURL(f="geocode_manual")],
                 #]],
                 #[T("Fullscreen Map"), False, aURL(f="map_viewing_client")],
