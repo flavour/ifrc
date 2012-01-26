@@ -976,7 +976,7 @@ class S3ProjectDRRModel(S3Model):
         activity_id = self.project_activity_id
         #multi_activity_type_id = self.project_multi_activity_type_id
 
-        pca = self.settings.get_project_community_activity()
+        pca = current.deployment_settings.get_project_community_activity()
 
         messages = current.messages
         NONE = messages.NONE
@@ -1170,7 +1170,7 @@ class S3ProjectDRRModel(S3Model):
                                   s3.comments(),
                                   *s3.meta_fields())
 
-        # Field configuration?
+        # Field configuration
         if pca:
             table.activity_id.label = T("Community")
 

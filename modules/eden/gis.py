@@ -2019,8 +2019,11 @@ class S3MapModel(S3Model):
                                         comment=DIV(_class="tooltip",
                                                     _title="%s|%s" % (T("Buffer"),
                                                                       T("The number of tiles around the visible map to download. Zero means that the 1st page loads faster, higher numbers mean subsequent panning is faster.")))),
-                                  #Field("queryable", "boolean", default=False, label=T("Queryable?")),
-                                  #Field("legend_url", label=T("legend URL")),
+                                  Field("queryable", "boolean", default=True, label=T("Queryable?")),
+                                  Field("legend_url", label=T("Legend URL"),
+                                        comment=DIV(_class="tooltip",
+                                                    _title="%s|%s" % (T("Legend URL"),
+                                                                      T("Address of an image to use for this Layer in the Legend. This allows use of a controlled static image rather than querying the server automatically for what it provides (which won't work through GeoWebCache anyway).")))),
                                   #Field("legend_format", label=T("Legend Format"), requires = IS_NULL_OR(IS_IN_SET(gis_layer_wms_img_formats))),
                                   role_required(),       # Single Role
                                   #roles_permitted(),    # Multiple Roles (needs implementing in modules/s3gis.py)
@@ -2239,16 +2242,18 @@ class S3MapModel(S3Model):
         T = current.T
         reponse = current.response
 
-        if not form.vars.apikey:
+        vars = form.vars
+
+        if not vars.apikey:
             response.warning = T("Bing Layers cannot be displayed if there isn't a valid API Key")
         # Enable the overall LayerType if any of the layers are enabled
-        if "aerial_enabled" in form.vars or \
-           "road_enabled" in form.vars or \
-           "hybrid_enabled" in form.vars:
-            form.vars.enabled = True
+        if "aerial_enabled" in vars or \
+           "road_enabled" in vars or \
+           "hybrid_enabled" in vars:
+            vars.enabled = True
         else:
             # Disable it
-            form.vars.enabled = False
+            vars.enabled = False
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2260,20 +2265,22 @@ class S3MapModel(S3Model):
         T = current.T
         reponse = current.response
 
-        if not form.vars.apikey:
-            response.warning = T("Google Layers cannot be displayed if there isn't a valid API Key")
+        vars = form.vars
+
+        if not vars.apikey:
+            response.warning = T("Google Earth & MapMaker Layers cannot be displayed if there isn't a valid API Key")
         # Enable the overall LayerType if any of the layers are enabled
-        if "satellite_enabled" in form.vars or \
-           "maps_enabled" in form.vars or \
-           "hybrid_enabled" in form.vars or \
-           "mapmaker_enabled" in form.vars or \
-           "mapmakerhybrid_enabled" in form.vars or \
-           "earth_enabled" in form.vars or \
-           "streetview_enabled" in form.vars:
-            form.vars.enabled = True
+        if "satellite_enabled" in vars or \
+           "maps_enabled" in vars or \
+           "hybrid_enabled" in vars or \
+           "mapmaker_enabled" in vars or \
+           "mapmakerhybrid_enabled" in vars or \
+           "earth_enabled" in vars or \
+           "streetview_enabled" in vars:
+            vars.enabled = True
         else:
             # Disable it
-            form.vars.enabled = False
+            vars.enabled = False
 
     # -------------------------------------------------------------------------
     #@staticmethod
