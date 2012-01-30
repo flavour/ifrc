@@ -352,6 +352,10 @@ deployment_settings.inv.collapse_tabs = True
 # Use the term 'Order' instead of 'Shipment'
 #deployment_settings.inv.shipment_name = "order"
 
+# Supply
+# Do not edit after deployment
+#deployment_settings.supply.catalog_default = T("Other Items")
+
 # Human Resource Management
 deployment_settings.hrm.email_required = True
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
