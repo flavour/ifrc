@@ -1285,6 +1285,20 @@ class S3HRSkillModel(S3Model):
                        report_fact = report_fields,
                        report_method=["count","list"])
 
+        report_fields = [ 
+                         "training_event_id",
+                         "person_id",
+                         (T("Course"), "training_event_id$course_id"),
+                         # "month", Month Virtual Field Broken
+                        ]
+
+        # Resource Configuration
+        self.configure(tablename,
+                       report_rows = report_fields,
+                       report_cols = report_fields,
+                       report_fact = report_fields,
+                       report_method=["count","list"])
+
         # =====================================================================
         # Certificates
         #
