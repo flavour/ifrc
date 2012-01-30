@@ -1201,11 +1201,14 @@ class S3ProjectDRRModel(S3Model):
         self.configure(tablename,
                         onaccept=self.project_beneficiary_onaccept,
                         deduplicate=self.project_beneficiary_deduplicate,
-                        #report_filter=[
-                            #S3SearchOptionsWidget(field=["project_id"],
-                                                  #name="project",
-                                                  #label=T("Project"))
-                        #],
+                        report_filter=[
+                            S3SearchOptionsWidget(field=["project_id"],
+                                                  name="project",
+                                                  label=T("Project")),
+                            S3SearchOptionsWidget(field=["bnf_type"],
+                                                  name="bnf_type",
+                                                  label=T("Beneficiary Type")),
+                        ],
                         report_rows=[
                                       "activity_id",
                                       "project_id",
