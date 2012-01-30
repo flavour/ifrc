@@ -545,6 +545,7 @@ class S3ProjectModel(S3Model):
             report_fields.append((T("Activity"), "name"))
         report_fields.append((T("Activity Type"), "multi_activity_type_id"))
         if drr:
+            report_fields.append((T("Sector"), "project_id$sector_id"))
             report_fields.append((T("Theme"), "project_id$multi_theme_id"))
             report_fields.append((T("Hazard"), "project_id$multi_hazard_id"))
             report_fields.append((T("HFA"), "project_id$hfa"))

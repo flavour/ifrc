@@ -3074,6 +3074,7 @@
 'Parking Area': 'Parking Area',
 'Partial': 'Partial',
 'Participant': 'Participant',
+'Partner': 'Partner',
 'Partner National Society': 'Partner National Society',
 'Pass': 'Pass',
 'Passport': 'Passport',
