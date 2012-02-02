@@ -232,7 +232,7 @@ def s3_rheader_tabs(r, tabs=[]):
         Constructs a DIV of component links for a S3RESTRequest
 
         @param tabs: the tabs as list of tuples (title, component_name, vars),
-            where vars is optional
+                     where vars is optional
     """
 
     rheader_tabs = S3ComponentTabs(tabs)

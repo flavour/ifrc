@@ -55,7 +55,6 @@ if populate > 0:
                 dict(t="org_organisation", uacl=acl.READ|acl.CREATE, oacl=default_oacl),
                 #dict(c="hms", uacl=acl.READ|acl.CREATE, oacl=default_oacl),
                 #dict(c="cr", uacl=acl.READ|acl.CREATE, oacl=default_oacl),
-                dict(c="survey", uacl=acl.READ|acl.CREATE, oacl=default_oacl)
                 )
 
     # If we don't have OrgAuth active, then Authenticated users:
@@ -243,6 +242,45 @@ if populate > 0:
     create_role("Projects Reader",
                 "Can see all Project records belonging to this Organisation & all it's Facilities. Cannot edit any records or control access permissions.",
                 dict(c="poject", uacl=acl.READ, oacl=acl.READ),
+                )
+
+    # Survey Roles
+    create_role("Survey Reader", "",
+                dict(c="survey", f = "index", 
+                     uacl=acl.READ, oacl=acl.READ),
+                dict(c="survey", f = "series", 
+                     uacl=acl.READ, oacl=acl.READ),
+                dict(c="survey", f = "series_export_formatted", 
+                     uacl=acl.READ, oacl=acl.READ),
+                dict(t="survey_translate", 
+                     uacl=acl.READ, oacl=acl.READ))
+    create_role("Survey Editor", "",
+                dict(c="survey", f = "index",
+                     uacl=acl.READ, oacl=acl.READ),
+                dict(c="survey", f = "complete", 
+                     uacl=acl.CREATE, oacl=acl.CREATE|acl.UPDATE),
+                dict(c="survey", f = "newAssessment", 
+                     uacl=acl.CREATE|acl.READ|acl.UPDATE, oacl=acl.CREATE|acl.READ|acl.UPDATE),
+                dict(c="survey", f = "series", 
+                     uacl=acl.CREATE|acl.READ|acl.UPDATE, oacl=acl.CREATE|acl.READ|acl.UPDATE),
+                dict(c="survey", f = "series_export_formatted", 
+                     uacl=acl.READ, oacl=acl.READ),
+                dict(t="survey_answer", 
+                     uacl=acl.CREATE|acl.READ, oacl=acl.CREATE|acl.READ|acl.UPDATE),
+                dict(t="survey_complete", 
+                     uacl=acl.CREATE|acl.READ, oacl=acl.CREATE|acl.READ|acl.UPDATE),
+                dict(t="survey_question", 
+                     uacl=acl.CREATE|acl.READ|acl.UPDATE, oacl=acl.CREATE|acl.READ|acl.UPDATE),
+                dict(t="survey_series", 
+                     uacl=acl.READ, oacl=acl.READ),
+                dict(t="survey_translate", 
+                     uacl=acl.READ, oacl=acl.READ),
+                )
+    create_role("Survey Admin", "",
+                dict(c="survey", f = "index",
+                     uacl=acl.READ, oacl=acl.READ),
+                dict(c="survey",
+                     uacl=acl.READ|acl.CREATE|acl.UPDATE|acl.DELETE, oacl=acl.READ|acl.UPDATE|acl.DELETE),
                 )
 
 # END =========================================================================
