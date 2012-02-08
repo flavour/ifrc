@@ -707,7 +707,7 @@ S3.timeline.now = '""", now.isoformat(), """';
                 if rheader:
                     output["rheader"] = rheader
 
-            output["title"] = T("Incident Timeline")
+            output["title"] = T("Event Timeline")
             response.view = "timeline.html"
             return output
 
