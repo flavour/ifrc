@@ -9,7 +9,7 @@
 
     @author: Graeme Foster <graeme[at]acm.org>
 
-    @copyright: 2011 (c) Sahana Software Foundation
+    @copyright: 2011-12 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -2955,7 +2955,7 @@ class S3PDFDataSource:
 
         # Retrieve the resource contents
         table = resource.table
-        lfields, joins = resource.get_list_fields(table, list_fields)
+        lfields, joins, ljoins = resource.get_lfields(list_fields)
         fields = [f for f in lfields if f.show]
         headers = [f.label for f in lfields if f.show]
         # @ToDo: make consistent with XLS

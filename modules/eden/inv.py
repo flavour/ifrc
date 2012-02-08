@@ -2,9 +2,7 @@
 
 """ Sahana Eden Inventory Model
 
-    @author: Michael Howden <michael[at]aidiq.com>
-
-    @copyright: 2009-2011 (c) Sahana Software Foundation
+    @copyright: 2009-2012 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1077,9 +1075,9 @@ def inv_recv_rheader(r):
                 rfooter.append(dc_btn)
 
                 if record.status != SHIP_STATUS_CANCEL:
-                    if auth.s3_has_permission("delete",
-                                              "inv_recv",
-                                              record_id=record.id):
+                    if current.auth.s3_has_permission("delete",
+                                                      "inv_recv",
+                                                      record_id=record.id):
                         cancel_btn = A( T("Cancel Shipment"),
                                         _href = URL(c = "inv",
                                                     f = "recv_cancel",

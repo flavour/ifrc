@@ -2,10 +2,7 @@
 
 """ Sahana Eden Request Model
 
-    @author: Michael Howden <michael[at]aidiq.com>
-    @author: Fran Boon <fran[at]aidiq.com>
-
-    @copyright: 2009-2011 (c) Sahana Software Foundation
+    @copyright: 2009-2012 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -82,9 +79,7 @@ class S3RequestModel(S3Model):
 
         org_site_represent = self.org_site_represent
         human_resource_id = self.hrm_human_resource_id
-
-        current.manager.load("event_event")
-        event_id = s3.event_id
+        event_id = self.event_event_id
 
         UNKNOWN_OPT = current.messages.UNKNOWN_OPT
 
@@ -595,7 +590,7 @@ $(function() {
                           _id = "list",
                           _class = "dataTable display")
 
-            supply_item_represent = table.item_id_represent
+            supply_item_represent = table.item_id.represent
             item_pack_represent = table.item_pack_id.represent
             for req_item in req_items:
                 # Convert inv item quantity to req item quantity
@@ -774,7 +769,7 @@ class S3RequestItemModel(S3Model):
                                         requires = IS_FLOAT_IN_RANGE(minimum=0)),
                                   Field("pack_value",
                                         "double",
-                                        label = T("Value per Pack")),
+                                        label = T("Est. Value per Pack")),
                                   # @ToDo: Move this into a Currency Widget for the pack_value field
                                   currency_type("currency"),
                                   site_id,

@@ -108,14 +108,8 @@ def index():
 def person():
     """ RESTful CRUD controller """
 
-    # Load Model
-    s3mgr.load("pr_address")
-    if deployment_settings.get_save_search_widget():
-        s3mgr.load("pr_save_search")
-        s3mgr.load("msg_subscription")
-
     # Enable this to allow migration of users between instances
-    #response.s3.filter = (db.pr_person.uuid == db.auth_user.person_uuid) & (db.auth_user.registration_key != "disabled")
+    #response.s3.filter = (s3db.pr_person.uuid == db.auth_user.person_uuid) & (db.auth_user.registration_key != "disabled")
 
     def prep(r):
         if r.representation == "json" and \
@@ -232,7 +226,8 @@ def person():
         tabs.append((T("Training"), "training"))
     # Configuration tabs
     if deployment_settings.get_save_search_widget():
-        tabs = tabs + [(T("Saved Searches"), "save_search"),
+        tabs = tabs + [#(T("Subscriptions"), "pe_subscription"),
+                       (T("Saved Searches"), "save_search"),
                        (T("Subscription Details"), "subscription")]
     tabs.append((T("Map Settings"), "config"))
 
@@ -252,7 +247,7 @@ def group():
     """ RESTful CRUD controller """
 
     tablename = "pr_group"
-    table = db[tablename]
+    table = s3db[tablename]
 
     response.s3.filter = (table.system == False) # do not show system groups
 
@@ -277,17 +272,11 @@ def group():
 def pimage():
     """ RESTful CRUD controller """
 
-    # Load Model
-    s3mgr.load("pr_address")
-
     return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
 def contact():
     """ RESTful CRUD controller """
-
-    # Load Model
-    s3mgr.load("pr_address")
 
     table = s3db.pr_contact
 
@@ -322,9 +311,6 @@ def presence():
 # -----------------------------------------------------------------------------
 def pentity():
     """ RESTful CRUD controller """
-
-    # Load Model
-    s3mgr.load("pr_address")
 
     return s3_rest_controller()
 

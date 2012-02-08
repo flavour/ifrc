@@ -24,9 +24,11 @@ import eden.hrm
 import eden.project
 import eden.supply
 import eden.inv
-import eden.req
 import eden.proc
 import eden.asset
+import eden.scenario
+import eden.event
+import eden.req
 import eden.vehicle
 import eden.irs
 import eden.fire
@@ -34,6 +36,8 @@ import eden.delphi
 import eden.dvi
 import eden.support
 import eden.survey
+import eden.hms
+#import eden.patient
 
 # =============================================================================
 # Import S3 meta fields into global namespace
@@ -54,7 +58,7 @@ def s3_avatar_represent(id, tablename="auth_user", _class="avatar"):
         user = db(table.id == id).select(table.email,
                                          table.image,
                                          limitby=(0, 1),
-                                         cache=(cache.ram, 10)).first()
+                                         cache=s3db.cache).first()
         if user:
             email = user.email.strip().lower()
             image = user.image
@@ -62,14 +66,14 @@ def s3_avatar_represent(id, tablename="auth_user", _class="avatar"):
         user = db(table.id == id).select(table.pe_id,
                                          table.picture,
                                          limitby=(0, 1),
-                                         cache=(cache.ram, 10)).first()
+                                         cache=s3db.cache).first()
         if user:
             image = user.picture
             ctable = db.pr_contact
             query = (ctable.pe_id == id) & (ctable.contact_method == "EMAIL")
             email = db(query).select(ctable.value,
                                      limitby=(0, 1),
-                                     cache=(cache.ram, 10)).first()
+                                     cache=s3db.cache).first()
             if email:
                 email = email.value
 
@@ -94,7 +98,7 @@ def s3_role_represent(id):
     table = s3db.auth_group
     role = db(table.id == id).select(table.role,
                                      limitby=(0, 1),
-                                     cache=(cache.ram, 10)).first()
+                                     cache=s3db.cache).first()
     if role:
         return role.role
     return None
@@ -278,14 +282,6 @@ s3.roles_permitted = roles_permitted
 
 # =============================================================================
 # Other reusable fields
-
-# -----------------------------------------------------------------------------
-# Reusable name field to include in other table definitions
-name_field = S3ReusableField("name", length=64,
-                             label=T("Name"), required=IS_NOT_EMPTY())
-
-# Make available for S3Models
-s3.name_field = name_field
 
 # -----------------------------------------------------------------------------
 # Reusable comments field to include in other table definitions

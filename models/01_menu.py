@@ -252,14 +252,19 @@ if auth.permission.format in ("html"):
             menu = menu_config["menu"]
 
             # role hooks
-            if s3_has_role(AUTHENTICATED) and "on_auth" in menu_config:
+            if "on_auth" in menu_config and s3_has_role(AUTHENTICATED):
                 menu.extend(menu_config["on_auth"])
 
-            if s3_has_role(ADMIN) and "on_admin" in menu_config:
+            if "on_admin" in menu_config and s3_has_role(ADMIN):
                 menu.extend(menu_config["on_admin"])
 
-            if s3_has_role(EDITOR) and "on_editor" in menu_config:
+            if "on_editor" in menu_config and s3_has_role(EDITOR):
                 menu.extend(menu_config["on_editor"])
+
+            if "on_mapadmin" in menu_config and \
+                (not deployment_settings.get_security_map() or \
+                 s3_has_role(MAP_ADMIN)):
+                menu.extend(menu_config["on_mapadmin"])
 
             # conditionals
             conditions = [x for x in menu_config if re.match(r"condition[0-9]+", x)]
@@ -414,8 +419,8 @@ if auth.permission.format in ("html"):
         project_menu = {
             "menu": [
                 [T("Projects"), False, aURL(f="project"),[
-                    #[T("Add New Project"), False, aURL(p="create", f="project", args="create")],
-                    [T("List Projects"), False, aURL(f="project")],
+                    [T("Add New Project"), False, aURL(p="create", f="project", args="create")],
+                    [T("List All Projects"), False, aURL(f="project")],
                     [T("Open Tasks for Project"), False, aURL(f="project", vars={"tasks":1})],
                 ]],
                 #[T("Tasks"), False, aURL(f="task"),[
@@ -741,6 +746,7 @@ if auth.permission.format in ("html"):
         # ---------------------------------------------------------------------
         "gis": {
             "menu": [
+                #[T("Fullscreen Map"), False, aURL(f="map_viewing_client")],
                 #[T("Locations"), False, aURL(f="location"), [
                 #    [T("New Location"), False, aURL(p="create", f="location",
                 #                                    args="create")],
@@ -752,22 +758,19 @@ if auth.permission.format in ("html"):
                 #    [T("Import"), False, aURL(f="location", args="import")],
                 #    #[T("Geocode"), False, aURL(f="geocode_manual")],
                 #]],
-                #[T("Fullscreen Map"), False, aURL(f="map_viewing_client")],
+                #[T("Configuration"), False, aURL(f="config")],
                 ## Currently not got geocoding support
                 ##[T("Bulk Uploader"), False, aURL(c="doc", f="bulk_upload")]
             ],
 
-            #"on_admin": [
-            #    [T("Hierarchies"), False, aURL(f="hierarchy"), [
-            #        [T("New Hierarchy"), False, aURL(p="create", f="hierarchy",
-            #                                        args="create")],
-            #        [T("List All"), False, aURL(f="hierarchy")],
-            #        [T("Import"), False, aURL(f="hierarchy", args="import")],
-            #    ]]
+            #"on_mapadmin": [
+            #    [T("Admin"), False, "#", [
+            #        [T("Hierarchy"), False, aURL(f="hierarchy")],
+            #        [T("Markers"), False, aURL(f="marker")],
+            #        [T("Projections"), False, aURL(f="projection")],
+            #        [T("Symbology"), False, aURL(f="symbology")],
+            #    ]],
             #],
-
-            #"condition1": lambda: not deployment_settings.get_security_map() or s3_has_role(MAP_ADMIN),
-            #"conditional1": [[T("Service Catalogue"), False, URL(f="map_service_catalogue")]]
         },
 
         # HMS / Hospital Status Assessment and Request Management System
@@ -881,6 +884,7 @@ if auth.permission.format in ("html"):
                 [T("Events"), False, aURL(f="ireport"),[
                     [T("New"), False, aURL(p="create", f="ireport", args="create")],
                     [T("List All"), False, aURL(f="ireport")],
+                    #[T("Open Incidents"), False, aURL(f="ireport", vars={"open":1})],
                     [T("Timeline"), False, aURL(f="ireport", args="timeline")],
                     #[T("Search"), False, aURL(f="ireport", args="search")]
                 ]],
@@ -988,12 +992,14 @@ if auth.permission.format in ("html"):
             "menu": [
                 [T("Home"), False, aURL(f="index")],
                 [T("Procurement Plans"), False, aURL(f="plan"),[
-                    [T("New"), False, aURL(p="create", f="plan", args="create")],
+                    [T("New"), False, aURL(p="create", f="plan",
+                                           args="create")],
                     [T("List All"), False, aURL(f="plan")],
                     #[T("Search"), False, aURL(f="plan", args="search")]
                 ]],
                 [T("Suppliers"), False, aURL(f="supplier"),[
-                    [T("New"), False, aURL(p="create", f="supplier", args="create")],
+                    [T("New"), False, aURL(p="create", f="supplier",
+                                           args="create")],
                     [T("List All"), False, aURL(f="supplier")],
                     #[T("Search"), False, aURL(f="supplier", args="search")]
                 ]],

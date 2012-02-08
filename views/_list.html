@@ -9,6 +9,7 @@
  <div id='component'>
 {{except:}}
 </div>
+<div>
 {{pass}}
 <div id='list-btn-add'>
 {{try:}}
@@ -29,9 +30,9 @@
 {{pass}}
 </div>
 {{if response.s3.rfooter:}}
-<div id='rfooter'>
- {{=XML(response.s3.rfooter)}}
-</div>
+  <div id='rfooter'>
+    {{=XML(response.s3.rfooter)}}
+  </div>
 {{pass}}
 {{try:}}{{=dashboard}}{{except:}}{{pass}}
 {{include "dataTables.html"}}

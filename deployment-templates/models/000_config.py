@@ -231,6 +231,13 @@ deployment_settings.gis.mouse_position = "normal"
 #deployment_settings.gis.print_service = "/geoserver/pdf/"
 # Do we have a spatial DB available? (currently unused. Will support PostGIS & Spatialite.)
 deployment_settings.gis.spatialdb = True
+# Bing API Key (for Map layers)
+#deployment_settings.gis.api_bing = ""
+# Google API Key (for Earth & MapMaker Layers)
+# default works for localhost
+#deployment_settings.gis.api_google = ""
+# Yahoo API Key (for Geocoder)
+#deployment_settings.gis.api_yahoo = ""
 # GeoServer (Currently used by GeoExplorer. Will allow REST control of GeoServer.)
 # NB Needs to be publically-accessible URL for querying via client JS
 #deployment_settings.gis.geoserver_url = "http://localhost/geoserver"
@@ -381,6 +388,7 @@ deployment_settings.save_search.widget = False
 deployment_settings.options.support_requests = True
 
 # Comment/uncomment modules here to disable/enable them
+# @ToDo: have the system automatically enable migrate if a module is enabled
 # Modules menu is defined in 01_menu.py
 deployment_settings.modules = OrderedDict([
     # Core modules which shouldn't be disabled
@@ -483,7 +491,7 @@ deployment_settings.modules = OrderedDict([
         )),
     # Vehicle depends on Assets
     #("vehicle", Storage(
-    #        name_nice = T("Vehicle Management"),
+    #        name_nice = T("Vehicles"),
     #        description = T("Manage Vehicles"),
     #        restricted = True,
     #        module_type = 10,

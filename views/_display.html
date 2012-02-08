@@ -8,6 +8,7 @@
  </div>
   <div id='component'>
 {{except:}}
+  </div>
   <div>
  {{pass}}
 	{{try:}}
@@ -40,10 +41,10 @@
 	 {{=list_btn}}
 	{{except:}}
 	{{pass}}
-	{{if response.s3.rfooter:}}
-	<div id='rfooter'>
-	 {{=XML(response.s3.rfooter)}}
-	</div>
-	{{pass}}
 </div>
+{{if response.s3.rfooter:}}
+  <div id='rfooter'>
+    {{=XML(response.s3.rfooter)}}
+  </div>
+{{pass}}
 {{try:}}{{=dashboard}}{{except:}}{{pass}}
