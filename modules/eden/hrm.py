@@ -2030,7 +2030,11 @@ class HRMTrainingVirtualFields:
 
     def month(self):
         # Year/Month of the start date of the training event
-        start_date = self.hrm_training_event.start_date
+        try:
+            start_date = self.hrm_training_event.start_date
+        except AttributeError:
+            # not available
+            start_date = None
         if start_date:
             return "%s/%02d" % (start_date.year, start_date.month)
         else:
@@ -2038,7 +2042,11 @@ class HRMTrainingVirtualFields:
 
     def year(self):
         # The year of the training event
-        start_date = self.hrm_training_event.start_date
+        try:
+            start_date = self.hrm_training_event.start_date
+        except AttributeError:
+            # not available
+            start_date = None
         if start_date:
             return start_date.year
         else:
