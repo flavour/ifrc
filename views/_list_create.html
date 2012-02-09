@@ -8,6 +8,7 @@
 <div id='component'>
 {{except:}}
 </div>
+<div>
 {{pass}}
 <div id='map'></div>
 <div id='list-btn-add'>
@@ -34,11 +35,11 @@
 {{=items}}
 </div>
 {{except:}}{{pass}}
+</div>
 {{if response.s3.rfooter:}}
-<div id='rfooter'>
-{{=XML(response.s3.rfooter)}}
-</div>
-</div>
+  <div id='rfooter'>
+    {{=XML(response.s3.rfooter)}}
+  </div>
 {{pass}}
 {{try:}}{{=dashboard}}{{except:}}{{pass}}
 {{include "dataTables.html"}}

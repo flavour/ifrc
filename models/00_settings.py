@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
-""" Global settings:
+"""
+    Global settings:
 
     Those which are typically edited during a deployment are in
     000_config.py & their results parsed into here. Deployers
     shouldn't typically need to edit any settings here.
-
 """
 
 # Keep all our configuration options off the main global variables
@@ -24,9 +24,6 @@ if not session.s3:
 s3.base_url = "%s/%s" % (deployment_settings.get_base_public_url(),
                          request.application)
 s3.download_url = "%s/default/download" % s3.base_url
-
-# Dictionary to store our asynchronous Tasks
-tasks = {}
 
 ###############
 # Client tests

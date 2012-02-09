@@ -10,7 +10,7 @@
 
     @author: Dominic König <dominic[at]aidiq.com>
 
-    @copyright: 2009-2011 (c) Sahana Software Foundation
+    @copyright: 2009-2012 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1889,7 +1889,7 @@ class S3CRUD(S3Method):
         wildcard = "%%%s%%" % context
 
         # Retrieve the list of search fields
-        lfields, joins = resource.get_list_fields(table, fields)
+        lfields, joins, ljoins = resource.get_lfields(fields)
         flist = []
         for i in xrange(0, columns):
             field = lfields[i].field
@@ -1980,7 +1980,7 @@ class S3CRUD(S3Method):
 
         orderby = []
 
-        lfields, joins = resource.get_list_fields(table, fields)
+        lfields, joins, ljoins = resource.get_lfields(fields)
         columns = [lfields[int(vars["iSortCol_%s" % str(i)])].field
                    for i in xrange(iSortingCols)]
         for i in xrange(len(columns)):

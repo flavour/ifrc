@@ -2,8 +2,6 @@
 
 """ Sahana Eden Project Model
 
-    @author: Dominic König <dominic[at]aidiq.com>
-
     @copyright: 2011-2012 (c) Sahana Software Foundation
     @license: MIT
 
@@ -1656,6 +1654,7 @@ class S3ProjectTaskModel(S3Model):
                        orderby="project_task.priority",
                        onvalidation=self.task_onvalidation,
                        create_onaccept=self.task_create_onaccept,
+                       onaccept=self.task_onaccept,
                        search_method=task_search,
                        list_fields=["id",
                                     "priority",
@@ -1955,6 +1954,15 @@ class S3ProjectTaskModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def task_onaccept(form):
+        """
+            If the task is assigned to someone then notify them
+        """
+
+        task_notify(form)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def task_create_onaccept(form):
         """
             When a Task is created:
@@ -1966,16 +1974,18 @@ class S3ProjectTaskModel(S3Model):
         s3db = current.s3db
         session = current.session
 
+        vars = form.vars
+
         if session.s3.event:
             # Create a link between this Task & the active Event
             etable = s3db.event_task
             etable.insert(event_id=session.s3.event,
-                          task_id=form.vars.id)
+                          task_id=vars.id)
 
         # Find the associated Project
         ptable = db.project_project
         ltable = db.project_task_project
-        query = (ltable.task_id == form.vars.id) & \
+        query = (ltable.task_id == vars.id) & \
                 (ltable.project_id == ptable.id)
         project = db(query).select(ptable.organisation_id,
                                    limitby=(0, 1)).first()
@@ -1988,8 +1998,11 @@ class S3ProjectTaskModel(S3Model):
                                     limitby=(0, 1)).first()
             if role:
                 table = s3db.project_task
-                query = (table.id == form.vars.id)
+                query = (table.id == vars.id)
                 db(query).update(owned_by_organisation=role.owned_by_organisation)
+
+        # Notify Assignee
+        task_notify(form)
 
         return
 
@@ -2064,14 +2077,19 @@ def project_assignee_represent(id):
     if not id:
         return output
 
-    etable = s3db.pr_pentity
-    query = (etable.id == id)
-    record = db(query).select(etable.instance_type,
-                              cache=cache,
-                              limitby=(0, 1)).first()
-    if not record:
-        return output
-    instance_type = record.instance_type
+    if isinstance(id, Row):
+        instance_type = id.instance_type
+        id = id.pe_id
+    else:
+        etable = s3db.pr_pentity
+        query = (etable.id == id)
+        record = db(query).select(etable.instance_type,
+                                  cache=cache,
+                                  limitby=(0, 1)).first()
+        if not record:
+            return output
+
+        instance_type = record.instance_type
 
     table = s3db[instance_type]
     query = (table.pe_id == id)
@@ -2101,239 +2119,265 @@ def project_assignee_represent(id):
 def project_rheader(r, tabs=[]):
     """ Project Resource Headers - used in Project & Budget modules """
 
-    rheader = None
+    if r.representation != "html":
+        # RHeaders only used in interactive views
+        return None
+    record = r.record
+    if record is None:
+        # List or Create form: rheader makes no sense here
+        return None
 
-    if r.representation == "html":
-        record = r.record
-        if record:
-            table = r.table
-            T = current.T
-            db = current.db
-            s3db = current.s3db
-            auth = current.auth
-            s3 = current.response.s3
-            settings = current.deployment_settings
-            drr = settings.get_project_drr()
-            pca = settings.get_project_community_activity()
+    table = r.table
+    resourcename = r.name
+    T = current.T
+    auth = current.auth
+    settings = current.deployment_settings
+    drr = settings.get_project_drr()
+    pca = settings.get_project_community_activity()
 
-            system_roles = current.session.s3.system_roles
-            ADMIN = system_roles.ADMIN
+    if resourcename == "project":
+        # Tabs
+        tabs = [(T("Basic Details"), None)]
+        if drr:
+            tabs.append((T("Organizations"), "organisation"))
 
-            if r.name == "project":
-                # Tabs
-                tabs = [(T("Basic Details"), None)]
-                if drr:
-                    tabs.append((T("Organizations"), "organisation"))
+        ADMIN = current.session.s3.system_roles.ADMIN
+        admin = auth.s3_has_role(ADMIN)
+        #staff = auth.s3_has_role("STAFF")
+        staff = True
+        if admin or drr:
+            tabs.append((T("Communities") if pca else T("Activities"), "activity"))
+        if staff and not drr:
+            tabs.append((T("Milestones"), "milestone"))
+        if not drr:
+            tabs.append((T("Tasks"), "task"))
+        if drr:
+            tabs.append((T("Documents"), "document"))
+        elif admin:
+            tabs.append((T("Attachments"), "document"))
+        if record.calendar:
+            tabs.append((T("Calendar"), "timeline"))
 
-                admin = auth.s3_has_role(ADMIN)
-                #staff = auth.s3_has_role("STAFF")
-                staff = True
-                if admin or drr:
-                    tabs.append((T("Communities") if pca else T("Activities"), "activity"))
-                if staff and not drr:
-                    tabs.append((T("Milestones"), "milestone"))
-                if not drr:
-                    tabs.append((T("Tasks"), "task"))
-                if drr:
-                    tabs.append((T("Documents"), "document"))
-                elif admin:
-                    tabs.append((T("Attachments"), "document"))
-                if record.calendar:
-                    tabs.append((T("Calendar"), "timeline"))
+        rheader_tabs = s3_rheader_tabs(r, tabs)
 
-                rheader_tabs = s3_rheader_tabs(r, tabs)
+        row3 = ""
+        if drr:
+            row2 = TR(
+                TH("%s: " % table.countries_id.label),
+                table.countries_id.represent(record.countries_id),
+                )
+        else:
+            row2 = TR(
+                TH("%s: " % table.organisation_id.label),
+                table.organisation_id.represent(record.organisation_id)
+                )
+            if record.end_date:
+                row3 = TR(
+                    TH("%s: " % table.end_date.label),
+                    table.end_date.represent(record.end_date)
+                    )
 
-                row3 = ""
-                if drr:
-                    row2 = TR(
-                        TH("%s: " % table.countries_id.label),
-                        table.countries_id.represent(record.countries_id),
+        rheader = DIV(TABLE(
+            TR(
+               TH("%s: " % table.name.label),
+               record.name
+              ),
+            row2,
+            row3,
+            ), rheader_tabs)
+
+    elif resourcename == "activity":
+        # @ToDo: integrate tabs?
+        rheader_tabs = s3_rheader_tabs(r, tabs)
+        tbl = TABLE()
+        if record.project_id is not None:
+            tbl.append(
+                        TR(
+                            TH("%s: " % table.project_id.label),
+                            table.project_id.represent(record.project_id))
                         )
-                else:
-                    row2 = TR(
-                        TH("%s: " % table.organisation_id.label),
-                        table.organisation_id.represent(record.organisation_id)
+        if pca:
+            tbl.append(
+
+                        TR(
+                           TH("%s: " % table.location_id.label),
+                           table.location_id.represent(record.location_id)
+                          )
+                       )
+        else:
+            tbl.append(
+
+                        TR(
+                           TH("%s: " % table.name.label),
+                           record.name
+                          )
+                       )
+        rheader = DIV(tbl, rheader_tabs)
+
+    elif resourcename == "task":
+        db = current.db
+        s3db = current.s3db
+
+        # Tabs
+        tabs = [(T("Details"), None)]
+        staff = auth.s3_has_role("STAFF")
+        if staff:
+                (T("Time"), "time"),
+        tabs.append((T("Comments"), "discuss"))
+        tabs.append((T("Attachments"), "document"))
+        #(T("Roles"), "job_role"),
+        #(T("Assignments"), "human_resource"),
+        #(T("Requests"), "req")
+
+        rheader_tabs = s3_rheader_tabs(r, tabs)
+
+        # RHeader
+        ptable = s3db.project_project
+        ltable = s3db.project_task_project
+        query = (ltable.deleted == False) & \
+                (ltable.task_id == r.id) & \
+                (ltable.project_id == ptable.id)
+        project = db(query).select(ptable.name,
+                                   limitby=(0, 1)).first()
+        if project:
+            project = TR(
+                            TH("%s: " % T("Project")),
+                            project.name
                         )
-                    if record.end_date:
-                        row3 = TR(
-                            TH("%s: " % table.end_date.label),
-                            table.end_date.represent(record.end_date)
-                            )
+        else:
+            project = ""
 
-                rheader = DIV(TABLE(
-                    TR(
-                       TH("%s: " % table.name.label),
-                       record.name
-                      ),
-                    row2,
-                    row3,
-                    ), rheader_tabs)
+        atable = s3db.project_activity
+        ltable = s3db.project_task_activity
+        query = (ltable.deleted == False) & \
+                (ltable.task_id == r.id) & \
+                (ltable.activity_id == atable.id)
+        activity = db(query).select(atable.name,
+                                    limitby=(0, 1)).first()
+        if activity:
+            activity = TR(
+                            TH("%s: " % T("Activity")),
+                            activity.name
+                        )
+        else:
+            activity = ""
 
-            elif r.name == "activity":
-                # @ToDo: integrate tabs?
-                rheader_tabs = s3_rheader_tabs(r, tabs)
-                tbl = TABLE()
-                if record.project_id is not None:
-                    tbl.append(
-                                TR(
-                                    TH("%s: " % table.project_id.label),
-                                    table.project_id.represent(record.project_id))
-                                )
-                if pca:
-                    tbl.append(
+        if record.description:
+            description = TR(
+                            TH("%s: " % table.description.label),
+                            record.description
+                        )
+        else:
+            description = ""
 
-                                TR(
-                                   TH("%s: " % table.location_id.label),
-                                   table.location_id.represent(record.location_id)
-                                  )
-                               )
-                else:
-                    tbl.append(
+        if record.site_id:
+            facility = TR(
+                            TH("%s: " % table.site_id.label),
+                            table.site_id.represent(record.site_id),
+                        )
+        else:
+            facility = ""
 
-                                TR(
-                                   TH("%s: " % table.name.label),
-                                   record.name
-                                  )
-                               )
-                rheader = DIV(tbl, rheader_tabs)
-            elif r.name == "task":
-                # Tabs
-                tabs = [(T("Details"), None)]
-                staff = auth.s3_has_role("STAFF")
-                if staff:
-                        (T("Time"), "time"),
-                tabs.append((T("Comments"), "discuss"))
-                tabs.append((T("Attachments"), "document"))
-                #(T("Roles"), "job_role"),
-                #(T("Assignments"), "human_resource"),
-                #(T("Requests"), "req")
+        if record.location_id:
+            location = TR(
+                            TH("%s: " % table.location_id.label),
+                            table.location_id.represent(record.location_id),
+                        )
+        else:
+            location = ""
 
-                rheader_tabs = s3_rheader_tabs(r, tabs)
+        if record.pe_id:
+            assignee = TR(
+                            TH("%s: " % table.pe_id.label),
+                            s3db.pr_pentity_represent(record.pe_id,
+                                                      show_label=False),
+                        )
+        else:
+            assignee = ""
 
-                # RHeader
-                ptable = s3db.project_project
-                ltable = s3db.project_task_project
-                query = (ltable.deleted == False) & \
-                        (ltable.task_id == r.id) & \
-                        (ltable.project_id == ptable.id)
-                project = db(query).select(ptable.name,
-                                           limitby=(0, 1)).first()
-                if project:
-                    project = TR(
-                                    TH("%s: " % T("Project")),
-                                    project.name
-                                )
-                else:
-                    project = ""
+        if record.time_estimated:
+            time_estimated = TR(
+                            TH("%s: " % table.time_estimated.label),
+                            record.time_estimated
+                        )
+        else:
+            time_estimated = ""
 
-                atable = s3db.project_activity
-                ltable = s3db.project_task_activity
-                query = (ltable.deleted == False) & \
-                        (ltable.task_id == r.id) & \
-                        (ltable.activity_id == atable.id)
-                activity = db(query).select(atable.name,
-                                            limitby=(0, 1)).first()
-                if activity:
-                    activity = TR(
-                                    TH("%s: " % T("Activity")),
-                                    activity.name
-                                )
-                else:
-                    activity = ""
+        if record.time_actual:
+            time_actual = TR(
+                            TH("%s: " % table.time_actual.label),
+                            record.time_actual
+                        )
+        else:
+            time_actual = ""
 
-                if record.description:
-                    description = TR(
-                                    TH("%s: " % table.description.label),
-                                    record.description
-                                )
-                else:
-                    description = ""
-
-                if record.site_id:
-                    facility = TR(
-                                    TH("%s: " % table.site_id.label),
-                                    table.site_id.represent(record.site_id),
-                                )
-                else:
-                    facility = ""
-
-                if record.location_id:
-                    location = TR(
-                                    TH("%s: " % table.location_id.label),
-                                    table.location_id.represent(record.location_id),
-                                )
-                else:
-                    location = ""
-
-                if record.pe_id:
-                    assignee = TR(
-                                    TH("%s: " % table.pe_id.label),
-                                    s3.pr_pentity_represent(record.pe_id,
-                                                            show_label=False),
-                                )
-                else:
-                    assignee = ""
-
-                if record.time_estimated:
-                    time_estimated = TR(
-                                    TH("%s: " % table.time_estimated.label),
-                                    record.time_estimated
-                                )
-                else:
-                    time_estimated = ""
-
-                if record.time_actual:
-                    time_actual = TR(
-                                    TH("%s: " % table.time_actual.label),
-                                    record.time_actual
-                                )
-                else:
-                    time_actual = ""
-
-                # Comments
-                if r.method == "discuss":
-                    comments = ""
-                else:
-                    ctable = s3db.project_comment
-                    query = (ctable.deleted == False) & \
-                            (ctable.task_id == r.id)
-                    comments = db(query).select(ctable.body).last()
-                    if comments:
-                        try:
-                            markup = etree.XML(comments.body)
-                            text = markup.xpath(".//text()")
-                            if text:
-                                text = " ".join(text)
-                            else:
-                                text = ""
-                        except etree.XMLSyntaxError:
-                            t = html.fromstring(comments.body)
-                            text = t.text_content()
-                        comments = TR(
-                                        TH("%s: " % T("Latest Comment")),
-                                        A(text,
-                                          _href=URL(args=[r.id, "discuss"]))
-                                    )
+        # Comments
+        if r.method == "discuss":
+            comments = ""
+        else:
+            ctable = s3db.project_comment
+            query = (ctable.deleted == False) & \
+                    (ctable.task_id == r.id)
+            comments = db(query).select(ctable.body).last()
+            if comments:
+                try:
+                    markup = etree.XML(comments.body)
+                    text = markup.xpath(".//text()")
+                    if text:
+                        text = " ".join(text)
                     else:
-                        comments = ""
+                        text = ""
+                except etree.XMLSyntaxError:
+                    t = html.fromstring(comments.body)
+                    text = t.text_content()
+                comments = TR(
+                                TH("%s: " % T("Latest Comment")),
+                                A(text,
+                                  _href=URL(args=[r.id, "discuss"]))
+                            )
+            else:
+                comments = ""
 
-                rheader = DIV(TABLE(
-                    project,
-                    activity,
-                    TR(
-                        TH("%s: " % table.name.label),
-                        record.name,
-                        ),
-                    description,
-                    facility,
-                    location,
-                    assignee,
-                    time_estimated,
-                    time_actual,
-                    comments,
-                    ), rheader_tabs)
+        rheader = DIV(TABLE(
+            project,
+            activity,
+            TR(
+                TH("%s: " % table.name.label),
+                record.name,
+                ),
+            description,
+            facility,
+            location,
+            assignee,
+            time_estimated,
+            time_actual,
+            comments,
+            ), rheader_tabs)
 
     return rheader
+
+# -------------------------------------------------------------------------
+def task_notify(form):
+    """
+        If the task is assigned to someone then notify them
+    """
+
+    vars = form.vars
+    pe_id = int(vars.pe_id)
+    if pe_id != form.record.pe_id:
+        # Assignee has changed
+        settings = current.deployment_settings
+        if settings.has_module("msg"):
+            # Notify assignee
+            subject = "%s: Task assigned to you" % settings.get_system_name_short()
+            url = "%s%s" % (settings.get_base_public_url(),
+                            URL(c="project", f="task", args=vars.id))
+            message = "You have been assigned a Task:\n\n%s\n\n%s\n\n%s" % \
+                (url,
+                 vars.name,
+                 vars.description or "")
+            current.msg.send_by_pe_id(pe_id, subject, message)
+    return
 
 # =============================================================================
 class S3ProjectActivityVirtualfields:
@@ -2478,7 +2522,7 @@ class S3ProjectTaskVirtualfields:
         db = current.db
         s3db = current.s3db
 
-        atable = s3db.project_project
+        atable = s3db.project_activity
         ltable = s3db.project_task_activity
         query = (ltable.deleted != True) & \
                 (ltable.task_id == self.project_task.id) & \

@@ -2,9 +2,6 @@
 
 """
     Human Resource Management
-
-    @author: Dominic König <dominic AT aidiq DOT com>
-    @author: Fran Boon <fran AT aidiq DOT com>
 """
 
 module = request.controller
@@ -76,7 +73,7 @@ def index():
     if r.representation == "aadata":
         return output
     # Post-process
-    response.s3.actions = [dict(label=str(T("Details")),
+    response.s3.actions = [dict(label=str(T(messages["UPDATE"])),
                                 _class="action-btn",
                                 url=URL(f="person",
                                         args=["human_resource"],
