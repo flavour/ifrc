@@ -600,7 +600,7 @@ class S3ProjectModel(S3Model):
                                 link="project_task_activity",
                                 joinby="activity_id",
                                 key="task_id",
-                                actuate="embed",
+                                actuate="replace",
                                 autocomplete="name",
                                 autodelete=False))
 
@@ -1594,7 +1594,7 @@ class S3ProjectTaskModel(S3Model):
 
         # Virtual Fields
         # Do just for the common report
-        #table.virtualfields.append(S3ProjectTaskVirtualfields())
+        table.virtualfields.append(S3ProjectTaskVirtualfields())
 
         # Search Method
         task_search = S3Search(
@@ -1658,6 +1658,7 @@ class S3ProjectTaskModel(S3Model):
                        search_method=task_search,
                        list_fields=["id",
                                     "priority",
+                                    (T("ID"), "task_id"),
                                     "name",
                                     "pe_id",
                                     "milestone_id",
@@ -1946,10 +1947,14 @@ class S3ProjectTaskModel(S3Model):
     def task_onvalidation(form):
         """ Task form validation """
 
-        if str(form.vars.status) == "3" and not form.vars.pe_id:
+        vars = form.vars
+        if str(vars.status) == "3" and not vars.pe_id:
             form.errors.pe_id = \
                 T("Status 'assigned' requires the %(fieldname)s to not be blank") % \
-                    dict(fieldname=db.project_task.pe_id.label)
+                    dict(fieldname=current.db.project_task.pe_id.label)
+        elif vars.pe_id and str(vars.status) == "2":
+            # Set the Status to 'Assigned' if left at default 'New'
+            vars.status = 3
         return
 
     # -------------------------------------------------------------------------
@@ -1959,7 +1964,9 @@ class S3ProjectTaskModel(S3Model):
             If the task is assigned to someone then notify them
         """
 
+        # Notify Assignee
         task_notify(form)
+        return
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1975,6 +1982,7 @@ class S3ProjectTaskModel(S3Model):
         session = current.session
 
         vars = form.vars
+        task_id = form.vars.id
 
         if session.s3.event:
             # Create a link between this Task & the active Event
@@ -2001,9 +2009,25 @@ class S3ProjectTaskModel(S3Model):
                 query = (table.id == vars.id)
                 db(query).update(owned_by_organisation=role.owned_by_organisation)
 
+        # Make sure the task is also linked to the project
+        # when created under an activity
+        if task_id:
+            lta = s3db.project_task_activity
+            ltp = s3db.project_task_project
+            ta = s3db.project_activity
+            query = (ltp.deleted != True) & \
+                    (ltp.task_id == task_id)
+            row = db(query).select(ltp.project_id, limitby=(0, 1)).first()
+            if not row:
+                query = (lta.deleted != True) & \
+                        (lta.task_id == task_id) & \
+                        (lta.activity_id == ta.id)
+                row = db(query).select(ta.project_id, limitby=(0, 1)).first()
+                if row and row.project_id:
+                    ltp.insert(task_id=task_id, project_id=row.project_id)
+
         # Notify Assignee
         task_notify(form)
-
         return
 
     # -------------------------------------------------------------------------
@@ -2214,6 +2238,7 @@ def project_rheader(r, tabs=[]):
                        )
         rheader = DIV(tbl, rheader_tabs)
 
+
     elif resourcename == "task":
         db = current.db
         s3db = current.s3db
@@ -2363,8 +2388,11 @@ def task_notify(form):
     """
 
     vars = form.vars
-    pe_id = int(vars.pe_id)
-    if pe_id != form.record.pe_id:
+    try:
+        pe_id = int(vars.pe_id)
+    except TypeError, ValueError:
+        return
+    if form.record is None or (pe_id != form.record.pe_id):
         # Assignee has changed
         settings = current.deployment_settings
         if settings.has_module("msg"):
@@ -2492,26 +2520,18 @@ class S3ProjectActivityContactVirtualFields:
 class S3ProjectTaskVirtualfields:
     """ Virtual fields for the project_task table """
 
-    extra_fields = []
+    extra_fields = ["id",
+                    "project_task_project:project_id$name",
+                    "project_task_activity:activity_id$name"]
 
     def project(self):
         """
             Project associated with this task
         """
 
-        db = current.db
-        s3db = current.s3db
-
-        ptable = s3db.project_project
-        ltable = s3db.project_task_project
-        query = (ltable.deleted != True) & \
-                (ltable.task_id == self.project_task.id) & \
-                (ltable.project_id == ptable.id)
-        project = db(query).select(ptable.name,
-                                   limitby=(0, 1)).first()
-        if project:
-            return project.name
-        else:
+        try:
+            return self.project_project.name
+        except AttributeError:
             return None
 
     def activity(self):
@@ -2519,19 +2539,16 @@ class S3ProjectTaskVirtualfields:
             Activity associated with this task
         """
 
-        db = current.db
-        s3db = current.s3db
+        try:
+            return self.project_activity.name
+        except AttributeError:
+            return None
 
-        atable = s3db.project_activity
-        ltable = s3db.project_task_activity
-        query = (ltable.deleted != True) & \
-                (ltable.task_id == self.project_task.id) & \
-                (ltable.activity_id == atable.id)
-        project = db(query).select(atable.name,
-                                   limitby=(0, 1)).first()
-        if project:
-            return project.name
-        else:
+    def task_id(self):
+
+        try:
+            return self.project_task.id
+        except AttributeError:
             return None
 
 # =============================================================================
