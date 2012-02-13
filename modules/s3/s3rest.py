@@ -148,7 +148,7 @@ class S3RequestManager(object):
 
         # Toolkits
         self.audit = current.s3_audit
-        self.auth = current.auth
+        self.auth = auth = current.auth
         self.gis = current.gis
 
         # Register
@@ -172,7 +172,7 @@ class S3RequestManager(object):
         self.search = S3Method()
 
         # Hooks
-        self.permit = self.auth.s3_has_permission
+        self.permit = auth.s3_has_permission
         self.messages = None
         self.import_prep = None
         self.log = None
@@ -641,20 +641,22 @@ class S3Request(object):
             cnames = None
 
         # Append component ID to the URL query
-        if self.component_name and self.component_id:
-            varname = "%s.id" % self.component_name
+        component_name = self.component_name
+        component_id = self.component_id
+        if component_name and component_id:
+            varname = "%s.id" % component_name
             if varname in vars:
                 var = vars[varname]
                 if not isinstance(var, (list, tuple)):
                     var = [var]
-                var.append(self.component_id)
+                var.append(component_id)
                 vars[varname] = var
             else:
-                vars[varname] = self.component_id
+                vars[varname] = component_id
 
         # Define the target resource
         _filter = current.response[manager.HOOKS].filter # manager.HOOKS="s3"
-        components = self.component_name
+        components = component_name
         if components is None:
             components = cnames
         self.resource = manager.define_resource(self.prefix,
@@ -666,7 +668,7 @@ class S3Request(object):
                                                 include_deleted=include_deleted)
 
         self.tablename = self.resource.tablename
-        self.table = self.resource.table
+        table = self.table = self.resource.table
 
         # Try to load the master record
         self.record = None
@@ -676,7 +678,8 @@ class S3Request(object):
             self.resource.load()
             if len(self.resource) == 1:
                 self.record = self.resource.records().first()
-                self.id = self.record.id
+                id = table._id.name
+                self.id = self.record[id]
                 manager.store_session(self.resource.prefix,
                                       self.resource.name,
                                       self.id)
@@ -1874,7 +1877,7 @@ class S3Resource(object):
 
         # Authorization hooks
         self.permit = manager.permit
-        self.accessible_query = manager.auth.s3_accessible_query
+        self.accessible_query = current.auth.s3_accessible_query
 
         # Audit hook
         self.audit = manager.audit
@@ -2212,7 +2215,8 @@ class S3Resource(object):
                 else:
                     rows = self.select(table.ALL)
                 self._length = len(rows)
-        self._ids = [row.id for row in rows]
+        id = table._id.name
+        self._ids = [row[id] for row in rows]
         uid = manager.xml.UID
         if uid in table.fields:
             self._uids = [row[uid] for row in rows]
@@ -2256,6 +2260,7 @@ class S3Resource(object):
 
             @returns: number of records deleted
 
+            @todo: Fix for Super Entities where we need row[table._id.name]
             @todo: optimize
         """
 
@@ -2273,9 +2278,9 @@ class S3Resource(object):
 
         # Get all rows
         if "uuid" in table.fields:
-            rows = self.select(table.id, table.uuid)
+            rows = self.select(table._id, table.uuid)
         else:
-            rows = self.select(table.id)
+            rows = self.select(table._id)
 
         if not rows:
             # No rows in this resource => return success here
@@ -3428,9 +3433,9 @@ class S3Resource(object):
             UID = xml.UID
             if id and UID in table:
                 if not isinstance(id, (tuple, list)):
-                    query = (table.id == id)
+                    query = (table._id == id)
                 else:
-                    query = (table.id.belongs(id))
+                    query = (table._id.belongs(id))
                 originals = db(query).select(table[UID])
                 uids = [row[UID] for row in originals]
                 matches = []
@@ -3532,8 +3537,9 @@ class S3Resource(object):
                     req = req.other
                 if not isinstance(req, IS_ONE_OF):
                     raise RuntimeError, "not isinstance(req, IS_ONE_OF)"
-                rows = db().select(db[req.ktable][req.kfield],
-                                   orderby=~db[req.ktable][req.kfield],
+                kfield = db[req.ktable][req.kfield]
+                rows = db().select(kfield,
+                                   orderby=~kfield,
                                    limitby=(0, 1))
                 res = []
                 for row in rows:
@@ -3655,7 +3661,7 @@ class S3Resource(object):
         table = self.table
 
         if self.parent and self.linked is None:
-            component = self.parent.components.get(self.name, None)
+            component = self.parent.components.get(self.alias, None)
             if component:
                 fkey = component.fkey
         elif self.linked is not None:
@@ -3684,20 +3690,22 @@ class S3Resource(object):
 
         # Collect the extra fields
         flist = list(fields)
+        append = flist.append
         for vtable in table.virtualfields:
-            try:
+            if hasattr(vtable, "extra_fields"):
                 extra_fields = vtable.extra_fields
                 for ef in extra_fields:
                     if ef not in flist:
-                        flist.append(ef)
-            except:
-                continue
+                        append(ef)
 
         lfields = []
         joins = Storage()
         left = Storage()
 
-        # @todo: optimize
+        append = lfields.append
+        name = self.name
+        get_lfield = self.get_lfield
+
         for f in flist:
             # Allow to override the field label
             if isinstance(f, tuple):
@@ -3705,9 +3713,9 @@ class S3Resource(object):
             else:
                 label, selector = None, f
             if "." not in selector:
-                selector = "%s.%s" % (self.name, selector)
+                selector = "%s.%s" % (name, selector)
             try:
-                lfield = self.get_lfield(selector)
+                lfield = get_lfield(selector)
             except (KeyError, SyntaxError):
                 continue
             if label is None:
@@ -3722,13 +3730,14 @@ class S3Resource(object):
             if lfield.left:
                 left.update(lfield.left)
             lfield.show = f in fields
-            lfields.append(lfield)
+            append(lfield)
 
         lefts = []
+        append = lefts.append
         for tn in left:
             ljoins = left[tn]
             for lj in ljoins:
-                lefts.append(lj)
+                append(lj)
         return (lfields, joins, lefts)
 
     # -------------------------------------------------------------------------
@@ -3787,6 +3796,10 @@ class S3Resource(object):
                 raise KeyError("%s is not a component of %s" % (tn, tablename))
         else:
             tn = tablename
+            if tail:
+                original = "%s$%s" % (fn, tail)
+            else:
+                original = fn
 
         # Load the table
         table = s3db[tn]
@@ -3795,7 +3808,9 @@ class S3Resource(object):
         else:
             if fn == "uid":
                 fn = xml.UID
-            if fn in table.fields:
+            if fn == "id":
+                f = table._id
+            elif fn in table.fields:
                 f = table[fn]
             else:
                 f = None
@@ -3936,7 +3951,7 @@ class S3Resource(object):
                          distinct=field.distinct or distinct)
             return field
         else:
-            field = Storage(selector=selector,
+            field = Storage(selector=original,
                             tname = tn,
                             fname = fn,
                             colname = "%s.%s" % (tn, fn),
@@ -4652,7 +4667,8 @@ class S3ResourceFilter:
         tablename = resource.tablename
         fields = table.fields
 
-        if tablename == "gis_feature_query":
+        if tablename == "gis_feature_query" or \
+           tablename == "gis_cache":
             gtable = table
         else:
             gtable = current.s3db.gis_location

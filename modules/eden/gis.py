@@ -959,6 +959,17 @@ class S3GISConfigModel(S3Model):
                                                                           T("If neither are defined, then the Default Marker is used.")))),
                                     ondelete = "RESTRICT")
 
+        # Components
+        # Layers
+        self.add_component("gis_layer_entity",
+                            gis_marker=Storage(
+                                    link="gis_layer_symbology",
+                                    joinby="marker_id",
+                                    key="layer_id",
+                                    actuate="hide",
+                                    autocomplete="name",
+                                    autodelete=False))
+
         self.configure(tablename,
                        onvalidation=self.gis_marker_onvalidation,
                        deduplicate=self.gis_marker_deduplicate)
@@ -1083,6 +1094,16 @@ class S3GISConfigModel(S3Model):
                                     link="gis_layer_symbology",
                                     joinby="symbology_id",
                                     key="layer_id",
+                                    actuate="hide",
+                                    autocomplete="name",
+                                    autodelete=False))
+
+        # Markers
+        self.add_component("gis_marker",
+                            gis_symbology=Storage(
+                                    link="gis_layer_symbology",
+                                    joinby="symbology_id",
+                                    key="marker_id",
                                     actuate="replace",
                                     autocomplete="name",
                                     autodelete=False))
@@ -1182,8 +1203,11 @@ class S3GISConfigModel(S3Model):
         # Reusable field - used by Events & Scenarios
         config_id = S3ReusableField("config_id", db.gis_config,
                                     #readable=False,
+                                    #writable=False,
+                                    requires = IS_ONE_OF(db,
+                                                         "gis_config.id",
+                                                         "%(name)s"),
                                     represent = self.gis_config_represent,
-                                    writable=False,
                                     label = T("Map Configuration"),
                                     ondelete = "RESTRICT")
 
@@ -1699,6 +1723,22 @@ class S3LayerEntityModel(S3Model):
                                   ##roles_permitted(),    # Multiple Roles (needs implementing in modules/s3gis.py)
                                 )
 
+        s3.crud_strings[tablename] = Storage(
+                    title_create = T("Add Layer"),
+                    title_display = T("Layer Details"),
+                    title_list = T("Layers"),
+                    title_update = T("Edit Layer"),
+                    title_search = T("Search Layers"),
+                    subtitle_create = T("Add New Layer"),
+                    subtitle_list = T("List Layers"),
+                    label_list_button = T("List Layers"),
+                    label_create_button = T("Add Layer"),
+                    label_delete_button = T("Delete Layer"),
+                    msg_record_created = T("Layer added"),
+                    msg_record_modified = T("Layer updated"),
+                    msg_record_deleted = T("Layer deleted"),
+                    msg_list_empty=T("No Layers currently defined"))
+
         layer_id = self.super_link("layer_id", "gis_layer_entity",
                                    label = T("Layer"),
                                    # SuperLinks don't support requires
@@ -1727,6 +1767,17 @@ class S3LayerEntityModel(S3Model):
                                     autocomplete="name",
                                     autodelete=False))
 
+        # Symbologies
+        self.add_component("gis_symbology",
+                            gis_layer_entity=Storage(
+                                    link="gis_layer_symbology",
+                                    pkey="layer_id",
+                                    joinby="layer_id",
+                                    key="symbology_id",
+                                    actuate="hide",
+                                    autocomplete="name",
+                                    autodelete=False))
+
         # =====================================================================
         #  Layer Config link table
 
@@ -1741,6 +1792,21 @@ class S3LayerEntityModel(S3Model):
                                   Field("base", "boolean", default=False,
                                         label=T("Default Base layer?")),
                                   *s3.meta_fields())
+
+        s3.crud_strings[tablename] = Storage(
+                    title_create = T("Add Profile Configuration for this Layer"),
+                    title_display = T("Profile Configuration"),
+                    title_list = T("Profile Configurations"),
+                    title_update = T("Edit Profile Configuration"),
+                    subtitle_create = T("Add New Profile Configuration"),
+                    subtitle_list =  T("List Profiles configured for this Layer"),
+                    label_list_button = T("List Profiles configured for this Layer"),
+                    label_create_button = T("Add Profile Configuration"),
+                    label_delete_button = T("Remove Profile Configuration for Layer"),
+                    msg_record_created = T("Profile Configured"),
+                    msg_record_modified = T("Profile Configuration updated"),
+                    msg_record_deleted = T("Profile Configuration removed"),
+                    msg_list_empty = T("No Profiles currently have Configurations for this Layer"))
 
         # =====================================================================
         #  Layer Symbology link table
@@ -1758,6 +1824,21 @@ class S3LayerEntityModel(S3Model):
                                         requires = IS_NULL_OR(IS_IN_SET(current.gis.gps_symbols,
                                                                         zero=T("Use default")))),
                                   *s3.meta_fields())
+
+        s3.crud_strings[tablename] = Storage(
+                    title_create = T("Add Symbology for Layer"),
+                    title_display = T("Symbology"),
+                    title_list = T("Symbologies"),
+                    title_update = T("Edit Symbology"),
+                    subtitle_create = T("Add New Symbology for Layer"),
+                    subtitle_list = T("List Symbologies for Layer"),
+                    label_list_button = T("List Symbologies for Layer"),
+                    label_create_button = T("Add Symbology for Layer"),
+                    label_delete_button = T("Remove Symbology from Layer"),
+                    msg_record_created = T("Symbology added"),
+                    msg_record_modified = T("Symbology updated"),
+                    msg_record_deleted = T("Symbology removed from Layer"),
+                    msg_list_empty = T("No Symbologies currently defined for this Layer"))
 
         # ---------------------------------------------------------------------
         return Storage(
@@ -2290,6 +2371,7 @@ class S3MapModel(S3Model):
                                   *s3.meta_fields())
 
         self.configure(tablename,
+                       deduplicate = self.gis_layer_kml_deduplicate,
                        super_entity="gis_layer_entity")
 
         # Components
@@ -2702,6 +2784,37 @@ class S3MapModel(S3Model):
                 item.method = item.METHOD.UPDATE
         return
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def gis_layer_kml_deduplicate(item):
+        """
+          This callback will be called when importing Symbology records it will look
+          to see if the record being imported is a duplicate.
+
+          @param item: An S3ImportJob object which includes all the details
+                      of the record being imported
+
+          If the record is a duplicate then it will set the job method to update
+
+        """
+
+        db = current.db
+
+        if item.id:
+            return
+        if item.tablename == "gis_layer_kml":
+            # Match if url is identical
+            table = item.table
+            data = item.data
+            url = data.url
+            query = (table.url == url)
+            duplicate = db(query).select(table.id,
+                                         limitby=(0, 1)).first()
+            if duplicate:
+                item.id = duplicate.id
+                item.method = item.METHOD.UPDATE
+        return
+
 # =============================================================================
 def name_field():
     T = current.T
@@ -2962,10 +3075,9 @@ def gis_layer_represent(id, link=True):
         represent = "[layer %d] (%s)" % (id, instance_type_nice)
 
     if link and layer:
-        if not id:
-            query = (table.layer_id == layer.layer_id)
-            id = db(query).select(table.id,
-                                  limitby=(0, 1)).first()
+        query = (table.layer_id == layer.layer_id)
+        id = db(query).select(table.id,
+                              limitby=(0, 1)).first().id
         c, f = instance_type.split("_", 1)
         represent = A(represent,
                       _href = URL(c=c, f=f,
@@ -2994,7 +3106,7 @@ def gis_rheader(r, tabs=[]):
     if resourcename == "config":
         # Tabs
         if not tabs:
-            tabs = [(T("Basic Details"), None),
+            tabs = [(T("Profile Details"), None),
                     (T("Layers"), "layer_entity"),
                    ]
 
@@ -3002,24 +3114,18 @@ def gis_rheader(r, tabs=[]):
 
         context = ""
         if record.uuid == "SITE_DEFAULT":
-            context = T("Site Default")
+            context = T("Default")
         else:
             # Check both the OU & Region contexts
             s3db = current.s3db
             pe_id = record.pe_id
             if pe_id:
                 auth = current.auth
-                if auth.is_logged_in():
-                    # Is this the user's personal config?
-                    ptable = s3db.pr_person
-                    query = (ptable.uuid == auth.user.person_uuid)
-                    pe = db(query).select(ptable.pe_id,
-                                          limitby=(0, 1),
-                                          cache=s3db.cache).first()
-                    if pe_id == pe.pe_id:
-                        context = T("Personal")
-
-                context = s3db.pr_pentity_represent(record.pe_id, show_label=False)
+                # Is this the user's personal config?
+                if auth.user and auth.user.pe_id == pe_id:
+                    context = T("Personal")
+                else:
+                    context = s3db.pr_pentity_represent(pe_id, show_label=False)
 
             region_location_id = record.region_location_id
             if region_location_id:
@@ -3045,6 +3151,22 @@ def gis_rheader(r, tabs=[]):
     elif resourcename == "symbology":
         # Tabs
         if not tabs:
+            tabs = [(T("Symbology Details"), None),
+                    (T("Layers"), "layer_entity"),
+                    (T("Markers"), "marker"),
+                   ]
+
+        rheader_tabs = s3_rheader_tabs(r, tabs)
+
+        rheader = DIV(TABLE(
+                            TR(TH("%s: " % table.name.label),
+                                record.name),
+                            ),
+                      rheader_tabs)
+
+    elif resourcename == "marker":
+        # Tabs
+        if not tabs:
             tabs = [(T("Basic Details"), None),
                     (T("Layers"), "layer_entity"),
                    ]
@@ -3060,13 +3182,35 @@ def gis_rheader(r, tabs=[]):
     elif resourcename == "layer_feature" or \
          resourcename == "layer_georss" or \
          resourcename == "layer_geojson" or \
-         resourcename == "layer_kml" or \
-         resourcename == "layer_entity" :
+         resourcename == "layer_kml":
         # Tabs
         if not tabs:
-            tabs = [(T("Basic Details"), None),
-                    # @ToDo: Better Label?
-                    (T("Configs"), "config"),
+            tabs = [(T("Layer Details"), None),
+                    (T("Profiles"), "config"),
+                    (T("Markers"), "symbology"),
+                   ]
+
+        rheader_tabs = s3_rheader_tabs(r, tabs)
+
+        if record.description:
+            description = TR(TH("%s: " % table.description.label),
+                             record.description)
+        else:
+            description = ""
+
+        rheader = DIV(TABLE(
+                            TR(TH("%s: " % table.name.label),
+                               record.name,
+                            ),
+                            description,
+                            ),
+                      rheader_tabs)
+
+    elif resourcename == "layer_entity":
+        # Tabs
+        if not tabs:
+            tabs = [(T("Layer Details"), None), # @ToDo: Make this the layer instance not entity
+                    (T("Profiles"), "config"),
                     (T("Markers"), "symbology"),
                    ]
 
@@ -3097,9 +3241,8 @@ def gis_rheader(r, tabs=[]):
          resourcename == "layer_js" :
         # Tabs
         if not tabs:
-            tabs = [(T("Basic Details"), None),
-                    # @ToDo: Better Label?
-                    (T("Configs"), "config"),
+            tabs = [(T("Layer Details"), None),
+                    (T("Profiles"), "config"),
                    ]
 
         rheader_tabs = s3_rheader_tabs(r, tabs)
