@@ -341,20 +341,6 @@ class S3ProjectModel(S3Model):
                   onaccept=self.project_project_onaccept,
                   create_next=URL(c="project", f="project",
                                   args=["[id]", next]),
-                  list_fields=["id",
-                               "name",
-                               "organisation_id",
-                               #"countries_id",
-                               "start_date",
-                               "end_date",
-                               ])
-                  list_fields=["id",
-                               "name",
-                               #"organisation_id",
-                               "countries_id",
-                               "start_date",
-                               "end_date",
-                               ])
                   list_fields=list_fields)
 
         # Reusable Field
