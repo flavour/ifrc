@@ -790,8 +790,6 @@ class S3ProjectModel(S3Model):
     def project_project_deduplicate(item):
         """ Import item de-duplication """
 
-        db = current.db
-
         if item.id:
             return
         if item.tablename == "project_project" and \
@@ -799,12 +797,13 @@ class S3ProjectModel(S3Model):
             # Match project by name (all-lowercase)
             table = item.table
             name = item.data.name
-            query = (table.name.lower() == name.lower())
-            duplicate = db(query).select(table.id,
-                                         limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
+            if name:
+                query = (table.name.lower() == name.lower())
+                duplicate = current.db(query).select(table.id,
+                                                     limitby=(0, 1)).first()
+                if duplicate:
+                    item.id = duplicate.id
+                    item.method = item.METHOD.UPDATE
         return
 
     # -------------------------------------------------------------------------
