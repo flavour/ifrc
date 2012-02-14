@@ -274,14 +274,12 @@ if len(pop_list) > 0:
             else:
                 end = datetime.datetime.now()
                 duration = end - start
-                print >> sys.stdout, "Installed demo '%s' completed in %s" % \
-                                        (demo, duration)
+                print >> sys.stdout, "Installed demo '%s' completed in %s mins" % \
+                                        (demo, '{:.2f}'.format(duration.total_seconds()/60))
         grandTotalEnd = datetime.datetime.now()
         duration = grandTotalEnd - grandTotalStart
-        print >> sys.stdout, "Pre-populate completed in %s" % (duration)
-        if _debug:
-            for result in bi.resultList:
-                print >> sys.stdout, result
+        print >> sys.stdout, "Pre-populate completed in %s mins" % \
+                                ('{:.2f}'.format(duration.total_seconds()/60))
         bi.resultList = []
 
     for errorLine in bi.errorList:

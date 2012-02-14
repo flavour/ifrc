@@ -2082,7 +2082,7 @@ class GIS(object):
             "code2field" : "ISO"  # This field is used to uniquely identify the L0 for parenting the L1s
         }
 
-        #Copy the current working directory to revert back to later
+        # Copy the current working directory to revert back to later
         old_working_directory = os.getcwd()
 
         # Create the working directory
