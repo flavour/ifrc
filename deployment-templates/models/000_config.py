@@ -152,10 +152,10 @@ deployment_settings.L10n.default_language = "en-gb"
 deployment_settings.L10n.display_toolbar = False
 # Default timezone for users
 deployment_settings.L10n.utc_offset = "UTC +0700"
-# Uncomment these to use US-style dates in English (localisations can still convert to local format)
-#deployment_settings.L10n.date_format = T("%m-%d-%Y")
+# Unsortable 'pretty' date format
+deployment_settings.L10n.date_format = T("%d-%b-%Y")
 #deployment_settings.L10n.time_format = T("%H:%M:%S")
-#deployment_settings.L10n.datetime_format = T("%m-%d-%Y %H:%M:%S")
+deployment_settings.L10n.datetime_format = T("%d-%b-%Y %H:%M:%S")
 # Religions used in Person Registry
 # @ToDo: find a better code
 # http://eden.sahanafoundation.org/ticket/594
@@ -172,6 +172,9 @@ deployment_settings.L10n.religions = {
 # Make last name in person/user records mandatory
 deployment_settings.L10n.mandatory_lastname = True
 # Show thousands separators in certain numeric fields
+deployment_settings.L10n.thousands_separator = True
+
+# Add thousands separator to numbers, eg. 1,000,000
 deployment_settings.L10n.thousands_separator = True
 
 # Finance settings
