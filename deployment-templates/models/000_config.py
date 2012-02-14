@@ -174,6 +174,9 @@ deployment_settings.L10n.mandatory_lastname = True
 # Show thousands separators in certain numeric fields
 deployment_settings.L10n.thousands_separator = True
 
+# Add thousands separator to numbers, eg. 1,000,000
+deployment_settings.L10n.thousands_separator = True
+
 # Finance settings
 deployment_settings.fin.currencies = {
     "USD" :T("United States Dollars"),
