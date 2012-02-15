@@ -1102,7 +1102,16 @@ class GIS(object):
             rows.exclude(filter)
         elif not rows:
             # prepop hasn't run yet
-            return None
+            levels = OrderedDict()
+            hierarchy_level_keys = self.hierarchy_level_keys
+            for key in hierarchy_level_keys:
+                if key == "L0":
+                    levels[key] = COUNTRY
+                else:
+                    # Only include rows with values
+                    levels[key] = key
+            return levels
+
         row = rows.first()
         if level:
             try:
@@ -2082,7 +2091,7 @@ class GIS(object):
             "code2field" : "ISO"  # This field is used to uniquely identify the L0 for parenting the L1s
         }
 
-        #Copy the current working directory to revert back to later
+        # Copy the current working directory to revert back to later
         old_working_directory = os.getcwd()
 
         # Create the working directory

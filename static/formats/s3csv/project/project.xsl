@@ -143,11 +143,13 @@
                 </xsl:attribute>
             </reference>
 
-            <reference field="human_resource_id" resource="hrm_human_resource">
-                <xsl:attribute name="tuid">
-                    <xsl:value-of select="concat('HR:', $LastName, ',', $FirstName)"/>
-                </xsl:attribute>
-            </reference>
+            <xsl:if test="col[@field='FPFirstName']!=''">
+                <reference field="human_resource_id" resource="hrm_human_resource">
+                    <xsl:attribute name="tuid">
+                        <xsl:value-of select="concat('HR:', $LastName, ',', $FirstName)"/>
+                    </xsl:attribute>
+                </reference>
+            </xsl:if>
 
             <resource name="project_organisation">
                 <data field="role">1</data>
@@ -175,7 +177,9 @@
             <xsl:with-param name="arg">theme</xsl:with-param>
         </xsl:call-template>
 
-        <xsl:call-template name="FocalPerson"/>
+        <xsl:if test="col[@field='FPFirstName']!=''">
+            <xsl:call-template name="FocalPerson"/>
+        </xsl:if>
 
     </xsl:template>
 
