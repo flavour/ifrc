@@ -987,7 +987,7 @@ class S3ContingencyTable(TABLE):
         for i in xrange(numcols):
             value = values[i].value
             v = represent(cols, value)
-            add_col_title(s3_truncate(str(v)))
+            add_col_title(s3_truncate(unicode(v)))
             colhdr = TH(v, _style=_style)
             add_header(colhdr)
 
@@ -1014,7 +1014,7 @@ class S3ContingencyTable(TABLE):
             # Row header
             row = rvals[i]
             v = represent(rows, row.value)
-            add_row_title(s3_truncate(str(v)))
+            add_row_title(s3_truncate(unicode(v)))
             rowhdr = TD(DIV(v))
             add_cell(rowhdr)
 

@@ -44,6 +44,7 @@ __all__ = ["S3RequestManager",
 import sys
 import datetime
 import time
+import HTMLParser
 try:
     from cStringIO import StringIO    # Faster, where available
 except:
@@ -414,15 +415,9 @@ class S3RequestManager(object):
 
         # Strip away markup from text
         if strip_markup and "<" in text:
-            try:
-                markup = etree.XML(text)
-                text = markup.xpath(".//text()")
-                if text:
-                    text = " ".join(text)
-                else:
-                    text = ""
-            except etree.XMLSyntaxError:
-                text = text.replace("<", "<!-- <").replace(">", "> -->")
+            stripper = S3MarkupStripper()
+            stripper.feed(text)
+            text = stripper.stripped()
 
         # Link ID field
         if fname == "id" and linkto:
@@ -1057,7 +1052,7 @@ class S3Request(object):
         tablename = self.component and self.component.tablename or self.tablename
 
         transform = False
-        if method is None or method in ("read", "display"):
+        if method is None or method in ("read", "display", "update"):
             if self.transformable():
                 method = "export_tree"
                 transform = True
@@ -1075,7 +1070,7 @@ class S3Request(object):
                 else:
                     method = "read"
             else:
-                if self.id or method in ("read", "display"):
+                if self.id or method in ("read", "display", "update"):
                     # Enforce single record
                     if not self.resource._rows:
                         self.resource.load(start=0, limit=1)
@@ -5702,5 +5697,20 @@ class S3TypeConverter:
             return value
         else:
             raise TypeError
+
+# =============================================================================
+
+class S3MarkupStripper(HTMLParser.HTMLParser):
+    """ Simple markup stripper """
+
+    def __init__(self):
+        self.reset()
+        self.result = []
+
+    def handle_data(self, d):
+        self.result.append(d)
+
+    def stripped(self):
+        return ''.join(self.result)
 
 # END =========================================================================
