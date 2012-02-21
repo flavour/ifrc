@@ -341,4 +341,6 @@ def req_match():
 
     return output
 
+response.s3.req_match = req_match
+
 # END =========================================================================

@@ -135,10 +135,10 @@ def incoming():
     return inv_incoming()
 
 # =============================================================================
-def match():
+def req_match():
     """ Match Requests """
 
-    return req_match()
+    return response.s3.req_match()
 
 # =============================================================================
 def donor():

@@ -174,7 +174,6 @@ def incoming():
 def req_match():
     """ Match Requests """
 
-    s3mgr.load("req_req")
     return response.s3.req_match()
 
 # =============================================================================
