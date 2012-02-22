@@ -369,6 +369,7 @@ if auth.permission.format in ("html"):
                     [T("Add New Project"), False, aURL(p="create", f="project", args="create")],
                     [T("List All Projects"), False, aURL(f="project")],
                     [list_activities_label, False, aURL(f="activity")],
+                    [list_activity_contacts_label, False, aURL(f="activity_contact")],
                     [T("Search"), False, aURL(f="project", args="search")],
                 ]],
                 [T("Reports"), False, aURL(f="report"),[
