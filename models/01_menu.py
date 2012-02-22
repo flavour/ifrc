@@ -355,9 +355,11 @@ if auth.permission.format in ("html"):
 
     if deployment_settings.get_project_community_activity():
         list_activities_label = T("List All Communities")
+        list_activity_contacts_label = T("List All Community Contacts")
         import_activities_label = T("Import Project Communities")
     else:
         list_activities_label = T("List All Activities")
+        list_activity_contacts_label = T("List All Activity Contacts")
         import_activities_label = T("Import Project Activities")
 
     if deployment_settings.get_project_drr():
@@ -380,13 +382,13 @@ if auth.permission.format in ("html"):
                                             aggregate="sum"))],
                     [T("Funding"), False, aURL(f="organisation", args="report")],
                 ]],
-                [T("Import"), False, aURL(f="index"),[
+                [T("Import"), False, "#", [
                     [T("Import Projects"), False, aURL(p="create", f="project",
-                                                    args="import")],
+                                                       args="import")],
                     [T("Import Project Organizations"), False, aURL(p="create", f="organisation",
                                                                     args="import")],
                     [import_activities_label, False, aURL(p="create", f="activity",
-                                                                args="import")],
+                                                          args="import")],
                 ]],
                 [T("Activity Types"), False, aURL(f="activity_type"),[
                     [T("Add New Activity Type"), False, aURL(p="create", f="activity_type", args="create")],
@@ -648,19 +650,22 @@ if auth.permission.format in ("html"):
         # ---------------------------------------------------------------------
         "asset": {
             "menu": [
-                #[T("Home"), False, aURL(c="asset", f="index")],
-                [T("Assets"), False, aURL(c="asset", f="asset"),
-                [
+                [T("Assets"), False, aURL(c="asset", f="asset"), [
                     [T("New"), False, aURL(p="create", c="asset", f="asset",
                                            args="create")],
                     [T("List All"), False, aURL(c="asset", f="asset")],
                     [T("Search"), False, aURL(c="asset", f="asset",
                                               args="search")],
+                    [T("Report"), False, aURL(c="asset", f="asset",
+                                              args=["report"],
+                                              vars=dict(rows="item_id$item_category_id",
+                                                        cols="L1",
+                                                        fact="number",
+                                                        aggregate="count"))],
                     [T("Import"), False, aURL(p="create", c="asset", f="asset",
                                               args="import")],
                 ]],
-                [T("Items"), False, aURL(c="asset", f="item"),
-                [
+                [T("Items"), False, aURL(c="asset", f="item"), [
                     [T("New"), False, aURL(p="create", c="asset", f="item",
                                            args="create")],
                     [T("List All"), False, aURL(c="asset", f="item")],
@@ -699,13 +704,13 @@ if auth.permission.format in ("html"):
         # ---------------------------------------------------------------------
         "doc": {
             "menu": [
-                [T("Documents"), False, aURL(f="document"),[
+                [T("Documents"), False, aURL(f="document"), [
                     [T("New"), False, aURL(p="create", f="document",
                                            args="create")],
                     [T("List All"), False, aURL(f="document")],
                     #[T("Search"), False, aURL(f="ireport", args="search")]
                 ]],
-                [T("Photos"), False, aURL(f="image"),[
+                [T("Photos"), False, aURL(f="image"), [
                     [T("New"), False, aURL(p="create", f="image",
                                            args="create")],
                     [T("List All"), False, aURL(f="image")],
@@ -806,7 +811,7 @@ if auth.permission.format in ("html"):
                         [T("List All"), False, aURL(c="inv", f="warehouse")],
                         [T("Search"), False, aURL(c="inv", f="warehouse",
                                                   args="search")],
-                        [T("Report"), False, aURL(p="create", c="inv", f="inv_item",
+                        [T("Report"), False, aURL(c="inv", f="inv_item",
                                                   args=["report"])],
                         [T("Import"), False, aURL(p="create", c="inv",
                                                   f="warehouse",
@@ -816,7 +821,7 @@ if auth.permission.format in ("html"):
                         [T("Search Warehouse Stock"), False, aURL(c="inv",
                                                                   f="inv_item",
                                                                   args="search")],
-                        [T("Report"), False, aURL(p="create", c="inv", f="inv_item",
+                        [T("Report"), False, aURL(c="inv", f="inv_item",
                                                   args=["report"])],
                         [T("Import"), False, aURL(p="create", c="inv", f="inv_item",
                                                   args=["import"])],
@@ -879,10 +884,16 @@ if auth.permission.format in ("html"):
         # ---------------------------------------------------------------------
         "irs": {
             "menu": [
-                [T("Events"), False, aURL(f="ireport"),[
+                [T("Events"), False, aURL(f="ireport"), [
                     [T("New"), False, aURL(p="create", f="ireport", args="create")],
                     [T("List All"), False, aURL(f="ireport")],
                     #[T("Open Incidents"), False, aURL(f="ireport", vars={"open":1})],
+                    [T("Search"), False, aURL(f="ireport", args=["search"])],
+                    [T("Report"), False, aURL(f="ireport", args=["report"],
+                                              vars=dict(rows="L1",
+                                                        cols="category",
+                                                        fact="datetime",
+                                                        aggregate="count"))],
                     [T("Timeline"), False, aURL(f="ireport", args="timeline")],
                     #[T("Search"), False, aURL(f="ireport", args="search")]
                 ]],

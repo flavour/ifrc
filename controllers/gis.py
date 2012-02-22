@@ -905,11 +905,13 @@ def config():
                     # @ToDo: ideal would be to have the SITE_DEFAULT (with any OU configs overlaid) on the left-hand side & then they can see what they wish to override on the right-hand side
                     # - could be easier to put the currently-effective config into the form fields, however then we have to save all this data
                     # - if each field was readable & you clicked on it to make it editable (like RHoK pr_contact), that would solve this
+                    pe_id = auth.user.pe_id
                     # For Lists
-                    response.s3.filter = query & (s3db.gis_config.pe_id == pe_id)
+                    response.s3.filter = (s3db.gis_config.pe_id == pe_id)
                     # For Create forms
                     field = r.table.pe_id
                     field.default = pe_id
+                    field.readable = False
                     field.writable = False
             elif r.component_name == "layer_entity":
                 s3.crud_strings["gis_layer_config"] = Storage(
@@ -1098,6 +1100,7 @@ def enable_layer(r):
     """
         Enable a Layer
             designed to be a custom method called by an action button
+        @ToDo: See if we want to reinstate somethign like this for the new data model (currently unsued)
     """
 
     if not r.id:
@@ -1115,6 +1118,7 @@ def disable_layer(r):
     """
         Disable a Layer
             designed to be a custom method called by an action button
+        @ToDo: See if we want to reinstate somethign like this for the new data model (currently unsued)
     """
 
     if not r.id:
@@ -2267,7 +2271,11 @@ def display_feature():
         session.error = T("No access to this record!")
         raise HTTP(401, body=s3mgr.xml.json_message(False, 401, session.error))
 
-    feature = db(table.id == feature_id).select(limitby=(0, 1)).first()
+    feature = db(table.id == feature_id).select(table.id,
+                                                table.parent,
+                                                table.lat,
+                                                table.lon,
+                                                limitby=(0, 1)).first()
 
     config = gis.get_config()
 
@@ -2276,10 +2284,10 @@ def display_feature():
         lat = feature.lat
         lon = feature.lon
         if (lat is None) or (lon is None):
-            if feature.get("parent"):
+            if feature.parent:
                 # Skip the current record if we can
                 latlon = gis.get_latlon(feature.parent)
-            elif feature.get("id"):
+            elif feature.id:
                 latlon = gis.get_latlon(feature.id)
             else:
                 # nothing we can do!
@@ -2294,15 +2302,19 @@ def display_feature():
         lat = config.lat
         lon = config.lon
 
-    # Default zoom +2 (same as a single zoom on a cluster)
-    zoom = config.zoom + 2
+    #if feature.parent:
+    bounds = gis.get_bounds(features=[feature])
+    #else:
+        # Default zoom +2 (same as a single zoom on a cluster)
+    #    zoom = config.zoom + 2
 
     map = gis.show_map(
         features = [{"lat"  : lat,
                      "lon"  : lon}],
         lat = lat,
         lon = lon,
-        zoom = zoom,
+        #zoom = zoom,
+        bbox = bounds,
         window = True,
         closable = False,
         collapsed = True
