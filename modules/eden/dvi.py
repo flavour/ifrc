@@ -428,7 +428,7 @@ class S3DVIModel(S3Model):
         return DIV(A(ADD_PERSON,
                         _class="colorbox",
                         _href=URL(c="pr", f="person", args="create",
-                                vars=dict(format="popup", child=fieldname)),
+                                  vars=dict(format="popup", child=fieldname)),
                         _target="top",
                         _title=ADD_PERSON),
                    DIV(DIV(_class="tooltip",
