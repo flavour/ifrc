@@ -1450,8 +1450,9 @@ class S3PersonPresence(S3Model):
                                   person_id("observer",
                                             label=T("Observer"),
                                             default = auth.s3_logged_in_person(),
-                                            comment=pr_person_comment(T("Observer"),
-                                                                      T("Person who has actually seen the person/group."))),
+                                            comment=pr_person_comment(title=T("Observer"),
+                                                                      comment=T("Person who has actually seen the person/group."),
+                                                                      child="observer")),
                                   Field("shelter_id", "integer",
                                         readable = False,
                                         writable = False),
@@ -2263,16 +2264,18 @@ def pr_rheader(r, tabs=[]):
     return None
 
 # =============================================================================
-pr_person_comment = lambda title, comment, caller=None, child=None: \
-                        DIV(A(current.messages.ADD_PERSON,
-                              _class="colorbox",
-                              _href=URL(c="pr", f="person", args="create",
-                              vars=dict(format="popup",
-                                        caller=caller,
-                                        child=child)),
-                              _target="top",
-                              _title=current.messages.ADD_PERSON),
-                            DIV(DIV(_class="tooltip",
-                                    _title="%s|%s" % (title, comment))))
+def pr_person_comment(title=None, comment=None, caller=None, child=None):
+
+    T = current.T
+    if title is None:
+        title = T("Person")
+    if comment is None:
+        comment = T("Type the first few characters of one of the Person's names.")
+    if child is None:
+        child = "person_id"
+    return s3_popup_comment(c="pr", f="person",
+                            vars=dict(caller=caller, child=child),
+                            title=current.messages.ADD_PERSON,
+                            tooltip="%s|%s" % (title, comment))
 
 # END =========================================================================

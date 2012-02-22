@@ -373,14 +373,14 @@ class S3ProjectModel(S3Model):
                         ),
                     )
                 )
-            
+
 
         # Resource Configuration
         if drr:
             next = "organisation"
         else:
             next = "activity"
-            
+
         if drr:
             table.virtualfields.append(S3ProjectVirtualfields())
             list_fields=["id",
@@ -1269,7 +1269,7 @@ class S3ProjectDRRModel(S3Model):
             msg_record_deleted = T("Beneficiaries Deleted"),
             msg_list_empty = T("No Beneficiaries Found")
         )
-        
+
         table.virtualfields.append(S3ProjectBeneficiaryVirtualfields())
 
         # Search Method?
