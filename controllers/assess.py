@@ -120,7 +120,7 @@ def rat():
             # Pre-populate staff ID
             staff_id = auth.s3_logged_in_human_resource()
             if staff_id:
-                r.table.staff_id.default = staff_id.id
+                r.table.staff_id.default = staff_id
 
             if r.method == "create":
                 # If this assessment is being created as a component of a shelter,

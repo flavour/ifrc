@@ -14,17 +14,8 @@ if session.s3.hrm is None:
     session.s3.hrm = Storage()
 session.s3.hrm.mode = request.vars.get("mode", None)
 
-# Hack the menu dict with the correct Personal Profile
-#if auth.permission.format in ("html"):
-    #s3_menu_dict[module]["conditional2"][0] = [ T("Personal Profile"),
-                                                  #True,
-                                                  #aURL(c="hrm",
-                                                       #f="person",
-                                                       #args=[str(s3_logged_in_person())],
-                                                       #vars=dict(mode="personal"))
-                                                #]
-
 hr_menu_prep()
+
 
 # =============================================================================
 def index():
@@ -354,14 +345,6 @@ def person():
 
         @ToDo: Volunteers should be redirected to vol/person?
     """
-
-    #if auth.permission.format in ("html"):
-        ## Fix the breadcrumb
-        #breadcrumbs.pop(2)
-        #(T("Human Resources"), False,
-                         #URL(c=request.controller,
-                             #f=request.function,
-                             #args=request.args))
 
     if deployment_settings.has_module("asset"):
         # Assets as component of people

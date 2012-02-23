@@ -39,20 +39,22 @@ def index():
 def station():
     """ Fire Station """
 
+    location_id = s3db.gis_location_id
+
     csv_extra_fields = [
         dict(label="Country",
-             field=s3db.location_id("country_id",
-                                    label=T("Country"),
-                                    requires = IS_NULL_OR(
-                                                IS_ONE_OF(db,
-                                                          "gis_location.id",
-                                                          "%(name)s",
-                                                          filterby = "level",
-                                                          filter_opts = ["L0"],
-                                                          sort=True)),
-                                    widget = None)),
+             field=location_id("country_id",
+                               label=T("Country"),
+                               requires = IS_NULL_OR(
+                                          IS_ONE_OF(db,
+                                                    "gis_location.id",
+                                                    "%(name)s",
+                                                    filterby = "level",
+                                                    filter_opts = ["L0"],
+                                                    sort=True)),
+                               widget = None)),
         dict(label="Organisation",
-             field=s3db.organisation_id())
+             field=s3db.org_organisation_id())
     ]
 
     return s3_rest_controller(rheader = fire_rheader,

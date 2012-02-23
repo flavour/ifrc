@@ -1587,7 +1587,7 @@ class S3ProjectTaskModel(S3Model):
             #99: T("unspecified")
         }
 
-        project_task_active_statuses = [2, 3, 11]
+        project_task_active_statuses = [2, 3, 4, 11]
         project_task_priority_opts = {
             1:T("Urgent"),
             2:T("High"),
@@ -1717,18 +1717,20 @@ class S3ProjectTaskModel(S3Model):
         # Search Method
         task_search = S3Search(
                 advanced = (
-                    S3SearchOptionsWidget(
-                        name = "task_search_project",
-                        label = T("Project"),
-                        field = ["project"],
-                        cols = 3
-                    ),
-                    S3SearchOptionsWidget(
-                        name = "task_search_activity",
-                        label = T("Activity"),
-                        field = ["activity"],
-                        cols = 3
-                    ),
+                    # Virtual fields not supported by Search Widgets yet
+                    #S3SearchOptionsWidget(
+                        #name = "task_search_project",
+                        #label = T("Project"),
+                        #field = ["project"],
+                        #cols = 3
+                    #),
+                    # Virtual fields not supported by Search Widgets yet
+                    #S3SearchOptionsWidget(
+                        #name = "task_search_activity",
+                        #label = T("Activity"),
+                        #field = ["activity"],
+                        #cols = 3
+                    #),
                     S3SearchOptionsWidget(
                         name = "task_search_priority",
                         label = T("Priority"),

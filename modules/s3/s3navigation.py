@@ -1119,6 +1119,8 @@ def s3_popup_comment(c=None,
                      f=None,
                      t=None,
                      vars=None,
+                     label=None,
+                     info=None,
                      title=None,
                      tooltip=None):
 
@@ -1130,6 +1132,8 @@ def s3_popup_comment(c=None,
         @param f: the target function
         @param t: the target table (defaults to c_f)
         @param vars: the request vars (format="popup" will be added automatically)
+        @param label: the link label
+        @param info: hover-title for the label
         @param title: the tooltip title
         @param tooltip: the tooltip text
 
@@ -1140,6 +1144,11 @@ def s3_popup_comment(c=None,
 
     if title is None:
         return None
+
+    if label is None:
+        label = title
+    if info is None:
+        info = title
 
     if vars is not None:
         _vars = Storage(vars)
@@ -1154,14 +1163,14 @@ def s3_popup_comment(c=None,
                                                p="create",
                                                args="create", vars=_vars)
         if _href is not False:
-            popup = A(title,
+            popup = A(label,
                       _class="colorbox",
                       _href=_href,
                       _target="top",
-                      _title=title)
+                      _title=info)
             if tooltip is not None:
                 ttip = DIV(_class="tooltip",
-                        _title="%s|%s" % (title, tooltip))
+                           _title="%s|%s" % (title, tooltip))
 
     comment = DIV(popup, ttip)
     return comment

@@ -258,7 +258,7 @@ def setting():
     s3mgr.configure(tablename,
                     deletable=False,
                     listadd=False)
-    response.menu_options = admin_menu_options
+    #response.menu_options = admin_menu_options
     return s3_rest_controller()
 
 
@@ -298,7 +298,7 @@ def email_settings():
         msg_record_modified = T("Email settings updated"),
     )
 
-    response.menu_options = admin_menu_options
+    #response.menu_options = admin_menu_options
     s3mgr.configure(tablename, listadd=False, deletable=False)
     return s3_rest_controller()
 
@@ -358,7 +358,7 @@ def modem_settings():
                     #listadd=False,
                     #update_next = URL(args=[1, "update"])
                     )
-    response.menu_options = admin_menu_options
+    #response.menu_options = admin_menu_options
     return s3_rest_controller()
 
 
@@ -398,7 +398,7 @@ def smtp_to_sms_settings():
                     deletable=False,
                     listadd=False,
                     update_next = URL(args=[1, "update"]))
-    response.menu_options = admin_menu_options
+    #response.menu_options = admin_menu_options
     return s3_rest_controller()
 
 
@@ -445,7 +445,7 @@ def api_settings():
                     deletable=False,
                     listadd=False,
                     update_next = URL(args=[1, "update"]))
-    response.menu_options = admin_menu_options
+    #response.menu_options = admin_menu_options
     return s3_rest_controller()
 
 
@@ -478,7 +478,7 @@ def tropo_settings():
                     deletable=False,
                     listadd=False,
                     update_next = URL(args=[1, "update"]))
-    response.menu_options = admin_menu_options
+    #response.menu_options = admin_menu_options
     return s3_rest_controller()
 
 
@@ -548,7 +548,7 @@ def twitter_settings():
         return output
     response.s3.postp = user_postp
 
-    response.menu_options = admin_menu_options
+    #response.menu_options = admin_menu_options
     s3mgr.configure(tablename, listadd=False, deletable=False)
     return s3_rest_controller()
 

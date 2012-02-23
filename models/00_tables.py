@@ -38,7 +38,7 @@ import eden.support
 import eden.survey
 import eden.hms
 import eden.sync
-#import eden.patient
+import eden.patient
 
 # =============================================================================
 # Import S3 meta fields into global namespace
@@ -614,6 +614,7 @@ s3.address_update = address_update
 
 # =============================================================================
 # Default CRUD strings
+#
 ADD_RECORD = T("Add Record")
 LIST_RECORDS = T("List Records")
 s3.crud_strings = Storage(

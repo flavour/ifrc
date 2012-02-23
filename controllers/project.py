@@ -442,7 +442,7 @@ def time():
         s3.crud_strings["project_time"].title_list = T("My Logged Hours")
         s3mgr.configure("project_time",
                         listadd=False)
-        person_id = auth.logged_in_person()
+        person_id = auth.s3_logged_in_person()
         if person_id:
             response.s3.filter = (table.person_id == person_id)
         try:

@@ -46,81 +46,6 @@ from ..s3 import *
 
 # =============================================================================
 
-class S3LanguageMenuLayout(S3NavigationItem):
-
-    @staticmethod
-    def layout(item):
-        """ Language menu layout
-
-            options for each entry:
-                - lang_code: the language code
-                - lang_name: the language name
-            option for the menu
-                - current_language: code of the current language
-        """
-
-        if item.enabled:
-            if item.components:
-                # The language menu itself
-                current_language = item.options.get("current_language", None)
-                items = item.render_components()
-                select = SELECT(items, value=current_language,
-                                    _name="_language",
-                                    _title="Language Selection",
-                                    _onchange="$('#personal-menu div form').submit();")
-                form = FORM(select, _name="_language",
-                                    _action="",
-                                    _method="get")
-                return form
-            else:
-                # A language entry
-                return OPTION(item.option.lang_code,
-                              item.option.lang_name)
-        else:
-            return None
-
-    # -------------------------------------------------------------------------
-    def check_enabled(self):
-        """ Check whether the language menu is enabled """
-
-        settings = current.deployment_settings
-
-        if settings.get_L10n_display_toolbar():
-            return True
-        else:
-            return False
-
-# -----------------------------------------------------------------------------
-# Shortcut
-ML = S3LanguageMenuLayout
-
-# =============================================================================
-
-class S3PersonalMenuLayout(S3NavigationItem):
-
-    @staticmethod
-    def layout(item):
-
-        if item.parent is None:
-            # The menu
-            items = item.render_components()
-            if items:
-                return DIV(UL(items), _class="pmenu-wrapper")
-            else:
-                return "" # menu is empty
-        else:
-            # A menu item
-            if item.enabled and item.authorized:
-                return LI(A(item.label, _href=item.url()))
-            else:
-                return None
-
-# -----------------------------------------------------------------------------
-# Shortcut
-MP = S3PersonalMenuLayout
-
-# =============================================================================
-
 class S3MainMenuLayout(S3NavigationItem):
 
     @staticmethod
@@ -354,5 +279,80 @@ class S3Menu(DIV):
     # -------------------------------------------------------------------------
     def xml(self):
         return self.serialize(self.data, 0).xml()
+
+# =============================================================================
+
+class S3LanguageMenuLayout(S3NavigationItem):
+
+    @staticmethod
+    def layout(item):
+        """ Language menu layout
+
+            options for each entry:
+                - lang_code: the language code
+                - lang_name: the language name
+            option for the menu
+                - current_language: code of the current language
+        """
+
+        if item.enabled:
+            if item.components:
+                # The language menu itself
+                current_language = item.options.get("current_language", None)
+                items = item.render_components()
+                select = SELECT(items, value=current_language,
+                                    _name="_language",
+                                    _title="Language Selection",
+                                    _onchange="$('#personal-menu div form').submit();")
+                form = FORM(select, _name="_language",
+                                    _action="",
+                                    _method="get")
+                return form
+            else:
+                # A language entry
+                return OPTION(item.option.lang_code,
+                              item.option.lang_name)
+        else:
+            return None
+
+    # -------------------------------------------------------------------------
+    def check_enabled(self):
+        """ Check whether the language menu is enabled """
+
+        settings = current.deployment_settings
+
+        if settings.get_L10n_display_toolbar():
+            return True
+        else:
+            return False
+
+# -----------------------------------------------------------------------------
+# Shortcut
+ML = S3LanguageMenuLayout
+
+# =============================================================================
+
+class S3PersonalMenuLayout(S3NavigationItem):
+
+    @staticmethod
+    def layout(item):
+
+        if item.parent is None:
+            # The menu
+            items = item.render_components()
+            if items:
+                return DIV(UL(items), _class="pmenu-wrapper")
+            else:
+                return "" # menu is empty
+        else:
+            # A menu item
+            if item.enabled and item.authorized:
+                return LI(A(item.label, _href=item.url()))
+            else:
+                return None
+
+# -----------------------------------------------------------------------------
+# Shortcut
+MP = S3PersonalMenuLayout
 
 # END =========================================================================

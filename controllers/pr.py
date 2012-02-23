@@ -42,8 +42,6 @@ def s3_menu_postp():
         menu_selected = [T("Open recent"), True, None, menu_selected]
         response.menu_options.append(menu_selected)
 
-#s3_menu_postp()
-
 # -----------------------------------------------------------------------------
 def index():
     """ Module's Home Page """

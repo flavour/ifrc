@@ -3,6 +3,7 @@
 module = "climate"
 resourcename = request.function
 
+# @todo: re-write this for new framework:
 #response.menu = s3_menu_dict[module]["menu"]
 #response.menu.append(s3.menu_help)
 #response.menu.append(s3.menu_auth)

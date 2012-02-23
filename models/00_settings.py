@@ -556,6 +556,7 @@ s3.messages.confirmation_email = "%s %s. %s %s/%s/default/help\n\n%s,\n\n%s" % (
 # Valid Extensions for Image Upload fields
 IMAGE_EXTENSIONS = ["png", "PNG", "jpg", "JPG", "jpeg", "JPEG", "gif", "GIF", "tif", "TIF", "tiff", "TIFF", "bmp", "BMP", "raw", "RAW"]
 s3.IMAGE_EXTENSIONS = IMAGE_EXTENSIONS
+
 # -----------------------------------------------------------------------------
 # List of Nations (ISO-3166-1 Country Codes)
 # @ToDo: Pull this list from the list of L0s in the database

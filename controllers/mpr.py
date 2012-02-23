@@ -31,7 +31,7 @@ def index():
     prefix = "pr"
     resourcename = "person"
     tablename = "%s_%s" % (prefix, resourcename)
-    table = db[tablename]
+    table = s3db[tablename]
 
     report_url = URL(c="mpr", f=resourcename,
                      args=["[id]", "note"],
@@ -98,7 +98,7 @@ def person():
 
     prefix = "pr"
     tablename = "%s_%s" % (prefix, resourcename)
-    table = db[tablename]
+    table = s3db[tablename]
 
     s3.crud_strings[tablename].update(
         title_display = T("Missing Person Details"),

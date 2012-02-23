@@ -388,9 +388,19 @@ class S3RequestManager(object):
             if not xml_escape and val is not None:
                 ftype = str(field.type)
                 if ftype in ("string", "text"):
-                    val = text = xml_encode(unicode(val))
+                    try:
+                        val = unicode(val)
+                    except:
+                        val = unicode(val.decode("utf-8"))
+                    val = text = xml_encode(val)
                 elif ftype == "list:string":
-                    val = text = [xml_encode(unicode(v)) for v in val]
+                    vals = []
+                    for v in val:
+                        try:
+                            vals.append(xml_encode(unicode(v)))
+                        except:
+                            vals.append(xml_encode(unicode(v.decode("utf-8"))))
+                    val = text = vals
 
         # Get text representation
         if field.represent:
@@ -4729,13 +4739,13 @@ class S3ResourceFilter:
             elif c == "," and not quote:
                 if w == "NONE":
                     w = None
-                vlist.append(w)
+                vlist.append(w.strip('"'))
                 w = ""
             else:
                 w += c
         if w == "NONE":
             w = None
-        vlist.append(w)
+        vlist.append(w.strip('"'))
         if len(vlist) == 1:
             return vlist[0]
         return vlist
@@ -4778,7 +4788,8 @@ class S3ResourceFilter:
                 if i >= first:
                     append(row)
                 i += 1
-        return Rows(rows.db, result, colnames=rows.colnames)
+        return Rows(rows.db, result,
+                    colnames=rows.colnames, compact=False)
 
     # -------------------------------------------------------------------------
     def count(self, left=None, distinct=False):
