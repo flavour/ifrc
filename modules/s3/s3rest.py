@@ -388,9 +388,9 @@ class S3RequestManager(object):
             if not xml_escape and val is not None:
                 ftype = str(field.type)
                 if ftype in ("string", "text"):
-                    val = text = xml_encode(str(val))
+                    val = text = xml_encode(unicode(val))
                 elif ftype == "list:string":
-                    val = text = [xml_encode(str(v)) for v in val]
+                    val = text = [xml_encode(unicode(v)) for v in val]
 
         # Get text representation
         if field.represent:
@@ -411,7 +411,7 @@ class S3RequestManager(object):
                 if len(ur) > 48:
                     text = "%s..." % ur[:45].encode("utf8")
             else:
-                text = str(text)
+                text = unicode(text)
 
         # Strip away markup from text
         if strip_markup and "<" in text:

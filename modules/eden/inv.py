@@ -409,7 +409,8 @@ class S3IncomingModel(S3Model):
                                   #Field("from_person"), # Text field, because lookup to pr_person record is unnecessarily complex workflow
                                   person_id(name = "sender_id",
                                             label = T("Sent By Person"),
-                                            comment = self.pr_person_comment(child="sender_id")),
+                                            comment = self.pr_person_comment(child="sender_id"),
+                                            ),
                                   Field("status",
                                         "integer",
                                         requires = IS_NULL_OR(IS_IN_SET(shipment_status)),
