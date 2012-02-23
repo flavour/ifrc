@@ -15,17 +15,17 @@ if session.s3.hrm is None:
 session.s3.hrm.mode = request.vars.get("mode", None)
 
 # Hack the menu dict with the correct Personal Profile
-if auth.permission.format in ("html"):
-    s3_menu_dict[module]["conditional2"][0] = [ T("Personal Profile"),
-                                                  True,
-                                                  aURL(c="hrm",
-                                                       f="person",
-                                                       args=[str(s3_logged_in_person())],
-                                                       vars=dict(mode="personal"))
-                                                ]
+#if auth.permission.format in ("html"):
+    #s3_menu_dict[module]["conditional2"][0] = [ T("Personal Profile"),
+                                                  #True,
+                                                  #aURL(c="hrm",
+                                                       #f="person",
+                                                       #args=[str(s3_logged_in_person())],
+                                                       #vars=dict(mode="personal"))
+                                                #]
 
 # Options Menu (available in all Functions" Views)
-s3_menu(module, prep=hr_menu_prep)
+hr_menu_prep()
 
 # =============================================================================
 def index():

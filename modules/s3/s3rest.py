@@ -407,7 +407,7 @@ class S3RequestManager(object):
             if val is None:
                 text = NONE
             elif fname == "comments" and not extended_comments:
-                ur = unicode(text, "utf8")
+                ur = unicode(text)
                 if len(ur) > 48:
                     text = "%s..." % ur[:45].encode("utf8")
             else:

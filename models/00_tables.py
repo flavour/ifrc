@@ -635,6 +635,48 @@ s3.crud_strings = Storage(
     msg_no_match = T("No Matching Records"))
 
 # =============================================================================
+# Deployment-dependend CRUD Strings
+#
+if deployment_settings.get_inv_shipment_name() == "order":
+    ADD_RECV = T("Add Order")
+    LIST_RECV = T("List Orders")
+    s3.crud_strings["inv_recv"] = Storage(
+        title_create = ADD_RECV,
+        title_display = T("Order Details"),
+        title_list = LIST_RECV,
+        title_update = T("Edit Order"),
+        title_search = T("Search Orders"),
+        subtitle_create = ADD_RECV,
+        subtitle_list = T("Orders"),
+        label_list_button = LIST_RECV,
+        label_create_button = ADD_RECV,
+        label_delete_button = T("Delete Order"),
+        msg_record_created = T("Order Created"),
+        msg_record_modified = T("Order updated"),
+        msg_record_deleted = T("Order canceled"),
+        msg_list_empty = T("No Orders registered")
+    )
+else:
+    ADD_RECV = T("Receive Shipment")
+    LIST_RECV = T("List Received Shipments")
+    s3.crud_strings["inv_recv"] = Storage(
+        title_create = ADD_RECV,
+        title_display = T("Received Shipment Details"),
+        title_list = LIST_RECV,
+        title_update = T("Edit Received Shipment"),
+        title_search = T("Search Received Shipments"),
+        subtitle_create = ADD_RECV,
+        subtitle_list = T("Received Shipments"),
+        label_list_button = LIST_RECV,
+        label_create_button = ADD_RECV,
+        label_delete_button = T("Delete Received Shipment"),
+        msg_record_created = T("Shipment Created"),
+        msg_record_modified = T("Received Shipment updated"),
+        msg_record_deleted = T("Received Shipment canceled"),
+        msg_list_empty = T("No Received Shipments")
+    )
+
+# =============================================================================
 # Common tables
 
 # Import Files

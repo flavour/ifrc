@@ -1392,7 +1392,8 @@ class S3Compose(S3CRUD):
         #ltable.priority.label = T("Priority")
 
         if "pe_id" in table:
-            records = resource.sqltable(as_list=True, start=None, limit=None)
+            records = resource.sqltable(fields=["pe_id"],
+                                        as_list=True, start=None, limit=None)
             if records and table.virtualfields:
                 # Check for join
                 tablename = table._tablename

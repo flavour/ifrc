@@ -17,9 +17,6 @@ if module not in deployment_settings.modules:
 # Load Models
 s3mgr.load("cr_shelter")
 
-# Options Menu (available in all Functions' Views)
-s3_menu(module)
-
 # S3 framework functions
 # -----------------------------------------------------------------------------
 def index():

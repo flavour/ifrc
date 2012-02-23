@@ -75,60 +75,11 @@
           {{if auth.is_logged_in():}}
             <div class="username fright">{{=auth.user.email}}</div>
           {{pass}}
-            {{=MENUS3(response.menu, _type="personal-menu", _current_lang=request.vars.get("_language"), _menu_langs=s3.menu_lang)}}
+            {{=current.menu.personal}}
             <p>Managing material and human resources together to better prepare for future hazards and vulnerabilities.</p>
         </div>
         <a href='#main-content' class='skipnavigation'>Skip to Content</a>
-        <ul id='nav'>
-            <li><a href='/{{=request.application}}/gis/index' class='{{="highlight" if request.controller=="gis" else ""}}'>Map</a>
-                <ul class='sub-menu'>
-                    <li><a href='/{{=request.application}}/irs/ireport'>Events</a></li>
-                </ul>
-            </li>
-            <li><a href='/{{=request.application}}/hrm/index' class='{{="highlight" if request.controller=="hrm" else ""}}'>Staff & Volunteers</a>
-                <ul class='sub-menu'>
-                    <li><a href='/{{=request.application}}/hrm/human_resource?group=staff'>Staff</a></li>
-                    <li><a href='/{{=request.application}}/hrm/human_resource?group=volunteer'>Volunteers</a></li>
-                    <li><a href='/{{=request.application}}/hrm/group'>Teams</a></li>
-                    <li><a href='/{{=request.application}}/org/organisation'>Organisations</a></li>
-                    <li><a href='/{{=request.application}}/org/office'>Offices</a></li>
-                    <li><a href='/{{=request.application}}/hrm/job_role'>Job Roles</a></li>
-                    <!--<li><a href='/{{=request.application}}/hrm/skill'>Skill List</a></li>-->
-                    <li><a href='/{{=request.application}}/hrm/training_event'>Training Events</a></li>
-                    <li><a href='/{{=request.application}}/hrm/course'>Training Courses</a></li>
-                    <!--<li><a href='/{{=request.application}}/hrm/certificate'>Certificate List</a></li>-->
-                </ul>
-            </li>
-            <li><a href='/{{=request.application}}/inv/warehouse' class='{{="highlight" if request.controller=="inv" else ""}}'>Warehouses</a>
-                <ul class='sub-menu'>
-                    <li><a href='/{{=request.application}}/inv/warehouse'>Warehouses</a></li>
-                    <li><a href='/{{=request.application}}/inv/recv'>Received Shipments</a></li>
-                    <li><a href='/{{=request.application}}/inv/send'>Sent Shipments</a></li>
-                    <li><a href='/{{=request.application}}/supply/item'>Items</a></li>
-                    <li><a href='/{{=request.application}}/supply/catalog'>Item Catalogues</a></li>
-                    <li><a href='/{{=request.application}}/supply/item_category'>Item Categories</a></li>
-                </ul>
-            </li>
-            <li><a href='/{{=request.application}}/asset/index' class='{{="highlight" if request.controller=="asset" else ""}}'>Assets</a>
-                <ul class='sub-menu'>
-                    <li><a href='/{{=request.application}}/asset/asset'>Assets</a></li>
-                    <li><a href='/{{=request.application}}/asset/item'>Items</a></li>
-                </ul>
-            </li>
-            <li><a href='/{{=request.application}}/survey/index' class='{{="highlight" if request.controller=="survey" else ""}}'>Assessments</a>
-                <ul class='sub-menu'>
-                    <li><a href='/{{=request.application}}/survey/template'>Assessment Templates</a></li>
-                    <li><a href='/{{=request.application}}/survey/series'>Disaster Assessments</a></li>
-                </ul>
-            </li>
-            <li><a href='/{{=request.application}}/project/index' class='{{="highlight" if request.controller=="project" else ""}}'>Projects</a>
-                <ul class='sub-menu'>
-                    <li><a href='/{{=request.application}}/project/project'>Projects</a></li>
-                    <li><a href='/{{=request.application}}/project/activity'>Communities</a></li>
-                    <li><a href='/{{=request.application}}/project/report'>Reports</a></li>
-                </ul>
-            </li>
-        </ul>
+        {{=current.menu.main}}
         <!--<div id='searchbox'><form><div><input type='text' name='search' title='Search' class='text-search'></div>
         <div><select name='category' class='catsearch'>
         <option value='' selected>Option1</option>
@@ -142,11 +93,12 @@
         {{if response.information:}}<div class='information'>{{=response.information}}</div>{{pass}}
         {{if response.confirmation:}}<div class='confirmation'>{{=response.confirmation}}</div>{{pass}}
         {{if response.flash:}}<div class='confirmation'>{{=response.flash}}</div>{{pass}}
-        {{if response.menu_options or response.menu_left:}}
+        {{if current.menu.options or response.menu_left:}}
             <div id='left-col'>
-              {{if response.menu_options:}}
-                {{=MENUS3(response.menu_options, _type="main-sub-menu", _id="main-sub-menu", _class="sub-menu")}}
-              {{pass}}{{if response.menu_left:}}
+              {{if current.menu.options:}}
+                {{=current.menu.options}}
+              {{pass}}
+              {{if response.menu_left:}}
                 {{=response.menu_left}}
               {{pass}}
             </div>

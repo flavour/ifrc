@@ -15,16 +15,16 @@ if session.s3.hrm is None:
 session.s3.hrm.mode = request.vars.get("mode", None)
 
 # Hack the menu dict with the correct Personal Profile
-if auth.permission.format in ("html"):
-    s3_menu_dict[module]["conditional2"][0] = [ T("Personal Profile"),
-                                                  True,
-                                                  aURL(c="hrm",
-                                                       f="person",
-                                                       args=[str(s3_logged_in_person())],
-                                                       vars=dict(mode="personal"))
-                                                ]
+#if auth.permission.format in ("html"):
+    #s3_menu_dict[module]["conditional2"][0] = [ T("Personal Profile"),
+                                                  #True,
+                                                  #aURL(c="hrm",
+                                                       #f="person",
+                                                       #args=[str(s3_logged_in_person())],
+                                                       #vars=dict(mode="personal"))
+                                                #]
 
-s3_menu(module, prep=hr_menu_prep)
+hr_menu_prep()
 
 # =============================================================================
 def index():
@@ -176,19 +176,6 @@ def human_resource():
         human_resource_search._S3Search__advanced.pop(1)
         s3mgr.configure(tablename,
                         search_method = human_resource_search)
-        if auth.permission.format in ("html"):
-            # Fix the breadcrumb
-            breadcrumbs[2] = (T("Volunteers"), False,
-                              URL(c=request.controller,
-                                  f=request.function,
-                                  args=request.args,
-                                  vars=request.vars))
-            if "create" in request.args:
-                breadcrumbs[3] = (T("New Volunteer"), True,
-                                  URL(c=request.controller,
-                                      f=request.function,
-                                      args=request.args,
-                                      vars=request.vars))
 
     elif group == "staff":
         #s3mgr.configure(table._tablename, insertable=False)
@@ -221,13 +208,6 @@ def human_resource():
         human_resource_search._S3Search__advanced.pop(1)
         s3mgr.configure(tablename,
                         search_method = human_resource_search)
-        if auth.permission.format in ("html"):
-            # Fix the breadcrumb
-            breadcrumbs[2] = (T("Staff"), False,
-                              URL(c=request.controller,
-                                  f=request.function,
-                                  args=request.args,
-                                  vars=request.vars))
 
     s3mgr.configure(tablename,
                     list_fields = list_fields)
@@ -375,13 +355,13 @@ def person():
         @ToDo: Volunteers should be redirected to vol/person?
     """
 
-    if auth.permission.format in ("html"):
-        # Fix the breadcrumb
-        breadcrumbs.pop(2)
+    #if auth.permission.format in ("html"):
+        ## Fix the breadcrumb
+        #breadcrumbs.pop(2)
         #(T("Human Resources"), False,
-        #                  URL(c=request.controller,
-        #                      f=request.function,
-        #                      args=request.args))
+                         #URL(c=request.controller,
+                             #f=request.function,
+                             #args=request.args))
 
     if deployment_settings.has_module("asset"):
         # Assets as component of people
@@ -688,9 +668,10 @@ def hrm_rheader(r, tabs=[]):
             rheader_tabs = s3_rheader_tabs(r, tabs)
             person = r.record
             if person:
-                rheader = DIV(s3_avatar_represent(person.id,
-                                                  "pr_person",
-                                                  _class="fleft"),
+                rheader = DIV(DIV(s3_avatar_represent(person.id,
+                                                      "pr_person",
+                                                      _class="fleft"),
+                                  _style="padding-bottom:10px;"),
                               TABLE(
                     TR(TH(s3_fullname(person))),
                     ), rheader_tabs)

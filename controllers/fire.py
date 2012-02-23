@@ -6,9 +6,6 @@ resourcename = request.function
 if module not in deployment_settings.modules:
     raise HTTP(404, body="Module disabled: %s" % module)
 
-# Options Menu (available in all Functions' Views)
-s3_menu("fire")
-
 # -----------------------------------------------------------------------------
 def index():
     """ Module Homepage """
@@ -103,7 +100,7 @@ def fire_rheader(r, tabs=[]):
         if r.name == "station":
             station = r.record
             if station:
-            
+
                 tabs = [
                     (T("Station Details"), None),
                     (T("Vehicles"), "vehicle"),

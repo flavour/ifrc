@@ -10,8 +10,6 @@ resourcename = request.function
 if module not in deployment_settings.modules:
     raise HTTP(404, body="Module disabled: %s" % module)
 
-s3_menu(module)
-
 drr = deployment_settings.get_project_drr()
 
 # =============================================================================

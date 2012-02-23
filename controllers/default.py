@@ -340,6 +340,8 @@ $('.marker').mouseout(function() {
     map.append(DIV(SPAN("Click anywhere on the map for full functionality"),
                    _class="map-tip"))
 
+    current.menu.breadcrumbs = None
+
     return dict(dashboard=dashboard,
                 map=map)
 

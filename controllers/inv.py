@@ -13,8 +13,6 @@ resourcename = request.function
 if not deployment_settings.has_module(module):
     raise HTTP(404, body="Module disabled: %s" % module)
 
-s3_menu(module)
-
 # -----------------------------------------------------------------------------
 def index():
     """
@@ -171,17 +169,10 @@ def incoming():
     return inv_incoming()
 
 # =============================================================================
-def match():
+def req_match():
     """ Match Requests """
 
-    return req_match()
-
-# -----------------------------------------------------------------------------
-#def req_match():
-#    """ Match Requests """
-#
-#    s3mgr.load("req_req")
-#    return response.s3.req_match()
+    return response.s3.req_match()
 
 # =============================================================================
 def inv_item():
