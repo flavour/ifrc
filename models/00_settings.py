@@ -166,7 +166,7 @@ messages["NOT_APPLICABLE"] = "N/A"
 messages["ADD_PERSON"] = "Add Person"
 messages["ADD_LOCATION"] = "Add Location"
 messages["SELECT_LOCATION"] = "Select a location"
-    
+
 for u in messages:
     if isinstance(messages[u], str):
         globals()[u] = T(messages[u])
@@ -526,6 +526,17 @@ s3mgr.json_formats = ["geojson", "s3json"]
 s3mgr.csv_formats = ["hrf", "s3csv"]
 
 s3mgr.ROWSPERPAGE = 20
+
+#######
+# Menus
+#######
+
+# Import menus and layouts
+from eden.menus import *
+from eden.layouts import *
+
+# Create a Storage for menus
+current.menu = Storage(main=MM(), options=None)
 
 ##########
 # Messages

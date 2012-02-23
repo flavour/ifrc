@@ -7,18 +7,9 @@
 if auth.permission.format in ("html"):
 
     # =========================================================================
-    # Import default menu structures and layouts
-    #
-    from eden.menus import *
-    from eden.layouts import *
-
-    # Create a Storage for menus
-    menu = current.menu = Storage()
-
-    # =========================================================================
     # Application main menu
     #
-    menu.main = MM()(
+    current.menu.main = MM()(
 
         # Standard modules-menu
         #S3MainMenu.menu_modules(),
@@ -87,7 +78,7 @@ if auth.permission.format in ("html"):
 
         self_registration = deployment_settings.get_security_self_registration()
 
-        menu.personal = MP()(
+        current.menu.personal = MP()(
                             MP("Register", c="default", f="user",
                                m="register", check=self_registration),
                             MP("Sign In", c="default", f="user",
@@ -97,7 +88,7 @@ if auth.permission.format in ("html"):
                             menu_lang
                         )
     else:
-        menu.personal = MP()(
+        current.menu.personal = MP()(
                             MP("Administration", c="admin", f="index",
                                check=s3_has_role(ADMIN)),
                             MP("Sign Out", c="default", f="user",
@@ -248,21 +239,5 @@ if auth.permission.format in ("html"):
 
     }
     s3_menu_dict["org"] = s3_menu_dict["hrm"]
-
-    # =========================================================================
-    # Compose the option menu
-    #
-    controller = request.controller
-    if controller not in s3_menu_dict:
-        # Fall back to standard menu for this controller
-        menu.options = S3OptionsMenu(controller).menu
-    else:
-        # Use custom menu
-        menu.options = s3_menu_dict[controller]
-
-    current.menu.breadcrumbs = S3OptionsMenu.breadcrumbs
-
-else:
-    current.menu = Storage(main=None, options=None)
 
 # END =========================================================================
