@@ -322,6 +322,8 @@ deployment_settings.req.status_writable = True
 #deployment_settings.req.show_quantity_transit = False
 #deployment_settings.req.multiple_req_items = False
 #deployment_settings.req.use_commit = False
+deployment_settings.req.use_req_number = False
+deployment_settings.req.req_type = ["Stock"]
 
 # Custom Crud Strings for specific req_req types
 #deployment_settings.req.req_crud_strings = dict()
@@ -368,6 +370,7 @@ deployment_settings.inv.collapse_tabs = True
 #deployment_settings.inv.shipment_name = "order"
 
 # Supply
+deployment_settings.supply.use_alt_name = False
 # Do not edit after deployment
 #deployment_settings.supply.catalog_default = T("Other Items")
 

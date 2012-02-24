@@ -707,6 +707,9 @@ class S3ProjectModel(S3Model):
         # ---------------------------------------------------------------------
         # Project Activity Contact Person
         #
+        # @ToDo: This is a Community Contact nmot an Activity contact,l so
+        #        should be renamed when we add proper Communities
+        #
         tablename = "project_activity_contact"
         table = define_table(tablename,
                              activity_id(),
@@ -2332,7 +2335,7 @@ def project_rheader(r, tabs=[]):
         admin = auth.s3_has_role(ADMIN)
         #staff = auth.s3_has_role("STAFF")
         staff = True
-        if admin or drr:
+        if staff or drr:
             append((T("Communities") if pca else T("Activities"), "activity"))
         if staff and not drr:
             append((T("Milestones"), "milestone"))
@@ -2340,7 +2343,7 @@ def project_rheader(r, tabs=[]):
             append((T("Tasks"), "task"))
         if drr:
             append((T("Documents"), "document"))
-        elif admin:
+        elif staff:
             append((T("Attachments"), "document"))
         if record.calendar:
             append((T("Calendar"), "timeline"))
