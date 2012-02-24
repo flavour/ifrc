@@ -278,7 +278,7 @@ class S3EventModel(S3Model):
                                     )
         self.configure(tablename,
                        deduplicate=self.event_incident_duplicate)
-        
+
 
         # ---------------------------------------------------------------------
         # Pass variables back to global scope (response.s3.*)
@@ -575,7 +575,7 @@ class S3EventHRModel(S3Model):
     """
 
     names = ["event_human_resource"]
- 
+
     def model(self):
 
         T = current.T
@@ -625,7 +625,7 @@ class S3EventIReportModel(S3Model):
     """
 
     names = ["event_ireport"]
- 
+
     def model(self):
 
         T = current.T
@@ -672,7 +672,7 @@ class S3EventMapModel(S3Model):
     """
 
     names = ["event_config"]
- 
+
     def model(self):
 
         T = current.T
@@ -719,7 +719,7 @@ class S3EventSiteModel(S3Model):
     """
 
     names = ["event_site"]
- 
+
     def model(self):
 
         T = current.T

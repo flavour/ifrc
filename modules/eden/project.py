@@ -707,13 +707,13 @@ class S3ProjectModel(S3Model):
         # ---------------------------------------------------------------------
         # Project Activity Contact Person
         #
-        # @ToDo: This is a Community Contact nmot an Activity contact,l so
+        # @ToDo: This is a Community Contact not an Activity contact, so
         #        should be renamed when we add proper Communities
         #
         tablename = "project_activity_contact"
         table = define_table(tablename,
                              activity_id(),
-                             person_id(widget=S3AddPersonWidget(),
+                             person_id(widget=S3AddPersonWidget(controller="pr"),
                                        requires=IS_ADD_PERSON_WIDGET(),
                                        comment=None),
                              *meta_fields())
