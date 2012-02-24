@@ -198,8 +198,8 @@ deployment_settings.fin.currencies = {
 # Size of the Embedded Map
 # Change this if-required for your theme
 # NB API can override this in specific modules
-#deployment_settings.gis.map_height = 600
-#deployment_settings.gis.map_width = 1000
+deployment_settings.gis.map_height = 600
+deployment_settings.gis.map_width = 854
 # Restrict the Location Selector to just certain countries
 # NB This can also be over-ridden for specific contexts later
 # e.g. Activities filtered to those of parent Project

@@ -17,6 +17,7 @@ session.s3.hrm.mode = request.vars.get("mode", None)
 hr_menu_prep()
 
 
+
 # =============================================================================
 def index():
     """ Dashboard """
@@ -371,6 +372,8 @@ def person():
         hr = table[hr_id]
         if hr:
             group = hr.type == 2 and "volunteer" or "staff"
+            # Also inform the back-end of this finding
+            request.get_vars["group"] = group
 
     org = session.s3.hrm.org
     if org is not None:
@@ -586,11 +589,19 @@ def person():
         if r.representation == "s3json":
             s3mgr.show_ids = True
         elif r.interactive and r.method != "import":
+            if r.component:
+                if r.component_name == "asset":
+                    # Edits should always happen via the Asset Log
+                    # @ToDo: Allow this method too, if we can do so safely
+                    s3mgr.configure("asset_asset",
+                                    insertable = False,
+                                    editable = False,
+                                    deletable = False)
+            else:
+                # Assume volunteers only between 12-81
+                r.table.date_of_birth.widget = S3DateWidget(past=972, future=-144)
+
             resource = r.resource
-
-            # Assume volunteers only between 12-81
-            r.table.date_of_birth.widget = S3DateWidget(past=972, future=-144)
-
             if mode is not None:
                 r.resource.build_query(id=s3_logged_in_person())
             else:
@@ -618,6 +629,14 @@ def person():
 
     # Post-process
     def postp(r, output):
+        if r.interactive and r.component and r.component_name == "asset":
+            # Provide a link to assign a new Asset
+            # @ToDo: Proper Widget to do this inline
+            output["add_btn"] = A(T("Assign Asset"),
+                                  _href=URL(c="asset", f="asset"),
+                                  _id="add-btn",
+                                  _class="action-btn")
+
         if isinstance(output, dict):
             output["dashboard"] = hrm_dashboard
         return output
