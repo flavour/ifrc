@@ -801,8 +801,8 @@ div#last_update {
     margin: 2px;
     z-index: 500;
     white-space: nowrap;
-    -moz-border-radius:2px;
-    -webkit-border-radius:2px;
+    -moz-border-radius: 2px;
+    -webkit-border-radius: 2px;
 }
 
 .delete-btn:hover,

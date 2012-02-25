@@ -323,6 +323,9 @@ deployment_settings.req.status_writable = True
 #deployment_settings.req.multiple_req_items = False
 #deployment_settings.req.use_commit = False
 deployment_settings.req.use_req_number = False
+# Restrict the type of requests that can be made, valid values in the
+# list are ["Stock", "People", "Other"]. If this is commented out then
+# all types will be valid.
 deployment_settings.req.req_type = ["Stock"]
 
 # Custom Crud Strings for specific req_req types
