@@ -198,8 +198,8 @@ deployment_settings.fin.currencies = {
 # Size of the Embedded Map
 # Change this if-required for your theme
 # NB API can override this in specific modules
-#deployment_settings.gis.map_height = 600
-#deployment_settings.gis.map_width = 1000
+deployment_settings.gis.map_height = 600
+deployment_settings.gis.map_width = 854
 # Restrict the Location Selector to just certain countries
 # NB This can also be over-ridden for specific contexts later
 # e.g. Activities filtered to those of parent Project
@@ -323,6 +323,9 @@ deployment_settings.req.status_writable = True
 #deployment_settings.req.multiple_req_items = False
 #deployment_settings.req.use_commit = False
 deployment_settings.req.use_req_number = False
+# Restrict the type of requests that can be made, valid values in the
+# list are ["Stock", "People", "Other"]. If this is commented out then
+# all types will be valid.
 deployment_settings.req.req_type = ["Stock"]
 
 # Custom Crud Strings for specific req_req types

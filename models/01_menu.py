@@ -113,7 +113,7 @@ if auth.permission.format in ("html"):
 
         # ---------------------------------------------------------------------
         # GIS Mapping
-        "gis": None,
+        #"gis": None,
 
         # ---------------------------------------------------------------------
         # HRM Human Resources / ORG Organisation Registry (shared)
@@ -188,8 +188,10 @@ if auth.permission.format in ("html"):
                     M("Training Events", c="hrm", f="training_event",
                       check=manager_mode)(
                         M("New Training Event", m="create"),
-                        M("List All"),
-                        M("Search", m="search"),
+                        M("List All Training Events"),
+                        M("Search Training Events", m="search"),
+                        M("Search Training Participants", f="training",
+                          m="search"),
                         M("Training Report", f="training", m="report",
                           vars=dict(rows="training_event_id$course_id",
                                     cols="month",
@@ -222,14 +224,19 @@ if auth.permission.format in ("html"):
         # ---------------------------------------------------------------------
         # IRS / Incident Reporting
         "irs": M(c="irs")(
-                    M("Incident Reports", f="ireport")(
+                    M("Events", f="ireport")(
                         M("New", m="create"),
                         M("List All"),
-                        M("Open Incidents", vars={"open":1}),
+                        #M("Open Incidents", vars={"open":1}),
                         M("Timeline", args="timeline"),
-                        #M("Search", m="search")
+                        M("Search", m="search"),
+                        M("Report", m="report",
+                          vars=dict(rows="L1",
+                                    cols="category",
+                                    fact="datetime",
+                                    aggregate="count")),
                     ),
-                    M("Incident Categories", f="icategory", restrict=[ADMIN])(
+                    M("Event Categories", f="icategory", restrict=[ADMIN])(
                         M("New", m="create"),
                         M("List All"),
                     ),

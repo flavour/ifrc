@@ -46,7 +46,7 @@ ul, ol {
 
 #sub-dashboard {
     position: relative;
-    width: 810px;
+    width: 854px;
     margin: 50px 0 0 -15px;
     padding: 0;
     float: left;
@@ -801,8 +801,8 @@ div#last_update {
     margin: 2px;
     z-index: 500;
     white-space: nowrap;
-    -moz-border-radius:2px;
-    -webkit-border-radius:2px;
+    -moz-border-radius: 2px;
+    -webkit-border-radius: 2px;
 }
 
 .delete-btn:hover,
