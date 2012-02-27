@@ -1969,10 +1969,11 @@ class S3CRUD(S3Method):
             elif query:
                 searchq = searchq | query
         for j in joins.values():
-            if searchq is None:
-                searchq = j
-            else:
-                searchq &= j
+            for q in j:
+                if searchq is None:
+                    searchq = q
+                else:
+                    searchq &= q
 
         return searchq
 
