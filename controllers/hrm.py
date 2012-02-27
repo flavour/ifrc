@@ -16,8 +16,6 @@ session.s3.hrm.mode = request.vars.get("mode", None)
 
 hr_menu_prep()
 
-
-
 # =============================================================================
 def index():
     """ Dashboard """
