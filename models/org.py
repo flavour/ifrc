@@ -195,7 +195,7 @@ def org_filter():
         @ToDo: Support Delegations!
     """
 
-    if s3_has_role("HR Reader") or s3_has_role("HR Editor") or s3_has_role("HR Manager"):
+    if s3_has_role("HR_READ") or s3_has_role("HR_EDIT") or s3_has_role("HR_ADMIN"):
         # Continue to check Orgs
         pass
     else:
