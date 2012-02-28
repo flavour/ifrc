@@ -224,7 +224,7 @@ $(document).ready(function() {
         self.configure(tablename,
                        super_entity = "supply_item_entity",
                        list_fields = ["id",
-                                      "site_id",
+                                      #"site_id",
                                       "item_id",
                                       "quantity",
                                       "pack_value",
@@ -351,7 +351,6 @@ class S3IncomingModel(S3Model):
         #
         inv_recv_type = { 0: NONE,
                           1: T("Other Warehouse"),
-
                           2: T("Donation"),
                           3: T("Supplier"),
                         }
@@ -545,10 +544,14 @@ class S3IncomingModel(S3Model):
                       ),
             ))
 
+        # Redirect to the Items tabs after creation
+        recv_item_url = URL(f="recv", args=["[id]",
+                                            "recv_item"])
+
         self.configure(tablename,
                        search_method = recv_search,
-                       next=URL(args=["[id]", "inv_inv_item"]))
-
+                       create_next = recv_item_url,
+                       update_next = recv_item_url)
         # Component
         self.add_component("inv_recv_item",
                            inv_recv="recv_id")
