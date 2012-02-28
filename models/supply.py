@@ -23,16 +23,9 @@ def supply_item_controller():
                                               filter_opts = [True])
                                             )
 
-    def prep(r):
-        if r.interactive:
-            if r.component_name == "inv_item" and r.record:
-                ptable = s3db.supply_item_pack
-                itable = s3db.inv_inv_item
-                itable.item_pack_id.requires = IS_ONE_OF(db(ptable.item_id == r.id),
-                                                         "supply_item_pack.id",
-                                                         s3db.supply_item_pack_represent)
-        return True
-    response.s3.prep = prep
+    s3mgr.configure("inv_inv_item",
+                    listadd=False,
+                    deletable=False)
 
     return s3_rest_controller("supply", "item",
                               rheader=eden.supply.supply_item_rheader)
