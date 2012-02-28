@@ -144,6 +144,12 @@ textarea {
     color: #000;
 } */
 
+form table td,
+form table td:first-child {
+	border-style: none;
+	background-color: transparent;
+}
+
 #rheader {
     margin-bottom: 0.75em;
 }
