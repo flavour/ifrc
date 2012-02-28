@@ -535,7 +535,7 @@ $(function() {
             current.auth.s3_has_permission("read", "req_req"):
             return [
                     (T("Requests"), "req"),
-                    (T("Match Requests"), "req_match/"),
+                    (T("Match Requests"), "match/"),
                     (T("Commit"), "commit")
                     ]
         else:
@@ -1427,7 +1427,7 @@ class S3CommitItemModel(S3Model):
         table.virtualfields.append(item_pack_virtualfields(tablename=tablename))
 
         # CRUD strings
-        ADD_COMMIT_ITEM = T("Add Item to Commitment")
+        ADD_COMMIT_ITEM = T("Add New Item to Commitment")
         LIST_COMMIT_ITEM = T("List Commitment Items")
         s3.crud_strings[tablename] = Storage(
             title_create = ADD_COMMIT_ITEM,

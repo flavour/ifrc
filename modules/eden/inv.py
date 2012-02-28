@@ -350,7 +350,8 @@ class S3IncomingModel(S3Model):
         # Received (In/Receive / Donation / etc)
         #
         inv_recv_type = { 0: NONE,
-                          1: T("Another Stock"),
+                          1: T("Other Warehouse"),
+
                           2: T("Donation"),
                           3: T("Supplier"),
                         }
@@ -545,7 +546,8 @@ class S3IncomingModel(S3Model):
             ))
 
         self.configure(tablename,
-                       search_method = recv_search)
+                       search_method = recv_search,
+                       next=URL(args=["[id]", "inv_inv_item"]))
 
         # Component
         self.add_component("inv_recv_item",
@@ -585,7 +587,7 @@ class S3IncomingModel(S3Model):
 
         # CRUD strings
         if settings.get_inv_shipment_name() == "order":
-            ADD_RECV_ITEM = T("Add Item to Order")
+            ADD_RECV_ITEM = T("Add New Item to Order")
             LIST_RECV_ITEMS = T("List Order Items")
             s3.crud_strings[tablename] = Storage(
                 title_create = ADD_RECV_ITEM,
@@ -603,7 +605,7 @@ class S3IncomingModel(S3Model):
                 msg_record_deleted = T("Item removed from order"),
                 msg_list_empty = T("No Order Items currently registered"))
         else:
-            ADD_RECV_ITEM = T("Add Item to Shipment")
+            ADD_RECV_ITEM = T("Add New Item to Shipment")
             LIST_RECV_ITEMS = T("List Received Items")
             s3.crud_strings[tablename] = Storage(
                 title_create = ADD_RECV_ITEM,

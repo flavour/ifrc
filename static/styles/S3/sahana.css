@@ -794,8 +794,7 @@ div#last_update {
 .action-btn {
     cursor: pointer;
     text-decoration: none;
-    font-weight: bold;
-    font-size: 11pt;
+    /* font-weight: bold; */
     font-family: "Helvetica Neue",Arial,Helvetica,sans-serif;
     color: #fff;
     line-height: 1.5;

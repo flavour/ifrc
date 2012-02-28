@@ -274,9 +274,7 @@ def activity():
 
     # Pre-process
     def prep(r):
-        if r.representation == "plain":
-            s3.crud_strings[tablename].title_display = T("Project Details")
-        elif r.interactive:
+        if r.interactive:
             if r.component is not None:
                 if r.component_name == "document":
                     doc_table = s3db.doc_document
