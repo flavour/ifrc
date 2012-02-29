@@ -4253,8 +4253,22 @@ class S3Resource(object):
                 if str(j) not in qstr:
                     query &= j
 
+
         # Left outer joins
         if _left:
+            # Try sorting the left joins according to their dependency
+            def sort_left(x, y):
+                tx, qx = str(x.first), str(x.second)
+                ty, qy = str(y.first), str(y.second)
+                if "%s." % tx in qy:
+                    return -1
+                if "%s." % ty in qx:
+                    return 1
+                return 0
+            try:
+                _left.sort(sort_left)
+            except:
+                pass
             attributes.update(left=_left)
 
         # Fields in the query
