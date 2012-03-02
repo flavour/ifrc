@@ -185,10 +185,10 @@ def incoming():
     return inv_incoming()
 
 # =============================================================================
-def req_match():
+def match():
     """ Match Requests """
 
-    return response.s3.req_match()
+    return req_match()
 
 # =============================================================================
 def inv_item():
