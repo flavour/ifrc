@@ -244,7 +244,7 @@ def incoming():
 def req_match():
     """ Match Requests """
 
-    return response.s3.req_match()
+    return s3db.req_match()
 
 # END =========================================================================
 
