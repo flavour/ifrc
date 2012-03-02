@@ -536,7 +536,7 @@ deployment_settings.modules = OrderedDict([
     #        module_type = 10,
     #    )),
     ("irs", Storage(
-            name_nice = T("Events"),
+            name_nice = T("Incidents"),
             description = T("Situational Awareness"),
             restricted = True,
             module_type = 10
