@@ -16,7 +16,6 @@ if auth.permission.format in ("html"):
 
         # Custom modules-menu
         homepage("gis")(
-            MM("Events", c="irs", f="ireport"),
         ),
         homepage("hrm", "org")(
             MM("Staff", c="hrm", f="human_resource", vars={"group":"staff"}),
@@ -30,13 +29,15 @@ if auth.permission.format in ("html"):
             MM("Training Courses", c="hrm", f="course"),
             #MM("Certificate List", c="hrm", f="certificate"),
         ),
-        homepage("inv", "supply")(
+        homepage("inv", "supply", "req")(
             MM("Warehouses", c="inv", f="warehouse"),
             MM("Received Shipments", c="inv", f="recv"),
             MM("Sent Shipments", c="inv", f="send"),
             MM("Items", c="supply", f="item"),
             MM("Item Catalogues", c="supply", f="catalog"),
             MM("Item Categories", c="supply", f="item_category"),
+            M("Requests", f="req")(),
+            #M("Commitments", f="commit")(),
         ),
         homepage("asset")(
             MM("Assets", c="asset", f="asset"),
@@ -50,6 +51,9 @@ if auth.permission.format in ("html"):
             MM("Projects", c="project", f="project"),
             MM("Communities", c="project", f="activity"),
             MM("Reports", c="project", f="report"),
+        ),
+        homepage("irs")(
+            MM("Incidents", c="irs", f="ireport"),
         )
 
         # Standard service menus
@@ -220,30 +224,6 @@ if auth.permission.format in ("html"):
                     M("Personal Profile", c="hrm", f="person",
                       check=manager_mode, vars=dict(mode="personal"))
                 ),
-
-        # ---------------------------------------------------------------------
-        # IRS / Incident Reporting
-        "irs": M(c="irs")(
-                    M("Events", f="ireport")(
-                        M("New", m="create"),
-                        M("List All"),
-                        #M("Open Incidents", vars={"open":1}),
-                        M("Timeline", args="timeline"),
-                        M("Search", m="search"),
-                        M("Report", m="report",
-                          vars=dict(rows="L1",
-                                    cols="category",
-                                    fact="datetime",
-                                    aggregate="count")),
-                    ),
-                    M("Event Categories", f="icategory", restrict=[ADMIN])(
-                        M("New", m="create"),
-                        M("List All"),
-                    ),
-                    #M("Ushahidi " + T("Import"), f="ireport", restrict=[ADMIN],
-                      #args="ushahidi")
-                ),
-
     }
     s3_menu_dict["org"] = s3_menu_dict["hrm"]
 

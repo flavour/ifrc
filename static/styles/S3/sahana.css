@@ -13,6 +13,10 @@ ul, ol {
     display: none;
 }
 
+textarea.comments {
+    height: 50px;
+}
+
 /* CSS floats */
 .fleft {
     float: left !important;

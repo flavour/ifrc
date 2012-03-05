@@ -305,23 +305,23 @@ class S3IRSModel(S3Model):
                              s3.comments(),
                              *(s3.lx_fields() + meta_fields()))
         # CRUD strings
-        ADD_INC_REPORT = T("Add Event")
-        LIST_INC_REPORTS = T("List Events")
+        ADD_INC_REPORT = T("Add Incident")
+        LIST_INC_REPORTS = T("List Incidents")
         s3.crud_strings[tablename] = Storage(
             title_create = ADD_INC_REPORT,
-            title_display = T("Event Details"),
+            title_display = T("Incident Details"),
             title_list = LIST_INC_REPORTS,
-            title_update = T("Edit Event"),
-            title_search = T("Search Events"),
-            subtitle_create = T("Add New Event"),
-            subtitle_list = T("Events"),
+            title_update = T("Edit Incident"),
+            title_search = T("Search Incidents"),
+            subtitle_create = T("Add New Incident"),
+            subtitle_list = T("Incidents"),
             label_list_button = LIST_INC_REPORTS,
             label_create_button = ADD_INC_REPORT,
-            label_delete_button = T("Delete Event"),
-            msg_record_created = T("Event added"),
-            msg_record_modified = T("Event updated"),
-            msg_record_deleted = T("Event deleted"),
-            msg_list_empty = T("No Events currently registered"))
+            label_delete_button = T("Delete Incident"),
+            msg_record_created = T("Incident added"),
+            msg_record_modified = T("Incident updated"),
+            msg_record_deleted = T("Incident deleted"),
+            msg_list_empty = T("No Incidents currently registered"))
 
         ireport_search = S3Search(
             advanced=(
@@ -786,7 +786,7 @@ S3.timeline.now = '""", now.isoformat(), """';
                 if rheader:
                     output["rheader"] = rheader
 
-            output["title"] = T("Event Timeline")
+            output["title"] = T("Incident Timeline")
             response.view = "timeline.html"
             return output
 
