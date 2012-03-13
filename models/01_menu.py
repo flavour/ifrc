@@ -21,7 +21,7 @@ if auth.permission.format in ("html"):
             MM("Staff", c="hrm", f="human_resource", vars={"group":"staff"}),
             MM("Volunteers", c="hrm", f="human_resource", vars={"group":"volunteer"}),
             MM("Teams", c="hrm", f="group"),
-            MM("Organisations", c="org", f="organisation"),
+            MM("Organizations", c="org", f="organisation"),
             MM("Offices", c="org", f="office"),
             MM("Job Roles", c="hrm", f="job_role"),
             #MM("Skill List", c="hrm", f="skill"),
@@ -52,8 +52,9 @@ if auth.permission.format in ("html"):
             MM("Communities", c="project", f="activity"),
             MM("Reports", c="project", f="report"),
         ),
-        homepage("irs")(
-            MM("Incidents", c="irs", f="ireport"),
+        homepage("event", "irs")(
+            MM("Events", c="event", f="event"),
+            MM("Incident Reports", c="irs", f="ireport"),
         )
 
         # Standard service menus
@@ -213,7 +214,7 @@ if auth.permission.format in ("html"):
                       #check=manager_mode)(
                         #M("New Certificate", m="create"),
                         #M("List All"),
-                        #M("Skill Equivalence", f="certificate_skill"),
+                        ##M("Skill Equivalence", f="certificate_skill"),
                     #),
                     M("Profile", c="hrm", f="person",
                       check=personal_mode, vars=dict(mode="personal")),
@@ -224,7 +225,32 @@ if auth.permission.format in ("html"):
                     M("Personal Profile", c="hrm", f="person",
                       check=manager_mode, vars=dict(mode="personal"))
                 ),
+        # ---------------------------------------------------------------------
+        # Event / IRS Incident Reports (shared)
+        "irs": M()(
+                    M("Events", c="event", f="event")(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Incident Reports", c="irs", f="ireport")(
+                        M("New", m="create"),
+                        M("List All"),
+                        M("Open Incidents", vars={"open":1}),
+                        M("Timeline", args="timeline"),
+                        M("Search", m="search"),
+                        M("Report", m="report",
+                          vars=dict(rows="L1",
+                                    cols="category",
+                                    fact="datetime",
+                                    aggregate="count"))
+                    ),
+                    M("Incident Categories", c="irs", f="icategory", check=s3_has_role(ADMIN))(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                ),
     }
     s3_menu_dict["org"] = s3_menu_dict["hrm"]
+    s3_menu_dict["event"] = s3_menu_dict["irs"]
 
 # END =========================================================================

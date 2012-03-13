@@ -47,6 +47,7 @@ from ..s3 import *
 # =============================================================================
 
 class S3MainMenuLayout(S3NavigationItem):
+    """ Application Main Menu Layout """
 
     @staticmethod
     def layout(item):
@@ -76,6 +77,7 @@ MM = S3MainMenuLayout
 # =============================================================================
 
 class S3OptionsMenuLayout(S3NavigationItem):
+    """ Controller Options Menu Layout """
 
     @staticmethod
     def layout(item):

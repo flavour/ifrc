@@ -106,7 +106,8 @@ def event():
     response.s3.postp = postp
 
     output = s3_rest_controller("event", resourcename,
-                                rheader=event_rheader)
+                                #rheader=event_rheader
+                                )
     return output
 
 # -----------------------------------------------------------------------------
