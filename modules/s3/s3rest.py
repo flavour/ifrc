@@ -2279,6 +2279,7 @@ class S3Resource(object):
 
             @param ondelete: on-delete callback
             @param format: the representation format of the request (optional)
+            @param cascade: this is a cascade delete (prevents rollbacks/commits)
 
             @returns: number of records deleted
 
@@ -3115,10 +3116,13 @@ class S3Resource(object):
         """
 
         manager = current.manager
+        model = manager.model
         xml = manager.xml
 
         tablename = self.tablename
         table = self.table
+
+        postprocess = model.get_config(tablename, "onexport", None)
 
         default = (None, None)
 
@@ -3146,6 +3150,7 @@ class S3Resource(object):
         # Generate the element
         element = xml.resource(parent, table, record,
                                fields=dfields,
+                               postprocess=postprocess,
                                url=url)
         # Add the references
         xml.add_references(element, rmap,
@@ -3153,7 +3158,7 @@ class S3Resource(object):
 
         # GIS-encode the element
         download_url = manager.s3.download_url
-        xml.gis_encode(self, record, rmap,
+        xml.gis_encode(self, record, element, rmap,
                        download_url=download_url,
                        marker=marker)
 
@@ -4160,6 +4165,10 @@ class S3Resource(object):
             @param record: the new component record to be linked
         """
 
+        db = current.db
+        manager = current.manager
+        model = manager.model
+
         if self.parent is None or self.linked is None:
             return None
 
@@ -4178,14 +4187,21 @@ class S3Resource(object):
         if not _lkey or not _rkey:
             return None
 
-        # Create the link if it does not already exist
-        db = current.db
         ltable = self.table
+        ltn = ltable._tablename
+        onaccept = model.get_config(ltn, "create_onaccept",
+                   model.get_config(ltn, "onaccept", None))
+
+        # Create the link if it does not already exist
         query = ((ltable[lkey] == _lkey) &
                  (ltable[rkey] == _rkey))
         row = db(query).select(ltable._id, limitby=(0, 1)).first()
         if not row:
-            link_id = ltable.insert(**{lkey:_lkey, rkey:_rkey})
+            form = Storage(vars=Storage({lkey:_lkey, rkey:_rkey}))
+            link_id = ltable.insert(**form.vars)
+            if link_id and onaccept:
+                form.vars[ltable._id.name] = link_id
+                callback(onaccept, form)
         else:
             link_id = row[ltable._id.name]
         return link_id
@@ -4437,6 +4453,7 @@ class S3ResourceFilter:
         andf = self._andf
 
         manager = current.manager
+        xml = manager.xml
         model = manager.model
         DELETED = manager.DELETED
 
@@ -4742,16 +4759,35 @@ class S3ResourceFilter:
                         # Badly-formed bbox - ignore
                         continue
                     else:
+                        bbox_filter = None
                         if tablename == "gis_feature_query" or \
                            tablename == "gis_cache":
                             gtable = table
                         else:
                             gtable = current.s3db.gis_location
-
-                        bbox_filter = (gtable.lon > float(minLon)) & \
-                                      (gtable.lon < float(maxLon)) & \
-                                      (gtable.lat > float(minLat)) & \
-                                      (gtable.lat < float(maxLat))
+                            if current.deployment_settings.get_gis_spatialdb():
+                                # Use the Spatial Database
+                                minLon = float(minLon)
+                                maxLon = float(maxLon)
+                                minLat = float(minLat)
+                                maxLat = float(maxLat)
+                                bbox = "POLYGON((%s %s, %s %s, %s %s, %s %s, %s %s))" % \
+                                            (minLon, minLat,
+                                             minLon, maxLat,
+                                             maxLon, maxLat,
+                                             maxLon, minLat,
+                                             minLon, minLat)
+                                try:
+                                    # Spatial DAL & Database
+                                    bbox_filter = gtable.the_geom.st_intersects(bbox)
+                                except:
+                                    # Old DAL or non-spatial database
+                                    pass
+                        if not bbox_filter:
+                            bbox_filter = (gtable.lon > float(minLon)) & \
+                                          (gtable.lon < float(maxLon)) & \
+                                          (gtable.lat > float(minLat)) & \
+                                          (gtable.lat < float(maxLat))
                         if fname is not None:
                             # Need a join
                             join = (gtable.id == table[fname])
@@ -4761,6 +4797,7 @@ class S3ResourceFilter:
                     if bbox_query is None:
                         bbox_query = bbox
                     else:
+                        # Merge with the previous BBOX
                         bbox_query = bbox_query & bbox
         return bbox_query
 

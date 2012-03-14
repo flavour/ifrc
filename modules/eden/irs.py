@@ -52,7 +52,6 @@ class S3IRSModel(S3Model):
 
         location_id = self.gis_location_id
 
-
         datetime_represent = S3DateTime.datetime_represent
 
         # Shortcuts
@@ -305,23 +304,23 @@ class S3IRSModel(S3Model):
                              s3.comments(),
                              *(s3.lx_fields() + meta_fields()))
         # CRUD strings
-        ADD_INC_REPORT = T("Add Incident")
-        LIST_INC_REPORTS = T("List Incidents")
+        ADD_INC_REPORT = T("Add Incident Report")
+        LIST_INC_REPORTS = T("List Incident Reports")
         s3.crud_strings[tablename] = Storage(
             title_create = ADD_INC_REPORT,
-            title_display = T("Incident Details"),
+            title_display = T("Incident Report Details"),
             title_list = LIST_INC_REPORTS,
-            title_update = T("Edit Incident"),
-            title_search = T("Search Incidents"),
-            subtitle_create = T("Add New Incident"),
-            subtitle_list = T("Incidents"),
+            title_update = T("Edit Incident Report"),
+            title_search = T("Search Incident Reports"),
+            subtitle_create = T("Add New Incident Report"),
+            subtitle_list = T("Incident Reports"),
             label_list_button = LIST_INC_REPORTS,
             label_create_button = ADD_INC_REPORT,
-            label_delete_button = T("Delete Incident"),
-            msg_record_created = T("Incident added"),
-            msg_record_modified = T("Incident updated"),
-            msg_record_deleted = T("Incident deleted"),
-            msg_list_empty = T("No Incidents currently registered"))
+            label_delete_button = T("Delete Incident Report"),
+            msg_record_created = T("Incident Report added"),
+            msg_record_modified = T("Incident Report updated"),
+            msg_record_deleted = T("Incident Report deleted"),
+            msg_list_empty = T("No Incident Reports currently registered"))
 
         ireport_search = S3Search(
             advanced=(
@@ -456,7 +455,7 @@ class S3IRSModel(S3Model):
                                      represent = lambda id: \
                                         (id and [db.irs_ireport[id].name] or [NONE])[0],
                                      label = T("Incident"),
-                                     ondelete = "RESTRICT")
+                                     ondelete = "CASCADE")
 
         # ---------------------------------------------------------------------
         # Custom Methods
@@ -1052,8 +1051,9 @@ def irs_rheader(r, tabs=[]):
                 # (T("Vehicles"), "vehicle"),
                 # (T("Staff"), "human_resource"),
                 # (T("Tasks"), "task"),
-                # (T("Dispatch"), "dispatch"),
                ]
+        # if settings.has_module("msg"):
+            # tabs.append((T("Dispatch"), "dispatch"))
 
         rheader_tabs = s3_rheader_tabs(r, tabs)
 
