@@ -74,7 +74,7 @@ class S3XML(S3Codec):
     CUSER = "created_by"
     MTIME = "modified_on"
     MUSER = "modified_by"
-    OROLE = "owned_by_role"
+    OGROUP = "owned_by_group"
     OUSER = "owned_by_user"
 
     # GIS field names
@@ -86,14 +86,14 @@ class S3XML(S3Codec):
             "id",
             "deleted_fk",
             "owned_by_organisation",
-            "owned_by_facility"]
+            "owned_by_entity"]
 
     FIELDS_TO_ATTRIBUTES = [
             "id",
             "admin",
             CUSER,
             MUSER,
-            OROLE,
+            OGROUP,
             OUSER,
             CTIME,
             MTIME,
@@ -105,7 +105,7 @@ class S3XML(S3Codec):
             "admin",
             CUSER,
             MUSER,
-            OROLE,
+            OGROUP,
             OUSER,
             CTIME,
             MTIME,
@@ -420,7 +420,7 @@ class S3XML(S3Codec):
 
         if f in (self.CUSER, self.MUSER, self.OUSER):
             return self.represent_user(v)
-        elif f in (self.OROLE):
+        elif f in (self.OGROUP):
             return self.represent_role(v)
 
         manager = current.manager
@@ -711,29 +711,46 @@ class S3XML(S3Codec):
             elif "polygons" in current.request.get_vars:
                 # Display Polygons not Points
                 if WKTFIELD in fields:
-                    #if current.deployment_settings.get_gis_spatialdb():
-                    #   Do the Simplify & GeoJSON direct from the DB
-                    #else:
-                    WKT = db(ktable.id == r_id).select(ktable[WKTFIELD],
-                                                       limitby=(0, 1))
-                    if WKT:
-                        WKT = WKT.first()
-                        wkt = WKT[WKTFIELD]
-                        if wkt is None:
-                            continue
+                    query = (ktable.id == r_id)
+                    if current.deployment_settings.get_gis_spatialdb():
                         if current.auth.permission.format == "geojson":
-                            # Simplify the polygon to reduce download size
-                            geojson = gis.simplify(wkt, output="geojson")
-                            # Output the GeoJSON directly into the XML, so that XSLT can simply drop in
-                            geometry = etree.SubElement(element, "geometry")
-                            geometry.set("value", geojson)
+                            # Do the Simplify & GeoJSON direct from the DB
+                            geojson = db(query).select(ktable.the_geom.st_simplify(0.001).st_asgeojson(precision=4).with_alias('geojson'),
+                                                       limitby=(0, 1)).first().geojson
+                            if geojson:
+                                # Output the GeoJSON directly into the XML, so that XSLT can simply drop in
+                                geometry = etree.SubElement(element, "geometry")
+                                geometry.set("value", geojson)
+                                WKT = True
                         else:
-                            # Simplify the polygon to reduce download size
-                            # & also to work around the recursion limit in libxslt
-                            # http://blog.gmane.org/gmane.comp.python.lxml.devel/day=20120309
-                            wkt = gis.simplify(wkt)
-                            # Convert the WKT in XSLT
-                            attr[ATTRIBUTE.wkt] = wkt
+                            # Do the Simplify direct from the DB
+                            wkt = db(query).select(ktable.the_geom.st_simplify(0.001).st_astext().with_alias('wkt'),
+                                                   limitby=(0, 1)).first().wkt
+                            if wkt:
+                                # Convert the WKT in XSLT
+                                attr[ATTRIBUTE.wkt] = wkt
+                                WKT = True
+                    else:
+                        WKT = db(query).select(ktable[WKTFIELD],
+                                               limitby=(0, 1))
+                        if WKT:
+                            WKT = WKT.first()
+                            wkt = WKT[WKTFIELD]
+                            if wkt is None:
+                                continue
+                            if current.auth.permission.format == "geojson":
+                                # Simplify the polygon to reduce download size
+                                geojson = gis.simplify(wkt, output="geojson")
+                                # Output the GeoJSON directly into the XML, so that XSLT can simply drop in
+                                geometry = etree.SubElement(element, "geometry")
+                                geometry.set("value", geojson)
+                            else:
+                                # Simplify the polygon to reduce download size
+                                # & also to work around the recursion limit in libxslt
+                                # http://blog.gmane.org/gmane.comp.python.lxml.devel/day=20120309
+                                wkt = gis.simplify(wkt)
+                                # Convert the WKT in XSLT
+                                attr[ATTRIBUTE.wkt] = wkt
 
             if not LatLon and not WKT:
                 # Normal Location lookup
@@ -1064,7 +1081,7 @@ class S3XML(S3Codec):
                     if user:
                         record[f] = user.id
                 continue
-            elif f == self.OROLE:
+            elif f == self.OGROUP:
                 v = element.get(f, None)
                 if v and gtable and "role" in gtable:
                     query = gtable.role == v
@@ -1610,6 +1627,7 @@ class S3XML(S3Codec):
         else:
             obj = {}
             findall = element.findall
+            xpath = element.xpath
             for child in element:
                 tag = child.tag
                 if not isinstance(tag, basestring):
@@ -1617,22 +1635,28 @@ class S3XML(S3Codec):
                 if tag[0] == "{":
                     tag = tag.rsplit("}", 1)[1]
                 collapse = True
+                single = False
                 if native:
+                    is_single = lambda t, a, v: len(xpath("%s[@%s='%s']" % (t, a, v))) == 1
                     if tag == TAG.resource:
                         resource = child.get(ATTRIBUTE.name)
                         tag = "%s_%s" % (PREFIX.resource, resource)
                         collapse = False
                     elif tag == TAG.options:
-                        resource = child.get(ATTRIBUTE.resource)
-                        tag = "%s_%s" % (PREFIX.options, resource)
+                        r = child.get(ATTRIBUTE.resource)
+                        tag = "%s_%s" % (PREFIX.options, r)
+                        single = is_single(TAG.options, ATTRIBUTE.resource, r)
                     elif tag == TAG.reference:
-                        tag = "%s_%s" % (PREFIX.reference,
-                                         child.get(ATTRIBUTE.field))
+                        f = child.get(ATTRIBUTE.field)
+                        tag = "%s_%s" % (PREFIX.reference, f)
+                        single = is_single(TAG.reference, ATTRIBUTE.field, f)
                     elif tag == TAG.data:
                         tag = child.get(ATTRIBUTE.field)
+                        single = is_single(TAG.data, ATTRIBUTE.field, tag)
+                else:
+                    single = len(findall(tag)) == 1
                 child_obj = element2json(child, native=native)
                 if child_obj:
-                    single = len(findall(tag)) == 1
                     if tag not in obj:
                         if single and collapse:
                             obj[tag] = child_obj
@@ -1677,7 +1701,7 @@ class S3XML(S3Codec):
 
     # -------------------------------------------------------------------------
     @classmethod
-    def tree2json(cls, tree, pretty_print=False):
+    def tree2json(cls, tree, pretty_print=False, native=False):
         """
             Converts an element tree into JSON
 
@@ -1690,7 +1714,7 @@ class S3XML(S3Codec):
         else:
             root = tree
 
-        if root.tag == cls.TAG.root:
+        if native or root.tag == cls.TAG.root:
             native = True
         else:
             native = False

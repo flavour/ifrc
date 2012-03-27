@@ -784,7 +784,7 @@ class S3SearchLocationHierarchyWidget(S3SearchOptionsWidget):
 
         self.field = [field]
 
-        label = gis.get_location_hierarchy(level=level)
+        label = gis.get_location_hierarchy()[level]
 
         self.attr = Storage(attr)
         self.attr["label"] = label
@@ -922,7 +922,7 @@ class S3SearchLocationWidget(S3SearchWidget):
 
 class S3SearchCredentialsWidget(S3SearchOptionsWidget):
     """
-        Options Widge to search for HRMs with specified Credentials
+        Options Widget to search for HRMs with specified Credentials
     """
 
     def widget(self, resource, vars):

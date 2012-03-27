@@ -33,6 +33,7 @@ __all__ = ["S3OrganisationModel",
            "S3RoomModel",
            "S3OfficeModel",
            "org_organisation_represent",
+           "org_organisation_logo",
            "org_rheader",
            "org_site_represent",
            "org_organisation_controller",
@@ -255,6 +256,24 @@ class S3OrganisationModel(S3Model):
                                                                   zero = SELECT_LOCATION)),
                                    represent = lambda code: \
                                         gis.get_country(code, key_type="code") or UNKNOWN_OPT),
+                             Field("logo_bmp",
+                                   "upload",
+                                   requires = IS_EMPTY_OR(IS_IMAGE(maxsize=(200, 200),
+                                                                   error_message=T("Upload an image file (bmp), max. 200x200 pixels!"))),
+                                   label = T("Logo (bitmap)"),
+                                   comment = DIV(_class="tooltip",
+                                                 _title="%s|%s" % (T("Logo"),
+                                                                   T("Logo of the organization. This should be a bmp file and it should be no larger than 200x200")))
+                                  ),
+                             Field("logo_png",
+                                   "upload",
+                                   requires = IS_EMPTY_OR(IS_IMAGE(maxsize=(200, 200),
+                                                                   error_message=T("Upload an image file (png), max. 200x200 pixels!"))),
+                                   label = T("Logo (png)"),
+                                   comment = DIV(_class="tooltip",
+                                                 _title="%s|%s" % (T("Logo"),
+                                                                   T("Logo of the organization. This should be a png file and it should be no larger than 200x200")))
+                                  ),
                              Field("website", label = T("Website"),
                                    requires = IS_NULL_OR(IS_URL()),
                                    represent = s3_url_represent),
@@ -424,6 +443,17 @@ class S3OrganisationModel(S3Model):
         add_component("doc_document", org_organisation="organisation_id")
         add_component("doc_image", org_organisation="organisation_id")
 
+        # Branches
+        add_component("org_organisation",
+                      org_organisation=Storage(
+                                    name="branch",
+                                    link="org_organisation_branch",
+                                    joinby="organisation_id",
+                                    key="branch_id",
+                                    actuate="embed",
+                                    autocomplete="name",
+                                    autodelete=False))
+
         # Assets
         # @ToDo
         #add_component("asset_asset",
@@ -465,6 +495,39 @@ class S3OrganisationModel(S3Model):
                                                      _title="%s|%s" % (ADD_DONOR,
                                                                        ADD_DONOR_HELP))),
                                    ondelete = "SET NULL")
+
+        # ---------------------------------------------------------------------
+        # Organisation Branches
+        #
+        tablename = "org_organisation_branch"
+        table = define_table(tablename,
+                             organisation_id(),
+                             organisation_id("branch_id"),
+                             *meta_fields())
+
+        # CRUD strings
+        ADD_BRANCH = T("Add Branch Organization")
+        LIST_BRANCHES = T("List Branch Organizations")
+        crud_strings[tablename] = Storage(
+            title_create = ADD_BRANCH,
+            title_display = T("Branch Organization Details"),
+            title_list = LIST_BRANCHES,
+            title_update = T("Edit Branch Organization"),
+            title_search = T("Search Branch Organizations"),
+            title_upload = T("Import Branch Organizations"),
+            subtitle_create = T("Add New Branch Organization"),
+            subtitle_list = T("Branch Organizations"),
+            label_list_button = LIST_BRANCHES,
+            label_create_button = T("Add New Branch"),
+            label_delete_button = T("Delete Branch"),
+            msg_record_created = T("Branch Organization added"),
+            msg_record_modified = T("Branch Organization updated"),
+            msg_record_deleted = T("Branch Organization deleted"),
+            msg_list_empty = T("No Branch Organizations currently registered"))
+
+        configure(tablename,
+                  onaccept=self.org_branch_onaccept,
+                  ondelete=self.org_branch_onaccept)
 
         # ---------------------------------------------------------------------
         # Organisation <-> User
@@ -660,6 +723,46 @@ class S3OrganisationModel(S3Model):
             donor = db(query).select(table.name,
                                      limitby=(0, 1)).first()
             return donor and donor.name or NONE
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def org_branch_onaccept(form):
+        """
+            Remove any duplicate memberships and update affiliations
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        ltable = s3db.org_organisation_branch
+
+        if hasattr(form, "vars"):
+            _id = form.vars.id
+        elif isinstance(form, Row) and "id" in form:
+            _id = form.id
+        else:
+            return
+        if _id:
+            record = db(ltable.id == _id).select(limitby=(0, 1)).first()
+        else:
+            return
+        if record:
+            branch_id = record.branch_id
+            organisation_id = record.organisation_id
+            if branch_id and organisation_id and not record.deleted:
+                import gluon.contrib.simplejson as json
+                query = (ltable.branch_id == branch_id) & \
+                        (ltable.organisation_id == organisation_id) & \
+                        (ltable.id != record.id) & \
+                        (ltable.deleted != True)
+                deleted_fk = {"branch_id": branch_id,
+                              "organisation_id": organisation_id}
+                db(query).update(deleted = True,
+                                 branch_id = None,
+                                 organisation_id = None,
+                                 deleted_fk = json.dumps(deleted_fk))
+            s3db.pr_update_affiliations(ltable, record)
+        return
 
 # =============================================================================
 class S3SiteModel(S3Model):
@@ -1207,6 +1310,42 @@ def org_organisation_represent(id, showlink=False, acronym=True):
     return represent
 
 # =============================================================================
+def org_organisation_logo(id, type="png"):
+    """
+        Return a logo of the organisation with the given id, if one exists
+        
+        The id can either be the id of the organisation 
+               or a Row of the organisation
+
+        The type can either be png or bmp and is the format of the saved image
+    """
+    if isinstance(id, Row):
+        # Do not repeat the lookup if already done by IS_ONE_OF or RHeader
+        record = id
+    else:
+        table = current.s3db.org_organisation
+        query = (table.id == id)
+        record = current.db(query).select(limitby = (0, 1)).first()
+    field = "logo_png"
+    if type == "bmp":
+        field = "logo_bmp"
+    if record and record[field]:
+        if record.acronym == None or record.acronym == "":
+            alt = "%s logo" % record.name
+        else:
+            alt = "%s logo" % record.acronym
+        logo = IMG(_src=URL(c="default",
+                                f="download",
+                                args=record[field],
+                                ),
+                       _alt=alt,
+                       _height = "60px",
+                      )
+        return logo
+    return None
+    
+
+# =============================================================================
 def org_site_represent(id, link=True):
     """ Represent a Facility in option fields or list views """
 
@@ -1300,8 +1439,9 @@ def org_rheader(r, tabs=[]):
         # Tabs
         if not tabs:
             tabs = [(T("Basic Details"), None),
-                    (T("Staff & Volunteers"), "human_resource"),
+                    (T("Branches"), "branch"),
                     (T("Offices"), "office"),
+                    (T("Staff & Volunteers"), "human_resource"),
                     (T("Projects"), "project"),
                     #(T("Tasks"), "task"),
                    ]
@@ -1324,14 +1464,21 @@ def org_rheader(r, tabs=[]):
         else:
             website = ""
 
-        rheader = DIV(TABLE(
-            TR(
-                TH("%s: " % table.name.label),
-                record.name,
-                ),
-            website,
-            sectors,
-        ), rheader_tabs)
+        rheader = DIV()
+        logo = org_organisation_logo(record)
+        rData = TABLE(
+                        TR(
+                            TH("%s: " % table.name.label),
+                            record.name,
+                          ),
+                        website,
+                        sectors,
+                        )
+        if logo:
+            rheader.append(TABLE(TR(TD(logo),TD(rData))))
+        else:
+            rheader.append(rData)
+        rheader.append(rheader_tabs)
 
     elif tablename == "org_office":
         s3 = current.response.s3
@@ -1339,7 +1486,6 @@ def org_rheader(r, tabs=[]):
         tabs = [(T("Basic Details"), None),
                 #(T("Contact Data"), "contact"),
                 (T("Staff"), "human_resource"),
-                (T("Attachments"), "document"),
                ]
         try:
             tabs = tabs + current.s3db.inv_tabs(r)
@@ -1349,11 +1495,12 @@ def org_rheader(r, tabs=[]):
             tabs = tabs + s3.req_tabs(r)
         except:
             pass
-
+        tabs.append((T("Attachments"), "document"))
 
         rheader_tabs = s3_rheader_tabs(r, tabs)
+        logo = org_organisation_logo(record.organisation_id)
 
-        rheader = DIV(TABLE(
+        rData = TABLE(
                       TR(
                          TH("%s: " % table.name.label),
                          record.name,
@@ -1377,8 +1524,13 @@ def org_rheader(r, tabs=[]):
                       #                  args=[r.id, "update"],
                       #                  vars={"_next": _next})))
                       #   )
-                          ),
-                      rheader_tabs)
+                          )
+        rheader = DIV()
+        if logo:
+            rheader.append(TABLE(TR(TD(logo),TD(rData))))
+        else:
+            rheader.append(rData)
+        rheader.append(rheader_tabs)
 
         #if r.component and r.component.name == "req":
             # Inject the helptext script

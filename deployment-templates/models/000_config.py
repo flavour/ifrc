@@ -44,6 +44,10 @@ deployment_settings.auth.registration_requests_organisation = True
 deployment_settings.auth.registration_organisation_mandatory = True
 # Uncomment this to have the Organisation input hidden unless the user enters a non-whitelisted domain
 deployment_settings.auth.registration_organisation_hidden = True
+# Uncomment this to default the Organisation during registration
+#deployment_settings.auth.registration_organisation_default = "My Organisation"
+# Uncomment & populate these to set the default roles assigned to newly-registered users
+#deployment_settings.auth.registration_roles = ["STAFF", "PROJECT_EDIT"]
 # Uncomment this to request an image when users register
 #deployment_settings.auth.registration_requests_image = True
 # Uncomment this to direct newly-registered users to their volunteer page to be able to add extra details
@@ -52,7 +56,8 @@ deployment_settings.auth.registration_organisation_hidden = True
 #deployment_settings.auth.registration_volunteer = True
 # Uncomment this to allow users to Login using OpenID
 deployment_settings.auth.openid = False
-
+# Uncomment this to allow users to Login using Gmail's SMTP
+#deployment_settings.auth.gmail_domains = ["gmail.com"]
 # Always notify the approver of a new (verified) user, even if the user is automatically approved
 deployment_settings.auth.always_notify_approver = True
 
@@ -171,8 +176,6 @@ deployment_settings.L10n.religions = {
 }
 # Make last name in person/user records mandatory
 deployment_settings.L10n.mandatory_lastname = True
-# Show thousands separators in certain numeric fields
-deployment_settings.L10n.thousands_separator = True
 
 # Add thousands separator to numbers, eg. 1,000,000
 deployment_settings.L10n.thousands_separator = True
@@ -268,7 +271,6 @@ deployment_settings.security.archive_not_delete = True
 # 4: Apply both Controller & Function ACLs
 # 5: Apply Controller, Function & Table ACLs
 # 6: Apply Controller, Function, Table & Organisation ACLs
-# 7: Apply Controller, Function, Table, Organisation & Facility ACLs
 #
 deployment_settings.security.policy = 6 # Organisation-ACLs
 #acl = deployment_settings.aaa.acl
@@ -378,7 +380,12 @@ deployment_settings.supply.use_alt_name = False
 #deployment_settings.supply.catalog_default = T("Other Items")
 
 # Human Resource Management
-deployment_settings.hrm.email_required = True
+# Uncomment to allow Staff & Volunteers to be registered without an email address
+#deployment_settings.hrm.email_required = False
+# Uncomment to hide the Staff resource
+#deployment_settings.hrm.show_staff = False
+# Uncomment to hide the Volunteer resource
+#deployment_settings.hrm.show_vols = False
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
 #deployment_settings.hrm.skill_types = True
 
@@ -387,6 +394,8 @@ deployment_settings.hrm.email_required = True
 deployment_settings.project.drr = True
 # Uncomment this to label project activities as project communities
 deployment_settings.project.community_activity = True
+# Uncomment this to use Milestones in project/task.
+#deployment_settings.project.milestones = True
 
 # Save Search Widget
 deployment_settings.save_search.widget = False
@@ -599,6 +608,18 @@ deployment_settings.modules = OrderedDict([
     #       restricted = False,
     #       module_type = 10,
     #   )),
+    #("cms", Storage(
+    #      name_nice = T("Content Management"),
+    #      description = T("Content Management System"),
+    #      restricted = True,
+    #      module_type = 10,
+    #  )),
+    ("member", Storage(
+           name_nice = T("Members"),
+           description = T("Membership Management System"),
+           restricted = True,
+           module_type = 10,
+       )),
     #("ocr", Storage(
     #       name_nice = T("Optical Character Recognition"),
     #       description = T("Optical Character Recognition for reading the scanned handwritten paper forms."),

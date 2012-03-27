@@ -107,7 +107,7 @@ class S3OptionsMenuLayout(S3NavigationItem):
 # Shortcut
 M = S3OptionsMenuLayout
 
-# =========================================================================
+# =============================================================================
 
 class S3MenuSeparatorLayout(S3NavigationItem):
     """ Simple menu separator """
@@ -124,7 +124,7 @@ class S3MenuSeparatorLayout(S3NavigationItem):
 # Shortcut
 SEP = S3MenuSeparatorLayout
 
-# =========================================================================
+# =============================================================================
 
 class S3BreadcrumbsLayout(S3NavigationItem):
     """ Breadcrumbs layout """
@@ -142,7 +142,7 @@ class S3BreadcrumbsLayout(S3NavigationItem):
                 _class = "ancestor"
             return LI(A(item.label, _href=item.url(), _class=_class))
 
-# =========================================================================
+# =============================================================================
 def homepage(module=None, *match, **attr):
     """
         Shortcut for module homepage menu items using the MM layout,
