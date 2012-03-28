@@ -27,11 +27,11 @@ def org_filter():
     orgs = db(table.owned_by_organisation.belongs(roles)).select(table.id)
     orgs = [org.id for org in orgs]
 
-    stable = s3db.org_site
-    siteorgs = db(stable.owned_by_facility.belongs(roles)).select(stable.organisation_id)
-    for org in siteorgs:
-        if org.organisation_id not in orgs:
-            orgs.append(org.organisation_id)
+    #stable = s3db.org_site
+    #siteorgs = db(stable.owned_by_facility.belongs(roles)).select(stable.organisation_id)
+    #for org in siteorgs:
+        #if org.organisation_id not in orgs:
+            #orgs.append(org.organisation_id)
 
     if orgs:
         session.s3.hrm.orgs = orgs
