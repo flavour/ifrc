@@ -10,12 +10,12 @@ resourcename = request.function
 if not deployment_settings.has_module(module):
     raise HTTP(404, body="Module disabled: %s" % module)
 
+roles = session.s3.roles or []
 if session.s3.hrm is None:
     session.s3.hrm = Storage()
 session.s3.hrm.mode = request.vars.get("mode", None)
 
-# Options Menu (available in all Functions" Views)
-hr_menu_prep()
+s3db.hrm_vars()
 
 # =============================================================================
 def index():
@@ -170,7 +170,7 @@ def incoming():
     return inv_incoming()
 
 # =============================================================================
-def req_match():
+def match():
     """ Match Requests """
 
     return s3db.req_match()
