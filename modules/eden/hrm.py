@@ -34,6 +34,8 @@ __all__ = ["S3HRModel",
            "hrm_human_resource_represent",
            #"hrm_position_represent",
            "hrm_rheader",
+           "hrm_vars",
+           "hrm_dashboard"
            ]
 
 from gluon import *
@@ -2247,6 +2249,56 @@ S3FilterFieldChange({
             form.vars.id = id
             self.hrm_certification_onaccept(form)
 
+# =============================================================================
+@current.auth.requires_login()
+def hrm_vars():
+    """ Set session and response variables """
+
+    s3db = current.s3db
+    session = current.session
+    hrm_vars = session.s3.hrm
+
+    settings = current.deployment_settings
+    try:
+        module_name = settings.modules[module].name_nice
+    except:
+        module_name = current.T("Human Resources Management")
+    current.response.title = module_name
+
+    s3_has_role = current.auth.s3_has_role
+
+    if s3_has_role("HR_READ") or \
+       s3_has_role("HR_EDIT") or \
+       s3_has_role("HR_ADMIN"):
+        if "orgs" not in hrm_vars:
+            # Find all organisations the current user is a staff
+            # member of (+all their branches)
+            # @todo: more logical to rely on accessible_query here
+            user = current.auth.user.pe_id
+            branches = s3db.pr_get_role_branches(user,
+                                                roles="Staff",
+                                                entity_type="org_organisation")
+            otable = s3db.org_organisation
+            query = (otable.pe_id.belongs(branches))
+            orgs = current.db(query).select(otable.id)
+            orgs = [org.id for org in orgs]
+            if orgs:
+                hrm_vars.orgs = orgs
+            else:
+                hrm_vars.orgs = None
+    else:
+        # No HR Role so don't check Orgs
+        hrm_vars.orgs = None
+
+    # Set mode
+    if hrm_vars.mode != "personal":
+        sr = session.s3.system_roles
+        if sr.ADMIN in session.s3.roles or \
+           hrm_vars.orgs or \
+           deployment_settings.get_security_policy() in (1, 2):
+            hrm_vars.mode = None
+    else:
+        hrm_vars.mode = "personal"
 
 # =============================================================================
 def hrm_hr_represent(id):
@@ -2271,7 +2323,7 @@ def hrm_hr_represent(id):
 
     return repr_str
 
-# -------------------------------------------------------------------------
+# =============================================================================
 def hrm_human_resource_represent(id,
                                  show_link = False,
                                  none_value = None
@@ -2541,6 +2593,41 @@ def hrm_rheader(r, tabs=[]):
                       rheader_tabs)
 
     return rheader
+
+# =============================================================================
+# @todo: i18n, make a function?
+hrm_dashboard = UL(LI(A(H2("STAFF & VOLUNTEERS"),
+                        UL(LI(A("Manage Staff & Volunteer Data",
+                                _href=URL(f="human_resource"))),
+                           LI(A("Manage Teams Data",
+                                _href=URL(f="group")))),
+                        IMG(_src=URL(c="static", f="img",
+                                     args=["ifrc", "graphic_staff_wide.png"]),
+                            _alt="Staff and Volunteers"),
+                      _href=URL(c="hrm", f="index"))),
+                   LI(A(H2("OFFICES"),
+                        UL(LI(A("Manage Offices Data",
+                                _href=URL(c="org", f="office"))),
+                           LI(A("Manage Organisations Data",
+                                _href=URL(c="org", f="organisation")))),
+                        IMG(_src=URL(c="static", f="img",
+                                     args=["ifrc", "graphic_office.png"]),
+                            _alt="Offices"),
+                      _href=URL(c="org", f="index"))),
+                   LI(A(H2("CATALOGUES"),
+                        UL(#LI(A("Certificates",
+                           #     _href=URL(f="certificate"))),
+                           LI(A("Training Courses",
+                                _href=URL(f="course"))),
+                           #LI(A("Skills",
+                           #     _href=URL(f="skill"))),
+                           LI(A("Job Roles",
+                                _href=URL(f="job_role")))),
+                        IMG(_src=URL(c="static", f="img",
+                                     args=["ifrc", "graphic_catalogue.png"]),
+                            _alt="Catalogues"),
+                      _href=URL(c="hrm", f="index"))),
+                   _id="sub-dashboard")
 
 # =============================================================================
 class HRMVirtualFields:

@@ -14,8 +14,7 @@ if session.s3.hrm is None:
     session.s3.hrm = Storage()
 session.s3.hrm.mode = request.vars.get("mode", None)
 
-# Options Menu (available in all Functions" Views)
-hr_menu_prep()
+s3db.hrm_vars()
 
 # =============================================================================
 def index():
