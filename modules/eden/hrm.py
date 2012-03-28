@@ -33,6 +33,7 @@ __all__ = ["S3HRModel",
            "hrm_hr_represent",
            "hrm_human_resource_represent",
            #"hrm_position_represent",
+           "hrm_vars",
            "hrm_rheader",
            "hrm_vars",
            "hrm_dashboard"
@@ -2251,11 +2252,14 @@ S3FilterFieldChange({
 
 # =============================================================================
 @current.auth.requires_login()
-def hrm_vars():
+def hrm_vars(module):
     """ Set session and response variables """
 
     s3db = current.s3db
     session = current.session
+
+    if session.s3.hrm is None:
+        session.s3.hrm = Storage()
     hrm_vars = session.s3.hrm
 
     settings = current.deployment_settings
@@ -2266,7 +2270,6 @@ def hrm_vars():
     current.response.title = module_name
 
     s3_has_role = current.auth.s3_has_role
-
     if s3_has_role("HR_READ") or \
        s3_has_role("HR_EDIT") or \
        s3_has_role("HR_ADMIN"):
@@ -2276,8 +2279,8 @@ def hrm_vars():
             # @todo: more logical to rely on accessible_query here
             user = current.auth.user.pe_id
             branches = s3db.pr_get_role_branches(user,
-                                                roles="Staff",
-                                                entity_type="org_organisation")
+                                                 roles="Staff",
+                                                 entity_type="org_organisation")
             otable = s3db.org_organisation
             query = (otable.pe_id.belongs(branches))
             orgs = current.db(query).select(otable.id)
@@ -2291,6 +2294,7 @@ def hrm_vars():
         hrm_vars.orgs = None
 
     # Set mode
+    hrm_vars.mode = current.request.vars.get("mode", None)
     if hrm_vars.mode != "personal":
         sr = session.s3.system_roles
         if sr.ADMIN in session.s3.roles or \

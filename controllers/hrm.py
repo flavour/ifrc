@@ -10,11 +10,7 @@ resourcename = request.function
 if module not in deployment_settings.modules:
     raise HTTP(404, body="Module disabled: %s" % module)
 
-if session.s3.hrm is None:
-    session.s3.hrm = Storage()
-session.s3.hrm.mode = request.vars.get("mode", None)
-
-s3db.hrm_vars()
+s3db.hrm_vars(module)
 
 # =============================================================================
 def index():
@@ -94,8 +90,6 @@ def human_resource():
 
     tablename = "hrm_human_resource"
     table = s3db[tablename]
-
-
 
     # NB Change these & change the list_fields.pop() later
     list_fields = ["id",
@@ -488,9 +482,6 @@ def person():
             s3.crud_strings[tablename].update(
                 title_display = T("Volunteer Details"),
                 title_update = T("Volunteer Details"))
-
-
-
 
     # Upload for configuration (add replace option)
     response.s3.importerPrep = lambda: dict(ReplaceOption=T("Remove existing data before import"))
@@ -914,8 +905,9 @@ def training():
         return output
     response.s3.postp = postp
 
-    if ADMIN not in session.s3.roles and \
-       EDITOR not in session.s3.roles:
+    roles = session.s3.roles or []
+    if ADMIN not in roles and \
+       EDITOR not in roles:
         ttable = s3db.hrm_training
         hrtable = s3db.hrm_human_resource
         orgtable = s3db.org_organisation
