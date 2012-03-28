@@ -107,7 +107,7 @@ class S3LocationModel(S3Model):
         if current.deployment_settings.get_gis_spatialdb():
             # Add a spatial field
             # Should we do a test to confirm this? Ideally that would be done only in eden_update_check
-            meta_spatial_fields = (meta_fields() + (Field("the_geom", "geometry:geometry()"),))
+            meta_spatial_fields = (meta_fields() + (Field("the_geom", "geometry()"),))
         else:
             meta_spatial_fields = meta_fields()
 
@@ -207,7 +207,7 @@ class S3LocationModel(S3Model):
         # privileges from generic Authenticated users for particular locations (like
         # hierarchy or region locations) by changing the owner on those locations, e.g.
         # to MapAdmin.
-        table.owned_by_role.default = AUTHENTICATED
+        table.owned_by_group.default = AUTHENTICATED
 
         # Although the filter_opts here includes all allowed Ln keys, not just the
         # ones that are within the current hierarchy depth limit, this should not
@@ -1245,7 +1245,7 @@ class S3GISConfigModel(S3Model):
                                    # @ToDo: Remove default once we have cascading working
                                    default = 22),
 
-                              *meta_fields())
+                             *meta_fields())
 
         # Reusable field - used by Events & Scenarios
         config_id = S3ReusableField("config_id", db.gis_config,
@@ -1291,6 +1291,7 @@ class S3GISConfigModel(S3Model):
         configure(tablename,
                   onvalidation=self.gis_config_onvalidation,
                   onaccept=self.gis_config_onaccept,
+                  create_next=URL(args=["[id]", "layer_entity"]),
                   # @ToDo: Not currently allowing delete, but with some
                   # restrictions, we could.
                   #delete_onaccept=self.gis_config_ondelete,
@@ -1531,7 +1532,7 @@ class S3GISConfigModel(S3Model):
             MAP_ADMIN = current.session.s3.system_roles.MAP_ADMIN
             table = current.s3db.gis_location
             query = (table.id == vars.region_location_id)
-            current.db(query).update(owned_by_role = MAP_ADMIN)
+            current.db(query).update(owned_by_group = MAP_ADMIN)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1756,6 +1757,7 @@ class S3LayerEntityModel(S3Model):
         layer_types = Storage(gis_layer_feature = T("Feature Layer"),
                               gis_layer_bing = T("Bing Layer"),
                               gis_layer_coordinate = T("Coordinate Layer"),
+                              gis_layer_empty = T("No Base Layer"),
                               gis_layer_openstreetmap = T("OpenStreetMap Layer"),
                               gis_layer_geojson = T("GeoJSON Layer"),
                               gis_layer_georss = T("GeoRSS Layer"),
@@ -1865,6 +1867,9 @@ class S3LayerEntityModel(S3Model):
                     msg_record_deleted = T("Profile Configuration removed"),
                     msg_list_empty = T("No Profiles currently have Configurations for this Layer"))
 
+        self.configure(tablename,
+                       onaccept=self.layer_config_onaccept)
+
         # =====================================================================
         #  Layer Symbology link table
 
@@ -1905,6 +1910,35 @@ class S3LayerEntityModel(S3Model):
                 gis_layer_types = layer_types,
             )
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def layer_config_onaccept(form):
+        """
+            If this is the default base layer then remove this flag from all
+            others in this config.
+        """
+
+        vars = form.vars
+        base = vars.base
+        if base == 'False':
+            base = False
+        enabled = vars.enabled
+        if enabled == 'False':
+            enabled = False
+
+        if base and enabled:
+            db = current.db
+            s3db = current.s3db
+            ctable = s3db.gis_config
+            ltable = s3db.gis_layer_config
+            query = (ltable.id == vars.id) & \
+                    (ltable.config_id == ctable.id)
+            config = db(query).select(ctable.id,
+                                      limitby=(0, 1)).first()
+            # Set all others in this config as not the default Base Layer
+            query  = (ltable.config_id == config.id) & \
+                     (ltable.id != vars.id)
+            db(query).update(base = False)
 
 # =============================================================================
 class S3FeatureLayerModel(S3Model):
@@ -2089,6 +2123,7 @@ class S3MapModel(S3Model):
              "gis_feature_query",
              "gis_layer_bing",
              "gis_layer_coordinate",
+             "gis_layer_empty",
              "gis_layer_geojson",
              "gis_layer_georss",
              "gis_layer_google",
@@ -2207,6 +2242,35 @@ class S3MapModel(S3Model):
         #
 
         tablename = "gis_layer_coordinate"
+        table = define_table(tablename,
+                             layer_id,
+                             name_field()(),
+                             Field("description", label=T("Description")),
+                             gis_layer_folder()(),
+                             role_required(),       # Single Role
+                             #roles_permitted(),    # Multiple Roles (needs implementing in modules/s3gis.py)
+                             *meta_fields())
+
+        configure(tablename,
+                  super_entity="gis_layer_entity")
+
+        # Components
+        # Configs
+        add_component("gis_config",
+                      gis_layer_coordinate=Storage(
+                                    link="gis_layer_config",
+                                    pkey="layer_id",
+                                    joinby="layer_id",
+                                    key="config_id",
+                                    actuate="hide",
+                                    autocomplete="name",
+                                    autodelete=False))
+
+        # ---------------------------------------------------------------------
+        # Empty
+        #
+
+        tablename = "gis_layer_empty"
         table = define_table(tablename,
                              layer_id,
                              name_field()(),
@@ -2920,13 +2984,13 @@ class S3GISThemeModel(S3Model):
         crud_strings = s3.crud_strings
         define_table = self.define_table
         meta_fields = s3.meta_fields
-        
+
         # =====================================================================
         # Theme Layer
         #
 
         gis_theme_type_opts = {
-            # This should be stored 
+            # This should be stored
             #"population":T("Population"),
             }
 
@@ -3437,6 +3501,7 @@ def gis_rheader(r, tabs=[]):
 
     elif resourcename == "layer_openstreetmap" or \
          resourcename == "layer_bing" or \
+         resourcename == "layer_empty" or \
          resourcename == "layer_google" or \
          resourcename == "layer_tms" or \
          resourcename == "layer_wms" or \

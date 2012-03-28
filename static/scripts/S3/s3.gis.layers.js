@@ -43,10 +43,14 @@ function addLayers() {
             addWMSLayer(S3.gis.layers_wms[i]);
         }
     }
-    // XYZ (generated server-side in s3gis.py)
-    //try {
-    //    addXYZLayers();
-    //} catch(err) {};
+    // Empty
+    if (S3.gis.EmptyLayer) {
+        var layer = new OpenLayers.Layer(S3.gis.EmptyLayer, {
+            isBaseLayer: true,
+            'displayInLayerSwitcher': true}
+        );
+        map.addLayer(layer);
+    }
     // JS (generated server-side in s3gis.py)
     try {
         addJSLayers();
@@ -499,6 +503,7 @@ function addGoogleLayers() {
     var google = S3.gis.Google;
     var layer;
     if (google.MapMaker || google.MapMakerHybrid) {
+        // v2 API
         if (google.Satellite) {
             layer = new OpenLayers.Layer.Google(
                 google.Satellite, {
@@ -554,6 +559,7 @@ function addGoogleLayers() {
             map.addLayer(layer);
         }
     } else {
+        // v3 API
         if (google.Satellite) {
             layer = new OpenLayers.Layer.Google(
                 google.Satellite, {
@@ -1014,7 +1020,7 @@ function addWFSLayer(layer) {
         // Needed for WFS-T
         schema: schema
     })
-    
+
     var cluster_options = {
         context: {
             radius: function(feature) {
@@ -1055,7 +1061,7 @@ function addWFSLayer(layer) {
             }
         }
     }
-    
+
     if (styleField && styleValues) {
         // Use the Custom Styling
         // Old: Make a Deep Copy of the Global Styling
@@ -1097,7 +1103,7 @@ function addWFSLayer(layer) {
             return color;
         };
     }
-    
+
     // Needs to be uniquely instantiated
     var style_cluster = new OpenLayers.Style (
         {
@@ -1345,7 +1351,7 @@ function onGeojsonFeatureSelect(event) {
         for (var i = 0; i < feature.cluster.length; i++) {
             if (undefined != feature.cluster[i].attributes.popup) {
                 // Only display the 1st line of the hover popup
-                name = feature.cluster[i].attributes.popup.split('<br />', 1)[0]; 
+                name = feature.cluster[i].attributes.popup.split('<br />', 1)[0];
             } else {
                 name = feature.cluster[i].attributes.name;
             }

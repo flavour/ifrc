@@ -939,10 +939,13 @@ div#last_update {
 }
 .comment-text {
     padding: 0 0 0 20px;
-    float: left
+    float: left;
 }
 .comment-header {
     margin: 0 0 10px 0;
+}
+.comment-footer {
+    clear: left;
 }
 .comment-date {
     font-size: 11px;
@@ -951,6 +954,23 @@ div#last_update {
 
 #export_btn {
     padding: 0px;
+}
+
+/* hrm/contacts */
+.contacts-wrapper {
+    width: 500px;
+}
+
+.contacts-wrapper p {
+   margin-bottom: 5px;
+}
+.contacts-wrapper div.margin {
+   margin-bottom: 10px;
+}
+
+.contacts-wrapper .contact.saving .editBtn,
+.contacts-wrapper .contact.edit .editBtn {
+    display: none;
 }
 
 /* Styles added for the layout of the survey questionnaire form */

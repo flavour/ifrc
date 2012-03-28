@@ -242,6 +242,7 @@ class GIS(object):
         self.gps_symbols = GPS_SYMBOLS
         self.DEFAULT_SYMBOL = "White Dot"
         self.hierarchy_level_keys = ["L0", "L1", "L2", "L3", "L4"]
+        self.hierarchy_levels = {}
         self.max_allowed_level_num = 4
         self.region_level_keys = ["L0", "L1", "L2", "L3", "L4", "GR"]
         # Info for countries. These will be filled in once the gis_location
@@ -946,6 +947,7 @@ class GIS(object):
         mtable = s3db.gis_marker
         ptable = s3db.gis_projection
         stable = s3db.gis_symbology
+        ltable = s3db.gis_layer_config
 
         row = None
         if config_id:
@@ -996,6 +998,16 @@ class GIS(object):
                 cache[key] = projection[key] if key in projection else None
             for key in ["image", "height", "width"]:
                 cache["marker_%s" % key] = marker[key] if key in marker else None
+            # Default Base Layer?
+            query = (ltable.config_id == config_id) & \
+                    (ltable.base == True) & \
+                    (ltable.enabled == True)
+            base = db(query).select(ltable.layer_id,
+                                    limitby=(0, 1)).first()
+            if base:
+                cache["base"] = base.layer_id
+            else:
+                cache["base"] = None
 
         # Store the values
         s3.gis.config = cache
@@ -1062,11 +1074,22 @@ class GIS(object):
             Returns the location hierarchy and it's labels
 
             @param: level - a specific level for which to lookup the label
+                            (this use is to be discouraged, especially for the early runs as the result won't be cached)
             @param: location - the location_id to lookup the location for
                                currently only the actual location is supported
                                @ToDo: Do a search of parents to allow this
                                       lookup for any location
         """
+
+        _levels = self.hierarchy_levels
+        _location = location
+
+        if not location and _levels:
+            # Use cached value
+            if level:
+                return _levels[level]
+            else:
+                return _levels
 
         T = current.T
         COUNTRY = str(T("Country"))
@@ -1111,7 +1134,6 @@ class GIS(object):
                 if key == "L0":
                     levels[key] = COUNTRY
                 else:
-                    # Only include rows with values
                     levels[key] = key
             return levels
 
@@ -1130,6 +1152,9 @@ class GIS(object):
                 elif key in row and row[key]:
                     # Only include rows with values
                     levels[key] = str(T(row[key]))
+            if not _location:
+                # Cache the value
+                self.hierarchy_levels = levels
             return levels
 
     # -------------------------------------------------------------------------
@@ -3100,6 +3125,14 @@ class GIS(object):
     def simplify(wkt, tolerance=0.001, preserve_topology=True, output="wkt"):
         """
             Simplify a complex Polygon
+            - NB This uses Python, better performance will be gaiend by doing
+                 this direct from the database if you are using PostGIS:
+            ST_Simplify() is available as
+            db(query).select(table.the_geom.st_simplify(tolerance).st_astext().with_alias('wkt')).first().wkt
+            db(query).select(table.the_geom.st_simplify(tolerance).st_asgeojson().with_alias('geojson')).first().geojson
+
+            @ToDo: Reduce the number of decimal points to 4
+                   - requires patching modules/geojson?
         """
 
         try:
@@ -3115,7 +3148,8 @@ class GIS(object):
             output = simplified.to_wkt()
         elif output == "geojson":
             from ..geojson import dumps
-            output = dumps(simplified)
+            # Compact Encoding
+            output = dumps(simplified, separators=(",", ":"))
 
         return output
 
@@ -3323,7 +3357,6 @@ class GIS(object):
                                            args=["markers", config.marker_image]))
         symbology = config.symbology_id
 
-        mtable = s3db.gis_marker
         markers = {}
 
         html = DIV(_id="map_wrapper")
@@ -3784,6 +3817,7 @@ S3.gis.lon = %s;
             layers_feature_queries = """
 S3.gis.layers_feature_queries = new Array();"""
             counter = -1
+            mtable = s3db.gis_marker
         else:
             layers_feature_queries = ""
         for layer in feature_queries:
@@ -3927,9 +3961,10 @@ S3.gis.layers_feature_queries[%i] = {
         if catalogue_layers:
             # Add all Layers from the Catalogue
             layer_types = [
-                OSMLayer,
                 BingLayer,
+                EmptyLayer,
                 GoogleLayer,
+                OSMLayer,
                 TMSLayer,
                 WMSLayer,
                 JSLayer,
@@ -3944,12 +3979,31 @@ S3.gis.layers_feature_queries[%i] = {
             ]
         else:
             # Add just the default Base Layer
-            # @ToDo
-            layer_types = [
-                OSMLayer,
-                # v3 doesn't work when initially hidden
-                #GoogleLayer,
-            ]
+            response.s3.gis.base = True
+            layer_types = []
+            base = config["base"]
+            if base:
+                ltable = s3db.gis_layer_entity
+                query = (ltable.id == base)
+                layer = db(query).select(ltable.instance_type,
+                                         limitby=(0, 1)).first()
+                if layer:
+                    layer_type = layer.instance_type
+                    if layer_type == "gis_layer_openstreetmap":
+                        layer_types = [OSMLayer]
+                    elif layer_type == "gis_layer_google":
+                        # NB v3 doesn't work when initially hidden
+                        layer_types = [GoogleLayer]
+                    elif layer_type == "gis_layer_bing":
+                        layer_types = [BingLayer]
+                    elif layer_type == "gis_layer_tms":
+                        layer_types = [TMSLayer]
+                    elif layer_type == "gis_layer_wms":
+                        layer_types = [WMSLayer]
+                    elif layer_type == "gis_layer_empty":
+                        layer_types = [EmptyLayer]
+            if not layer_types:
+                layer_types = [EmptyLayer]
 
         layers_config = ""
         for LayerType in layer_types:
@@ -4194,6 +4248,13 @@ class Layer(object):
         query = (table.layer_id == ltable.layer_id) & \
                 (ltable.enabled == True) & \
                 (ltable.config_id == current.session.s3.gis_config_id)
+        if current.response.s3.gis.base == True:
+            if self.tablename == "gis_layer_empty":
+                # Show even if disabled (as fallback)
+                query = (table.id > 0)
+            else:
+                # Only show the default base layer
+                query = query & (ltable.base == True)
         rows = current.db(query).select(*fields)
         for _record in rows:
             # Check user is allowed to access the layer
@@ -4393,6 +4454,32 @@ class CoordinateLayer(Layer):
                 visibility = "false"
             output = "S3.gis.CoordinateGrid={name:'%s',visibility:%s};" % \
                 (name_safe, visibility)
+            return output
+        else:
+            return None
+
+# -----------------------------------------------------------------------------
+class EmptyLayer(Layer):
+    """
+        Empty Layer from Catalogue
+        - there should only be one of these
+    """
+
+    tablename = "gis_layer_empty"
+
+    # -------------------------------------------------------------------------
+    def as_javascript(self):
+        """
+            Output the Layer as Javascript
+            - suitable for inclusion in the HTML page
+        """
+
+        sublayers = self.sublayers
+        if sublayers:
+            sublayer = sublayers[0]
+            name = str(current.T(sublayer.name))
+            name_safe = re.sub("'", "", name)
+            output = "S3.gis.EmptyLayer='%s';" % name_safe
             return output
         else:
             return None
@@ -4647,7 +4734,7 @@ class GoogleLayer(Layer):
                 add_script("http://maps.google.com/maps?file=api&v=2&key=%s" % apikey)
             else:
                 # v3 API
-                add_script("http://maps.google.com/maps/api/js?v=3.2&sensor=false")
+                add_script("http://maps.google.com/maps/api/js?v=3.6&sensor=false")
                 if "StreetviewButton" in output:
                     # Streetview doesn't work with v2 API
                     output["StreetviewButton"] = str(T("Click where you want to open Streetview"))
