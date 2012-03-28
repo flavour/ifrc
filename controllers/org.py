@@ -10,12 +10,7 @@ resourcename = request.function
 if not deployment_settings.has_module(module):
     raise HTTP(404, body="Module disabled: %s" % module)
 
-roles = session.s3.roles or []
-if session.s3.hrm is None:
-    session.s3.hrm = Storage()
-session.s3.hrm.mode = request.vars.get("mode", None)
-
-s3db.hrm_vars()
+s3db.hrm_vars(module)
 
 # =============================================================================
 def index():
