@@ -59,6 +59,7 @@ textarea.comments {
 
 /* Language Menu */
 #language_selector select {
+    font-size: 0.9em;
     margin: 0;
 }
 
