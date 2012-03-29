@@ -146,7 +146,7 @@ deployment_settings.L10n.languages = OrderedDict([
     #("pt", "Português"),
     #("pt-br", "Português (Brasil)"),
     #("ru", "русский"),
-    #("es", "Español"),
+    ("es", "Español"),
     #("tl", "Tagalog"),
     #("ur", "اردو"),
     #("vi", "Tiếng Việt"),
@@ -154,7 +154,7 @@ deployment_settings.L10n.languages = OrderedDict([
 # Default language for Language Toolbar (& GIS Locations in future)
 deployment_settings.L10n.default_language = "en-gb"
 # Display the language toolbar
-deployment_settings.L10n.display_toolbar = False
+deployment_settings.L10n.display_toolbar = True
 # Default timezone for users
 deployment_settings.L10n.utc_offset = "UTC +0700"
 # Unsortable 'pretty' date format
