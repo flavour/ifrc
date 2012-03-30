@@ -19,22 +19,19 @@ def hrm_dashboard():
     from eden.layouts import S3DashBoardMenuLayout as DB
 
     dashboard = DB()(
-        DB("STAFF & VOLUNTEERS",
-            c="hrm",
+        DB("STAFF & VOLUNTEERS", c="hrm",
             image = "graphic_staff_wide.png",
             title = "Staff and Volunteers")(
             DB("Manage Staff & Volunteer Data", f="human_resource"),
             DB("Manage Teams Data", f="group"),
         ),
-        DB("OFFICES",
-            c="org",
+        DB("OFFICES", c="org",
             image = "graphic_office.png",
             title = "Offices")(
             DB("Manage Offices Data", f="office"),
             DB("Manage Organisations Data", f="organisation"),
         ),
-        DB("CATALOGUES",
-            c="hrm",
+        DB("CATALOGUES", c="hrm",
             image="graphic_catalogue.png",
             title="Catalogues")(
             #DB("Certificates", f="certificate"),

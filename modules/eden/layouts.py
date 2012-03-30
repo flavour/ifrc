@@ -248,8 +248,6 @@ class S3DashBoardMenuLayout(S3NavigationItem):
             items = None
 
         if item.parent is None:
-            #return items
-        #elif item.parent.parent is None:
             if items:
                 return UL(items, _id="sub-dashboard")
             else:
