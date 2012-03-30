@@ -29,7 +29,6 @@
     @status: work in progress
     @todo: - complete layout implementations
            - render "selected" (flag in item)
-           - remove S3Menu
 """
 
 __all__ = ["S3LanguageMenuLayout", "ML",
@@ -45,7 +44,6 @@ from gluon.storage import Storage
 from ..s3 import *
 
 # =============================================================================
-
 class S3MainMenuLayout(S3NavigationItem):
     """ Application Main Menu Layout """
 
@@ -75,7 +73,6 @@ class S3MainMenuLayout(S3NavigationItem):
 MM = S3MainMenuLayout
 
 # =============================================================================
-
 class S3OptionsMenuLayout(S3NavigationItem):
     """ Controller Options Menu Layout """
 
@@ -108,7 +105,6 @@ class S3OptionsMenuLayout(S3NavigationItem):
 M = S3OptionsMenuLayout
 
 # =============================================================================
-
 class S3MenuSeparatorLayout(S3NavigationItem):
     """ Simple menu separator """
 
@@ -125,7 +121,6 @@ class S3MenuSeparatorLayout(S3NavigationItem):
 SEP = S3MenuSeparatorLayout
 
 # =============================================================================
-
 class S3BreadcrumbsLayout(S3NavigationItem):
     """ Breadcrumbs layout """
 
@@ -167,123 +162,6 @@ def homepage(module=None, *match, **attr):
     return None
 
 # =============================================================================
-class S3Menu(DIV):
-    """
-        MENU implementation -
-            * breadcrumbs support
-            * greater control / flexibility
-
-        @author Abhishek Mishra
-        @author Fran Boon
-
-        @deprecated: retained here for reference
-    """
-
-    # -------------------------------------------------------------------------
-    def __init__(self, data, **args):
-        self.data = data
-        self.attributes = args
-
-    # -------------------------------------------------------------------------
-    def serialize(self, data, level=0):
-        """
-            NOTE on right:
-                personal-menu is the one on top right besides login,
-                a presence of right in module level menu indicates a personal-menu
-
-                nav is the big menu below the logo,
-                an absence of right in module level menu indicates nav items
-
-                main-sub-menu is the left side menu
-                a right = True indicates a highlight here (set by 01_menu)
-
-                extension are submenus under main-sub-menu
-                a right = True indicates highlight here (set by 01_menu)
-        """
-        _type = self.attributes["_type"]
-        if _type == "personal-menu":
-            items = []
-            data = [x for x in data if x[1]]
-            for item in data:
-                (name, link) = item[:2]
-                items.append(LI(A(name,
-                                  _href=link)
-                                )
-                            )
-
-            deployment_settings = current.deployment_settings
-            if deployment_settings.get_L10n_display_toolbar():
-                menu_langs = self.attributes["_menu_langs"]
-                current_lang = current.T.accepted_language
-                langopts = [ OPTION(x[0], _value=x[2]) for x in menu_langs[3] ]
-                langselect = SELECT(langopts,
-                                    _name="_language",
-                                    _title="Language Selection",
-                                    value=current_lang,
-                                    _onchange="$('#personal-menu div form').submit();"
-                                )
-                langform = FORM(langselect,
-                                _name="_language",
-                                _action="",
-                                _method="get")
-                return DIV([UL(items), langform], _class="pmenu-wrapper")
-            else:
-                return DIV(UL(items))
-        elif _type == "nav":
-            _highlight = "" or self.attributes["_highlight"]
-            items = []
-            for item in data:
-                (name, right, link) = item[:3]
-                if not right:
-                    import re
-                    _link = link
-                    if "default" not in _highlight:
-                        _highlight = re.match("(.*/).*$", _highlight).group(1)
-                        _link = re.match("(.*/).*$", link).group(1)
-                    _class = "highlight" if str(_link) in _highlight else " "
-                    items.append(LI(
-                        A(name, _href=link, _class=_class)
-                    ))
-            return UL(items, **self.attributes)
-        elif _type == "main-sub-menu":
-            items = []
-            for item in data:
-                (name, right, link) = item[:3]
-                if link:
-                    # Lack of link => lack of permissions
-                    items.append(LI(A(name,
-                                      _href=link,
-                                      _class="highlight" if right==True else " ")
-                                    )
-                                )
-                if len(item) > 3:
-                    sub = item[3]
-                    append = S3Menu(sub,
-                                    _type="extension",
-                                    _class="menu-extention").serialize(sub)
-                    items.append(append)
-            return UL(items, **self.attributes)
-        elif _type == "extension":
-            items = []
-            for item in data:
-                (name, right, link) = item[:3]
-                if link:
-                    # Lack of link => lack of permissions
-                    items.append(LI(A("%s" % name,
-                                      _href=link,
-                                      _class="highlight" if right==True else " ")
-                                    )
-                                )
-            return UL(items, **self.attributes)
-        else:
-            return UL()
-
-    # -------------------------------------------------------------------------
-    def xml(self):
-        return self.serialize(self.data, 0).xml()
-
-# =============================================================================
-
 class S3LanguageMenuLayout(S3NavigationItem):
 
     @staticmethod
@@ -300,20 +178,21 @@ class S3LanguageMenuLayout(S3NavigationItem):
         if item.enabled:
             if item.components:
                 # The language menu itself
-                current_language = item.options.get("current_language", None)
+                current_language = current.T.accepted_language
                 items = item.render_components()
                 select = SELECT(items, value=current_language,
                                     _name="_language",
                                     _title="Language Selection",
                                     _onchange="$('#personal-menu div form').submit();")
-                form = FORM(select, _name="_language",
+                form = FORM(select, _id="language_selector",
+                                    _name="_language",
                                     _action="",
                                     _method="get")
                 return form
             else:
                 # A language entry
-                return OPTION(item.option.lang_code,
-                              item.option.lang_name)
+                return OPTION(item.opts.lang_name,
+                              _value=item.opts.lang_code)
         else:
             return None
 
@@ -321,9 +200,7 @@ class S3LanguageMenuLayout(S3NavigationItem):
     def check_enabled(self):
         """ Check whether the language menu is enabled """
 
-        settings = current.deployment_settings
-
-        if settings.get_L10n_display_toolbar():
+        if current.deployment_settings.get_L10n_display_toolbar():
             return True
         else:
             return False
@@ -333,7 +210,6 @@ class S3LanguageMenuLayout(S3NavigationItem):
 ML = S3LanguageMenuLayout
 
 # =============================================================================
-
 class S3PersonalMenuLayout(S3NavigationItem):
 
     @staticmethod

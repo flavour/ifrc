@@ -29,6 +29,9 @@ if auth.permission.format in ("html"):
             MM("Training Courses", c="hrm", f="course"),
             #MM("Certificate List", c="hrm", f="certificate"),
         ),
+        homepage("member")(
+            MM("Members", c="member", f="membership"),
+        ),
         homepage("inv", "supply", "req")(
             MM("Warehouses", c="inv", f="warehouse"),
             MM("Received Shipments", c="inv", f="recv"),

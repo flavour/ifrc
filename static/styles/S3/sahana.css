@@ -56,6 +56,13 @@ textarea.comments {
     float: left;
 }
 
+
+/* Language Menu */
+#language_selector select {
+    font-size: 0.9em;
+    margin: 0;
+}
+
 /* Side Menu */
 #left-col .sub-menu {
     margin-top: 10px;

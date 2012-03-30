@@ -85,8 +85,8 @@ caption {background:#eee;}
 /*** Header ***/
 #header > div {float:left;}
 #header #society-icon{width:60px;}
-#header #logo{width:610px;height:90px;border:1px solid #9c9c9c; border-width:0 1px 0 1px; }
-#header #personal-menu{width:349px}
+#header #logo{width:600px;height:90px;border:1px solid #9c9c9c; border-width:0 1px 0 1px; }
+#header #personal-menu{width:359px}
 #header #logo h1{float:left;}
 #header #logo a{display:block;margin:20px 0 0 15px;background:url(../../img/ifrc/logo.png) no-repeat;width:425px;height:64px;text-indent:-99999px;}
 #header #logo #region{float:left;margin:34px 0 0 10px;font-family:"Helvetica Neue", Arial, Helvetica, sans-serif;color:#891735;}
@@ -245,7 +245,7 @@ form.inline p {margin-bottom:0;}
 
 /*** Home Page ***/
 
-#news-window{overflow:hidden;position:absolute;z-index:999;background:url(../../img/ifrc/news_window_bg.png);width:190px;top:30px;right:30px;padding:10px;border-right:1px solid #989793;border-bottom:1px solid #989793;}
+#news-window{overflow:hidden;position:absolute;z-index:999;background:url(../../img/ifrc/news_window_bg.png);width:190px;top:30px;right:43px;padding:10px;border-right:1px solid #989793;border-bottom:1px solid #989793;}
 #news-window h2{margin-top:5px;}
 #news-window ul{list-style:none;margin:0px;padding:0px;}
 #news-window .more-info,#news-window .open-window{display:block;padding-bottom:10px;float:right;color:#DC032E;font-style:italics;}
