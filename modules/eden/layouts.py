@@ -233,4 +233,36 @@ class S3PersonalMenuLayout(S3NavigationItem):
 # Shortcut
 MP = S3PersonalMenuLayout
 
+# =============================================================================
+class S3DashBoardMenuLayout(S3NavigationItem):
+    """ Layout for the bottom-menu (dashboard menu) """
+
+    @staticmethod
+    def layout(item):
+
+        T = current.T
+
+        if item.components:
+            items = item.render_components()
+        else:
+            items = None
+
+        if item.parent is None:
+            #return items
+        #elif item.parent.parent is None:
+            if items:
+                return UL(items, _id="sub-dashboard")
+            else:
+                return ""
+        else:
+            if item.components:
+                return LI(A(H2(item.label),
+                          UL(items),
+                          IMG(_src=URL(c="static", f="img",
+                                       args=["ifrc", item.opts.image]),
+                              _alt=T(item.opts.title)),
+                          _href=item.url()))
+            else:
+                return LI(A(item.label, _href=item.url()))
+
 # END =========================================================================

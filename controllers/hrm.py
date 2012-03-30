@@ -13,6 +13,39 @@ if module not in deployment_settings.modules:
 s3db.hrm_vars(module)
 
 # =============================================================================
+def hrm_dashboard():
+    """ HRM-specific dashboard (bottom) menu """
+
+    from eden.layouts import S3DashBoardMenuLayout as DB
+
+    dashboard = DB()(
+        DB("STAFF & VOLUNTEERS",
+            c="hrm",
+            image = "graphic_staff_wide.png",
+            title = "Staff and Volunteers")(
+            DB("Manage Staff & Volunteer Data", f="human_resource"),
+            DB("Manage Teams Data", f="group"),
+        ),
+        DB("OFFICES",
+            c="org",
+            image = "graphic_office.png",
+            title = "Offices")(
+            DB("Manage Offices Data", f="office"),
+            DB("Manage Organisations Data", f="organisation"),
+        ),
+        DB("CATALOGUES",
+            c="hrm",
+            image="graphic_catalogue.png",
+            title="Catalogues")(
+            #DB("Certificates", f="certificate"),
+            DB("Training Courses", f="course"),
+            #DB("Skills", f="skill"),
+            DB("Job Roles", f="job_role")
+        ))
+
+    return dashboard
+
+# =============================================================================
 def index():
     """ Dashboard """
 
@@ -81,7 +114,7 @@ def index():
         response.title = module_name
 
         output["title"] = module_name
-        output["dashboard"] = s3db.hrm_dashboard
+        output["dashboard"] = hrm_dashboard()
 
     return output
 
@@ -226,7 +259,7 @@ def human_resource():
                                    vars = {"hrm_id": "[id]"}),
                         "_class": "action-btn",
                         "label": str(T("Send Message"))})
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         elif r.representation == "plain":
             # Map Popups
             output = hrm_map_popup(r)
@@ -591,7 +624,7 @@ def person():
                                   _id="add-btn",
                                   _class="action-btn")
         if isinstance(output, dict):
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -698,7 +731,7 @@ def group():
                         "_class": "action-btn",
                         "label": str(T("Send Notification"))})
 
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -732,7 +765,7 @@ def job_role():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -753,7 +786,7 @@ def skill():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -828,7 +861,7 @@ def course():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -847,7 +880,7 @@ def course_certificate():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -868,7 +901,7 @@ def certificate():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -887,7 +920,7 @@ def certificate_skill():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 
@@ -906,7 +939,7 @@ def training():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard
+            output["dashboard"] = hrm_dashboard()
         return output
     response.s3.postp = postp
 

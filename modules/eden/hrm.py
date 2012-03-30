@@ -36,7 +36,6 @@ __all__ = ["S3HRModel",
            "hrm_vars",
            "hrm_rheader",
            "hrm_vars",
-           "hrm_dashboard"
            ]
 
 from gluon import *
@@ -2593,41 +2592,6 @@ def hrm_rheader(r, tabs=[]):
                       rheader_tabs)
 
     return rheader
-
-# =============================================================================
-# @todo: i18n, make a function?
-hrm_dashboard = UL(LI(A(H2("STAFF & VOLUNTEERS"),
-                        UL(LI(A("Manage Staff & Volunteer Data",
-                                _href=URL(f="human_resource"))),
-                           LI(A("Manage Teams Data",
-                                _href=URL(f="group")))),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_staff_wide.png"]),
-                            _alt="Staff and Volunteers"),
-                      _href=URL(c="hrm", f="index"))),
-                   LI(A(H2("OFFICES"),
-                        UL(LI(A("Manage Offices Data",
-                                _href=URL(c="org", f="office"))),
-                           LI(A("Manage Organisations Data",
-                                _href=URL(c="org", f="organisation")))),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_office.png"]),
-                            _alt="Offices"),
-                      _href=URL(c="org", f="index"))),
-                   LI(A(H2("CATALOGUES"),
-                        UL(#LI(A("Certificates",
-                           #     _href=URL(f="certificate"))),
-                           LI(A("Training Courses",
-                                _href=URL(f="course"))),
-                           #LI(A("Skills",
-                           #     _href=URL(f="skill"))),
-                           LI(A("Job Roles",
-                                _href=URL(f="job_role")))),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_catalogue.png"]),
-                            _alt="Catalogues"),
-                      _href=URL(c="hrm", f="index"))),
-                   _id="sub-dashboard")
 
 # =============================================================================
 class HRMVirtualFields:
