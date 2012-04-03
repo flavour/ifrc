@@ -161,6 +161,9 @@ class S3InventoryModel(S3Model):
                                         length = 16,
                                         label = itn_label,
                                         ),
+                                  org_id(name = "owner_org_id",
+                                         label = "Owning Organization",
+                                         ondelete = "SET NULL"), # which org owns this item
                                   org_id(name = "supply_org_id",
                                          label = "Supplying Organization",
                                          ondelete = "SET NULL"), # original donating org
@@ -232,13 +235,22 @@ $(document).ready(function() {
                                     ]
                              ),
                           S3SearchOptionsWidget(
-                              name="recv_search_site",
+                              name="inv_item_search_site",
                               label=T("Facility"),
                               field=["site_id"],
                               represent ="%(name)s",
                               comment=T("If none are selected, then all are searched."),
                               cols = 2
                               ),
+                          # NotImplemented yet
+                          # S3SearchOptionsWidget(
+                              # name="inv_item_search_category",
+                              # label=T("Category"),
+                              # field=["item_category"],
+                              ##represent ="%(name)s",
+                              # comment=T("If none are selected, then all are searched."),
+                              # cols = 2
+                              # ),
                           S3SearchMinMaxWidget(
                               name="inv_item_search_expiry_date",
                               method="range",
@@ -253,10 +265,9 @@ $(document).ready(function() {
         self.configure(tablename,
                        super_entity = "supply_item_entity",
                        list_fields = ["id",
-                                      # This is added in req/req_item_inv_item controller
-                                      #"site_id",
                                       "item_id",
                                       (T("Code"), "item_code"),
+                                      "supply_org_id",
                                       (T("Category"), "item_category"),
                                       "site_id",
                                       "quantity",
@@ -267,18 +278,20 @@ $(document).ready(function() {
                        onvalidation = self.inv_inv_item_onvalidate,
                        search_method = inv_item_search,
                        report_filter = report_filter,
-                       report_rows = ["item_id","currency"],
-                       report_cols = ["site_id","currency"],
-                       report_fact = ["quantity", (T("Total Value"), "total_value")],
+                       #report_rows = ["item_id", "currency"],
+                       report_rows = ["item_id",
+                                      (T("Category"), "item_category"),
+                                      ],
+                       #report_cols = ["site_id", "currency"],
+                       report_cols = ["site_id"],
+                       report_fact = ["quantity",
+                                      (T("Total Value"), "total_value"),
+                                      ],
                        report_method=["sum"],
                        report_groupby = self.inv_inv_item.site_id,
                        report_hide_comments = True,
                        deduplicate = self.inv_item_duplicate
                        )
-
-        # Component
-        self.add_component("inv_track_item",
-                           inv_inv_item="inv_item_id")
 
         # ---------------------------------------------------------------------
         # Pass variables back to global scope (response.s3.*)
@@ -531,7 +544,7 @@ class S3TrackingModel(S3Model):
                                   *s3.meta_fields())
 
         # CRUD strings
-        ADD_SEND = T("Send Shipment")
+        ADD_SEND = T("Add New Shipment")
         LIST_SEND = T("List Sent Shipments")
         s3.crud_strings[tablename] = Storage(
             title_create = ADD_SEND,
@@ -1356,13 +1369,19 @@ def inv_warehouse_rheader(r):
     rheader = None
     if tablename == "org_organisation" or tablename == "org_office":
         rheader = s3.org_rheader(r)
+    if tablename == "inv_inv_item":
+        tabs = [(T("Details"), None),
+                (T("Track Shipment"), "track_movement/"),
+               ]
+        rheader = DIV (s3_rheader_tabs(r, tabs))
     rfooter = TAG[""]()
-    if record and "id" in record:
-        if r.component and r.component.name == "inv_item":
+    if record and "site_id" in record:
+        if (r.component and r.component.name == "inv_item"):
             as_btn = A( T("Adjust Stock"),
                           _href = URL(c = "inv",
                                       f = "adj",
-                                      args = [record.id, "create"]
+                                      args = ["create"],
+                                      vars = {"site":record.site_id},
                                       ),
                           _class = "action-btn"
                           )
@@ -1409,7 +1428,7 @@ def inv_recv_crud_strings():
         )
     else:
         recv_id_label = T("Receive Shipment")
-        ADD_RECV = T("Receive Shipment")
+        ADD_RECV = T("Add New Received Shipment")
         LIST_RECV = T("List Received Shipments")
         current.response.s3.crud_strings["inv_recv"] = Storage(
             title_create = ADD_RECV,
@@ -1815,6 +1834,25 @@ class S3AdjustModel(S3Model):
                          5 : T("Found"),
                         }
 
+        # CRUD strings
+        ADJUST_STOCK = T("Adjust Stock Levels")
+        LIST_ADJUSTMENTS = T("List Adjustments to Stock")
+        s3.crud_strings["inv_adj"] = Storage(
+            title_create = ADJUST_STOCK,
+            title_display = T("Stock Adjustment Details"),
+            title_list = LIST_ADJUSTMENTS,
+            title_update = T("Edit Adjustment"),
+            title_search = T("Search Adjustments to Stock Levels"),
+            subtitle_create = T("Add New Adjustment"),
+            subtitle_list = T("Adjustment Items"),
+            label_list_button = LIST_ADJUSTMENTS,
+            label_create_button = ADJUST_STOCK,
+            label_delete_button = T("Delete Adjustment"),
+            msg_record_created = T("Adjustment created"),
+            msg_record_modified = T("Adjustment modified"),
+            msg_record_deleted = T("Adjustment deleted"),
+            msg_list_empty = T("No adjustments to the stock levels exist"))
+
         # @todo add the optional adj_id
         tablename = "inv_adj_item"
         table = self.define_table("inv_adj_item",
@@ -1870,6 +1908,25 @@ class S3AdjustModel(S3Model):
                                        represent = self.inv_adj_item_represent,
                                        label = T("Inventory Adjustment Item"),
                                        ondelete = "RESTRICT")
+
+        # CRUD strings
+        ADJUST_STOCK = T("Adjust Stock Items")
+        LIST_ADJUSTMENTS = T("List Stock Adjustments Items")
+        s3.crud_strings["inv_adj_item"] = Storage(
+            title_create = ADJUST_STOCK,
+            title_display = T("Adjustment Item Details"),
+            title_list = LIST_ADJUSTMENTS,
+            title_update = T("Edit Adjustment Item"),
+            title_search = T("Search Adjustments Items"),
+            subtitle_create = T("Add New Adjustment Item"),
+            subtitle_list = T("Adjustment Items"),
+            label_list_button = LIST_ADJUSTMENTS,
+            label_create_button = ADJUST_STOCK,
+            label_delete_button = T("Delete Adjustment Item"),
+            msg_record_created = T("Adjustment item created"),
+            msg_record_modified = T("Adjustment item modified"),
+            msg_record_deleted = T("Adjustment item deleted"),
+            msg_list_empty = T("No items for this adjustments currently exist"))
 
         # Component
         self.add_component("inv_adj_item",
@@ -2076,7 +2133,10 @@ class InvItemVirtualFields:
     def total_value(self):
         """ Year/Month of the start date of the training event """
         try:
-            return self.inv_inv_item.quantity * self.inv_inv_item.pack_value
+            v = self.inv_inv_item.quantity * self.inv_inv_item.pack_value
+            # Need real numbers to use for Report calculations
+            #return IS_FLOAT_AMOUNT.represent(v, precision=2)
+            return v
         except:
             # not available
             return current.messages.NONE
