@@ -34,6 +34,10 @@ deployment_settings.security.self_registration = True
 deployment_settings.auth.registration_requires_verification = True
 deployment_settings.auth.registration_requires_approval = True
 
+# The name of the teams that users are added to when they opt-in to receive alerts
+#deployment_settings.auth.opt_in_team_list = ["Updates"]
+# Uncomment this to set the opt in default to True
+#deployment_settings.auth.opt_in_default = True
 # Uncomment this to request the Mobile Phone when a user registers
 deployment_settings.auth.registration_requests_mobile_phone = False
 # Uncomment this to have the Mobile Phone selection during registration be mandatory
@@ -54,10 +58,17 @@ deployment_settings.auth.registration_organisation_hidden = True
 # NB This requires Verification/Approval to be Off
 # @ToDo: Extend to all optional Profile settings: Homepage, Twitter, Facebook, Mobile Phone, Image
 #deployment_settings.auth.registration_volunteer = True
-# Uncomment this to allow users to Login using OpenID
-deployment_settings.auth.openid = False
 # Uncomment this to allow users to Login using Gmail's SMTP
 #deployment_settings.auth.gmail_domains = ["gmail.com"]
+# Fill these to allow users to Login using Facebook
+#deployment_settings.auth.facebook_id = ""
+#deployment_settings.auth.facebook_secret = ""
+# Fill these to allow users to Login using Google
+#deployment_settings.auth.google_id = ""
+#deployment_settings.auth.google_secret = ""
+# Uncomment this to allow users to Login using OpenID
+#deployment_settings.auth.openid = True
+
 # Always notify the approver of a new (verified) user, even if the user is automatically approved
 deployment_settings.auth.always_notify_approver = True
 
@@ -168,7 +179,7 @@ deployment_settings.L10n.religions = {
     "none":T("none"),
     "christian":T("Christian"),
     "muslim":T("Muslim"),
-    "jew":T("Jew"),
+    "jewish":T("Jewish"),
     "buddhist":T("Buddhist"),
     "hindu":T("Hindu"),
     "bahai":T("Bahai"),
@@ -621,16 +632,29 @@ deployment_settings.modules = OrderedDict([
            restricted = True,
            module_type = 10,
        )),
+    #("fire", Storage(
+    #       name_nice = T("Fire Stations"),
+    #       description = T("Fire Station Management"),
+    #       restricted = True,
+    #       module_type = 1,
+    #   )),
+    #("patient", Storage(
+    #        name_nice = T("Patient Tracking"),
+    #        description = T("Tracking of Patients"),
+    #        restricted = True,
+    #        module_type = 10
+    #    )),
     #("ocr", Storage(
     #       name_nice = T("Optical Character Recognition"),
     #       description = T("Optical Character Recognition for reading the scanned handwritten paper forms."),
     #       restricted = False,
     #       module_type = 10
     #   )),
-    #("patient", Storage(
-    #        name_nice = T("Patient Tracking"),
-    #        description = T("Tracking of Patients"),
-    #        restricted = True,
+    # This module has very limited functionality
+    #("flood", Storage(
+    #        name_nice = T("Flood Alerts"),
+    #        description = T("Flood Alerts show water levels in various parts of the country"),
+    #        restricted = False,
     #        module_type = 10
     #    )),
 ])

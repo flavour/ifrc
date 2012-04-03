@@ -60,7 +60,7 @@ from gluon import *
 from gluon.tools import callback
 import gluon.contrib.simplejson as json
 
-from s3validators import IS_ONE_OF
+from s3validators import IS_ONE_OF, IS_INT_AMOUNT, IS_FLOAT_AMOUNT
 from s3tools import SQLTABLES3
 from s3xml import S3XML
 from s3model import S3Model, S3ModelExtensions
@@ -4030,9 +4030,13 @@ class S3Resource(object):
         table = self.table
         tablename = self.tablename
 
-        if tablename == "gis_location" and "wkt" not in skip:
-            # Skip Bulky WKT fields
-            skip.append("wkt")
+        if tablename == "gis_location":
+            if "wkt" not in skip:
+                # Skip Bulky WKT fields
+                skip.append("wkt")
+            if current.deployment_settings.get_gis_spatialdb() and \
+               "the_geom" not in skip:
+                skip.append("the_geom")
 
         rfields = self.rfields
         dfields = self.dfields

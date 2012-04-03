@@ -132,11 +132,15 @@ class S3InventoryModel(S3Model):
                                         "double",
                                         label = T("Quantity"),
                                         notnull = True,
+                                        represent=lambda v, row=None: \
+                                            IS_FLOAT_AMOUNT.represent(v, precision=2),
                                         requires = IS_FLOAT_IN_RANGE(0,None),
                                         writable = False),
                                   Field("pack_value",
                                         "double",
-                                        label = T("Value per Pack")),
+                                        label = T("Value per Pack"),
+                                        represent=lambda v, row=None: \
+                                            IS_FLOAT_AMOUNT.represent(v, precision=2)),
                                   # @ToDo: Move this into a Currency Widget for the pack_value field
                                   currency_type("currency"),
                                   #Field("pack_quantity",
@@ -375,7 +379,7 @@ $(document).ready(function() {
                                              pack item
 
             If a item is added as part of an inv_track_item import then the
-            quantity will be set to zero. This will overwrite and existing
+            quantity will be set to zero. This will overwrite any existing
             total, if we have a duplicate. If the total was None then
             validation would fail (it's a not null field). So if a duplicate
             is found then the quantity needs to be removed.
@@ -385,10 +389,12 @@ $(document).ready(function() {
             site_id = "site_id" in job.data and job.data.site_id
             item_id = "item_id" in job.data and job.data.item_id
             pack_id = "item_pack_id" in job.data and job.data.item_pack_id
+            donor_id = "supply_org_id" in job.data and job.data.supply_org_id
             bin = "bin" in job.data and job.data.bin
             query = (table.site_id == site_id) & \
                     (table.item_id == item_id) & \
                     (table.item_pack_id == pack_id) & \
+                    (table.supply_org_id == donor_id) & \
                     (table.bin == bin)
             id = duplicator(job, query)
             if id:
@@ -1160,6 +1166,7 @@ $(document).ready(function() {
         oldTotal = 0
         # only modify the original stock total if we have a quantity on the form
         # Their'll not be one if it is being received since by then it is read only
+        # It will be there on an import and so the value will be deducted correctly
         if form.vars.quantity:
             if form.record:
                 if form.record.send_stock_id != None:

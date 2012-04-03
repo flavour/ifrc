@@ -233,11 +233,11 @@ class S3HRModel(S3Model):
                         label=T("Facility"),
                         field=["site_id"]
                       ),
-                      S3SearchSkillsWidget(
-                        name="human_resource_search_skills",
-                        label=T("Skills"),
-                        field=["skill_id"]
-                      ),
+                      # S3SearchSkillsWidget(
+                        # name="human_resource_search_skills",
+                        # label=T("Skills"),
+                        # field=["skill_id"]
+                      # ),
                       # This currently breaks Requests from being able to save since this form is embedded inside the S3SearchAutocompleteWidget
                       #S3SearchMinMaxWidget(
                       #  name="human_resource_search_date",
@@ -245,7 +245,8 @@ class S3HRModel(S3Model):
                       #  label=T("Contract Expiry Date"),
                       #  field=["end_date"]
                       #),
-            ))
+            )
+        )
 
         table.virtualfields.append(HRMVirtualFields())
 
@@ -2258,7 +2259,7 @@ def hrm_vars(module):
 
     s3db = current.s3db
     session = current.session
-    
+
     if session.s3.hrm is None:
         session.s3.hrm = Storage()
     hrm_vars = session.s3.hrm
@@ -2286,10 +2287,11 @@ def hrm_vars(module):
         sr = session.s3.system_roles
         if sr.ADMIN in session.s3.roles or \
            hrm_vars.orgs or \
-           deployment_settings.get_security_policy() in (1, 2):
+           current.deployment_settings.get_security_policy() in (1, 2):
             hrm_vars.mode = None
     else:
         hrm_vars.mode = "personal"
+    return
 
 # =============================================================================
 def hrm_hr_represent(id):
@@ -2588,6 +2590,8 @@ def hrm_rheader(r, tabs=[]):
 # =============================================================================
 class HRMVirtualFields:
     """ Virtual fields as dimension classes for reports """
+
+    extra_fields = ["person_id"]
 
     def course(self):
         """ Which Training Courses the person has attended """
