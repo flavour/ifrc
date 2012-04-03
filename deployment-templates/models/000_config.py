@@ -62,8 +62,8 @@ deployment_settings.auth.openid = False
 deployment_settings.auth.always_notify_approver = True
 
 # Base settings
-deployment_settings.base.system_name = T("Resource Mapping System")
-deployment_settings.base.system_name_short = T("Resource Mapping System")
+deployment_settings.base.system_name = T("Resource Management System")
+deployment_settings.base.system_name_short = T("Resource Management System")
 
 # Set this to the Public URL of the instance
 deployment_settings.base.public_url = "http://127.0.0.1:8000"
@@ -186,7 +186,8 @@ deployment_settings.fin.currencies = {
     "CHF" :T("Swiss Francs"),
     "EUR" :T("Euros"),
     "GBP" :T("Great British Pounds"),
-    "CAD" :T("Canadian Dollars")
+    "CAD" :T("Canadian Dollars"),
+    "AUD" :T("Australian Dollars")
 }
 #deployment_settings.fin.currency_default = "USD" # Dollars
 #deployment_settings.fin.currency_writable = False # False currently breaks things
