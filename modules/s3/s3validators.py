@@ -167,15 +167,47 @@ class IS_INT_AMOUNT(IS_INT_IN_RANGE):
         return IS_INT_IN_RANGE.__call__(self, value)
 
     @staticmethod
-    def represent(value):
-        if value is None:
+    def represent(number):
+        """
+            Change the format of the number depending on the language
+
+            Based on https://code.djangoproject.com/browser/django/trunk/django/utils/numberformat.py
+        """
+
+        if number is None:
             return ""
-        ts = current.deployment_settings.get_L10n_thousands_separator()
-        if not ts:
-            thousands_separator = ""
+
+        T = current.T
+        settings = current.deployment_settings
+
+        THOUSAND_SEPARATOR = T("THOUSAND_SEPARATOR")
+        if THOUSAND_SEPARATOR == "THOUSAND_SEPARATOR":
+            THOUSAND_SEPARATOR = settings.L10n.get("thousands_separator", u"\u00A0")
+
+        NUMBER_GROUPING = T("NUMBER_GROUPING")
+        if NUMBER_GROUPING == "NUMBER_GROUPING":
+            NUMBER_GROUPING = settings.L10n.get("thousands_grouping", 3)
+
+        # The negative/positive sign for the number
+        if float(number) < 0:
+            sign = "-"
         else:
-            thousands_separator = ","
-        return format(int(value), "%sd" % thousands_separator)
+            sign = ""
+
+        str_number = unicode(number)
+
+        if str_number[0] == "-":
+            str_number = str_number[1:]
+
+        # Walk backwards over the integer part, inserting the separator as we go
+        int_part_gd = ""
+        for cnt, digit in enumerate(str_number[::-1]):
+            if cnt and not cnt % NUMBER_GROUPING: # this "3" should be a variable but it's not needed yet
+                int_part_gd += THOUSAND_SEPARATOR
+            int_part_gd += digit
+        int_part = int_part_gd[::-1]
+
+        return int_part
 
     @staticmethod
     def widget(f, v, **attributes):
@@ -198,7 +230,7 @@ class IS_FLOAT_AMOUNT(IS_FLOAT_IN_RANGE):
                  minimum=None,
                  maximum=None,
                  error_message=None,
-                 dot='.'):
+                 dot="."):
 
         IS_FLOAT_IN_RANGE.__init__(self,
                                    minimum=minimum,
@@ -213,21 +245,38 @@ class IS_FLOAT_AMOUNT(IS_FLOAT_IN_RANGE):
         return IS_FLOAT_IN_RANGE.__call__(self, value)
 
     @staticmethod
-    def represent(value, precision=None):
-        if value is None:
+    def represent(number, precision=None):
+        """
+            Change the format of the number depending on the language
+
+            Based on https://code.djangoproject.com/browser/django/trunk/django/utils/numberformat.py
+        """
+
+        if number is None:
             return ""
-        ts = current.deployment_settings.get_L10n_thousands_separator()
-        if not ts:
-            thousands_separator = ""
+
+        # We need to check that we actually get the separators
+        # otherwise we use the English defaults
+        DECIMAL_SEPARATOR = current.T("DECIMAL_SEPARATOR")
+        if DECIMAL_SEPARATOR == "DECIMAL_SEPARATOR":
+            DECIMAL_SEPARATOR = current.deployment_settings.L10n.get("decimal_separator", ",")
+
+        str_number = unicode(number)
+
+        if "." in str_number:
+            int_part, dec_part = str_number.split(".")
+            if precision is not None:
+                dec_part = dec_part[:precision]
         else:
-            thousands_separator = ","
+            int_part, dec_part = str_number, ""
         if precision is not None:
-            fl = format(float(value), "%s.%df" % (thousands_separator, precision))
-        else:
-            fl = format(float(value), "%sf" % thousands_separator).rstrip("0")
-            if fl[-1] == ".":
-                fl += "0"
-        return fl
+            dec_part = dec_part + ("0" * (precision - len(dec_part)))
+        if dec_part:
+            dec_part = DECIMAL_SEPARATOR + dec_part
+
+        int_part = IS_INT_AMOUNT.represent(int(int_part))
+
+        return int_part + dec_part
 
     @staticmethod
     def widget(f, v, **attributes):
@@ -622,8 +671,7 @@ class IS_LOCATION_SELECTOR(Validator):
         self.no_parent = T("Need to have all levels filled out in mode strict!")
         self.invalid_lat = T("Latitude is Invalid!")
         self.invalid_lon = T("Longitude is Invalid!")
-        auth = current.auth
-        self.no_permission = auth.messages.access_denied
+        self.no_permission = current.auth.messages.access_denied
         self.errors = Storage()
 
     def __call__(self, value):
@@ -653,18 +701,24 @@ class IS_LOCATION_SELECTOR(Validator):
                     for e in errors:
                         error = "%s\n%s" % (error, errors[e]) if error else errors[e]
                     return (value, error)
-                db(table.id == value).update(name = location.name,
-                                             lat = location.lat,
-                                             lon = location.lon,
-                                             addr_street = location.street,
-                                             addr_postcode = location.postcode,
-                                             parent = location.parent,
-                                             wkt = location.wkt,
-                                             lon_min = location.lon_min,
-                                             lon_max = location.lon_max,
-                                             lat_min = location.lat_min,
-                                             lat_max = location.lat_max
-                                             )
+                vars = dict(name = location.name,
+                            lat = location.lat,
+                            lon = location.lon,
+                            addr_street = location.street,
+                            addr_postcode = location.postcode,
+                            parent = location.parent,
+                            wkt = location.wkt,
+                            lon_min = location.lon_min,
+                            lon_max = location.lon_max,
+                            lat_min = location.lat_min,
+                            lat_max = location.lat_max
+                            )
+
+                if current.deployment_settings.get_gis_spatialdb():
+                    # Also populate the spatial field
+                    vars["the_geom"] = vars["wkt"]
+
+                db(table.id == value).update(**vars)
                 # onaccept
                 gis.update_location_tree(value, location.parent)
                 return (value, None)
@@ -681,18 +735,24 @@ class IS_LOCATION_SELECTOR(Validator):
                 return (None, error)
             if location.name or location.lat or location.lon or \
                location.street or location.postcode or location.parent:
-                value = table.insert(name = location.name,
-                                     lat = location.lat,
-                                     lon = location.lon,
-                                     addr_street = location.street,
-                                     addr_postcode = location.postcode,
-                                     parent = location.parent,
-                                     wkt = location.wkt,
-                                     lon_min = location.lon_min,
-                                     lon_max = location.lon_max,
-                                     lat_min = location.lat_min,
-                                     lat_max = location.lat_max
-                                     )
+                vars = dict(name = location.name,
+                            lat = location.lat,
+                            lon = location.lon,
+                            addr_street = location.street,
+                            addr_postcode = location.postcode,
+                            parent = location.parent,
+                            wkt = location.wkt,
+                            lon_min = location.lon_min,
+                            lon_max = location.lon_max,
+                            lat_min = location.lat_min,
+                            lat_max = location.lat_max
+                            )
+                
+                if current.deployment_settings.get_gis_spatialdb():
+                    # Also populate the spatial field
+                    vars["the_geom"] = vars["wkt"]
+
+                value = table.insert(**vars)
                 # onaccept
                 gis.update_location_tree(value, location.parent)
                 return (value, None)
@@ -711,7 +771,6 @@ class IS_LOCATION_SELECTOR(Validator):
         db = current.db
         s3db = current.s3db
         auth = current.auth
-        gis = current.gis
         response = current.response
         session = current.session
 
@@ -778,7 +837,7 @@ class IS_LOCATION_SELECTOR(Validator):
         # done already
 
         # We don't use the full onaccept as we don't need to
-        onaccept = gis.update_location_tree
+        onaccept = current.gis.update_location_tree
 
         L1 = vars.get("gis_location_L1", None)
         L2 = vars.get("gis_location_L2", None)
@@ -1021,7 +1080,7 @@ class IS_LOCATION_SELECTOR(Validator):
         if form.errors:
             self.errors = form.errors
             return None
-        return Storage(
+        location = Storage(
                         name=name,
                         lat=lat, lon=lon,
                         street=street,
@@ -1033,6 +1092,8 @@ class IS_LOCATION_SELECTOR(Validator):
                         lat_min = vars.lat_min,
                         lat_max = vars.lat_max
                       )
+
+        return location
 
 # -----------------------------------------------------------------------------
 class IS_SITE_SELECTOR(IS_LOCATION_SELECTOR):

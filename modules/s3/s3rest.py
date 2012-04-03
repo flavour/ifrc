@@ -422,9 +422,9 @@ class S3RequestManager(object):
             except (UnicodeEncodeError, UnicodeDecodeError):
                 text = field.represent(val)
             else:
-                text = str(cache.ram(key,
-                                     lambda: field.represent(val),
-                                     time_expire=60))
+                text = unicode(cache.ram(key,
+                                         lambda: field.represent(val),
+                                         time_expire=60))
         else:
             if val is None:
                 text = NONE
@@ -2102,9 +2102,11 @@ class S3Resource(object):
 
         if f is None:
             return
+        self.clear()
         if self.rfilter is None:
             self.rfilter = S3ResourceFilter(self)
         self.rfilter.add_filter(f, component=c)
+        #self._length = None
 
     # -------------------------------------------------------------------------
     def add_component_filter(self, alias, f=None):
@@ -4030,9 +4032,13 @@ class S3Resource(object):
         table = self.table
         tablename = self.tablename
 
-        if tablename == "gis_location" and "wkt" not in skip:
-            # Skip Bulky WKT fields
-            skip.append("wkt")
+        if tablename == "gis_location":
+            if "wkt" not in skip:
+                # Skip Bulky WKT fields
+                skip.append("wkt")
+            if current.deployment_settings.get_gis_spatialdb() and \
+               "the_geom" not in skip:
+                skip.append("the_geom")
 
         rfields = self.rfields
         dfields = self.dfields

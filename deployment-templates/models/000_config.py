@@ -34,6 +34,10 @@ deployment_settings.security.self_registration = True
 deployment_settings.auth.registration_requires_verification = True
 deployment_settings.auth.registration_requires_approval = True
 
+# The name of the teams that users are added to when they opt-in to receive alerts
+#deployment_settings.auth.opt_in_team_list = ["Updates"]
+# Uncomment this to set the opt in default to True
+#deployment_settings.auth.opt_in_default = True
 # Uncomment this to request the Mobile Phone when a user registers
 deployment_settings.auth.registration_requests_mobile_phone = False
 # Uncomment this to have the Mobile Phone selection during registration be mandatory
@@ -54,16 +58,23 @@ deployment_settings.auth.registration_organisation_hidden = True
 # NB This requires Verification/Approval to be Off
 # @ToDo: Extend to all optional Profile settings: Homepage, Twitter, Facebook, Mobile Phone, Image
 #deployment_settings.auth.registration_volunteer = True
-# Uncomment this to allow users to Login using OpenID
-deployment_settings.auth.openid = False
 # Uncomment this to allow users to Login using Gmail's SMTP
 #deployment_settings.auth.gmail_domains = ["gmail.com"]
+# Fill these to allow users to Login using Facebook
+#deployment_settings.auth.facebook_id = ""
+#deployment_settings.auth.facebook_secret = ""
+# Fill these to allow users to Login using Google
+#deployment_settings.auth.google_id = ""
+#deployment_settings.auth.google_secret = ""
+# Uncomment this to allow users to Login using OpenID
+#deployment_settings.auth.openid = True
+
 # Always notify the approver of a new (verified) user, even if the user is automatically approved
 deployment_settings.auth.always_notify_approver = True
 
 # Base settings
-deployment_settings.base.system_name = T("Resource Mapping System")
-deployment_settings.base.system_name_short = T("Resource Mapping System")
+deployment_settings.base.system_name = T("Resource Management System")
+deployment_settings.base.system_name_short = T("Resource Management System")
 
 # Set this to the Public URL of the instance
 deployment_settings.base.public_url = "http://127.0.0.1:8000"
@@ -168,7 +179,7 @@ deployment_settings.L10n.religions = {
     "none":T("none"),
     "christian":T("Christian"),
     "muslim":T("Muslim"),
-    "jew":T("Jew"),
+    "jewish":T("Jewish"),
     "buddhist":T("Buddhist"),
     "hindu":T("Hindu"),
     "bahai":T("Bahai"),
@@ -177,16 +188,19 @@ deployment_settings.L10n.religions = {
 # Make last name in person/user records mandatory
 deployment_settings.L10n.mandatory_lastname = True
 
-# Add thousands separator to numbers, eg. 1,000,000
-deployment_settings.L10n.thousands_separator = True
-
+# Number formats (defaults to ISO 31-0)
+# Decimal separator for numbers (defaults to ,)
+deployment_settings.L10n.decimal_separator = "."
+# Thousands separator for numbers (defaults to space)
+deployment_settings.L10n.thousands_separator = ","
 # Finance settings
 deployment_settings.fin.currencies = {
     "USD" :T("United States Dollars"),
     "CHF" :T("Swiss Francs"),
     "EUR" :T("Euros"),
     "GBP" :T("Great British Pounds"),
-    "CAD" :T("Canadian Dollars")
+    "CAD" :T("Canadian Dollars"),
+    "AUD" :T("Australian Dollars")
 }
 #deployment_settings.fin.currency_default = "USD" # Dollars
 #deployment_settings.fin.currency_writable = False # False currently breaks things
@@ -620,16 +634,29 @@ deployment_settings.modules = OrderedDict([
            restricted = True,
            module_type = 10,
        )),
+    #("fire", Storage(
+    #       name_nice = T("Fire Stations"),
+    #       description = T("Fire Station Management"),
+    #       restricted = True,
+    #       module_type = 1,
+    #   )),
+    #("patient", Storage(
+    #        name_nice = T("Patient Tracking"),
+    #        description = T("Tracking of Patients"),
+    #        restricted = True,
+    #        module_type = 10
+    #    )),
     #("ocr", Storage(
     #       name_nice = T("Optical Character Recognition"),
     #       description = T("Optical Character Recognition for reading the scanned handwritten paper forms."),
     #       restricted = False,
     #       module_type = 10
     #   )),
-    #("patient", Storage(
-    #        name_nice = T("Patient Tracking"),
-    #        description = T("Tracking of Patients"),
-    #        restricted = True,
+    # This module has very limited functionality
+    #("flood", Storage(
+    #        name_nice = T("Flood Alerts"),
+    #        description = T("Flood Alerts show water levels in various parts of the country"),
+    #        restricted = False,
     #        module_type = 10
     #    )),
 ])
