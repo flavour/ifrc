@@ -55,10 +55,10 @@ if auth.permission.format in ("html"):
             MM("Communities", c="project", f="activity"),
             MM("Reports", c="project", f="report"),
         ),
-        homepage("event", "irs")(
-            MM("Events", c="event", f="event"),
-            MM("Incident Reports", c="irs", f="ireport"),
-        )
+        #homepage("event", "irs")(
+        #    MM("Events", c="event", f="event"),
+        #    MM("Incident Reports", c="irs", f="ireport"),
+        #)
 
         # Standard service menus
         #S3MainMenu.menu_help(right=True),
