@@ -1059,12 +1059,12 @@ body {
 }
 
 /* Links can't be clicked, so mark them with simple underline */
-a {
+/*a {
 	color: black;
-    background: transparent;
+    background: transparent;*/
 	/* font-weight: bold; */
-    text-decoration: underline;
-}
+    /*text-decoration: underline;
+}*/
 /* Give the destinations - needs to be selective. Internal navigation links aren't helpful */
 /*
 a:after,
