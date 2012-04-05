@@ -2802,6 +2802,14 @@ def project_rheader(r, tabs=[]):
         else:
             assignee = ""
 
+        if record.created_by:
+            creator = TR(
+                            TH("%s: " % T("Created by")),
+                            s3db.pr_pentity_represent(record.created_by, show_label=False),
+                        )
+        else:
+            creator = ""
+
         if record.time_estimated:
             time_estimated = TR(
                             TH("%s: " % table.time_estimated.label),
@@ -2856,6 +2864,7 @@ def project_rheader(r, tabs=[]):
             facility,
             location,
             assignee,
+            creator,
             time_estimated,
             time_actual,
             #comments,

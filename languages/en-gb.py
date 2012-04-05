@@ -3521,6 +3521,7 @@
 'Religious': 'Religious',
 'Religious Leader': 'Religious Leader',
 'Relocate as instructed in the <instruction>': 'Relocate as instructed in the <instruction>',
+'Remember me (for 30 days)': 'Remember me (for 30 days)',
 'Remote Error': 'Remote Error',
 'Remove': 'Remove',
 'Remove Activity from this event': 'Remove Activity from this event',
