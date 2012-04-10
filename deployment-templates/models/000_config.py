@@ -398,7 +398,7 @@ deployment_settings.org.site_code_len = 3
 
 # Human Resource Management
 # Uncomment to allow Staff & Volunteers to be registered without an email address
-#deployment_settings.hrm.email_required = False
+deployment_settings.hrm.email_required = False
 # Uncomment to hide the Staff resource
 #deployment_settings.hrm.show_staff = False
 # Uncomment to hide the Volunteer resource
