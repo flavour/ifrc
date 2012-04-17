@@ -51,23 +51,36 @@ class S3MainMenuLayout(S3NavigationItem):
     @staticmethod
     def layout(item):
 
-        if item.parent is None:
-            # The main menu
-            items = item.render_components()
-            return UL(items, _id="nav")
-        else:
-            if item.components:
-                # A submenu
+        # Manage flags: hide any disabled/unauthorized items
+        if not item.authorized:
+            item.enabled = False
+            item.visible = False
+        elif item.enabled is None or item.enabled:
+            item.enabled = True
+            item.visible = True
+
+        if item.enabled and item.visible:
+            if item.parent is None:
+                # The main menu
                 items = item.render_components()
-                _class = item.selected and "highlight" or ""
-                return LI(A(item.label, _href=item.url(), _class=_class),
-                          UL(items, _class="sub-menu"))
+                return UL(items, _id="nav")
             else:
-                # A menu item
-                if item.enabled and item.authorized:
-                    return LI(A(item.label, _href=item.url()))
+                if item.components:
+                    # A submenu
+                    items = item.render_components()
+                    _class = item.selected and "highlight" or ""
+                    return LI(A(item.label,
+                                _href=item.url(),
+                                _id=item.attr._id,
+                                _class=_class),
+                              UL(items, _class="sub-menu"))
                 else:
-                    return None
+                    # A menu item
+                    return LI(A(item.label,
+                                _href=item.url(),
+                                _id=item.attr._id))
+        else:
+            return None
 
 # -----------------------------------------------------------------------------
 # Shortcut
@@ -80,27 +93,63 @@ class S3OptionsMenuLayout(S3NavigationItem):
     @staticmethod
     def layout(item):
 
-        if item.parent is None:
-            # The menu itself
-            items = item.render_components()
-            return UL(items, _id="main-sub-menu", _class="sub-menu")
-        else:
-            if item.enabled and item.authorized:
-                if item.components:
-                    _class = ""
-                    if item.parent.parent is None and item.selected:
-                        _class = "highlight"
-                    items = item.render_components()
-                    if items:
-                        items = LI(UL(items, _class="menu-extention"))
-                    return [LI(A(item.label, _href=item.url(), _class=_class)), items]
-                else:
-                    if item.parent.parent is None:
-                        _class = item.selected and "highlight" or ""
-                    else:
-                        _class = " "
-                    return LI(A(item.label, _href=item.url(), _class=_class))
+        # Manage flags: hide any disabled/unauthorized items
+        if not item.authorized:
+            enabled = False
+            visible = False
+        elif item.enabled is None or item.enabled:
+            enabled = True
+            visible = True
 
+        if enabled and visible:
+            if item.parent is not None:
+                if item.enabled and item.authorized:
+                    if item.components:
+                        # Submenu
+                        _class = ""
+                        if item.parent.parent is None and item.selected:
+                            _class = "highlight"
+                        items = item.render_components()
+                        if items:
+                            items = LI(UL(items, _class="menu-extention"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+                        return [LI(A(item.label,
+                                     _href=item.url(),
+                                     _id=item.attr._id,
+                                     _class=_class)), items]
+
+
+
+                    else:
+                        # Submenu item
+                        if item.parent.parent is None:
+                            _class = item.selected and "highlight" or ""
+                        else:
+                            _class = " "
+
+                        return LI(A(item.label,
+                                    _href=item.url(),
+                                    _id=item.attr._id,
+                                    _class=_class))
+            else:
+                # Main menu
+                items = item.render_components()
+                return UL(items, _id="main-sub-menu", _class="sub-menu")
+
+        else:
+            return None
 # -----------------------------------------------------------------------------
 # Shortcut
 M = S3OptionsMenuLayout
