@@ -145,6 +145,8 @@ class S3Cube(S3CRUD):
                 query, errors = self._process_filter_options(form)
                 if r.http == "POST" and not errors:
                     self.resource.add_filter(query)
+                if "totals" not in r.post_vars:
+                    r.post_vars["totals"] = "off"
         else:
             form = None
 
@@ -159,13 +161,15 @@ class S3Cube(S3CRUD):
         cols = form_values.get("cols", None)
         fact = form_values.get("fact", None)
         aggregate = form_values.get("aggregate", "list")
+        if not aggregate:
+            aggregate = "list"
 
         # Fall back to list if no dimensions specified
         if not rows and not cols:
             self.method = "list"
 
         # Show totals?
-        show_totals = str(form_values.get("totals", True))
+        show_totals = form_values.get("totals", True)
         if show_totals and str(show_totals).lower() in ("false", "off"):
             show_totals = False
         else:
@@ -173,11 +177,13 @@ class S3Cube(S3CRUD):
 
         # Get the layers
         layers = []
+
         if not fact:
             if "name" in table:
                 fact = "name"
             else:
                 fact = table._id.name
+
         if fact:
             if not isinstance(fact, list):
                 fact = [fact]
@@ -1051,7 +1057,6 @@ class S3ContingencyTable(TABLE):
         labels = []
         get_mname = S3Cube.mname
         for field, method in layers:
-            # ToDO: change this to
             label = get_label(lfields, field, tablename, "fact")
             mname = get_mname(method)
             if not labels:
