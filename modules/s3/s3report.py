@@ -347,7 +347,7 @@ class S3Cube(S3CRUD):
         if request.env.request_method == "GET" and \
            "totals" in form_values:
             show_totals = form_values["totals"]
-            if show_totals.lower() in ("false", "off"):
+            if str(show_totals).lower() in ("false", "off"):
                 show_totals = False
 
         show_totals = INPUT(_type="checkbox", _id="totals", _name="totals",
