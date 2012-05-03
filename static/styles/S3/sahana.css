@@ -5,18 +5,41 @@ Sahana - Default Theme - Stylesheet
 */
 
 /*** General ***/
-ul, ol {
+ol, ul {
     padding-left: 1em;
 }
 
-.hide {
-    display: none;
+/* GIS */
+/* Over-ride Ext */
+div#map_wrapper ol, ul {
+    list-style: disc inside none;
+}
+div#gis-map-window ol, ul {
+    list-style: disc inside none;
+}
+div#map_wrapper td {
+    padding: 0;
+}
+div#gis-map-window td {
+    padding: 0;
+}
+div#map_wrapper span a {
+    /* For Catalogue Tabs */
+    color: #fff;
+}
+div#map_wrapper  td:first-child {
+    background: none repeat scroll 0 0 transparent;
+}
+div#gis-map-window  td:first-child {
+    background: none repeat scroll 0 0 transparent;
 }
 
-textarea.comments {
-    height: 50px;
+/* Except here */
+ul.x-tab-strip,
+ul.x-tree-node-ct,
+ul.x-tree-root-ct {
+    list-style: none outside none;
 }
-
 /* Hide for both screenreaders and browsers
    css-discuss.incutio.com/wiki/Screenreader_Visibility */
 .hidden {
@@ -41,6 +64,30 @@ textarea.comments {
 .taright {
     text-align: right !important;
 }
+
+textarea.comments {
+    height: 50px;
+}
+
+textarea.richtext {
+    height: 100px;
+}
+
+.hide {
+    display: none;
+}
+
+/* Popup text for represents of Long text fields */
+.popup {
+    display: none;
+    position: absolute;
+    border-style: solid;
+    background-color: #ffffcc;
+    padding: 5px;
+    margin: 0 20px 0 -50px;
+}
+
+
 
 /* Main Sections */
 /*
@@ -168,16 +215,6 @@ form table td:first-child {
 	background-color: transparent;
 }
 
-#rheader {
-    margin-bottom: 0.75em;
-}
-
-#rheader table td,
-#rheader table th {
-    border: 0;
-    padding: 5px;
-}
-
 /* Map Fixes */
 #map_panel table td {
     border: 0;
@@ -195,35 +232,6 @@ table.x-toolbar-ct {
 }
 td.x-toolbar-left table {
     margin-bottom: 0;
-}
-/* GIS */
-/* Over-ride Ext */
-div#map_wrapper ol, ul {
-    list-style: disc inside none;
-}
-div#gis-map-window ol, ul {
-    list-style: disc inside none;
-}
-div#map_wrapper td {
-    padding: 0;
-}
-div#gis-map-window td {
-    padding: 0;
-}
-div#map_wrapper span a {
-    /* For Catalogue Tabs */
-    color: #fff;
-}
-div#map_wrapper  td:first-child {
-    background: none repeat scroll 0 0 transparent;
-}
-div#gis-map-window  td:first-child {
-    background: none repeat scroll 0 0 transparent;
-}
-/* Except here */
-ul.x-tree-node-ct,
-ul.x-tree-root-ct {
-    list-style: none outside none;
 }
 /* Form Layout styles */
 p.legend {
@@ -515,6 +523,10 @@ div.item-container {
     font-style: italic;
 }
 
+ul.ui-autocomplete {
+    z-index: 9999 !important;
+}
+
 /* Map view */
 div#map {
     width: 100%;
@@ -552,16 +564,6 @@ div#map {
     height: 20px;
     width: 20px;
     background-image: url(../../img/help_on.gif);
-}
-
-/* Popup text for represents of Long text fields */
-.popup {
-    display:none;
-    position:absolute;
-    border-style: solid;
-    background-color: #ffffcc;
-    padding: 5px;
-    margin: 0 20px 0 -50px;
 }
 
 /* Form Popup */
@@ -647,6 +649,16 @@ div.confirmation {
 .throbber {
     margin-bottom: -16px;
     padding: 0 0 0 10px;
+}
+
+#rheader {
+    margin-bottom: 0.75em;
+}
+
+#rheader table td,
+#rheader table th {
+    border: 0;
+    padding: 5px;
 }
 
 /* Widget */
@@ -880,7 +892,7 @@ div#last_update {
     width: 16px;
     float: left;
     background-image: url(../../img/jquery-ui/ui-icons_222222_256x240.png);
-    background-position: -32px -16px;
+    background-position: -64px -16px;
 }
 .expanded {
     /*position: static;*/
@@ -888,9 +900,13 @@ div#last_update {
     width: 16px;
     float: left;
     background-image: url(../../img/jquery-ui/ui-icons_222222_256x240.png);
-    background-position: -64px -16px;
+    background-position: -32px -16px;
 }
 
+/* Grow Input */
+li input + a {
+    text-decoration: none;
+}
 
 .rfilter {
     float: left;

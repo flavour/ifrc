@@ -210,9 +210,6 @@ def human_resource():
                     field = table.type
                     field.readable = False
                     field.writable = False
-            elif r.representation == "plain":
-                # Don't redirect Map popups
-                pass
             elif r.id:
                 # Redirect to person controller
                 vars = {"human_resource.id": r.id}
@@ -235,13 +232,14 @@ def human_resource():
                         "_class": "action-btn",
                         "label": str(T("Send Message"))})
             output["dashboard"] = hrm_dashboard
-        elif r.representation == "plain":
+        elif r.representation == "plain" and \
+             r.method !="search":
             # Map Popups
             output = hrm_map_popup(r)
         return output
     response.s3.postp = postp
 
-    output = s3_rest_controller(interactive_report=True)
+    output = s3_rest_controller()
     return output
 
 # -----------------------------------------------------------------------------
@@ -383,6 +381,8 @@ def person():
 
         @ToDo: Volunteers should be redirected to vol/person?
     """
+
+    super_key = s3mgr.model.super_key
 
     # Custom Method for Contacts
     s3mgr.model.set_method("pr", resourcename,
@@ -983,7 +983,7 @@ def training():
                 (orgtable.pe_id.belongs(orgs))
         response.s3.filter = query
 
-    output = s3_rest_controller(interactive_report = True)
+    output = s3_rest_controller()
     return output
 
 # -----------------------------------------------------------------------------

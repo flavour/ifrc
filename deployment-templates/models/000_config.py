@@ -91,26 +91,24 @@ deployment_settings.base.migrate = True
 # To just create the .table files:
 #deployment_settings.base.fake_migrate = True
 
-# Enable/disable pre-population of the database.
-# Should be non-zero on 1st_run to pre-populate the database
-# - unless doing a manual DB migration
-# Then set to zero in Production (to save 1x DAL hit every page)
+# Pre-Populate
+# http://eden.sahanafoundation.org/wiki/DeveloperGuidelines/PrePopulate
+# Configure/disable pre-population of the database.
+
+# To pre-populate the database On 1st run should specify directory(s) in 
+# /private/prepopulate/
+# eg:
+# ["default"] (1 is a shortcut for this)
+# ["demo/Standard"]
+# ["demo/IFRC_Train"]
+# ["roles", "user"]
+# Unless doing a manual DB migration, where prepopulate = 0
+# In Production, prepopulate = 0 (to save 1x DAL hit every page)
+deployment_settings.base.prepopulate = 25
 # NOTE: the web UI will not be accessible while the DB is empty,
 # instead run:
 #   python web2py.py -N -S eden -M
 # to create the db structure, then exit and re-import the data.
-# This is a simple status flag with the following meanings
-# 0 - No pre-population
-# 1 - Base data entered in the database
-# 2 - Regression (data used by the regression tests)
-# 3 - Scalability testing
-# 4-9 Reserved
-# 10 - User (data required by the user typically for specialised test)
-# 11-19 Reserved
-# 20+ Demo (Data required for a default demo)
-#     Each subsequent Demos can take any unique number >= 20
-#     The actual demo will be defined by the file demo_folders.cfg
-deployment_settings.base.prepopulate = 25
 
 
 # Set this to True to use Content Delivery Networks to speed up Internet-facing sites
@@ -276,6 +274,7 @@ deployment_settings.gis.spatialdb = True
 
 # Use 'soft' deletes
 #deployment_settings.security.archive_not_delete = False
+
 # AAA Settings
 
 # Security Policy
@@ -435,26 +434,26 @@ deployment_settings.modules = OrderedDict([
         )),
     ("admin", Storage(
             name_nice = T("Administration"),
-            description = T("Site Administration"),
+            #description = "Site Administration",
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
         )),
     ("appadmin", Storage(
             name_nice = T("Administration"),
-            description = T("Site Administration"),
+            #description = "Site Administration",
             restricted = True,
             module_type = None  # No Menu
         )),
     ("errors", Storage(
             name_nice = T("Ticket Viewer"),
-            description = T("Needed for Breadcrumbs"),
+            #description = "Needed for Breadcrumbs",
             restricted = False,
             module_type = None  # No Menu
         )),
     ("sync", Storage(
             name_nice = T("Synchronization"),
-            description = T("Synchronization"),
+            #description = "Synchronization",
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
@@ -462,19 +461,19 @@ deployment_settings.modules = OrderedDict([
      # Uncomment to enable internal support requests
      ("support", Storage(
              name_nice = T("Support"),
-             description = T("Support Requests"),
+             #description = "Support Requests",
              restricted = True,
              module_type = None  # This item is handled separately for the menu
          )),
      ("gis", Storage(
             name_nice = T("Map"),
-            description = T("Situation Awareness & Geospatial Analysis"),
+            #description = "Situation Awareness & Geospatial Analysis",
             restricted = True,
             module_type = 1,     # 1st item in the menu
         )),
     ("pr", Storage(
             name_nice = T("Person Registry"),
-            description = T("Central point to record details on People"),
+            #description = "Central point to record details on People",
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu (access to controller is possible to all still)
             module_type = None,
@@ -482,7 +481,7 @@ deployment_settings.modules = OrderedDict([
     ("org", Storage(
             name_nice = T("Staff & Volunteers"),
             #name_nice = T("Organizations"),
-            description = T('Lists "who is doing what & where". Allows relief agencies to coordinate their activities'),
+            #description = 'Lists "who is doing what & where". Allows relief agencies to coordinate their activities',
             restricted = True,
             module_type = None,
         )),
@@ -493,98 +492,104 @@ deployment_settings.modules = OrderedDict([
             restricted = True,
             module_type = 2,
         )),
+    #("cms", Storage(
+    #      name_nice = T("Content Management"),
+    #      #description = "Content Management System",
+    #      restricted = True,
+    #      module_type = 10,
+    #  )),
     ("doc", Storage(
             name_nice = T("Documents"),
-            description = T("A library of digital resources, such as photos, documents and reports"),
+            #description = "A library of digital resources, such as photos, documents and reports",
             restricted = True,
             module_type = None,
         )),
     ("msg", Storage(
             name_nice = T("Messaging"),
-            description = T("Sends & Receives Alerts via Email & SMS"),
+            #description = "Sends & Receives Alerts via Email & SMS",
             restricted = True,
             # The user-visible functionality of this module isn't normally required. Rather it's main purpose is to be accessed from other modules.
             module_type = None,
         )),
     ("supply", Storage(
             name_nice = T("Supply Chain Management"),
-            description = T("Used within Inventory Management, Request Management and Asset Management"),
+            #description = "Used within Inventory Management, Request Management and Asset Management",
             restricted = True,
             module_type = None, # Not displayed
         )),
     ("inv", Storage(
 
             name_nice = T("Warehouses"),
-            description = T("Receiving and Sending Items"),
+            #description = "Receiving and Sending Items",
             restricted = True,
             module_type = 3
         )),
     #("proc", Storage(
     #        name_nice = T("Procurement"),
-    #        description = T("Ordering & Purchasing of Goods & Services"),
+    #        #description = "Ordering & Purchasing of Goods & Services",
     #        restricted = True,
     #        module_type = 10
     #    )),
     ("asset", Storage(
             name_nice = T("Assets"),
-            description = T("Recording and Assigning Assets"),
+            #description = "Recording and Assigning Assets",
             restricted = True,
             module_type = 4,
         )),
     # Vehicle depends on Assets
     #("vehicle", Storage(
     #        name_nice = T("Vehicles"),
-    #        description = T("Manage Vehicles"),
+    #        #description = "Manage Vehicles",
     #        restricted = True,
     #        module_type = 10,
     #    )),
     ("req", Storage(
             name_nice = T("Requests"),
-            description = T("Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested."),
+            #description = "Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested.",
             restricted = True,
             module_type = 10,
         )),
     ("project", Storage(
             name_nice = T("Projects"),
-            description = T("Tracking of Projects, Activities and Tasks"),
+            #description = "Tracking of Projects, Activities and Tasks",
             restricted = True,
             module_type = 6
         )),
     ("survey", Storage(
             name_nice = T("Assessments"),
-            description = T("Design, deploy & analyze surveys."),
+            #description = "Design, deploy & analyze surveys.",
             restricted = True,
             module_type = 5,
         )),
     #("cr", Storage(
     #        name_nice = T("Shelter Registry"),
-    #        description = T("Tracks the location, capacity and breakdown of victims in Shelters"),
+    #        #description = "Tracks the location, capacity and breakdown of victims in Shelters",
     #        restricted = False,
     #        module_type = 10,
     #    )),
     #("hms", Storage(
     #        name_nice = T("Hospitals"),
-    #        description = T("Helps to monitor status of hospitals"),
+    #        #description = "Helps to monitor status of hospitals",
     #        restricted = True,
     #        module_type = 10,
     #    )),
     ("irs", Storage(
             name_nice = T("Incidents"),
-            description = T("Situational Awareness"),
+            #description = "Situational Awareness",
             restricted = True,
             module_type = 10
         )),
     # Scenario depends on HRM
     #("scenario", Storage(
     #        name_nice = T("Scenarios"),
-    #        description = T("Define Scenarios for allocation of appropriate Resources (Human, Assets & Facilities)."),
+    #        #description = "Define Scenarios for allocation of appropriate Resources (Human, Assets & Facilities).",
     #        restricted = True,
     #        module_type = 10,
     #    )),
     # Event depends on HRM
     ("event", Storage(
             name_nice = T("Events"),
-            description = T("Activate Events from Scenario templates for allocation of appropriate Resources (Human, Assets & Facilities)."),
+            #description = "Activate Events from Scenario templates for allocation of appropriate Resources (Human, Assets & Facilities).",
             restricted = True,
             module_type = 10,
         )),
@@ -592,34 +597,34 @@ deployment_settings.modules = OrderedDict([
     # @ToDo: Rewrite in a modern style
     #("budget", Storage(
     #        name_nice = T("Budgeting Module"),
-    #        description = T("Allows a Budget to be drawn up"),
+    #        #description = "Allows a Budget to be drawn up",
     #        restricted = True,
     #        module_type = 10
     #    )),
     # @ToDo: Port these Assessments to the Survey module
     #("building", Storage(
     #        name_nice = T("Building Assessments"),
-    #        description = T("Building Safety Assessments"),
+    #        #description = "Building Safety Assessments",
     #        restricted = True,
     #        module_type = 10,
     #    )),
     # These are specialist modules
     # Requires RPy2
     #("climate", Storage(
-    #    name_nice = T("Climate"),
-    #    description = T("Climate data portal"),
-    #    restricted = True,
-    #    module_type = 10,
+    #       name_nice = T("Climate"),
+    #       #description = "Climate data portal",
+    #       restricted = True,
+    #       module_type = 10,
     #)),
     #("delphi", Storage(
     #        name_nice = T("Delphi Decision Maker"),
-    #        description = T("Supports the decision making of large groups of Crisis Management Experts by helping the groups create ranked list."),
+    #        #description = "Supports the decision making of large groups of Crisis Management Experts by helping the groups create ranked list.",
     #        restricted = False,
     #        module_type = 10,
     #    )),
     #("dvi", Storage(
     #       name_nice = T("Disaster Victim Identification"),
-    #       description = T("Disaster Victim Identification"),
+    #       #description = "Disaster Victim Identification",
     #       restricted = True,
     #       module_type = 10,
     #       #access = "|DVI|",      # Only users with the DVI role can see this module in the default menu & access the controller
@@ -628,45 +633,44 @@ deployment_settings.modules = OrderedDict([
     #   )),
     #("mpr", Storage(
     #       name_nice = T("Missing Person Registry"),
-    #       description = T("Helps to report and search for missing persons"),
+    #       #description = "Helps to report and search for missing persons",
     #       restricted = False,
     #       module_type = 10,
     #   )),
-    #("cms", Storage(
-    #      name_nice = T("Content Management"),
-    #      description = T("Content Management System"),
-    #      restricted = True,
-    #      module_type = 10,
-    #  )),
+    #("dvr", Storage(
+    #       name_nice = T("Disaster Victim Registry"),
+    #       #description = "Allow affected individuals & households to register to receive compensation and distributions",
+    #       restricted = False,
+    #       module_type = 10,
+    #   )),
     ("member", Storage(
            name_nice = T("Members"),
-           description = T("Membership Management System"),
+           #description = "Membership Management System",
            restricted = True,
            module_type = 10,
        )),
     #("fire", Storage(
     #       name_nice = T("Fire Stations"),
-    #       description = T("Fire Station Management"),
+    #       #description = "Fire Station Management",
     #       restricted = True,
     #       module_type = 1,
     #   )),
+    #("flood", Storage(
+    #        name_nice = T("Flood Warnings"),
+    #        #description = "Flood Gauges show water levels in various parts of the country",
+    #        restricted = False,
+    #        module_type = 10
+    #    )),
     #("patient", Storage(
     #        name_nice = T("Patient Tracking"),
-    #        description = T("Tracking of Patients"),
+    #        #description = "Tracking of Patients",
     #        restricted = True,
     #        module_type = 10
     #    )),
     #("ocr", Storage(
     #       name_nice = T("Optical Character Recognition"),
-    #       description = T("Optical Character Recognition for reading the scanned handwritten paper forms."),
+    #       #description = "Optical Character Recognition for reading the scanned handwritten paper forms.",
     #       restricted = False,
     #       module_type = 10
     #   )),
-    # This module has very limited functionality
-    #("flood", Storage(
-    #        name_nice = T("Flood Alerts"),
-    #        description = T("Flood Alerts show water levels in various parts of the country"),
-    #        restricted = False,
-    #        module_type = 10
-    #    )),
 ])

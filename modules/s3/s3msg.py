@@ -369,7 +369,8 @@ class S3Msg(object):
         for row in rows:
             message = row.message
             reply = self.parse_message(message)
-            db(ltable.id == row.id).update(reply = reply,is_parsed = True)
+            db(ltable.id == row.id).update(reply = reply,
+                                           is_parsed = True)
             
         return
     

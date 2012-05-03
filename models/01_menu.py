@@ -8,8 +8,10 @@ if auth.permission.format in ("html"):
 
     # =========================================================================
     # Application main menu
+    # -> To customize, replace the standard components by the desired items
+    # -> Put right-hand menu options in reverse order!
     #
-    current.menu.main = MM()(
+    menu.main = MM()(
 
         # Standard modules-menu
         #S3MainMenu.menu_modules(),
