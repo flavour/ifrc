@@ -531,6 +531,7 @@ class S3OptionsMenu:
                         M("List All"),
                         # @ToDo Search by type, services, location, available space
                         #M("Search", m="search"),
+                        M("Import", m="import"),
                     ),
                     M(types, f="shelter_type", restrict=[ADMIN])(
                         M("List / Add Services", m="create"),
@@ -597,7 +598,6 @@ class S3OptionsMenu:
                     )
                 )
 
-
     # -------------------------------------------------------------------------
     def dvi(self):
         """ DVI / Disaster Victim Identification """
@@ -630,6 +630,18 @@ class S3OptionsMenu:
                         M("List All"),
                     ),
                     M("Dashboard", f="index"),
+                )
+
+    # -------------------------------------------------------------------------
+    def dvr(self):
+        """ DVR Menu """
+
+        return M(c="dvr")(
+                    M("Cases", f="case")(
+                        M("New", m="create"),
+                        M("List All"),
+                        #M("Search", m="search")
+                    ),
                 )
 
     # -------------------------------------------------------------------------
@@ -671,6 +683,19 @@ class S3OptionsMenu:
                         M("Search", m="search"),
                         M("Import", m="import"),
                     )
+                )
+
+    # -------------------------------------------------------------------------
+    def flood(self):
+        """ FLOOD """
+
+        return M(c="flood")(
+                    M("Gauges", f="gauge")(
+                        M("New", m="create"),
+                        M("List All"),
+                        #M("Search", m="search"),
+                        M("Import", m="import"),
+                    ),
                 )
 
     # -------------------------------------------------------------------------

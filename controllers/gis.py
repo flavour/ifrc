@@ -409,9 +409,7 @@ def location():
     output = s3_rest_controller(csv_extra_fields = [
                                     dict(label="Country",
                                          field=country())
-                                ],
-                                interactive_report = True
-                                )
+                                ])
 
     _map = vars.get("_map", None)
     if _map and isinstance(output, dict):
@@ -811,6 +809,14 @@ def config():
                         field = ltable.visible
                         field.readable = False
                         field.writable = False
+                    elif type in ("gis_layer_theme",
+                                  ):
+                        field = ltable.base
+                        field.readable = False
+                        field.writable = False
+                        field = ltable.style
+                        field.readable = True
+                        field.writable = True
                 else:
                     # Only show Layers not yet in this config
                     # Find the records which are used
@@ -884,6 +890,8 @@ def config():
                             vars.visible = layer["visible"]
                         else:
                             vars.visible = False
+                        if "style" in layer:
+                            vars.style = json.dumps(layer["style"])
                         # Update or Insert?
                         query = (ltable.config_id == id) & \
                                 (ltable.layer_id == layer_id)
@@ -951,14 +959,11 @@ def hierarchy():
 def symbology():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     # Pre-process
     def prep(r):
         if r.interactive:
             if r.component_name == "layer_entity":
-                s3.crud_strings[tablename] = Storage(
+                s3.crud_strings["gis_layer_entity"] = Storage(
                     title_create=T("Configure Layer for this Symbology"),
                     title_display=LAYER_DETAILS,
                     title_list=LAYERS,
@@ -978,7 +983,7 @@ def symbology():
                     ltable = s3db.gis_layer_symbology
                     # Find the records which are used
                     query = (ltable.layer_id == table.layer_id) & \
-                            (ltable.config_id == r.id)
+                            (ltable.symbology_id == r.id)
                     rows = db(query).select(table.layer_id)
                     # Filter them out
                     # Restrict Layers to those which have Markers
@@ -1004,9 +1009,6 @@ def symbology():
 # -----------------------------------------------------------------------------
 def marker():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     # Pre-process
     def prep(r):
@@ -1053,9 +1055,6 @@ def trackpoint():
 # -----------------------------------------------------------------------------
 def track():
     """ RESTful CRUD controller for GPS Tracks (uploaded as files) """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     return s3_rest_controller()
 
@@ -1187,9 +1186,6 @@ def layer_entity():
 def layer_feature():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     # Custom Method
     s3mgr.model.set_method(module, resourcename,
                            method="disable",
@@ -1251,9 +1247,6 @@ def layer_feature():
 # -----------------------------------------------------------------------------
 def layer_openstreetmap():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
@@ -1319,9 +1312,6 @@ def layer_openstreetmap():
 def layer_bing():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
 
@@ -1381,9 +1371,6 @@ def layer_bing():
 def layer_empty():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
 
@@ -1433,9 +1420,6 @@ def layer_empty():
 # -----------------------------------------------------------------------------
 def layer_google():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
@@ -1495,9 +1479,6 @@ def layer_google():
 def layer_mgrs():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
 
@@ -1554,11 +1535,81 @@ def layer_mgrs():
     return output
 
 # -----------------------------------------------------------------------------
-def layer_geojson():
+def layer_arcrest():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
+    tablename = "%s_%s" % (module, resourcename)
+    s3mgr.load(tablename)
+
+    # CRUD Strings
+    type = "ArcGIS REST"
+    LAYERS = T(TYPE_LAYERS_FMT % type)
+    ADD_NEW_LAYER = T(ADD_NEW_TYPE_LAYER_FMT % type)
+    EDIT_LAYER = T(EDIT_TYPE_LAYER_FMT % type)
+    LIST_LAYERS = T(LIST_TYPE_LAYERS_FMT % type)
+    NO_LAYERS = T(NO_TYPE_LAYERS_FMT % type)
+    s3.crud_strings[tablename] = Storage(
+        title_create=ADD_LAYER,
+        title_display=LAYER_DETAILS,
+        title_list=LAYERS,
+        title_update=EDIT_LAYER,
+        title_search=SEARCH_LAYERS,
+        subtitle_create=ADD_NEW_LAYER,
+        subtitle_list=LIST_LAYERS,
+        label_list_button=LIST_LAYERS,
+        label_create_button=ADD_LAYER,
+        label_delete_button = DELETE_LAYER,
+        msg_record_created=LAYER_ADDED,
+        msg_record_modified=LAYER_UPDATED,
+        msg_record_deleted=LAYER_DELETED,
+        msg_list_empty=NO_LAYERS)
+
+    # Custom Method
+    s3mgr.model.set_method(module, resourcename, method="enable",
+                           action=enable_layer)
+
+    # Pre-processor
+    def prep(r):
+        if r.interactive:
+            if r.component_name == "config":
+                ltable = s3db.gis_layer_config
+                field = ltable.base
+                field.readable = False
+                field.writable = False
+                if r.method != "update":
+                    # Only show Configs with no definition yet for this layer
+                    table = r.table
+                    # Find the records which are used
+                    query = (ltable.layer_id == table.layer_id) & \
+                            (table.id == r.id)
+                    rows = db(query).select(ltable.config_id)
+                    # Filter them out
+                    ltable.config_id.requires = IS_ONE_OF(db,
+                                                         "gis_config.id",
+                                                         "%(name)s",
+                                                         not_filterby="config_id",
+                                                         not_filter_opts=[row.config_id for row in rows]
+                                                         )
+        return True
+    response.s3.prep = prep
+
+    # Post-processor
+    def postp(r, output):
+        if r.interactive and r.method != "import":
+            if not r.component:
+                s3_action_buttons(r, copyable=True)
+                # Inject checkbox to enable layer in default config
+                inject_enable(output)
+        return output
+    response.s3.postp = postp
+
+    output = s3_rest_controller(rheader=s3db.gis_rheader)
+
+    return output
+
+# -----------------------------------------------------------------------------
+def layer_geojson():
+    """ RESTful CRUD controller """
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
@@ -1647,9 +1698,6 @@ def layer_geojson():
 # -----------------------------------------------------------------------------
 def layer_georss():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
@@ -1743,9 +1791,6 @@ def layer_georss():
 def layer_gpx():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
 
@@ -1816,9 +1861,6 @@ def layer_gpx():
 # -----------------------------------------------------------------------------
 def layer_kml():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
@@ -1911,9 +1953,6 @@ def layer_kml():
 def layer_theme():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
 
@@ -1953,6 +1992,9 @@ def layer_theme():
                 field = ltable.base
                 field.readable = False
                 field.writable = False
+                field = ltable.style
+                field.readable = True
+                field.writable = True
                 if r.method != "update":
                     # Only show Configs with no definition yet for this layer
                     table = r.table
@@ -1998,9 +2040,6 @@ def theme_data():
 # -----------------------------------------------------------------------------
 def layer_tms():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
@@ -2076,9 +2115,6 @@ def layer_tms():
 def layer_wfs():
     """ RESTful CRUD controller """
 
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
-
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
 
@@ -2147,9 +2183,6 @@ def layer_wfs():
 # -----------------------------------------------------------------------------
 def layer_wms():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)
@@ -2221,9 +2254,6 @@ def layer_wms():
 # -----------------------------------------------------------------------------
 def layer_xyz():
     """ RESTful CRUD controller """
-
-    if deployment_settings.get_security_map() and not s3_has_role(MAP_ADMIN):
-        auth.permission.fail()
 
     tablename = "%s_%s" % (module, resourcename)
     s3mgr.load(tablename)

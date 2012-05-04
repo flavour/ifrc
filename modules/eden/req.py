@@ -34,6 +34,7 @@ __all__ = ["S3RequestModel",
            "S3CommitItemModel",
            "S3CommitPersonModel",
            "req_item_onaccept",
+           "req_update_status",
            "req_rheader",
            "req_match",
            ]
@@ -57,7 +58,7 @@ req_status_opts = { REQ_STATUS_NONE:     SPAN(T("None"),
                                               _class = "req_status_complete")
                    }
 
-rn_label = T("Requisition Number")
+rn_label = T("Requisition Reference")
 
 # =============================================================================
 class S3RequestModel(S3Model):
@@ -87,11 +88,14 @@ class S3RequestModel(S3Model):
         human_resource_id = self.pr_person_id
         event_id = self.event_event_id
 
-        UNKNOWN_OPT = current.messages.UNKNOWN_OPT
+        messages = current.messages
+        NONE = messages.NONE
+        UNKNOWN_OPT = messages.UNKNOWN_OPT
 
         s3_date_format = settings.get_L10n_date_format()
         s3_date_represent = lambda dt: S3DateTime.date_represent(dt, utc=True)
         s3_datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+        s3_string_represent = lambda str: str if str else NONE
 
         # Multiple Item/Skill Types per Request?
         multiple_req_items = settings.get_req_multiple_req_items()
@@ -109,7 +113,9 @@ class S3RequestModel(S3Model):
         req_ref = S3ReusableField( "req_ref",
                                    "string",
                                    label = rn_label,
-                                   writable = False)
+                                   writable = False,
+                                   represent = self.req_ref_represent,
+                                   )
 
         req_priority_opts = {
             3:T("High"),
@@ -194,7 +200,8 @@ class S3RequestModel(S3Model):
                                                       #minimum=request.utcnow - datetime.timedelta(days=1),
                                                       minimum=request.utcnow.date() - datetime.timedelta(days=1),
                                                       error_message="%s %%(min)s!" %
-                                                          T("Enter a valid future date")))],
+                                                            T("Enter a valid past date"),
+                                                        format = s3_date_format))],
                                         # @ToDo: deployment_setting
                                         #widget = S3DateTimeWidget(past=0,
                                         #                          future=8760), # Hours, so 1 year
@@ -424,6 +431,10 @@ $(function() {
                         method = "check",
                         action=self.req_check)
 
+        # Print Forms
+        self.set_method(tablename,
+                        method="form",
+                        action=self.req_form)
         # Components
         # Documents as a component of Requests
         self.add_component("req_document",
@@ -469,6 +480,7 @@ $(function() {
 
         # Hide fields which don't make sense in a Create form
         table = s3db.req_req
+        table.req_ref.readable = False
         table.commit_status.readable = table.commit_status.writable = False
         table.transit_status.readable = table.transit_status.writable = False
         table.fulfil_status.readable = table.fulfil_status.writable = False
@@ -515,7 +527,7 @@ $(function() {
             if not req:
                 return NONE
             req = "%s - %s" % (table.site_id.represent(req.site_id,
-                                                       link = False),
+                                                       show_link = False),
                                table.date.represent(req.date))
             if link:
                 return A(req,
@@ -528,6 +540,69 @@ $(function() {
         else:
             return NONE
 
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def req_ref_represent(value, show_link=True):
+        """
+            Represent for the Request Reference 
+            if show_link is True then it will generate a link to the pdf
+        """
+        if value:
+
+            if show_link:
+                db = current.db
+                s3db = current.s3db
+    
+                table = s3db.req_req
+                req_row = db(table.req_ref == value).select(table.id,
+                                                            limitby=(0, 1)
+                                                            ).first()
+                return A(value,
+                         _href = URL(f = "req",
+                                     args = [req_row.id, "form"]
+                                    ),
+                        )
+            else:
+                return B(value)
+        else:
+            return current.messages.NONE
+
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def req_form (r, **attr):
+        """
+            Generate a PDF of a Request Form
+        """
+
+        T = current.T
+        s3db = current.s3db
+
+        table = s3db.req_req
+
+        record = table[r.id]
+        req_ref = record.req_ref
+        list_fields = ["item_id",
+                       "item_pack_id",
+                       "quantity",
+                       "quantity_commit",
+                       "quantity_transit",
+                       "quantity_fulfil",
+                      ]
+
+        exporter = r.resource.exporter.pdf
+        return exporter(r,
+                        method = "list",
+                        pdf_title = "Request Form",
+                        pdf_filename = req_ref,
+                        list_fields = list_fields,
+                        pdf_hide_comments = True,
+                        pdf_componentname = "req_req_item",
+                        pdf_header_padding = 12,
+#                        pdf_footer = inv_recv_pdf_footer,
+                        pdf_table_autogrow = "B",
+                        pdf_paper_alignment = "Landscape",
+                        **attr
+                       )
     # -------------------------------------------------------------------------
     @staticmethod
     def req_priority_represent(id):
@@ -588,7 +663,7 @@ $(function() {
         NONE = current.messages.NONE
 
         site_id = r.vars.site_id
-        site_name = s3db.org_site_represent(site_id, link = False)
+        site_name = s3db.org_site_represent(site_id, show_link = False)
 
         output = {}
         output["title"] = T("Check Request")
@@ -681,8 +756,8 @@ $(function() {
                                  item_pack_represent(req_item.item_pack_id),
                                  # This requires an action btn to get the req_id
                                  req_item.quantity_commit,
-                                 req_item.quantity_fulfil,
                                  req_item.quantity_transit,
+                                 req_item.quantity_fulfil,
                                  #req_quantity_represent(req_item.quantity_commit, "commit"),
                                  #req_quantity_represent(req_item.quantity_fulfil, "fulfil"),
                                  #req_quantity_represent(req_item.quantity_transit, "transit"),
@@ -716,7 +791,10 @@ $(function() {
         # If the req_ref is None then set it up
         id = form.vars.id
         if not rrtable[id].req_ref:
-            code = s3db.inv_get_shipping_code("REQ", rrtable[id].site_id, id)
+            code = s3db.inv_get_shipping_code("REQ",
+                                              rrtable[id].site_id,
+                                              s3db.req_req.req_ref,
+                                             )
             db(rrtable.id == id).update(req_ref = code)
         # Configure the next page to go to based on the request type
         tablename = "req_req"
@@ -823,7 +901,6 @@ class S3RequestItemModel(S3Model):
 
         quantities_writable = settings.get_req_quantities_writable()
 
-        req_quantity_represent = self.req_quantity_represent
 
         # -----------------------------------------------------------------
         # Request Items
@@ -848,27 +925,30 @@ class S3RequestItemModel(S3Model):
                                   Field("quantity_commit",
                                         "double",
                                         label = T("Quantity Committed"),
-                                        represent = lambda quantity_commit: \
-                                            req_quantity_represent(quantity_commit,
-                                                                   "commit"),
+                                        represent = self.req_qnty_commit_represent,
+#                                        represent = lambda quantity_commit: \
+#                                            req_quantity_represent(quantity_commit,
+#                                                                   "commit"),
                                         default = 0,
                                         requires = IS_FLOAT_IN_RANGE(minimum=0),
                                         writable = quantities_writable),
                                   Field("quantity_transit",
                                         "double",
                                         label = T("Quantity in Transit"),
-                                        represent = lambda quantity_transit: \
-                                            req_quantity_represent(quantity_transit,
-                                                                   "transit"),
+                                        represent = self.req_qnty_transit_represent,
+#                                        represent = lambda quantity_transit: \
+#                                            req_quantity_represent(quantity_transit,
+#                                                                   "transit"),
                                         default = 0,
                                         requires = IS_FLOAT_IN_RANGE(minimum=0),
                                         writable = quantities_writable),
                                   Field("quantity_fulfil",
                                         "double",
                                         label = T("Quantity Fulfilled"),
-                                        represent = lambda quantity_fulfil: \
-                                            req_quantity_represent(quantity_fulfil,
-                                                                   "fulfil"),
+                                        represent = self.req_qnty_fulfil_represent,
+#                                        represent = lambda quantity_fulfil: \
+#                                            req_quantity_represent(quantity_fulfil,
+#                                                                   "fulfil"),
                                         default = 0,
                                         requires = IS_FLOAT_IN_RANGE(minimum=0),
                                         writable = quantities_writable),
@@ -985,7 +1065,37 @@ $(document).ready(function() {
 
     # ---------------------------------------------------------------------
     @staticmethod
-    def req_quantity_represent(quantity, type):
+    def req_qnty_commit_represent(quantity, show_link=True):
+        """
+            call the generic quantity represent
+        """
+        return S3RequestItemModel.req_quantity_represent(quantity,
+                                                         "commit",
+                                                         show_link)
+
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def req_qnty_transit_represent(quantity, show_link=True):
+        """
+            call the generic quantity represent
+        """
+        return S3RequestItemModel.req_quantity_represent(quantity,
+                                                         "transit",
+                                                         show_link)
+
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def req_qnty_fulfil_represent(quantity, show_link=True):
+        """
+            call the generic quantity represent
+        """
+        return S3RequestItemModel.req_quantity_represent(quantity,
+                                                         "fulfil",
+                                                         show_link)
+
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def req_quantity_represent(quantity, type, show_link=True):
         """
             @ToDo: There should be better control of this feature - currently this only works
                    with req_items which are being matched by commit / send / recv
@@ -993,7 +1103,7 @@ $(document).ready(function() {
 
         settings = current.deployment_settings
 
-        if quantity and not settings.get_req_quantities_writable():
+        if quantity and show_link and not settings.get_req_quantities_writable():
             return TAG[""]( quantity,
                             A(DIV(_class = "quantity %s ajax_more collapsed" % type
                                   ),
@@ -1640,12 +1750,7 @@ def req_item_onaccept(form):
         Partial = some items have quantity > 0
         Complete = quantity_x = quantity(requested) for ALL items
     """
-
-    db = current.db
-    s3db = current.s3db
     s3mgr = current.manager
-
-    table = s3db.req_req_item
 
     if form and form.vars.req_id:
         req_id = form.vars.req_id
@@ -1655,6 +1760,13 @@ def req_item_onaccept(form):
         # @todo: should raise a proper HTTP status here
         raise Exception("can not get req_id")
 
+    req_update_status(req_id)
+
+def req_update_status(req_id):
+    db = current.db
+    s3db = current.s3db
+
+    table = s3db.req_req_item
     is_none = dict(commit = True,
                    transit = True,
                    fulfil = True)
@@ -1662,7 +1774,6 @@ def req_item_onaccept(form):
     is_complete = dict(commit = True,
                        transit = True,
                        fulfil = True)
-
     # Must check all items in the req
     query = (table.req_id == req_id) & \
             (table.deleted == False )
@@ -1690,7 +1801,7 @@ def req_item_onaccept(form):
 
     rtable = s3db.req_req
     db(rtable.id == req_id).update(**status_update)
-
+    
 # =============================================================================
 def req_skill_onaccept(form):
     """
@@ -1823,20 +1934,25 @@ def req_rheader(r, check_page = False):
                 if settings.get_req_use_commit():
                     tabs.append((T("Commitments"), "commit"))
 
-                rheader_tabs = s3_rheader_tabs(r, tabs)
+                if not check_page:
+                    rheader_tabs = s3_rheader_tabs(r, tabs)
+                else:
+                    rheader_tabs = DIV()
+
 
                 site_id = request.vars.site_id
                 if site_id:
-                    site_name = s3db.org_site_represent(site_id, link = False)
+                    site_name = s3db.org_site_represent(site_id, show_link = False)
                     commit_btn = TAG[""](
-                                A( T("Commit from %s") % site_name,
-                                    _href = URL(c = "req",
-                                                f = "commit_req",
-                                                args = [r.id],
-                                                vars = dict(site_id = site_id)
-                                                ),
-                                    _class = "action-btn"
-                                   ),
+# Removed to try and simplify the workflow - GF
+#                                A( T("Commit from %s") % site_name,
+#                                    _href = URL(c = "req",
+#                                                f = "commit_req",
+#                                                args = [r.id],
+#                                                vars = dict(site_id = site_id)
+#                                                ),
+#                                    _class = "action-btn"
+#                                   ),
                                 A( T("Send from %s") % site_name,
                                     _href = URL(c = "req",
                                                 f = "send_req",
@@ -1884,35 +2000,39 @@ def req_rheader(r, check_page = False):
                     transit_status_cells = ("","")
 
                 table = r.table
-
-                rheader = DIV( TABLE(
-                                   TR(
-                                    TH("%s: " % table.date_required.label),
-                                    table.date_required.represent(record.date_required),
-                                    TH( "%s: " % table.commit_status.label),
-                                    table.commit_status.represent(record.commit_status),
-                                    ),
-                                   TR(
-                                    TH( "%s: " % table.date.label),
-                                    table.date.represent(record.date),
-                                    *transit_status_cells
-                                    ),
-                                   TR(
-                                    TH( "%s: " % table.site_id.label),
-                                    table.site_id.represent(record.site_id),
-                                    TH( "%s: " % table.fulfil_status.label),
-                                    table.fulfil_status.represent(record.fulfil_status)
-                                    ),
-                                   TR(
-                                    TH( "%s: " % table.comments.label),
-                                    TD(record.comments or "", _colspan=3)
-                                    ),
+                site_id = record.site_id
+                org_id = s3db.org_site[site_id].organisation_id
+                logo = s3db.org_organisation_logo(org_id)
+                rData = TABLE(
+                               TR(TD(logo, _colspan=2),
+                                  TH("%s: " % table.req_ref.label),
+                                  TD(table.req_ref.represent(record.req_ref))
+                                  ),
+                               TR(
+                                TH("%s: " % table.date_required.label),
+                                table.date_required.represent(record.date_required),
+                                TH( "%s: " % table.commit_status.label),
+                                table.commit_status.represent(record.commit_status),
                                 ),
-                                #commit_btn,
-                                )
-                if not check_page:
-                    rheader.append(rheader_tabs)
-
+                               TR(
+                                TH( "%s: " % table.date.label),
+                                table.date.represent(record.date),
+                                *transit_status_cells
+                                ),
+                               TR(
+                                TH( "%s: " % table.site_id.label),
+                                table.site_id.represent(record.site_id),
+                                TH( "%s: " % table.fulfil_status.label),
+                                table.fulfil_status.represent(record.fulfil_status)
+                                ),
+                               TR(
+                                TH( "%s: " % table.comments.label),
+                                TD(record.comments or "", _colspan=3)
+                                ),
+                               )
+                rheader = DIV (rData,
+                               rheader_tabs,
+                              )
                 return rheader
             #else:
                 # No Record means that we are either a Create or List Create

@@ -294,9 +294,14 @@ def s3_mark_required(fields,
     _required = False
     for field in fields:
         if field.writable:
-            required = field.required or field.notnull or \
-                        mark_required and field.name in mark_required
             validators = field.requires
+            if isinstance(validators, IS_EMPTY_OR):
+                # Allow notnull fields to be marked as not required if we populate them onvalidation
+                labels[field.name] = "%s:" % field.label
+                continue
+            else:
+                required = field.required or field.notnull or \
+                            mark_required and field.name in mark_required
             if not validators and not required:
                 labels[field.name] = "%s:" % field.label
                 continue
@@ -482,7 +487,8 @@ def s3_fullname(person=None, pe_id=None, truncate=True):
     """
         Returns the full name of a person
 
-        @param person: the pr_person record or record_id
+        @param person: the pr_person record or record_id or a list of record_ids
+                       (last used by gis.get_representation())
         @param pe_id: alternatively, the person entity ID
         @param truncate: truncate the name to max 24 characters
     """
@@ -494,14 +500,21 @@ def s3_fullname(person=None, pe_id=None, truncate=True):
 
     record = None
     query = None
+    rows = None
     if isinstance(person, (int, long)) or str(person).isdigit():
         query = (ptable.id == person) & (ptable.deleted != True)
+    elif isinstance(person, list):
+        query = (ptable.id.belongs(person)) & (ptable.deleted != True)
+        rows = db(query).select(ptable.id,
+                                ptable.first_name,
+                                ptable.middle_name,
+                                ptable.last_name)
     elif person is not None:
         record = person
     elif pe_id is not None:
         query = (ptable.pe_id == pe_id) & (ptable.deleted != True)
 
-    if not record and query:
+    if not record and not rows and query:
         record = db(query).select(ptable.first_name,
                                   ptable.middle_name,
                                   ptable.last_name,
@@ -525,6 +538,21 @@ def s3_fullname(person=None, pe_id=None, truncate=True):
             if record.pr_person.last_name:
                 lname = record.pr_person.last_name.strip()
         return s3_format_fullname(fname, mname, lname, truncate)
+
+    elif rows:
+        represents = {}
+        for record in rows:
+            fname, mname, lname = "", "", ""
+            if record.first_name:
+                fname = record.first_name.strip()
+            if record.middle_name:
+                mname = record.middle_name.strip()
+            if record.last_name:
+                lname = record.last_name.strip()
+            represent = s3_format_fullname(fname, mname, lname, truncate)
+            represents[record.id] = represent
+        return represents
+
     else:
         return DEFAULT
 

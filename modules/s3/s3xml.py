@@ -48,7 +48,6 @@ from gluon.storage import Storage
 import gluon.contrib.simplejson as json
 
 from s3codec import S3Codec
-from s3track import S3Trackable
 
 try:
     from lxml import etree
@@ -618,7 +617,6 @@ class S3XML(S3Codec):
                    record,
                    element,
                    rmap,
-                   download_url="",
                    marker=None,
                    ):
         """
@@ -628,7 +626,6 @@ class S3XML(S3Codec):
             @param record: the particular record
             @param element: the XML element
             @param rmap: list of references to encode
-            @param download_url: download URL of this instance
             @param marker: marker dict or filename
         """
 
@@ -639,6 +636,9 @@ class S3XML(S3Codec):
 
         db = current.db
         s3db = current.s3db
+        request = current.request
+        get_vars = request.get_vars
+        settings = current.deployment_settings
 
         LATFIELD = self.Lat
         LONFIELD = self.Lon
@@ -649,28 +649,35 @@ class S3XML(S3Codec):
         # Quicker to download Icons from Static
         # also doesn't require authentication so KML files can work in
         # Google Earth
-        # @ToDo: Remove the Public URL to keep filesize small when
-        # loading off same server? (GeoJSON &layer=xx)
-        download_url = download_url.replace("default/download",
-                                            "static/img/markers")
+        layer_id = get_vars.layer
+        if layer_id:
+            # Use a local URL to keep filesize small when
+            # loading off same server
+            download_url = "/%s/static/img/markers" % request.application
+        else:
+            download_url = "%s/%s/static/img/markers" % \
+                (settings.get_base_public_url(),
+                 request.application)
 
         _marker = None
         marker_url = None
         symbol = gis.DEFAULT_SYMBOL
         popup_label = None
-        popup_fields = None
         popup_url = None
+        tooltips = {}
+        latlons = {}
         if marker:
             try:
-                # Dict
+                # Dict (provided by Feature Layers)
                 _marker = marker["marker"]
                 if _marker:
                     marker_url = "%s/%s" % (download_url, _marker)
                 symbol = marker["gps_marker"] or symbol
-                popup_label = marker["popup_label"]
-                popup_fields = marker["popup_fields"]
+                popup_url = marker["popup_url"]
+                tooltips = marker["tooltips"]
+                latlons = marker["latlons"]
             except:
-                # String
+                # String (provided by ?)
                 marker_url = "%s/gis_marker.image.%s.png" % (download_url, marker)
 
         table = resource.table
@@ -696,23 +703,19 @@ class S3XML(S3Codec):
 
             LatLon = None
             WKT = None
-            if "track" in current.request.get_vars:
-                # Use S3Track
-                try:
-                    tracker = S3Trackable(table, record_id=record.id)
-                except SyntaxError:
-                    pass
-                else:
-                    gtable = s3db.gis_location
-                    LatLon = tracker.get_location(as_rows=True,
-                                                  _fields=[gtable.lat,
-                                                           gtable.lon])
+            if latlons:
+                # Use the value calculated in gis.get_marker_and_tooltip()
+                LatLon = latlons[tablename][record.id]
+                lat = LatLon[0]
+                lon = LatLon[1]
 
-            elif "polygons" in current.request.get_vars:
+            elif "polygons" in get_vars:
                 # Display Polygons not Points
+                # e.g. Theme Layers
+                # @ToDo: Move this to GIS & do it 1/layer instead of 1/record
                 if WKTFIELD in fields:
                     query = (ktable.id == r_id)
-                    if current.deployment_settings.get_gis_spatialdb():
+                    if settings.get_gis_spatialdb():
                         if current.auth.permission.format == "geojson":
                             # Do the Simplify & GeoJSON direct from the DB
                             geojson = db(query).select(ktable.the_geom.st_simplify(0.001).st_asgeojson(precision=4).with_alias("geojson"),
@@ -754,17 +757,19 @@ class S3XML(S3Codec):
 
             if not LatLon and not WKT:
                 # Normal Location lookup
+                # e.g. Feature Queries
                 LatLon = db(ktable.id == r_id).select(ktable[LATFIELD],
                                                       ktable[LONFIELD],
-                                                      limitby=(0, 1))
+                                                      limitby=(0, 1)).first()
+
             if LatLon:
-                LatLon = LatLon.first()
                 lat = LatLon[LATFIELD]
                 lon = LatLon[LONFIELD]
                 if lat is None or lon is None:
+                    # Cannot display on Map
                     continue
-                attr[ATTRIBUTE.lat] = "%.6f" % lat
-                attr[ATTRIBUTE.lon] = "%.6f" % lon
+                attr[ATTRIBUTE.lat] = "%.4f" % lat
+                attr[ATTRIBUTE.lon] = "%.4f" % lon
                 if not marker_url:
                     marker = gis.get_marker()
                     marker_url = "%s/%s" % (download_url, marker.image)
@@ -772,13 +777,10 @@ class S3XML(S3Codec):
                 attr[ATTRIBUTE.sym] = symbol
 
             if LatLon or WKT:
-                if popup_fields:
+                if tooltips and tablename in tooltips:
                     # Feature Layer
-                    # Build the HTML for the onHover Tooltip
-                    tooltip = gis.get_popup_tooltip(table,
-                                                    record,
-                                                    popup_label,
-                                                    popup_fields)
+                    # Retrieve the HTML for the onHover Tooltip
+                    tooltip = tooltips[tablename][record.id]
                     try:
                         # encode suitable for use as XML attribute
                         tooltip = self.xml_encode(tooltip).decode("utf-8")
@@ -788,21 +790,17 @@ class S3XML(S3Codec):
                         attr[ATTRIBUTE.popup] = tooltip
 
                     # Build the URL for the onClick Popup contents
-                    url = URL(resource.prefix,
-                              resource.name).split(".", 1)[0]
-                    popup_url = "%s/%i.plain" % (url,
-                                                 record.id)
+                    # @ToDo: add the Public URL so that layers can be loaded
+                    # off remote Sahana instances
+                    # (make this optional to keep filesize small when not
+                    #  needed?)
+                    popup_url = "%s/%i.plain" % (popup_url, record.id)
+                    attr[ATTRIBUTE.url] = popup_url
+
                 elif popup_label:
                     # Feature Queries
                     # This is the pre-generated HTML for the onHover Tooltip
                     attr[ATTRIBUTE.popup] = popup_label
-
-                if popup_url:
-                    # @ToDo: add the Public URL so that layers can
-                    # be loaded off remote Sahana instances
-                    # (make this optional to keep filesize small
-                    # when not needed?)
-                    attr[ATTRIBUTE.url] = popup_url
 
     # -------------------------------------------------------------------------
     def resource(self, parent, table, record,
@@ -872,8 +870,9 @@ class S3XML(S3Codec):
             # Quicker to download Icons from Static
             # also doesn't require authentication so KML files can work in
             # Google Earth
-            marker_download_url = download_url.replace("default/download",
-                                                       "static/img/markers")
+            marker_download_url = "%s/%s/static/img/markers" % \
+                (current.deployment_settings.get_base_public_url(),
+                 current.request.application)
             marker_url = "%s/%s" % (marker_download_url, marker.image)
             attrib[ATTRIBUTE.marker] = marker_url
             symbol = "White Dot"
@@ -1626,35 +1625,39 @@ class S3XML(S3Codec):
             return obj
         else:
             obj = {}
-            findall = element.findall
+            iterchildren = element.iterchildren
             xpath = element.xpath
-            for child in element:
+            is_single = lambda t, a, v: len(xpath("%s[@%s='%s']" % (t, a, v))) == 1
+            for child in iterchildren(tag=etree.Element):
                 tag = child.tag
-                if not isinstance(tag, basestring):
-                    continue # skip comment nodes
                 if tag[0] == "{":
                     tag = tag.rsplit("}", 1)[1]
                 collapse = True
                 single = False
+                attributes = child.attrib
                 if native:
-                    is_single = lambda t, a, v: len(xpath("%s[@%s='%s']" % (t, a, v))) == 1
                     if tag == TAG.resource:
-                        resource = child.get(ATTRIBUTE.name)
+                        resource = attributes[ATTRIBUTE.name]
                         tag = "%s_%s" % (PREFIX.resource, resource)
                         collapse = False
                     elif tag == TAG.options:
-                        r = child.get(ATTRIBUTE.resource)
+                        r = attributes[ATTRIBUTE.resource]
                         tag = "%s_%s" % (PREFIX.options, r)
                         single = is_single(TAG.options, ATTRIBUTE.resource, r)
                     elif tag == TAG.reference:
-                        f = child.get(ATTRIBUTE.field)
+                        f = attributes[ATTRIBUTE.field]
                         tag = "%s_%s" % (PREFIX.reference, f)
                         single = is_single(TAG.reference, ATTRIBUTE.field, f)
                     elif tag == TAG.data:
-                        tag = child.get(ATTRIBUTE.field)
+                        tag = attributes[ATTRIBUTE.field]
                         single = is_single(TAG.data, ATTRIBUTE.field, tag)
                 else:
-                    single = len(findall(tag)) == 1
+                    for s in iterchildren(tag=tag):
+                        if single is True:
+                            single = False
+                            break
+                        else:
+                            single = True
                 child_obj = element2json(child, native=native)
                 if child_obj:
                     if tag not in obj:
@@ -1663,7 +1666,7 @@ class S3XML(S3Codec):
                         else:
                             obj[tag] = [child_obj]
                     else:
-                        if not isinstance(obj[tag], list):
+                        if type(obj[tag]) is not list:
                             obj[tag] = [obj[tag]]
                         obj[tag].append(child_obj)
 
@@ -1671,7 +1674,7 @@ class S3XML(S3Codec):
             skip_text = False
             tag = element.tag
             for a in attributes:
-                v = element.get(a)
+                v = attributes[a]
                 if native:
                     if a == ATTRIBUTE.name and tag == TAG.resource:
                         continue

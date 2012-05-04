@@ -60,6 +60,14 @@ def site_org_json():
 def facility():
     """ RESTful CRUD controller """
 
+    manager = current.manager
+    # remove CRUD generated buttons in the tabs
+    manager.configure("inv_inv_item",
+                    create=False,
+                    listadd=False,
+                    editable=False,
+                    deletable=False,
+                   )
     return s3_rest_controller()
 
 # =============================================================================
@@ -199,4 +207,9 @@ def donor():
 
     return output
 
+# =============================================================================
+def req_match():
+    """ Match Requests """
+
+    return s3db.req_match()
 # END =========================================================================
