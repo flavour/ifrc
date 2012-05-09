@@ -83,9 +83,9 @@ def requests():
     # Open Request module
     url = "%s/req/req/create" % config.url
     browser.get(url)
-    w_autocomplete("Beat",
+    w_autocomplete("Beatriz de C",
                  "req_req_requester",
                  "Beatriz de Carvalho",
-                )
+                 )
 
     assert 0, "Keep the browser window open"

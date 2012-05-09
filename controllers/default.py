@@ -375,6 +375,17 @@ $('.marker').mouseout(function() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 # -----------------------------------------------------------------------------
 def organisation():
     """
@@ -477,7 +488,7 @@ def user():
                 else:
                     removed.append(opt_in)
             ptable = s3db.pr_person
-            putable = s3db.pr_person_user 
+            putable = s3db.pr_person_user
             query = (putable.user_id == request.post_vars.id) & \
                     (putable.pe_id == ptable.pe_id)
             person_id = db(query).select(ptable.id, limitby=(0, 1)).first().id

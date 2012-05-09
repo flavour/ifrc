@@ -104,11 +104,8 @@ deployment_settings.base.migrate = True
 # ["roles", "user"]
 # Unless doing a manual DB migration, where prepopulate = 0
 # In Production, prepopulate = 0 (to save 1x DAL hit every page)
-deployment_settings.base.prepopulate = 25
-# NOTE: the web UI will not be accessible while the DB is empty,
-# instead run:
-#   python web2py.py -N -S eden -M
-# to create the db structure, then exit and re-import the data.
+deployment_settings.base.prepopulate = ["demo/IFRC_Train"]
+
 
 
 # Set this to True to use Content Delivery Networks to speed up Internet-facing sites
@@ -414,6 +411,15 @@ deployment_settings.project.drr = True
 deployment_settings.project.community_activity = True
 # Uncomment this to use Milestones in project/task.
 #deployment_settings.project.milestones = True
+# Uncomment this to customise
+deployment_settings.project.organisation_roles = {
+    1: T("Host National Society"),
+    2: T("Partner National Society"),
+    3: T("Donor"),
+    #4: T("Customer"), # T("Beneficiary")?
+    5: T("Partner")
+}
+#deployment_settings.project.organisation_lead_role = 1
 
 # Save Search Widget
 deployment_settings.save_search.widget = False
@@ -674,3 +680,4 @@ deployment_settings.modules = OrderedDict([
     #       module_type = 10
     #   )),
 ])
+
