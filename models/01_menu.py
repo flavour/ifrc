@@ -19,7 +19,8 @@ if auth.permission.format in ("html"):
         # Custom modules-menu
         homepage("gis")(
         ),
-        homepage("hrm", "org", name=T("Staff"))(
+        homepage("hrm", "org", name=T("Staff"),
+                 vars=dict(group="staff"))(
             MM("Staff", c="hrm", f="staff"),
             MM("Teams", c="hrm", f="group"),
             MM("Organizations", c="org", f="organisation"),
@@ -30,7 +31,8 @@ if auth.permission.format in ("html"):
             MM("Training Courses", c="hrm", f="course"),
             #MM("Certificate List", c="hrm", f="certificate"),
         ),
-        homepage("hrm", name=T("Volunteers"))(
+        homepage("hrm", name=T("Volunteers"),
+                 vars=dict(group="volunteer"))(
             MM("Volunteers", c="hrm", f="volunteer"),
             MM("Teams", c="hrm", f="group"),
             MM("Job Roles", c="hrm", f="job_role"),
