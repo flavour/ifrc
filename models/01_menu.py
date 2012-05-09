@@ -19,12 +19,20 @@ if auth.permission.format in ("html"):
         # Custom modules-menu
         homepage("gis")(
         ),
-        homepage("hrm", "org")(
-            MM("Staff", c="hrm", f="human_resource", vars={"group":"staff"}),
-            MM("Volunteers", c="hrm", f="human_resource", vars={"group":"volunteer"}),
+        homepage("hrm", "org", name=T("Staff"))(
+            MM("Staff", c="hrm", f="staff"),
             MM("Teams", c="hrm", f="group"),
             MM("Organizations", c="org", f="organisation"),
             MM("Offices", c="org", f="office"),
+            MM("Job Roles", c="hrm", f="job_role"),
+            #MM("Skill List", c="hrm", f="skill"),
+            MM("Training Events", c="hrm", f="training_event"),
+            MM("Training Courses", c="hrm", f="course"),
+            #MM("Certificate List", c="hrm", f="certificate"),
+        ),
+        homepage("hrm", name=T("Volunteers"))(
+            MM("Volunteers", c="hrm", f="volunteer"),
+            MM("Teams", c="hrm", f="group"),
             MM("Job Roles", c="hrm", f="job_role"),
             #MM("Skill List", c="hrm", f="skill"),
             MM("Training Events", c="hrm", f="training_event"),
@@ -128,36 +136,28 @@ if auth.permission.format in ("html"):
         # ---------------------------------------------------------------------
         # HRM Human Resources / ORG Organisation Registry (shared)
         "hrm": M()(
-                    M("Staff", c="hrm", f=("human_resource", "person"),
-                      check=manager_mode, vars=staff)(
-                        M("New Staff Member", m="create",
-                          vars=staff),
-                        M("List All",
-                          vars=staff),
-                        M("Search", m="search",
-                          vars=staff),
+                    M("Staff", c="hrm", f=("staff", "person"),
+                      check=manager_mode)(
+                        M("New Staff Member", m="create"),
+                        M("List All"),
+                        M("Search", m="search"),
                         M("Report", m="report",
-                          vars=Storage(group="staff",
-                                       rows="course",
+                          vars=Storage(rows="course",
                                        cols="L1",
                                        fact="person_id",
                                        aggregate="count")),
                         M("Report Expiring Contracts",
-                          vars=dict(group="staff", expiring=1)),
+                          vars=dict(expiring=1)),
                         M("Import", f="person", m="import",
                           vars=staff, p="create"),
                     ),
-                    M("Volunteers", c="hrm", f=("human_resource", "person"),
-                      check=manager_mode, vars=volunteers)(
-                        M("New Volunteer", m="create",
-                          vars=volunteers),
-                        M("List All",
-                          vars=volunteers),
-                        M("Search", m="search",
-                          vars=volunteers),
+                    M("Volunteers", c="hrm", f=("volunteer", "person"),
+                      check=manager_mode)(
+                        M("New Volunteer", m="create"),
+                        M("List All"),
+                        M("Search", m="search"),
                         M("Report", m="report",
-                          vars=Storage(group="volunteer",
-                                       rows="course",
+                          vars=Storage(rows="course",
                                        cols="L1",
                                        fact="person_id",
                                        aggregate="count")),

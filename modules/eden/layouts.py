@@ -228,12 +228,12 @@ class S3AddResourceLink(S3NavigationItem):
             label = S3CRUD.crud_string(t, "label_create_button")
 
         return super(S3AddResourceLink, self).__init__(label, c=c, f=f, t=t,
-                                                m="create",
-                                                vars=vars,
-                                                info=info,
-                                                title=title,
-                                                tooltip=tooltip,
-                                                mandatory=True)
+                                                       m="create",
+                                                       vars=vars,
+                                                       info=info,
+                                                       title=title,
+                                                       tooltip=tooltip,
+                                                       mandatory=True)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -279,7 +279,12 @@ def homepage(module=None, *match, **attr):
     if module in all_modules:
         m = all_modules[module]
         c = [module] + list(match)
-        return layout(m.name_nice, c=c, f="index", **attr)
+        if "name" in attr:
+            name = attr["name"]
+            attr.pop("name")
+        else:
+            name = m.name_nice
+        return layout(name, c=c, f="index", **attr)
     return None
 
 # =============================================================================
