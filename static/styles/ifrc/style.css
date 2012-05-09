@@ -245,7 +245,18 @@ form.inline p {margin-bottom:0;}
 
 /*** Home Page ***/
 
-#news-window{overflow:hidden;position:absolute;z-index:999;background:url(../../img/ifrc/news_window_bg.png);width:190px;top:30px;right:43px;padding:10px;border-right:1px solid #989793;border-bottom:1px solid #989793;}
+#news-window{
+    overflow: hidden;
+    position: absolute;
+    z-index: 999;
+    background: url(../../img/ifrc/news_window_bg.png);
+    width: 190px;
+    top: 20px;
+    right: 20px;
+    padding: 10px;
+    border-right: 1px solid #989793;
+    border-bottom: 1px solid #989793;
+}
 #news-window h2{margin-top:5px;}
 #news-window ul{list-style:none;margin:0px;padding:0px;}
 #news-window .more-info,#news-window .open-window{display:block;padding-bottom:10px;float:right;color:#DC032E;font-style:italics;}
@@ -259,7 +270,7 @@ form.inline p {margin-bottom:0;}
     display: block;
     background: url(../../img/ifrc/map_bg.jpg) no-repeat;
     width: 1024px;
-    height: 394px;
+    height: 411px;
 }
 #map-home .map-tip{position:absolute;bottom:20px;left:35px;font-size:1em;}
 #map-home .map-tip:before{position:relative;top:6px;left:-1px;content:url(../../img/ifrc/maptip_start.png);}
@@ -289,18 +300,34 @@ form.inline p {margin-bottom:0;}
 }
 
 /*** Dashboard ***/
-#dashboard {position:relative;margin:0 0 0 60px;padding:0;border-right:1px solid #9c9c9c;}
+#dashboard {
+    position: relative;
+    margin: 0px;
+    padding: 0;
+    border-right: 1px solid #9c9c9c;
+}
 #dashboard li{position:relative;margin:0;padding:0;background:#fcf9ed;list-style:none;float:left;border-right:1px solid #9c9c9c;}
 #dashboard li:first-child{border-left:1px solid #9c9c9c;}
-#dashboard li a{display:block;width:137px;height:210px;padding:20px;}
+#dashboard li a {
+    display: block;
+    width: 115px;
+    height: 160px;
+    padding: 15px;
+}
 #dashboard li a:hover{background:url(../../img/ifrc/dashboard_hover.png) repeat-x;}
-#dashboard li h2{margin-bottom:0;}
+#dashboard li h2 {
+    font-size: 1.4em;
+    margin-bottom: 0;
+}
 #dashboard li p{color:#891735;line-height:1.25em;}
-#dashboard li img{position:absolute; bottom:30px;}
+#dashboard li img {
+    position: absolute;
+    bottom: 20px;
+}
 #dashboard:before {
     position: absolute;
     top: -14px;
-    left: -59px;
+    /*left: -59px;*/
     content: " ";
     display: block;
     height: 40px;

@@ -228,12 +228,12 @@ class S3AddResourceLink(S3NavigationItem):
             label = S3CRUD.crud_string(t, "label_create_button")
 
         return super(S3AddResourceLink, self).__init__(label, c=c, f=f, t=t,
-                                                m="create",
-                                                vars=vars,
-                                                info=info,
-                                                title=title,
-                                                tooltip=tooltip,
-                                                mandatory=True)
+                                                       m="create",
+                                                       vars=vars,
+                                                       info=info,
+                                                       title=title,
+                                                       tooltip=tooltip,
+                                                       mandatory=True)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -267,6 +267,9 @@ def homepage(module=None, *match, **attr):
         @param module: the module's prefix (controller)
         @param match: additional prefixes
         @param attr: attributes for the navigation item
+
+        @keyword name: override the deployment settings name_nice
+                       for the module
     """
 
     settings = current.deployment_settings
@@ -275,12 +278,17 @@ def homepage(module=None, *match, **attr):
     layout = S3MainMenuLayout
     c = [module] + list(match)
 
-    if module is None:
-        module = "default"
-    if module in all_modules:
-        m = all_modules[module]
-        module = m.name_nice
-    return layout(module, c=c, f="index", **attr)
+    if "name" in attr:
+        name = attr.pop("name")
+    else:
+        if module is None:
+            module = "default"
+        if module in all_modules:
+            m = all_modules[module]
+            name = m.name_nice
+        else:
+            name = module
+    return layout(name, c=c, f="index", **attr)
 
 # =============================================================================
 class S3LanguageMenuLayout(S3NavigationItem):
