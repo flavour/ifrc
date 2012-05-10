@@ -91,7 +91,7 @@ def index():
 def human_resource():
     """
         HR Controller
-        - combined (unused within IFRC, except for Imports)
+        - combined (unused, except for Imports)
     """
 
     tablename = "hrm_human_resource"

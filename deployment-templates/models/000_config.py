@@ -94,7 +94,6 @@ deployment_settings.base.migrate = True
 # Pre-Populate
 # http://eden.sahanafoundation.org/wiki/DeveloperGuidelines/PrePopulate
 # Configure/disable pre-population of the database.
-
 # To pre-populate the database On 1st run should specify directory(s) in 
 # /private/prepopulate/
 # eg:
@@ -104,9 +103,7 @@ deployment_settings.base.migrate = True
 # ["roles", "user"]
 # Unless doing a manual DB migration, where prepopulate = 0
 # In Production, prepopulate = 0 (to save 1x DAL hit every page)
-deployment_settings.base.prepopulate = ["demo/IFRC_Train"]
-
-
+deployment_settings.base.prepopulate = ["IFRC_Train"]
 
 # Set this to True to use Content Delivery Networks to speed up Internet-facing sites
 deployment_settings.base.cdn = False
@@ -133,6 +130,9 @@ deployment_settings.mail.sender = "'RMS' <sahana@rms.ifrc.org>"
 deployment_settings.mail.approver = "useradmin@ifrc.org"
 # Daily Limit on Sending of emails
 #deployment_settings.mail.limit = 1000
+#Enable session store in Memcache
+#deployment_settings.base.session_memcache = '127.0.0.1:11211'
+
 # Frontpage settings
 # RSS feeds
 deployment_settings.frontpage.rss = []
@@ -281,9 +281,11 @@ deployment_settings.gis.spatialdb = True
 # 3: Apply Controller ACLs
 # 4: Apply both Controller & Function ACLs
 # 5: Apply Controller, Function & Table ACLs
-# 6: Apply Controller, Function, Table & Organisation ACLs
+# 6: Apply Controller, Function, Table ACLs and Entity Realm
+# 7: Apply Controller, Function, Table ACLs and Entity Realm + Hierarchy
+# 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
 #
-deployment_settings.security.policy = 6 # Organisation-ACLs
+deployment_settings.security.policy = 7 # Organisation-ACLs
 #acl = deployment_settings.aaa.acl
 #deployment_settings.aaa.default_uacl =  acl.READ   # User ACL
 #deployment_settings.aaa.default_oacl =  acl.CREATE | acl.READ | acl.UPDATE # Owner ACL
@@ -335,7 +337,8 @@ deployment_settings.req.status_writable = True
 #deployment_settings.req.show_quantity_transit = False
 #deployment_settings.req.multiple_req_items = False
 #deployment_settings.req.use_commit = False
-deployment_settings.req.use_req_number = False
+deployment_settings.req.use_req_number = True
+deployment_settings.req.generate_req_number = True
 # Restrict the type of requests that can be made, valid values in the
 # list are ["Stock", "People", "Other"]. If this is commented out then
 # all types will be valid.
