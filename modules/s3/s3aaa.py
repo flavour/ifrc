@@ -1980,19 +1980,28 @@ class AuthS3(Auth):
 
         # Find the group IDs
         query = None
+        uuids = None
         if isinstance(group_id, (list, tuple)):
             if isinstance(group_id[0], str):
+                uuids = group_id
                 query = (gtable.uuid.belongs(group_id))
             else:
                 group_ids = group_id
         elif isinstance(group_id, str) and not group_id.isdigit():
+            uuids = [group_id]
             query = (gtable.uuid == group_id)
         else:
             group_ids = [group_id]
         if query is not None:
             query = (gtable.deleted != True) & query
-            groups = db(query).select(gtable.id)
+            groups = db(query).select(gtable.id, gtable.uuid)
             group_ids = [g.id for g in groups]
+            missing = [uuid for uuid in uuids
+                       if uuid not in [g.uuid for g in groups]]
+            for m in missing:
+                group_id = self.s3_create_role(m, uid=m)
+                if group_id:
+                    group_ids.append(group_id)
 
         # Find the assigned groups
         query = (mtable.deleted != True) & \
@@ -2096,6 +2105,29 @@ class AuthS3(Auth):
             self.s3_set_roles()
 
         return
+
+    # -------------------------------------------------------------------------
+    def s3_get_roles(self, user_id, for_pe=[]):
+        """
+            Lookup all roles which have been assigned to user for an entity
+
+            @param user_id: the user_id
+            @param for_pe: the entity (pe_id) or list of entities
+        """
+        mtable = self.settings.table_membership
+
+        if not user_id:
+            return []
+
+        query = (mtable.deleted != True) & \
+                (mtable.user_id == user_id)
+        if isinstance(for_pe, (list, tuple)):
+            if len(for_pe):
+                query &= (mtable.pe_id.belongs(for_pe))
+        else:
+            query &= (mtable.pe_id == for_pe)
+        rows = current.db(query).select(mtable.group_id)
+        return list(set([row.group_id for row in rows]))
 
     # -------------------------------------------------------------------------
     def s3_has_role(self, role, for_pe=None):

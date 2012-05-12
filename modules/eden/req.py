@@ -58,7 +58,7 @@ req_status_opts = { REQ_STATUS_NONE:     SPAN(T("None"),
                                               _class = "req_status_complete")
                    }
 
-rn_label = T("Requisition Reference")
+rn_label = T("Requisition Number")
 
 # =============================================================================
 class S3RequestModel(S3Model):
@@ -577,7 +577,7 @@ $(function() {
 
         record = table[r.id]
 
-        if settings.get_req_use_req_number():
+        if current.deployment_settings.get_req_use_req_number():
             filename = record.req_ref
         else:
             filename = None
