@@ -814,7 +814,7 @@ class S3OptionsMenu:
         return M(c="hrm")(
                     M("Staff", f="staff",
                       check=[manager_mode, show_staff])(
-                        M("New Staff Member", m="create"),
+                        M("Add Staff Member", m="create"),
                         M("List All"),
                         M("Search", m="search"),
                         M("Report", m="report",
@@ -829,7 +829,7 @@ class S3OptionsMenu:
                     ),
                     M("Volunteers", f="volunteer",
                       check=[manager_mode, show_vols])(
-                        M("New Volunteer", m="create"),
+                        M("Add Volunteer", m="create"),
                         M("List All"),
                         M("Search", m="search"),
                         M("Report", m="report",

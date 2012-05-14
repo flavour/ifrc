@@ -285,7 +285,7 @@ deployment_settings.gis.spatialdb = True
 # 7: Apply Controller, Function, Table ACLs and Entity Realm + Hierarchy
 # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
 #
-deployment_settings.security.policy = 7 # Organisation-ACLs
+deployment_settings.security.policy = 8 # inc Delegations
 #acl = deployment_settings.aaa.acl
 #deployment_settings.aaa.default_uacl =  acl.READ   # User ACL
 #deployment_settings.aaa.default_oacl =  acl.CREATE | acl.READ | acl.UPDATE # Owner ACL
@@ -393,7 +393,7 @@ deployment_settings.supply.use_alt_name = False
 # Do not edit after deployment
 #deployment_settings.supply.catalog_default = T("Other Items")
 
-# Organsiation Management
+# Organisation Management
 # Set the length of the auto-generated org/site code the default is 10
 deployment_settings.org.site_code_len = 3
 

@@ -99,7 +99,7 @@ if auth.permission.format in ("html"):
         current.menu.personal = MP()(
                             MP("Register", c="default", f="user",
                                m="register", check=self_registration),
-                            MP("Sign In", c="default", f="user",
+                            MP("Login", c="default", f="user",
                                m="login", vars=dict(_next=login_next)),
                             MP("Lost Password", c="default", f="user",
                                m="retrieve_password"),
@@ -109,7 +109,7 @@ if auth.permission.format in ("html"):
         current.menu.personal = MP()(
                             MP("Administration", c="admin", f="index",
                                check=s3_has_role(ADMIN)),
-                            MP("Sign Out", c="default", f="user",
+                            MP("Logout", c="default", f="user",
                                m="logout"),
                             MP("Change Password", c="default", f="user",
                                m="change_password"),
