@@ -3884,7 +3884,6 @@ def pr_get_ancestors(pe_id):
         paths).
 
         @param pe_id: the person entity ID
-        @param roles: list of roles to limit the search
 
         @returns: a list of PE-IDs
     """
@@ -3963,24 +3962,27 @@ def pr_realm_users(realm, roles=None, role_types=OU):
     ltable = s3db.pr_person_user
     utable = auth.settings.table_user
 
-    if not isinstance(realm, (list, tuple)):
-        realm = [realm]
-    query = (rtable.deleted != True) & \
-            (rtable.pe_id.belongs(realm))
-    if roles is not None:
-        if not isinstance(roles, (list, tuple)):
-            roles = [roles]
-        query &= (rtable.role.belongs(roles))
-    elif role_types is not None:
-        if not isinstance(role_types, (list, tuple)):
-            role_types = [role_types]
-        query &= (rtable.role_type.belongs(role_types))
-    query &= (atable.deleted != True) & \
-             (atable.role_id == rtable.id) & \
-             (atable.pe_id == ltable.pe_id) & \
-             (ltable.deleted != True) & \
-             (ltable.user_id == utable.id) & \
-             (utable.deleted != True)
+    if realm is None:
+        query = (utable.deleted != True)
+    else:
+        if not isinstance(realm, (list, tuple)):
+            realm = [realm]
+        query = (rtable.deleted != True) & \
+                (rtable.pe_id.belongs(realm))
+        if roles is not None:
+            if not isinstance(roles, (list, tuple)):
+                roles = [roles]
+            query &= (rtable.role.belongs(roles))
+        elif role_types is not None:
+            if not isinstance(role_types, (list, tuple)):
+                role_types = [role_types]
+            query &= (rtable.role_type.belongs(role_types))
+        query &= (atable.deleted != True) & \
+                (atable.role_id == rtable.id) & \
+                (atable.pe_id == ltable.pe_id) & \
+                (ltable.deleted != True) & \
+                (ltable.user_id == utable.id) & \
+                (utable.deleted != True)
     rows = db(query).select(utable.id, utable.email)
     if rows:
         if auth.settings.username_field:
@@ -3996,8 +3998,7 @@ def pr_ancestors(entities):
         Find all ancestor entities of the given entities in the
         OU hierarchy.
 
-        @param pe_id: the person entity ID
-        @param roles: list of roles to limit the search
+        @param entities:
 
         @returns: Storage of lists of PE-IDs
     """
@@ -4038,6 +4039,8 @@ def pr_ancestors(entities):
 
 # =============================================================================
 def pr_descendants(pe_ids, skip=[]):
+    """
+    """
 
     db = current.db
     s3db = current.s3db

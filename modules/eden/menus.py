@@ -811,45 +811,34 @@ class S3OptionsMenu:
         show_staff = lambda i: settings.get_hrm_show_staff()
         show_vols = lambda i: settings.get_hrm_show_vols()
 
-        staff = dict(group="staff")
-        volunteers = dict(group="volunteer")
-
         return M(c="hrm")(
-                    M("Staff", f="human_resource",
-                      check=[manager_mode, show_staff], vars=staff)(
-                        M("New Staff Member", m="create",
-                          vars=staff),
-                        M("List All",
-                          vars=staff),
-                        M("Search", m="search",
-                          vars=staff),
+                    M("Staff", f="staff",
+                      check=[manager_mode, show_staff])(
+                        M("New Staff Member", m="create"),
+                        M("List All"),
+                        M("Search", m="search"),
                         M("Report", m="report",
-                          vars=Storage(group="staff",
-                                       rows="course",
+                          vars=Storage(rows="course",
                                        cols="L1",
                                        fact="person_id",
                                        aggregate="count")),
                         M("Report Expiring Contracts",
-                          vars=dict(group="staff", expiring=1)),
+                          vars=dict(expiring=1)),
                         M("Import", f="person", m="import",
-                          vars=staff, p="create"),
+                          vars={"group":"staff"}, p="create"),
                     ),
-                    M("Volunteers", f="human_resource",
-                      check=[manager_mode, show_vols], vars=volunteers)(
-                        M("New Volunteer", m="create",
-                          vars=volunteers),
-                        M("List All",
-                          vars=volunteers),
-                        M("Search", m="search",
-                          vars=volunteers),
+                    M("Volunteers", f="volunteer",
+                      check=[manager_mode, show_vols])(
+                        M("New Volunteer", m="create"),
+                        M("List All"),
+                        M("Search", m="search"),
                         M("Report", m="report",
-                          vars=Storage(group="volunteer",
-                                       rows="course",
+                          vars=Storage(rows="course",
                                        cols="L1",
                                        fact="person_id",
                                        aggregate="count")),
                         M("Import", f="person", m="import",
-                          vars=volunteers, p="create"),
+                          vars={"group":"volunteer"}, p="create"),
                     ),
                     M("Teams", f="group",
                       check=manager_mode)(
@@ -1027,6 +1016,20 @@ class S3OptionsMenu:
         session = current.session
         ADMIN = session.s3.system_roles.ADMIN
 
+        # Do we have a series_id?
+        series_id = False
+        vars = Storage()
+        try:
+            series_id = int(current.request.args[0])
+        except:
+            try:
+                (dummy, series_id) = current.request.vars["viewing"].split(".")
+                series_id = int(series_id)
+            except:
+                pass
+        if series_id:
+            vars.viewing = "survey_complete.%s" % series_id
+
         return M(c="survey")(
                     M("Assessment Templates", f="template")(
                         #M("New", m="create"),
@@ -1048,7 +1051,7 @@ class S3OptionsMenu:
                         M("Import Template Layout", f="formatter",
                           m="import", p="create"),
                         M("Import Completed Assessment Forms", f="complete",
-                          m="import", p="create"),
+                          m="import", p="create", vars=vars, check=series_id),
                     ),
                 )
 
