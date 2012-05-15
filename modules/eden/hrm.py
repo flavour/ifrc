@@ -368,10 +368,14 @@ class S3HRModel(S3Model):
         ltable = s3db.pr_person_user
         htable = s3db.hrm_human_resource
 
-        try:
+        if "vars" in form:
+            # e.g. coming from staff/create
             vars = form.vars
-        except:
-            # Coming from s3_register callback
+        elif hasattr(form, "vars"):
+            # e.g.coming from user/create
+            vars = form.vars
+        else:
+            # e.g. Coming from s3_register callback
             vars = form
 
         # Get the full record
