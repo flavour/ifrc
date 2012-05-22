@@ -314,7 +314,7 @@ class S3TemplateModel(S3Model):
             status of Active or higher
         """
         template_id = form.vars.id
-        template = getTemplate(template_id)
+        template = survey_getTemplate(template_id)
         if template != None and template.status > 1:
             return False
         return True
@@ -2259,6 +2259,7 @@ def survey_series_rheader(r, tabs=[]):
                         ]
             else:
                 tabs = [(T("Details"), None),
+                        (T("Completed Assessments"), "complete"),
                         (T("Summary"), "summary"),
                         (T("Chart"), "graph"),
                         (T("Map"), "map"),

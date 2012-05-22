@@ -264,8 +264,9 @@ class S3OrganisationModel(S3Model):
                                         gis.get_country(code, key_type="code") or UNKNOWN_OPT),
                              Field("logo_bmp",
                                    "upload",
-                                   requires = IS_EMPTY_OR(IS_IMAGE(maxsize=(200, 200),
-                                                                   error_message=T("Upload an image file (bmp), max. 200x200 pixels!"))),
+                                   requires = [IS_EMPTY_OR(IS_IMAGE(maxsize=(200, 200),
+                                                                    error_message=T("Upload an image file (bmp), max. 200x200 pixels!"))),
+                                               IS_EMPTY_OR(IS_UPLOAD_FILENAME())],
                                    label = T("Logo (bitmap)"),
                                    comment = DIV(_class="tooltip",
                                                  _title="%s|%s" % (T("Logo"),
@@ -273,8 +274,9 @@ class S3OrganisationModel(S3Model):
                                   ),
                              Field("logo_png",
                                    "upload",
-                                   requires = IS_EMPTY_OR(IS_IMAGE(maxsize=(200, 200),
-                                                                   error_message=T("Upload an image file (png), max. 200x200 pixels!"))),
+                                   requires = [IS_EMPTY_OR(IS_IMAGE(maxsize=(200, 200),
+                                                                    error_message=T("Upload an image file (png), max. 200x200 pixels!"))),
+                                               IS_EMPTY_OR(IS_UPLOAD_FILENAME())],
                                    label = T("Logo (png)"),
                                    comment = DIV(_class="tooltip",
                                                  _title="%s|%s" % (T("Logo"),
@@ -979,7 +981,6 @@ class S3SiteModel(S3Model):
             if p == len(wildcard_posn):
                 return None
 
-
 # =============================================================================
 class S3FacilityModel(S3Model):
     """
@@ -1421,7 +1422,7 @@ def org_organisation_represent(id, showlink=False, acronym=True, parent=True):
                 parent = db(query).select(otable.name,
                                           limitby = (0, 1)).first()
                 if parent:
-                    represent = "%s, %s" % (parent.name,
+                    represent = "%s > %s" % (parent.name,
                                             represent)
             elif acronym and org.org_organisation.acronym:
                 represent = "%s (%s)" % (represent,
@@ -1479,6 +1480,7 @@ def org_organisation_logo(id, type="png"):
 def org_site_represent(id, show_link=True):
     """ Represent a Facility in option fields or list views """
 
+    
     db = current.db
     s3db = current.s3db
     represent = current.messages.NONE
@@ -1491,14 +1493,15 @@ def org_site_represent(id, show_link=True):
     if isinstance(id, Row) and "instance_type" in id:
         # Do not repeat the lookup if already done by IS_ONE_OF
         site = id
-        id = None
     else:
-        site = db(stable._id == id).select(stable.name,
+        site = db(stable._id == id).select(stable.id,
+                                           stable.name,
                                            stable.site_id,
                                            stable.instance_type,
                                            limitby=(0, 1)).first()
         if not site:
             return represent
+    id = None
 
     instance_type = site.instance_type
     try:
@@ -1507,7 +1510,7 @@ def org_site_represent(id, show_link=True):
         return represent
 
     instance_type_nice = stable.instance_type.represent(instance_type)
-
+    tab = None
     if instance_type == "org_office":
         type = None
         try:
@@ -1524,6 +1527,8 @@ def org_site_represent(id, show_link=True):
         if type == 5:
             instance_type = "inv_warehouse"
             instance_type_nice = T("Warehouse")
+            # add the url to the stock tab for the warehouse
+            tab = "inv_item"
 
     if site:
         represent = "%s (%s)" % (site.name, instance_type_nice)
@@ -1535,11 +1540,14 @@ def org_site_represent(id, show_link=True):
         if not id:
             query = (table.site_id == site.site_id)
             id = db(query).select(table.id,
-                                  limitby=(0, 1)).first()
+                                  limitby=(0, 1)).first().id
         c, f = instance_type.split("_", 1)
+        args = [id]
+        if tab:
+            args.append(tab)
         represent = A(represent,
                       _href = URL(c=c, f=f,
-                                  args = [id],
+                                  args = args,
                                   extension = "" # removes the .aaData extension in paginated views!
                                 ))
 
@@ -1573,6 +1581,7 @@ def org_rheader(r, tabs=[]):
                     (T("Offices"), "office"),
                     (T("Staff & Volunteers"), "human_resource"),
                     (T("Projects"), "project"),
+                    (T("User Roles"), "users"),
                     #(T("Tasks"), "task"),
                    ]
 
@@ -1626,6 +1635,7 @@ def org_rheader(r, tabs=[]):
         except:
             pass
         tabs.append((T("Attachments"), "document"))
+        tabs.append((T("User Roles"), "users"))
 
 
         logo = org_organisation_logo(record.organisation_id)
@@ -1684,6 +1694,7 @@ def org_organisation_controller():
     T = current.T
     db = current.db
     gis = current.gis
+    auth = current.auth
     s3 = current.response.s3
     manager = current.manager
 
@@ -1691,11 +1702,21 @@ def org_organisation_controller():
     def prep(r):
         if r.interactive:
             r.table.country.default = gis.get_default_country("code")
+
+            # Plug in role matrix for Admins/OrgAdmins
+            if r.id and auth.user is not None:
+                sr = auth.get_system_roles()
+                realms = auth.user.realms or Storage()
+                if sr.ADMIN in realms or \
+                   sr.ORG_ADMIN in realms and r.record.pe_id in realms[sr.ORG_ADMIN]:
+                    manager.model.set_method(r.prefix, r.name,
+                                             method="users",
+                                             action=S3RoleMatrix())
+
             if not r.component and r.method not in ["read", "update", "delete"]:
                 # Filter out branches
-                btable = s3db.org_organisation_branch
-                s3.filter = (btable.id > 0) & \
-                            (r.table.id != btable.branch_id)
+                branch_filter = S3FieldSelector("parent.id") == None
+                r.resource.add_filter(branch_filter)
             elif r.component_name == "human_resource" and r.component_id:
                 # Workaround until widget is fixed:
                 htable = s3db.hrm_human_resource
@@ -1756,6 +1777,7 @@ def org_office_controller():
     manager = current.manager
     settings = current.deployment_settings
     s3db = current.s3db
+    auth = current.auth
 
     # Get default organisation_id
     req_vars = request.vars
@@ -1823,6 +1845,16 @@ def org_office_controller():
                 s3.filter = (table.type != 5) | (table.type == None)
 
         if r.interactive:
+
+            # Plug in role matrix for Admins/OrgAdmins
+            if r.id and auth.user is not None:
+                sr = auth.get_system_roles()
+                realms = auth.user.realms or Storage()
+                if sr.ADMIN in realms or \
+                   sr.ORG_ADMIN in realms and r.record.pe_id in realms[sr.ORG_ADMIN]:
+                    manager.model.set_method(r.prefix, r.name,
+                                             method="users",
+                                             action=S3RoleMatrix())
 
             if settings.has_module("inv"):
                 # Don't include Warehouses in the type dropdown

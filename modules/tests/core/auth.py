@@ -9,15 +9,21 @@ from s3 import s3_debug
 from .utils import *
 
 # -----------------------------------------------------------------------------
-def login(account="normal"):
+def login(account="normal", nexturl=None):
     """ Login to the system """
 
     config = current.test_config
     browser = config.browser
 
-    url = "%s/default/user/login" % config.url
+    if nexturl:
+        url = "%s/default/user/login?_next=%s" % (config.url, nexturl)
+    else:
+        url = "%s/default/user/login" % config.url
     browser.get(url)
 
+    if isinstance(account,(list,tuple)):
+        email = account[0]
+        password = account[1]
     if account == "normal":
         email = "test@example.com"
         password = "eden"
@@ -55,6 +61,8 @@ def logout():
 
     url = "%s/default/user/login" % config.url
     browser.get(url)
+
+    browser.find_element_by_id("auth_menu_email").click()
 
     try:
         elem = browser.find_element_by_id("auth_menu_logout")

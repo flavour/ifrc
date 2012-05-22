@@ -58,6 +58,7 @@ class S3HRModel(S3Model):
         T = current.T
         db = current.db
         s3 = current.response.s3
+        s3db = current.s3db
         settings = current.deployment_settings
 
         person_id = self.pr_person_id
@@ -214,7 +215,7 @@ class S3HRModel(S3Model):
                         name="human_resource_search_org",
                         label=T("Organization"),
                         field="organisation_id",
-                        represent ="%(name)s",
+                        represent =s3db.org_organisation_represent,
                         cols = 3
                       ),
                       S3SearchLocationHierarchyWidget(
@@ -255,7 +256,7 @@ class S3HRModel(S3Model):
 
         hierarchy = current.gis.get_location_hierarchy()
         report_fields = [
-                         #"organisation_id",
+                         "organisation_id",
                          "person_id",
                          "site_id",
                          (T("Training"), "course"),
@@ -273,6 +274,13 @@ class S3HRModel(S3Model):
             deduplicate=self.hrm_human_resource_deduplicate,
             report_options = Storage(
                 search=[
+                      S3SearchOptionsWidget(
+                        name="human_resource_search_org",
+                        label=T("Organization"),
+                        field="organisation_id",
+                        represent = s3db.org_organisation_represent,
+                        cols = 3
+                      ),
                     S3SearchLocationHierarchyWidget(
                         name="human_resource_search_L1",
                         field="L1",
@@ -2122,11 +2130,6 @@ S3FilterFieldChange({
         data = table(table.id == id)
 
         if delete:
-            # I really wish this weren't neccesary, but I really need to get that person_id!
-            #def reduction(a, b):
-            #    a.update({b["f"]: b["k"]})
-            #    return a
-            #data = reduce(reduction, eval(data.deleted_fk), {})
             deleted_fks = json.loads(data.deleted_fk)
             person_id = deleted_fks["person_id"]
         else:
@@ -2248,22 +2251,22 @@ def hrm_human_resource_represent(id,
     ptable = s3db.pr_person
     otable = s3db.org_organisation
 
-    query = (htable.id == id) & \
-            (otable.id == htable.organisation_id)
+    # MH: SahanaCamp NYC Hack
+    query = (htable.id == id) #& \
+            #(otable.id == htable.organisation_id)
     row = db(query).select(htable.job_title,
-                           otable.name,
-                           otable.acronym,
+                           htable.organisation_id,
+                           #otable.name,
+                           #otable.acronym,
                            ptable.first_name,
                            ptable.middle_name,
                            ptable.last_name,
                            left=htable.on(ptable.id == htable.person_id),
                            limitby=(0, 1)).first()
     if row:
-        org = row[str(otable)]
-        repr_str = ", %s" % org.name
-        if org.acronym:
-            repr_str = ", %s" % org.acronym
         hr = row[str(htable)]
+        if hr.organisation_id:
+            repr_str = ", %s" % s3db.org_organisation_represent(hr.organisation_id)
         if hr.job_title:
             repr_str = ", %s%s" % (hr.job_title, repr_str)
         person = row[str(ptable)]
@@ -2456,6 +2459,7 @@ def hrm_rheader(r, tabs=[]):
                     (T("Experience"), "experience"),
                     (T("Teams"), "group_membership"),
                     (T("Assets"), "asset"),
+                    (T("User Roles"), "roles"),
                    ]
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(A(s3_avatar_represent(record.id,
