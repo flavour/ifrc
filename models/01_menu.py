@@ -49,7 +49,7 @@ if auth.permission.format in ("html"):
             MM("Items", c="supply", f="item"),
             MM("Item Catalogues", c="supply", f="catalog"),
             MM("Item Categories", c="supply", f="item_category"),
-            M("Requests", f="req")(),
+            M("Requests", c="req", f="req")(),
             #M("Commitments", f="commit")(),
         ),
         homepage("asset")(
