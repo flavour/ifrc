@@ -3917,7 +3917,7 @@ class S3Resource(object):
 
             # Resolve the selector
             if "." not in selector:
-                selector = "%s.%s" % (name, selector)
+                selector = "%s.%s" % (self.alias, selector)
             elif skip_components:
                 continue
             try:
@@ -5845,7 +5845,7 @@ class S3ResourceQuery:
         try:
             l = extract(lfield)
             r = extract(rfield)
-        except (KeyError, SyntaxError):
+        except KeyError, SyntaxError:
             return None
 
         op = self.op

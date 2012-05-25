@@ -914,6 +914,7 @@ class S3OptionsMenu:
                     ),
                     M("Warehouse Stock", c="inv", f="inv_item")(
                         M("Search Warehouse Stock", f="inv_item", m="search"),
+                        M("Search Shipped Items", f="track_item", m="search"),
                         M("Adjust Stock Levels", f="adj"),
                         M("Report", f="inv_item", m="report",
                           vars=Storage(rows="item_id",
@@ -1200,21 +1201,6 @@ class S3OptionsMenu:
         ADMIN = session.s3.system_roles.ADMIN
 
         settings = current.deployment_settings
-        if settings.get_project_community_activity():
-            activities_label = "Communities"
-            list_activities_label = "List All Communities"
-            search_activities_label = "Search Communities"
-            list_activity_contacts_label = "List All Community Contacts"
-            search_activity_contacts_label = "Search Community Contacts"
-            import_activities_label = "Import Project Communities"
-        else:
-            activities_label = "Activities"
-            list_activities_label = "List All Activities"
-            search_activities_label = "Search Activities"
-            # @ToDo: These should always be Community Contacts as that's what they are...however they shouldn't link to Activities...
-            list_activity_contacts_label = "List All Activity Contacts"
-            search_activity_contacts_label = "Search Activity Contacts"
-            import_activities_label = "Import Project Activities"
 
         project_menu = M(c="project")
 
@@ -1225,12 +1211,16 @@ class S3OptionsMenu:
                         M("List All Projects", f="project"),
                         M("Search", m="search"),
                     ),
-                    M(activities_label, f="activity")(
-                        M(list_activities_label),
-                        M(search_activities_label, m="search"),
-                        M(list_activity_contacts_label, f="activity_contact"),
-                        M(search_activity_contacts_label, f="activity_contact",
+                    M("Communities", f="community")(
+                        M("List All Communities"),
+                        M("Search Communities", m="search"),
+                        M("List All Community Contacts", f="community_contact"),
+                        M("Search Community Contacts", f="community_contact",
                           m="search"),
+                    ),
+                    M("Activities", f="activity")(
+                        M("List All Activities"),
+                        M("Search Activities", m="search"),
                     ),
                     M("Reports", f="report")(
                         M("Who is doing What Where", f="activity", m="report"),
@@ -1246,7 +1236,9 @@ class S3OptionsMenu:
                           m="import", p="create"),
                         M("Import Project Organizations", f="organisation",
                           m="import", p="create"),
-                        M(import_activities_label, f="activity",
+                        M("Import Project Communities", f="community",
+                          m="import", p="create"),
+                        M("Import Project Activities", f="activity",
                           m="import", p="create"),
                     ),
                     M("Activity Types", f="activity_type")(
