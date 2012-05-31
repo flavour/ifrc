@@ -376,30 +376,6 @@ $('.marker').mouseout(function() {
     return dict(dashboard=dashboard,
                 map=map)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # -----------------------------------------------------------------------------
 def organisation():
     """

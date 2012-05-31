@@ -87,8 +87,6 @@ textarea.richtext {
     margin: 0 20px 0 -50px;
 }
 
-
-
 /* Main Sections */
 /*
 #single-col {
@@ -445,8 +443,18 @@ table.dataTable {
     width: 100%;
 }
 
+table.dataTable .row_selected td{
+	background-color: #ddd;
+	border: 1px solid #aaa;
+}
+
 table.dataTable tr td{
     vertical-align: top;
+}
+
+table.dataTable .group {
+	background-color: #ddd;
+	border: 1px solid #aaa;
 }
 
 div.dataTables_filter {
@@ -1002,7 +1010,7 @@ li input + a {
 }
 
 .contacts-wrapper p {
-   margin-bottom: 10px;
+   margin-bottom: 5px;
 }
 .contacts-wrapper div.margin {
    margin-bottom: 10px;

@@ -9,23 +9,41 @@ from s3 import s3_debug
 from .utils import *
 
 # -----------------------------------------------------------------------------
-def login(account="normal"):
+def login(account="normal", nexturl=None):
     """ Login to the system """
 
     config = current.test_config
     browser = config.browser
 
-    url = "%s/default/user/login" % config.url
-    browser.get(url)
-
+    if isinstance(account,(list,tuple)):
+        email = account[0]
+        password = account[1]
     if account == "normal":
         email = "test@example.com"
         password = "eden"
     elif account == "admin":
         email = "admin@example.com"
         password = "testing"
+    elif isinstance(account, (tuple,list)) and len(account) == 2:
+        email = account[0]
+        password = account[1]
     else:
         raise NotImplementedError
+
+    # If the user is already logged in no need to do anything so return
+    if browser.page_source.find("<a id=\"auth_menu_email\">%s</a>" % email) > 0:
+        # if the url is different then move to the new url
+        if not browser.current_url.endswith(nexturl):
+            url = "%s/%s" % (config.url, nexturl)
+            browser.get(url)
+        return
+
+    if nexturl:
+        url = "%s/default/user/login?_next=%s" % (config.url, nexturl)
+    else:
+        url = "%s/default/user/login" % config.url
+    browser.get(url)
+
 
     # Login
     elem = browser.find_element_by_id("auth_user_email")
@@ -55,6 +73,8 @@ def logout():
 
     url = "%s/default/user/login" % config.url
     browser.get(url)
+
+    browser.find_element_by_id("auth_menu_email").click()
 
     try:
         elem = browser.find_element_by_id("auth_menu_logout")

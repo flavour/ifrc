@@ -213,6 +213,7 @@ class S3MainMenu:
                         restrict=[ADMIN], **attr)(
                             MM("Settings", f="settings"),
                             MM("Users", f="user"),
+                            MM("Person Registry", c="pr"),
                             MM("Database", c="appadmin", f="index"),
                             MM("Synchronization", c="sync", f="index"),
                             MM("Tickets", f="errors"),
@@ -519,10 +520,10 @@ class S3OptionsMenu:
         settings = current.deployment_settings
         if settings.get_ui_camp():
             shelter = "Camps"
-            types = "Camp Types and Services"
+            types = "Camp Settings"
         else:
             shelter = "Shelters"
-            types = "Shelter Types and Services"
+            types = "Shelter Settings"
 
         return M(c="cr")(
                     M(shelter, f="shelter")(
@@ -532,9 +533,9 @@ class S3OptionsMenu:
                         #M("Search", m="search"),
                         M("Import", m="import"),
                     ),
-                    M(types, f="shelter_type", restrict=[ADMIN])(
-                        M("List / Add Services", m="create"),
-                        M("List / Add Types"),
+                    M(types, restrict=[ADMIN])(
+                        M("Types", f="shelter_type"),
+                        M("Services", f="shelter_service"),
                     )
                 )
 
@@ -817,8 +818,8 @@ class S3OptionsMenu:
                         M("List All"),
                         M("Search", m="search"),
                         M("Report", m="report",
-                          vars=Storage(rows="course",
-                                       cols="L1",
+                          vars=Storage(rows="organisation_id",
+                                       cols="course",
                                        fact="person_id",
                                        aggregate="count")),
                         M("Report Expiring Contracts",
@@ -832,8 +833,8 @@ class S3OptionsMenu:
                         M("List All"),
                         M("Search", m="search"),
                         M("Report", m="report",
-                          vars=Storage(rows="course",
-                                       cols="L1",
+                          vars=Storage(rows="organisation_id",
+                                       cols="course",
                                        fact="person_id",
                                        aggregate="count")),
                         M("Import", f="person", m="import",
@@ -913,6 +914,7 @@ class S3OptionsMenu:
                     ),
                     M("Warehouse Stock", c="inv", f="inv_item")(
                         M("Search Warehouse Stock", f="inv_item", m="search"),
+                        M("Search Shipped Items", f="track_item", m="search"),
                         M("Adjust Stock Levels", f="adj"),
                         M("Report", f="inv_item", m="report",
                           vars=Storage(rows="item_id",
@@ -923,8 +925,8 @@ class S3OptionsMenu:
                     ),
                     M("Reports", c="inv", f="inv_item")(
                         M("Monetization", c="inv", f="inv_item", vars=dict(report="mon")),
-                        M("Summary of Releases", c="inv", f="inv_inv_item", vars=dict(report="rel")),
-                        M("Summary of Incoming Supplies", c="inv", f="inv_inv_item", vars=dict(report="inc")),
+                        M("Summary of Releases", c="inv", f="inv_item", vars=dict(report="rel")),
+                        M("Summary of Incoming Supplies", c="inv", f="inv_item", vars=dict(report="inc")),
                     ),
                     M(inv_recv_list, c="inv", f="recv")(
                         M("New", m="create"),
@@ -1036,7 +1038,7 @@ class S3OptionsMenu:
 
         return M(c="survey")(
                     M("Assessment Templates", f="template")(
-                        #M("New", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                     ),
                     #M("Section", f="section")(
@@ -1199,21 +1201,6 @@ class S3OptionsMenu:
         ADMIN = session.s3.system_roles.ADMIN
 
         settings = current.deployment_settings
-        if settings.get_project_community_activity():
-            activities_label = "Communities"
-            list_activities_label = "List All Communities"
-            search_activities_label = "Search Communities"
-            list_activity_contacts_label = "List All Community Contacts"
-            search_activity_contacts_label = "Search Community Contacts"
-            import_activities_label = "Import Project Communities"
-        else:
-            activities_label = "Activities"
-            list_activities_label = "List All Activities"
-            search_activities_label = "Search Activities"
-            # @ToDo: These should always be Community Contacts as that's what they are...however they shouldn't link to Activities...
-            list_activity_contacts_label = "List All Activity Contacts"
-            search_activity_contacts_label = "Search Activity Contacts"
-            import_activities_label = "Import Project Activities"
 
         project_menu = M(c="project")
 
@@ -1224,12 +1211,16 @@ class S3OptionsMenu:
                         M("List All Projects", f="project"),
                         M("Search", m="search"),
                     ),
-                    M(activities_label, f="activity")(
-                        M(list_activities_label),
-                        M(search_activities_label, m="search"),
-                        M(list_activity_contacts_label, f="activity_contact"),
-                        M(search_activity_contacts_label, f="activity_contact",
+                    M("Communities", f="community")(
+                        M("List All Communities"),
+                        M("Search Communities", m="search"),
+                        M("List All Community Contacts", f="community_contact"),
+                        M("Search Community Contacts", f="community_contact",
                           m="search"),
+                    ),
+                    M("Activities", f="activity")(
+                        M("List All Activities"),
+                        M("Search Activities", m="search"),
                     ),
                     M("Reports", f="report")(
                         M("Who is doing What Where", f="activity", m="report"),
@@ -1245,7 +1236,9 @@ class S3OptionsMenu:
                           m="import", p="create"),
                         M("Import Project Organizations", f="organisation",
                           m="import", p="create"),
-                        M(import_activities_label, f="activity",
+                        M("Import Project Communities", f="community",
+                          m="import", p="create"),
+                        M("Import Project Activities", f="activity",
                           m="import", p="create"),
                     ),
                     M("Activity Types", f="activity_type")(

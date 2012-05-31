@@ -1,4 +1,5 @@
 __all__ = ["w_autocomplete",
+           "w_inv_item_select",
           ]
 
 # @todo Their are performance issues need to profile and find out in which functions are the bottlenecks
@@ -16,40 +17,32 @@ import time
 
 # -----------------------------------------------------------------------------
 def w_autocomplete(search,
-                 autocomplete,
-                 needle = None,
-                 quiet = True,
-                ):
-    """ helper function to find a search string in an autocomplete """
-    def clickAutoitem(automenu, autoitem):
-        """ helper function to click the selected menu item """
-        menuitem = browser.find_element_by_id("ui-menu-%s-%s" % (automenu,autoitem))
-        menuitem.click()
-        # wait for throbber to close
-        time.sleep(1)
-        giveup = 0
-        while browser.find_element_by_id(throbber_id).is_displayed:
-            time.sleep(1)
-            giveup += 1
-            if giveup == 20:
-                return False
-        # throbber has closed and data was found, return
-        return True
-
-    import time 
+                   autocomplete,
+                   needle = None,
+                   quiet = True,
+                  ):
     config = current.test_config
     browser = config.browser
 
-    autocomplete_id = "dummy_%s_id" % autocomplete
-    throbber_id = "dummy_%s_id_throbber" % autocomplete
+    autocomplete_id = "dummy_%s" % autocomplete
+    throbber_id = "dummy_%s_throbber" % autocomplete
     if needle == None:
         needle = search
 
     elem = browser.find_element_by_id(autocomplete_id)
     elem.clear()
     elem.send_keys(search)
-    # We will wait for up-to a minute for the data to arrive
-    # But try every second
+    # give time for the throbber to appear
+    time.sleep(1)
+    # now wait for throbber to close
+    giveup = 0.0
+    sleeptime = 0.2
+    while browser.find_element_by_id(throbber_id).is_displayed():
+        time.sleep(sleeptime)
+        giveup += sleeptime
+        if giveup > 60:
+            return False
+    # throbber has closed and data was found, return
     for i in range(10):
         # For each autocomplete on the form the menu will have an id starting from 0
         automenu = 0
@@ -58,41 +51,52 @@ def w_autocomplete(search,
         except:
             menu = None
         while menu:
-            try:
-                # Try and get the value directly
-                menu_items = menu.text.splitlines()
-                autoitem = 0
-                for linkText in menu_items:
-                    if needle in linkText:
-                        # found the text need to click on it to get the db id
-                        return clickAutoitem(automenu, autoitem)
-                    autoitem += 1
-            except:
-                # for each item in the menu it will have an id starting from 0
-                autoitem = 0
-                if not quiet:
-                    print "Looking for element ui-menu-%s-%s" %(automenu,autoitem)
-                try:
+            # Try and get the value directly
+            menu_items = menu.text.splitlines()
+            autoitem = 0
+            for linkText in menu_items:
+                if needle in linkText:
+                    # found the text need to click on it to get the db id
                     menuitem = browser.find_element_by_id("ui-menu-%s-%s" % (automenu,autoitem))
-                except:
-                    menuitem = None
-                while menuitem:
-                    linkText = menuitem.text
-                    if not quiet:
-                        print "Looking for %s found %s" %(needle, linkText)
-                    if needle in linkText:
-                        # found the text need to click on it to get the db id
-                        return clickAutoitem(automenu, autoitem)
-                    autoitem += 1
-                    try:
-                        menuitem = browser.find_element_by_id("%s-%s" % (menu,automenu))
-                    except:
-                        menuitem = None
-                # end of looping through each menu item
+                    menuitem.click()
+                    db_id = browser.find_element_by_id(autocomplete)
+                    # The id is copied into the value attribute so use that
+                    return int(db_id.get_attribute("value"))
+                autoitem += 1
             automenu += 1
             try:
                 menu = browser.find_element_by_id("ui-menu-%s" % automenu)
             except:
                 menu = None
             # end of looping through each autocomplete menu
-        time.sleep(1)
+        print "Sleeping"
+        time.sleep(sleeptime)
+
+def w_inv_item_select (item_repr,
+                       tablename,
+                       field,
+                       quiet = True,
+                      ):
+    config = current.test_config
+    browser = config.browser
+
+    el_id = "%s_%s" % (tablename, field)
+    el = browser.find_element_by_id(el_id)
+    for option in el.find_elements_by_tag_name("option"):
+        if option.text == item_repr:
+            option.click()
+            raw_value = int(option.get_attribute("value"))
+            break
+    # Now wait for the pack_item to be populated
+    el_id = "%s_%s" % (tablename, "item_pack_id")
+    el = browser.find_element_by_id(el_id)
+    giveup = 0.0
+    sleeptime = 0.2
+    while el.find_elements_by_tag_name("option")[0].text == "":
+        # The pack drop down hasn't been populated yet so sleep
+        time.sleep(sleeptime)
+        giveup += sleeptime
+        if giveup > 60:
+            break
+    return raw_value
+    
