@@ -69,6 +69,9 @@ organisation_type_opts = {
 
 # =============================================================================
 class S3OrganisationModel(S3Model):
+    """
+        Organisations & their Sectors
+    """
 
     names = ["org_sector",
              "org_sector_id",
@@ -428,6 +431,10 @@ class S3OrganisationModel(S3Model):
 
         # Components
 
+        # Facilities
+        add_component("org_site",
+                      org_organisation="organisation_id")
+
         # Staff
         add_component("hrm_human_resource",
                       org_organisation="organisation_id")
@@ -779,7 +786,9 @@ class S3OrganisationModel(S3Model):
 
 # =============================================================================
 class S3SiteModel(S3Model):
-
+    """
+        Site Super-Entity
+    """
 
     names = ["org_site",
              "org_site_id",
@@ -987,7 +996,8 @@ class S3FacilityModel(S3Model):
         Generic Site
     """
 
-    names = ["org_facility",
+    names = ["org_facility_type",
+             "org_facility",
              ]
 
     def model(self):
@@ -999,29 +1009,72 @@ class S3FacilityModel(S3Model):
         location_id = self.gis_location_id
         organisation_id = self.org_organisation_id
 
+        define_table = self.define_table
+
+        # =============================================================================
+        # Facility Types (generic)
+        #
+        tablename = "org_facility_type"
+        table = define_table(tablename,
+                             Field("name"),
+                             s3.comments(),
+                             *s3.meta_fields()
+                             )
+
+        # CRUD strings
+        ADD_FAC = T("Add Facility Type")
+        LIST_FACS = T("List Facility types")
+        s3.crud_strings[tablename] = Storage(
+            title_create = ADD_FAC,
+            title_display = T("Facility Type Details"),
+            title_list = LIST_FACS,
+            title_update = T("Edit Facility Type"),
+            title_search = T("Search Facility types"),
+            title_upload = T("Import Facility types"),
+            subtitle_create = T("Add New Facility Type"),
+            subtitle_list = T("Facility types"),
+            label_list_button = LIST_FACS,
+            label_create_button = T("Add New Facility Type"),
+            label_delete_button = T("Delete Facility Type"),
+            msg_record_created = T("Facility Type added"),
+            msg_record_modified = T("Facility Type updated"),
+            msg_record_deleted = T("Facility Type deleted"),
+            msg_list_empty = T("No Facility types currently registered"))
+
         # =============================================================================
         # Facilities (generic)
         #
         tablename = "org_facility"
-        table = self.define_table(tablename,
-                                  self.super_link("site_id", "org_site"),
-                                  Field("name", notnull=True,
-                                        length=64,           # Mayon Compatibility
-                                        label = T("Name")),
-                                  Field("code",
-                                        length=10,
-                                        # Deployments that don't wants office codes can hide them
-                                        #readable=False,
-                                        #writable=False,
-                                        # Mayon compatibility
-                                        # @ToDo: Deployment Setting to add validator to make these unique
-                                        #notnull=True,
-                                        #unique=True,
-                                        label=T("Code")),
-                                  organisation_id(widget = S3OrganisationAutocompleteWidget(default_from_profile = True)),
-                                  location_id(),
-                                  s3.comments(),
-                                  *(s3.address_fields() + s3.meta_fields()))
+        table = define_table(tablename,
+                             self.super_link("site_id", "org_site"),
+                             Field("name", notnull=True,
+                                   length=64,           # Mayon Compatibility
+                                   label = T("Name")),
+                             Field("code",
+                                   length=10,
+                                   # Deployments that don't wants office codes can hide them
+                                   #readable=False,
+                                   #writable=False,
+                                   # Mayon compatibility
+                                   # @ToDo: Deployment Setting to add validator to make these unique
+                                   #notnull=True,
+                                   #unique=True,
+                                   label=T("Code")),
+                             Field("facility_type_id", "list:reference org_facility_type",
+                                   requires = IS_NULL_OR(IS_ONE_OF(db, "org_facility_type.id",
+                                                                   "%(name)s",
+                                                                   sort=True,
+                                                                   multiple=True)),
+                                   represent = self.org_facility_type_represent,
+                                   comment = S3AddResourceLink(c="org",
+                                                               f="facility_type",
+                                                               label=ADD_FAC,
+                                                               tooltip=T("Select a Facility Type from the list or click 'Add Facility Type'")),
+                                   label=T("Type")),
+                             organisation_id(widget = S3OrganisationAutocompleteWidget(default_from_profile = True)),
+                             location_id(),
+                             s3.comments(),
+                             *(s3.address_fields() + s3.meta_fields()))
 
         # CRUD strings
         ADD_FAC = T("Add Facility")
@@ -1052,6 +1105,41 @@ class S3FacilityModel(S3Model):
         #
         return Storage(
                 )
+
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def org_facility_type_represent(opt):
+        """ Represent a facility type in option fields or list views """
+
+        db = current.db
+        table = db.org_facility_type
+        set = db(table.id > 0).select(table.id,
+                                      table.name).as_dict()
+
+        if isinstance(opt, (list, tuple)):
+            opts = opt
+            vals = [str(set.get(o)["name"]) for o in opts]
+            multiple = True
+        elif isinstance(opt, int):
+            opts = [opt]
+            vals = str(set.get(opt)["name"])
+            multiple = False
+        else:
+            try:
+                opt = int(opt)
+            except:
+                return current.messages.NONE
+            else:
+                opts = [opt]
+                vals = str(set.get(opt)["name"])
+                multiple = False
+
+        if multiple:
+            if len(opts) > 1:
+                vals = ", ".join(vals)
+            else:
+                vals = len(vals) and vals[0] or ""
+        return vals
 
 # =============================================================================
 class S3RoomModel(S3Model):
@@ -1480,7 +1568,7 @@ def org_organisation_logo(id, type="png"):
 def org_site_represent(id, show_link=True):
     """ Represent a Facility in option fields or list views """
 
-    
+
     db = current.db
     s3db = current.s3db
     represent = current.messages.NONE
@@ -1578,10 +1666,10 @@ def org_rheader(r, tabs=[]):
         if not tabs:
             tabs = [(T("Basic Details"), None),
                     (T("Branches"), "branch"),
-                    (T("Offices"), "office"),
+                    (T("Facilities"), "site"),
                     (T("Staff & Volunteers"), "human_resource"),
                     (T("Projects"), "project"),
-                    (T("User Roles"), "users"),
+                    (T("User Roles"), "roles"),
                     #(T("Tasks"), "task"),
                    ]
 
@@ -1635,7 +1723,7 @@ def org_rheader(r, tabs=[]):
         except:
             pass
         tabs.append((T("Attachments"), "document"))
-        tabs.append((T("User Roles"), "users"))
+        tabs.append((T("User Roles"), "roles"))
 
 
         logo = org_organisation_logo(record.organisation_id)
@@ -1710,8 +1798,8 @@ def org_organisation_controller():
                 if sr.ADMIN in realms or \
                    sr.ORG_ADMIN in realms and r.record.pe_id in realms[sr.ORG_ADMIN]:
                     manager.model.set_method(r.prefix, r.name,
-                                             method="users",
-                                             action=S3RoleMatrix())
+                                             method="roles",
+                                             action=S3OrgRoleManager())
 
             if not r.component and r.method not in ["read", "update", "delete"]:
                 # Filter out branches
@@ -1853,8 +1941,8 @@ def org_office_controller():
                 if sr.ADMIN in realms or \
                    sr.ORG_ADMIN in realms and r.record.pe_id in realms[sr.ORG_ADMIN]:
                     manager.model.set_method(r.prefix, r.name,
-                                             method="users",
-                                             action=S3RoleMatrix())
+                                             method="roles",
+                                             action=S3OrgRoleManager())
 
             if settings.has_module("inv"):
                 # Don't include Warehouses in the type dropdown

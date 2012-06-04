@@ -810,6 +810,7 @@ class S3OptionsMenu:
 
         show_staff = lambda i: settings.get_hrm_show_staff()
         show_vols = lambda i: settings.get_hrm_show_vols()
+        show_programmes = lambda i: s3.hrm.mode is None and settings.get_hrm_experience() == "programme"
 
         return M(c="hrm")(
                     M("Staff", f="staff",
@@ -881,6 +882,12 @@ class S3OptionsMenu:
                         M("New Certificate", m="create"),
                         M("List All"),
                         #M("Skill Equivalence", f="certificate_skill"),
+                    ),
+                    M("Programmes", f="programme",
+                      check=show_programmes)(
+                        M("New Programme", m="create"),
+                        M("List All"),
+                        M("Import Hours", f="programme_hours", m="import"),
                     ),
                     M("Profile", f="person",
                       check=personal_mode, vars=dict(mode="personal")),
@@ -1002,6 +1009,62 @@ class S3OptionsMenu:
                 )
 
     # -------------------------------------------------------------------------
+    def security(self):
+        """ Security Management System """
+
+        T = current.T
+
+        session = current.session
+        ADMIN = session.s3.system_roles.ADMIN
+
+        return M(c="security")(
+                    M("Incident Reports", c="irs", f="ireport")(
+                        M("New", m="create"),
+                        M("List All"),
+                        M("Open Incidents", vars={"open":1}),
+                        M("Timeline", args="timeline"),
+                        M("Import", m="import"),
+                        M("Search", m="search"),
+                        M("Report", m="report",
+                          vars=dict(rows="L1",
+                                    cols="category",
+                                    fact="datetime",
+                                    aggregate="count"))
+                    ),
+                    M("Incident Categories", c="irs", f="icategory", restrict=[ADMIN])(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Facilities", c="org", f="facility")(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Facility Types", c="org", f="facility_type", restrict=[ADMIN])(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Zones", f="zone")(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Zone Types", f="zone_type", restrict=[ADMIN])(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Personnel", f="staff")(
+                        M("New", m="create"),
+                        M("List All Security-related Staff"),
+                        M("List All Essential Staff", f="essential", m="search"),
+                    ),
+                    M("Security Staff Types", f="staff_type", restrict=[ADMIN])(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    #M("Ushahidi " + T("Import"), c="irs", f="ireport", restrict=[ADMIN],
+                    #  args="ushahidi")
+                )
+
+    # -------------------------------------------------------------------------
     def scenario(self):
         """ SCENARIO """
 
@@ -1069,7 +1132,7 @@ class S3OptionsMenu:
                     M("Members", f="membership")(
                         M("New", m="create"),
                         M("List All"),
-                        #M("Search", m="search"),
+                        M("Search", m="search"),
                         M("Import", f="person", m="import"),
                     ),
                 )

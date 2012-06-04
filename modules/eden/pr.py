@@ -35,6 +35,7 @@ __all__ = ["S3PersonEntity",
            "S3PersonAddressModel",
            "S3PersonImageModel",
            "S3PersonIdentityModel",
+           "S3PersonEducationModel",
            "S3SavedSearch",
            "S3PersonPresence",
            "S3PersonDescription",
@@ -133,7 +134,8 @@ class S3PersonEntity(S3Model):
                            # tables & configuring as a super-entity
                            #cr_shelter = shelter,
                            #fire_station = T("Fire Station"),
-                           #hms_hospital = T("Hospital"),
+                           dvi_morgue = T("Morgue"),
+                           hms_hospital = T("Hospital"),
                            dvi_body = T("Body"))
 
         tablename = "pr_pentity"
@@ -638,6 +640,12 @@ class S3PersonModel(S3Model):
                                     comment = DIV(DIV(_class="tooltip",
                                                         _title="%s|%s" % (T("Local Name"),
                                                                         T("Name of the person in local language and script (optional)."))))),
+                             Field("father_name",
+                                   label = T("Name of Father"),
+                                  ),
+                             Field("mother_name",
+                                   label = T("Name of Mother"),
+                                  ),
                              pr_gender(label = T("Gender")),
                              Field("date_of_birth", "date",
                                    label = T("Date of Birth"),
@@ -758,22 +766,29 @@ class S3PersonModel(S3Model):
         # Components
         add_component("pr_group_membership", pr_person="person_id")
         add_component("pr_identity", pr_person="person_id")
+        add_component("pr_education", pr_person="person_id")
         add_component("pr_save_search", pr_person="person_id")
         add_component("msg_subscription", pr_person="person_id")
 
-        # HR Record as component of Persons
-        add_component("hrm_human_resource", pr_person="person_id")
         add_component("member_membership", pr_person="person_id")
 
-        # Skills as components of Persons
+        # HR Record
+        add_component("hrm_human_resource", pr_person="person_id")
+
+        # Skills
         add_component("hrm_certification", pr_person="person_id")
         add_component("hrm_competency", pr_person="person_id")
         add_component("hrm_credential", pr_person="person_id")
-        add_component("hrm_experience", pr_person="person_id")
         # @ToDo: Double link table to show the Courses attended?
         add_component("hrm_training", pr_person="person_id")
 
-        # Assets as component of persons
+        # Experience
+        add_component("hrm_experience", pr_person="person_id")
+        add_component("hrm_programme_hours", pr_person=Storage(
+                                                name="hours",
+                                                joinby="person_id"))
+
+        # Assets
         add_component("asset_asset", pr_person="assigned_to_id")
 
         # ---------------------------------------------------------------------
@@ -836,6 +851,7 @@ class S3PersonModel(S3Model):
             ctable = s3db.pr_contact
 
             # Match by first name and last name, and if given, by email address
+            # and/or mobile phone number
             fname = "first_name" in item.data and item.data.first_name
             lname = "last_name" in item.data and item.data.last_name
             if fname and lname:
@@ -854,15 +870,25 @@ class S3PersonModel(S3Model):
                 query = (ptable.first_name.lower() == fname.lower()) & \
                         (ptable.last_name.lower() == lname.lower())
                 email = False
+                sms = False
                 for citem in item.components:
                     if citem.tablename == "pr_contact":
                         if "contact_method" in citem.data and \
-                        citem.data.contact_method == "EMAIL":
+                           citem.data.contact_method == "EMAIL":
                             email = citem.data.value
+                        elif "contact_method" in citem.data and \
+                             citem.data.contact_method == "SMS":
+                            sms = citem.data.value
                 if email != False:
                     query = query & \
-                            (ptable.pe_id == ctable.pe_id) & \
                             (ctable.value.lower() == email.lower())
+                if sms != False:
+                    # @ToDo: Compare like current.msg.sanitise_phone(sms)
+                    query = query & \
+                            (ctable.value == sms)
+                if sms or email:
+                    query = query & \
+                            (ptable.pe_id == ctable.pe_id)
 
             else:
                 # Try Initials (this is a weak test but works well in small teams)
@@ -1708,7 +1734,9 @@ class S3PersonIdentityModel(S3Model):
                                         represent = lambda opt: \
                                                     pr_id_type_opts.get(opt,
                                                                         UNKNOWN_OPT)),
-                                  Field("value"),
+                                  Field("value", label = T("Number")),
+                                  Field("valid_from", "date"),
+                                  Field("valid_until", "date"),
                                   Field("description"),
                                   Field("country_code", length=4),
                                   Field("ia_name", label = T("Issuing Authority")),
@@ -1716,10 +1744,6 @@ class S3PersonIdentityModel(S3Model):
                                   #Field("ia_code"), # Code of issuing authority (if any)
                                   s3.comments(),
                                   *s3.meta_fields())
-
-        # Field configuration
-        table.value.requires = [IS_NOT_EMPTY(),
-                                IS_NOT_ONE_OF(db, "%s.value" % tablename)]
 
         # CRUD Strings
         ADD_IDENTITY = T("Add Identity")
@@ -1740,8 +1764,8 @@ class S3PersonIdentityModel(S3Model):
 
         # Resource configuration
         self.configure(tablename,
+                       deduplicate=self.identity_deduplicate,
                        list_fields=["id",
-                                    "type",
                                     "type",
                                     "value",
                                     "country_code",
@@ -1752,7 +1776,96 @@ class S3PersonIdentityModel(S3Model):
         # Return model-global names to response.s3
         #
         return Storage()
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def identity_deduplicate(item):
+        """ Identity de-duplication """
 
+        if item.id:
+            return
+        if item.tablename == "pr_identity":
+            table = item.table
+            person_id = item.data.get("person_id", None)
+            id_type = item.data.get("type", None)
+            id_value = item.data.get("value", None)
+
+            if person_id is None:
+                return
+
+            query = (table.person_id == person_id) & \
+                    (table.type == id_type) & \
+                    (table.value == id_value) & \
+                    (table.deleted != True)
+            duplicate = current.db(query).select(table.id,
+                                                 limitby=(0, 1)).first()
+            if duplicate:
+                item.id = duplicate.id
+                item.method = item.METHOD.UPDATE
+        return
+
+# =============================================================================
+class S3PersonEducationModel(S3Model):
+    """ Education details for Persons """
+
+    names = ["pr_education"]
+
+    def model(self):
+
+        T = current.T
+        db = current.db
+        request = current.request
+        s3 = current.response.s3
+
+        person_id = self.pr_person_id
+
+        tablename = "pr_education"
+        table = self.define_table("pr_education",
+                                  person_id(label = T("Person"),
+                                            ondelete="CASCADE"),
+                                  Field("level", label=T("Level of Award")),
+                                  Field("award", label=T("Name of Award")),
+                                  Field("institute", label = T("Name of Institute")),
+                                  Field("year",),
+                                  Field("major"),
+                                  Field("grade"),
+                                  s3.comments(),
+                                  *s3.meta_fields())
+
+
+        # CRUD Strings
+        ADD_IDENTITY = T("Add Educational Achievements")
+        s3.crud_strings[tablename] = Storage(
+            title_create = ADD_IDENTITY,
+            title_display = T("Education Details"),
+            title_list = T("Recorded Education Details"),
+            title_update = T("Edit Education Details"),
+            title_search = T("Search Education Details"),
+            subtitle_create = T("Add Education Detail"),
+            subtitle_list = T("Current Education Details"),
+            label_list_button = T("List Education Details"),
+            label_create_button = ADD_IDENTITY,
+            msg_record_created = T("Education details added"),
+            msg_record_modified = T("Education details updated"),
+            msg_record_deleted = T("Education details deleted"),
+            msg_list_empty = T("No education details currently registered"))
+
+        # Resource configuration
+        self.configure("pr_education",
+                       list_fields=["id",
+                                    "year",
+                                    "level",
+                                    "award",
+                                    "major",
+                                    "grade",
+                                    "institute",
+                                   ],
+                      orderby = "~pr_education.year",
+                      sortby = [[1, 'desc']])
+
+        # ---------------------------------------------------------------------
+        # Return model-global names to response.s3
+        #
+        return Storage()
 
 # =============================================================================
 class S3SavedSearch(S3Model):
@@ -2758,19 +2871,25 @@ def pr_pentity_represent(id, show_label=True, default_label="[No ID Tag]"):
     return pe_str
 
 # =============================================================================
-def pr_person_represent(person_id):
-    """ Representation """
+def pr_person_represent(person_id, showlink=False):
+    """
+        Represent a Person in option fields or list views
 
-    table = current.s3db.pr_person
+        @param showlink: whether to make the output into a hyperlink
+    """
 
     if not person_id:
         return current.messages.NONE
     if isinstance(person_id, dict):
-        return s3_fullname(person_id.keys())
+        name = s3_fullname(person_id.keys())
     else:
         name = current.cache.ram("pr_person_%s" % person_id,
                                  lambda: s3_fullname(person_id),
                                  time_expire=60)
+    if showlink:
+        # @ToDo: Use pr controller for other usecases
+        name = A(name,
+                 _href = URL(c="hrm", f="person", args=[person_id]))
     return name
 
 # =============================================================================
@@ -2964,12 +3083,13 @@ def pr_contacts(r, **attr):
                 "SMS": 1,
                 "EMAIL": 2,
                 "WORK_PHONE": 3,
-                "SKYPE": 4,
-                "RADIO": 5,
-                "TWITTER": 6,
-                "FACEBOOK": 7,
-                "FAX": 8,
-                "OTHER": 9
+                "HOME_PHONE": 4,
+                "SKYPE": 5,
+                "RADIO": 6,
+                "TWITTER": 7,
+                "FACEBOOK": 8,
+                "FAX": 9,
+                "OTHER": 10
             }
         return keys[key[0]]
     items.sort(key=mysort)

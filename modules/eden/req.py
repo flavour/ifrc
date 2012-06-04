@@ -301,6 +301,9 @@ class S3RequestModel(S3Model):
         if len(req_type_opts) == 1:
             k,v = req_type_opts.popitem()
             table.type.default = k
+            table.type.requires = k
+            table.type.writable = False
+            table.type.readable = False
 
         if not settings.get_req_use_req_number():
             table.req_ref.readable = False
@@ -2042,9 +2045,9 @@ def req_match():
     """
         Function to be called from controller functions to display all
         requests as a tab for a site.
-        @ToDo: Filter out requests from this site
     """
 
+    response = current.response
     request = current.request
     manager = current.manager
 
@@ -2100,6 +2103,7 @@ def req_match():
     else:
         rheader = None
 
+    response.s3.filter = (s3db.req_req.site_id != site_id)
     manager.configure("req_req", insertable=False)
     output = current.rest_controller("req", "req", rheader = rheader)
 
