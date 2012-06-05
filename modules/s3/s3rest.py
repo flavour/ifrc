@@ -57,6 +57,7 @@ except ImportError:
     raise
 
 from gluon import *
+from gluon.languages import lazyT
 from gluon.sql import Row, Rows
 from gluon.storage import Storage
 from gluon.tools import callback
@@ -1514,11 +1515,11 @@ class S3Request(object):
         meta = str(_vars.get("meta", False)).lower() == "true"
         opts = str(_vars.get("options", False)).lower() == "true"
         refs = str(_vars.get("references", False)).lower() == "true"
-        output = resource.struct(meta=meta,
-                                 options=opts,
-                                 references=refs,
-                                 stylesheet=stylesheet,
-                                 as_json=as_json)
+        output = resource.export_struct(meta=meta,
+                                        options=opts,
+                                        references=refs,
+                                        stylesheet=stylesheet,
+                                        as_json=as_json)
         if output is None:
             # Transformation error
             xml = manager.xml
@@ -1540,11 +1541,11 @@ class S3Request(object):
         resource = r.resource
         representation = r.representation
         if representation == "xml":
-            output = resource.fields(component=r.component_name)
+            output = resource.export_fields(component=r.component_name)
             content_type = "text/xml"
         elif representation == "s3json":
-            output = resource.fields(component=r.component_name,
-                                     as_json=True)
+            output = resource.export_fields(component=r.component_name,
+                                            as_json=True)
             content_type = "application/json"
         else:
             r.error(501, r.ERROR.BAD_FORMAT)
@@ -1589,15 +1590,15 @@ class S3Request(object):
         component = r.component_name
         representation = r.representation
         if representation == "xml":
-            output = resource.options(component=component,
-                                      fields=fields,
-                                      show_uids=show_uids)
+            output = resource.export_options(component=component,
+                                             fields=fields,
+                                             show_uids=show_uids)
             content_type = "text/xml"
         elif representation == "s3json":
-            output = resource.options(component=component,
-                                      fields=fields,
-                                      only_last=only_last,
-                                      as_json=True)
+            output = resource.export_options(component=component,
+                                             fields=fields,
+                                             only_last=only_last,
+                                             as_json=True)
             content_type = "application/json"
         else:
             r.error(501, r.ERROR.BAD_FORMAT)
@@ -2780,7 +2781,8 @@ class S3Resource(object):
 
         vfltr = self.get_filter()
         if vfltr is not None:
-            rows = self.sqltable(*fields, as_rows=True)
+            fs = [f.name for f in fields]
+            rows = self.sqltable(fields=fs, as_rows=True) or []
         else:
             query = self.get_query()
             rows = current.db(query).select(left=left, *fields)
@@ -3458,6 +3460,7 @@ class S3Resource(object):
 
                 if stylesheet is not None:
                     t = xml.transform(t, stylesheet, **args)
+                    _debug(t)
                     if not t:
                         raise SyntaxError(xml.error)
 
@@ -3693,12 +3696,12 @@ class S3Resource(object):
     # -------------------------------------------------------------------------
     # XML introspection
     # -------------------------------------------------------------------------
-    def options(self,
-                component=None,
-                fields=None,
-                only_last=False,
-                show_uids=False,
-                as_json=False):
+    def export_options(self,
+                       component=None,
+                       fields=None,
+                       only_last=False,
+                       show_uids=False,
+                       as_json=False):
         """
             Export field options of this resource as element tree
 
@@ -3716,10 +3719,10 @@ class S3Resource(object):
         if component is not None:
             c = self.components.get(component, None)
             if c:
-                tree = c.options(fields=fields,
-                                 only_last=only_last,
-                                 show_uids=show_uids,
-                                 as_json=as_json)
+                tree = c.export_options(fields=fields,
+                                        only_last=only_last,
+                                        show_uids=show_uids,
+                                        as_json=as_json)
                 return tree
             else:
                 raise AttributeError
@@ -3757,7 +3760,7 @@ class S3Resource(object):
                 return self.xml.tostring(tree, pretty_print=False)
 
     # -------------------------------------------------------------------------
-    def fields(self, component=None, as_json=False):
+    def export_fields(self, component=None, as_json=False):
         """
             Export a list of fields in the resource as element tree
 
@@ -3769,7 +3772,7 @@ class S3Resource(object):
         if component is not None:
             c = self.components.get(component, None)
             if c:
-                tree = c.fields()
+                tree = c.export_fields()
                 return tree
             else:
                 raise AttributeError
@@ -3782,13 +3785,13 @@ class S3Resource(object):
                 return self.xml.tostring(tree, pretty_print=True)
 
     # -------------------------------------------------------------------------
-    def struct(self,
-               meta=False,
-               options=False,
-               references=False,
-               stylesheet=None,
-               as_json=False,
-               as_tree=False):
+    def export_struct(self,
+                      meta=False,
+                      options=False,
+                      references=False,
+                      stylesheet=None,
+                      as_json=False,
+                      as_tree=False):
         """
             Get the structure of the resource
 
@@ -6098,6 +6101,8 @@ class S3TypeConverter:
             @raise ValueError: if the value conversion fails
         """
 
+        if isinstance(a, lazyT):
+            a = str(a)
         if b is None:
             return None
         if type(a) is type:
@@ -6135,12 +6140,15 @@ class S3TypeConverter:
                 return [cnv(a[0], item) for item in b]
             else:
                 return b
+        if isinstance(b, (list, tuple)):
+            cnv = cls.convert
+            return [cnv(a, item) for item in b]
         if isinstance(a, basestring):
             return cls._str(b)
-        if isinstance(a, int):
-            return cls._int(b)
         if isinstance(a, bool):
             return cls._bool(b)
+        if isinstance(a, int):
+            return cls._int(b)
         if isinstance(a, long):
             return cls._long(b)
         if isinstance(a, float):

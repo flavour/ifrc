@@ -751,6 +751,9 @@ class GIS(object):
             results = {}
 
         id = feature_id
+        # if we don't have a feature or a feature id return the empty dict
+        if not feature_id and not feature:
+            return results
         if not feature_id and "path" not in feature and "parent" in feature:
             # gis_location_onvalidation on a Create => no ID yet
             # Read the Parent's path instead
@@ -1926,7 +1929,7 @@ class GIS(object):
                                      ftable.controller,
                                      ftable.function,
                                      ftable.trackable,
-                                     #ftable.polygons,
+                                     ftable.polygons,
                                      ftable.popup_label,
                                      ftable.popup_fields,
                                      limitby=(0, 1)).first()
@@ -1938,7 +1941,7 @@ class GIS(object):
                 popup_label = frow.popup_label
                 popup_fields = frow.popup_fields
                 trackable = frow.trackable
-                #polygons = frow.polygons
+                polygons = frow.polygons
                 controller = frow.controller or resource.prefix
                 function = frow.function or resource.name
             else:
@@ -1947,7 +1950,7 @@ class GIS(object):
                 popup_label = ""
                 popup_fields = "name"
                 trackable = False
-                #polygons = False
+                polygons = False
                 controller = resource.prefix
                 function = resource.name
 
@@ -5432,6 +5435,8 @@ class WFSLayer(Layer):
                 output,
                 version = (self.version, ("1.1.0",)),
                 geometryName = (self.geometryName, ("the_geom",)),
+                username = (self.username, (None,)),
+                password = (self.password, (None,)),
                 styleField = (self.style_field, (None,)),
                 styleValues = (self.style_values, ("{}", None)),
                 projection = (self.projection.epsg, (4326,)),
@@ -5484,6 +5489,8 @@ class WMSLayer(Layer):
                 version = (self.version, ("1.1.1",)),
                 format = (self.img_format, ("image/png",)),
                 map = (self.map, (None,)),
+                username = (self.username, (None,)),
+                password = (self.password, (None,)),
                 buffer = (self.buffer, (0,)),
                 base = (self.base, (False,)),
                 _base = (self._base, (False,)),

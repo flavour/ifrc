@@ -2152,8 +2152,8 @@ class S3FeatureLayerModel(S3Model):
                                                               T("Used to build onHover Tooltip & 1st field also used in Cluster Popups to differentiate between records.")))),
                         gis_layer_folder()(),
                         # Disabled until re-implemented:
-                        #Field("polygons", "boolean", default=False,
-                        #      label=T("Display Polygons?")),
+                        Field("polygons", "boolean", default=False,
+                              label=T("Display Polygons?")),
                         gis_opacity()(),
                         # @ToDo: Expose the Graphic options
                         gis_refresh()(),
@@ -2925,6 +2925,14 @@ class S3MapModel(S3Model):
                                    comment=DIV(_class="tooltip",
                                                _title="%s|%s" % (T("Title"),
                                                                  T("The attribute which is used for the title of popups.")))),
+                             Field("username", label=T("Username"),
+                                   comment=DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("Username"),
+                                                                 T("Optional username for HTTP Basic Authentication.")))),
+                             Field("password", label=T("Password"),
+                                   comment=DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("Password"),
+                                                                 T("Optional password for HTTP Basic Authentication.")))),
                              Field("style_field", label=T("Style Field"),
                                    comment=DIV(_class="tooltip",
                                                _title="%s|%s" % (T("Style Field"),
@@ -3003,6 +3011,14 @@ class S3MapModel(S3Model):
                                                                  T("Optional selection of a MapServer map.")))),
                              Field("layers", label=T("Layers"),
                                    requires=IS_NOT_EMPTY()),
+                             Field("username", label=T("Username"),
+                                   comment=DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("Username"),
+                                                                 T("Optional username for HTTP Basic Authentication.")))),
+                             Field("password", label=T("Password"),
+                                   comment=DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("Password"),
+                                                                 T("Optional password for HTTP Basic Authentication.")))),
                              Field("img_format", length=32, label=T("Format"),
                                     requires=IS_NULL_OR(IS_IN_SET(wms_img_formats)),
                                    default="image/png"),
@@ -3576,8 +3592,10 @@ def gis_location_represent_row(location, showlink=True, simpletext=False):
                 represent_text = lat_lon_represent(location)
             if location.parent:
                 if represent_text:
-                    represent_text = "%s, %s" % \
-                        (represent_text, parent_represent(location))
+                    parent_repr = parent_represent(location)
+                    if parent_repr:
+                        represent_text = "%s, %s" % \
+                            (represent_text, parent_repr)
                 else:
                     represent_text = parent_represent(location)
             if not represent_text:
@@ -3593,9 +3611,11 @@ def gis_location_represent_row(location, showlink=True, simpletext=False):
 
     return represent
 
-# =============================================================================
+# -----------------------------------------------------------------------------
 def gis_location_represent(record, showlink=True, simpletext=False):
-    """ Represent a Location given either its id or full Row """
+    """
+        Represent a Location given either its id or full Row
+    """
 
     if not record:
         return current.messages.NONE
@@ -3620,10 +3640,12 @@ def gis_location_represent(record, showlink=True, simpletext=False):
 
     return gis_location_represent_row(location, showlink, simpletext)
 
+# -----------------------------------------------------------------------------
 def gis_location_lx_represent(record):
     """
-    Represent a location, given either its id or full Row, as a simple string
+        Represent a location, given either its id or full Row, as a simple string
     """
+
     if not record:
         return current.messages.None
 
@@ -3634,7 +3656,10 @@ def gis_location_lx_represent(record):
         s3db = current.s3db
         cache = s3db.cache
         table = s3db.gis_location
-        location = db(table.id == record).select(cache=cache, limitby=(0, 1)).first()
+        location = db(table.id == record).select(table.id,
+                                                 table.name,
+                                                 cache=cache,
+                                                 limitby=(0, 1)).first()
 
     parents = Storage()
     parents = current.gis.get_parent_per_level(parents,

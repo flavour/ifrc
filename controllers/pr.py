@@ -220,6 +220,7 @@ def person():
             (T("Contact Details"), "contacts"),
             (T("Images"), "image"),
             (T("Identity"), "identity"),
+            (T("Education"), "education"),
             (T("Teams"), "group_membership"),
             (T("Journal"), "note"),
             (T("Skills"), "competency"),
@@ -374,6 +375,14 @@ def image():
     """ RESTful CRUD controller """
 
     return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def education():
+    """ RESTful CRUD controller """
+
+    tablename = "pr_education"
+    table = s3db[tablename]
+    return s3_rest_controller("pr", "education")
 
 # -----------------------------------------------------------------------------
 #def contact():

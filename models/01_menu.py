@@ -29,7 +29,7 @@ if auth.permission.format in ("html"):
             #MM("Skill List", c="hrm", f="skill"),
             MM("Training Events", c="hrm", f="training_event"),
             MM("Training Courses", c="hrm", f="course"),
-            #MM("Certificate List", c="hrm", f="certificate"),
+            MM("Certificate List", c="hrm", f="certificate"),
         ),
         homepage("hrm", name=T("Volunteers"),
                  vars=dict(group="volunteer"))(
@@ -214,14 +214,14 @@ if auth.permission.format in ("html"):
                       check=manager_mode)(
                         M("New Training Course", m="create"),
                         M("List All"),
-                        #M("Course Certificates", f="course_certificate"),
+                        M("Course Certificates", f="course_certificate"),
                     ),
-                    #M("Certificate Catalog", c="hrm", f="certificate",
-                      #check=manager_mode)(
-                        #M("New Certificate", m="create"),
-                        #M("List All"),
-                        ##M("Skill Equivalence", f="certificate_skill"),
-                    #),
+                    M("Certificate Catalog", c="hrm", f="certificate",
+                      check=manager_mode)(
+                        M("New Certificate", m="create"),
+                        M("List All"),
+                        #M("Skill Equivalence", f="certificate_skill"),
+                    ),
                     M("Profile", c="hrm", f="person",
                       check=personal_mode, vars=dict(mode="personal")),
                     # This provides the link to switch to the manager mode:

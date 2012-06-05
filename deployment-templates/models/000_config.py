@@ -387,6 +387,7 @@ deployment_settings.inv.collapse_tabs = True
 #         4: T("Local Purchases"),
 #         5: T("Confiscated Goods from Bureau Of Customs")
 #    }
+
 # Supply
 deployment_settings.supply.use_alt_name = False
 # Do not edit after deployment
@@ -399,12 +400,16 @@ deployment_settings.org.site_code_len = 3
 # Human Resource Management
 # Uncomment to allow Staff & Volunteers to be registered without an email address
 deployment_settings.hrm.email_required = False
+# Uncomment to allow HR records to be deletable rather than just marking them as obsolete
+#deployment_settings.hrm.deletable = True
 # Uncomment to hide the Staff resource
 #deployment_settings.hrm.show_staff = False
 # Uncomment to hide the Volunteer resource
 #deployment_settings.hrm.show_vols = False
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
 #deployment_settings.hrm.skill_types = True
+# Uncomment to use an alternate table for HR experience
+deployment_settings.hrm.experience = "programme"
 
 # Project Tracking
 # Uncomment this to use settings suitable for a global/regional organisation (e.g. DRR)
@@ -657,6 +662,12 @@ deployment_settings.modules = OrderedDict([
            restricted = True,
            module_type = 10,
        )),
+    #("security", Storage(
+    #       name_nice = T("Security"),
+    #       #description = "Security Management System",
+    #       restricted = True,
+    #       module_type = 10,
+    #   )),
     #("fire", Storage(
     #       name_nice = T("Fire Stations"),
     #       #description = "Fire Station Management",
