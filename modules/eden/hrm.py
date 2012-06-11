@@ -593,7 +593,7 @@ class S3HRJobModel(S3Model):
                                   # Only included in order to be able to set owned_by_entity to filter appropriately
                                   organisation_id(
                                                   default = auth.user and \
-                                                            org_root_organisation(organisation_id=auth.user.organisation_id) or \
+                                                            self.org_root_organisation(organisation_id=auth.user.organisation_id) or \
                                                             None,
                                                   readable = False,
                                                   writable = False,
@@ -1290,7 +1290,7 @@ class S3HRSkillModel(S3Model):
                              # Only included in order to be able to set owned_by_entity to filter appropriately
                              organisation_id(
                                              default = auth.user and \
-                                                       org_root_organisation(organisation_id=auth.user.organisation_id) or \
+                                                       self.org_root_organisation(organisation_id=auth.user.organisation_id) or \
                                                        None,
                                              readable = False,
                                              writable = False,
@@ -2448,7 +2448,7 @@ class S3HRProgrammeModel(S3Model):
                                   # Only included in order to be able to set owned_by_entity to filter appropriately
                                   organisation_id(
                                                   default = auth.user and \
-                                                            org_root_organisation(organisation_id=auth.user.organisation_id) or \
+                                                            self.org_root_organisation(organisation_id=auth.user.organisation_id) or \
                                                             None,
                                                   readable = False,
                                                   writable = False,
@@ -2933,12 +2933,12 @@ def hrm_rheader(r, tabs=[]):
                     (T("Contacts"), "contacts"),
                     (T("Trainings"), "training"),
                     (T("Certificates"), "certification"),
-                    (T("Skills"), "competency"),
-                    (T("Credentials"), "credential"),
+                    #(T("Skills"), "competency"),
+                    #(T("Credentials"), "credential"),
                     experience_tab,
-                    (T("Teams"), "group_membership"),
+                    #(T("Teams"), "group_membership"),
                     (T("Assets"), "asset"),
-                    (T("User Roles"), "roles"),
+                    (T("Roles"), "roles"),
                    ]
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(A(s3_avatar_represent(record.id,
