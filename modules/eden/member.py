@@ -63,10 +63,13 @@ class S3MembersModel(S3Model):
         # ---------------------------------------------------------------------
         # Members
         #
+        # These are CVTL types
+        # @ToDo: Convert to a Table to make it per-NS
         member_type_opts = {
-            1: T("Normal Member"),
-            2: T("Life Member"),
-            3: T("Honorary Member"),
+            1: T("Active"),
+            2: T("Subscribing"),
+            3: T("Honorary"),
+            4: T("Youth"),
         }
 
         start_year = 2010 # @ToDo: deployment_setting
