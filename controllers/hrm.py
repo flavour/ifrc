@@ -242,7 +242,8 @@ def human_resource():
                                    vars = {"hrm_id": "[id]"}),
                         "_class": "action-btn",
                         "label": str(T("Send Message"))})
-            output["dashboard"] = hrm_dashboard
+            if isinstance(output, dict):
+                output["dashboard"] = hrm_dashboard
         elif r.representation == "plain" and \
              r.method !="search":
             # Map Popups
