@@ -96,6 +96,13 @@ def human_resource():
     tablename = "hrm_human_resource"
     table = s3db[tablename]
 
+    # Generate Service Record
+    s3mgr.model.set_method("hrm",
+                           "human_resource",
+                           method="form",
+                           action=s3db.hrm_service_record
+                          )
+
     # Must specify a group to create HRs
     # Interactive
     group = request.vars.get("group", None)
@@ -139,15 +146,7 @@ def human_resource():
         s3mgr.configure(tablename,
                         list_fields = list_fields)
         table.job_role_id.label = T("Volunteer Role")
-        s3.crud_strings[tablename].update(
-            title_create = T("Add Volunteer"),
-            title_display = T("Volunteer Information"),
-            title_list = T("Volunteers"),
-            title_search = T("Search Volunteers"),
-            subtitle_create = T("Add New Volunteer"),
-            subtitle_list = T("Volunteers"),
-            label_create_button = T("Add Volunteer"),
-            msg_record_created = T("Volunteer added"))
+        s3.crud_strings[tablename] = s3.crud_strings["hrm_volunteer"]
         # Remove inappropriate filters from the Search widget
         human_resource_search = s3mgr.model.get_config(tablename,
                                                        "search_method")
@@ -183,12 +182,7 @@ def human_resource():
                       ]
         s3mgr.configure(tablename,
                         list_fields = list_fields)
-        s3.crud_strings[tablename].update(
-            title_create = T("Add Staff Member"),
-            title_list = T("Staff"),
-            title_search = T("Search Staff"),
-            title_upload = T("Import Staff & Volunteers"),
-        )
+        s3.crud_strings[tablename] = s3.crud_strings["hrm_volunteer"]
         if "expiring" in request.get_vars:
             s3.filter = s3.filter & \
                 (table.end_date < (request.utcnow + datetime.timedelta(weeks=4)))
@@ -204,6 +198,8 @@ def human_resource():
                         search_method = human_resource_search)
 
     def prep(r):
+        if r.method == "form":
+            return True
         if r.interactive:
             # Assume volunteers only between 12-81
             s3db.pr_person.date_of_birth.widget = S3DateWidget(past=972, future=-144)
@@ -286,12 +282,7 @@ def staff():
                    (T("Contract End Date"), "end_date"),
                    "status",
                   ]
-    s3.crud_strings[tablename].update(
-        title_create = T("Add Staff Member"),
-        title_list = T("Staff"),
-        title_search = T("Search Staff"),
-        title_upload = T("Import Staff"),
-    )
+    s3.crud_strings[tablename] = s3.crud_strings["hrm_staff"]
     if "expiring" in request.get_vars:
         s3.filter = s3.filter & \
             (table.end_date < (request.utcnow + datetime.timedelta(weeks=4)))
@@ -369,7 +360,6 @@ def volunteer():
     """
         Volunteer Controller
     """
-
     tablename = "hrm_human_resource"
     table = s3db[tablename]
 
@@ -464,17 +454,7 @@ def volunteer():
         human_resource_search._S3Search__advanced.insert(3, search_widget)
     else:
         list_fields.append("status")
-    s3.crud_strings[tablename].update(
-        title_create = T("Add Volunteer"),
-        title_display = T("Volunteer Information"),
-        title_list = T("Volunteers"),
-        title_search = T("Search Volunteers"),
-        title_upload = T("Import Volunteers"),
-        subtitle_create = T("Add New Volunteer"),
-        subtitle_list = T("Volunteers"),
-        label_create_button = T("Add Volunteer"),
-        msg_record_created = T("Volunteer added"),
-    )
+    s3.crud_strings[tablename] = s3.crud_strings["hrm_volunteer"]
     s3mgr.configure(tablename,
                     list_fields = list_fields,
                     report_options = report_options,
@@ -834,6 +814,7 @@ def person():
     else:
         s3.crud_strings[tablename].update(
             title_upload = T("Import Volunteers"))
+        table.occupation.label = T("Previous Job")
         # Default type for HR
         table = db.hrm_human_resource
         table.type.default = 2
@@ -1053,16 +1034,14 @@ def group():
 
     # CRUD Strings
     ADD_TEAM = T("Add Team")
-    LIST_TEAMS = T("List Teams")
     s3.crud_strings[tablename] = Storage(
         title_create = ADD_TEAM,
         title_display = T("Team Details"),
-        title_list = LIST_TEAMS,
+        title_list = T("Teams"),
         title_update = T("Edit Team"),
         title_search = T("Search Teams"),
         subtitle_create = T("Add New Team"),
-        subtitle_list = T("Teams"),
-        label_list_button = LIST_TEAMS,
+        label_list_button = T("List Teams"),
         label_create_button = T("Add New Team"),
         label_search_button = T("Search Teams"),
         msg_record_created = T("Team added"),
@@ -1077,7 +1056,6 @@ def group():
         title_update = T("Edit Membership"),
         title_search = T("Search Member"),
         subtitle_create = T("Add New Member"),
-        subtitle_list = T("Current Team Members"),
         label_list_button = T("List Members"),
         label_create_button = T("Add Team Member"),
         label_delete_button = T("Delete Membership"),
@@ -1357,7 +1335,6 @@ def training_event():
                 title_search = T("Search Participants"),
                 title_upload = T("Import Participant Participants"),
                 subtitle_create = T("Add Participant"),
-                subtitle_list = T("Participants"),
                 label_list_button = T("List Participants"),
                 label_create_button = T("Add New Participant"),
                 label_delete_button = T("Delete Participant"),
