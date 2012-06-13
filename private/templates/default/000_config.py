@@ -297,6 +297,7 @@ deployment_settings.security.map = True
 # Should potentially large dropdowns be turned into autocompletes?
 # (unused currently)
 #deployment_settings.ui.autocomplete = True
+#deployment_settings.ui.read_label = "Details"
 #deployment_settings.ui.update_label = "Edit"
 # Enable this for a UN-style deployment
 #deployment_settings.ui.cluster = True
