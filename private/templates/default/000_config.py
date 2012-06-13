@@ -363,8 +363,6 @@ deployment_settings.hrm.email_required = False
 #deployment_settings.hrm.deletable = True
 # Uncomment to hide the Staff resource
 #deployment_settings.hrm.show_staff = False
-# Uncomment to hide the Volunteer resource
-#deployment_settings.hrm.show_vols = False
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
 #deployment_settings.hrm.skill_types = True
 # Uncomment to use an alternate table for HR experience
@@ -463,7 +461,7 @@ deployment_settings.modules = OrderedDict([
             module_type = None,
         )),
     ("org", Storage(
-            name_nice = T("Staff & Volunteers"),
+            name_nice = T("Staff"),
             #name_nice = T("Organizations"),
             #description = 'Lists "who is doing what & where". Allows relief agencies to coordinate their activities',
             restricted = True,
@@ -471,8 +469,14 @@ deployment_settings.modules = OrderedDict([
         )),
     # All modules below here should be possible to disable safely
     ("hrm", Storage(
-            name_nice = T("Staff & Volunteers"),
-            description = T("Human Resource Management"),
+            name_nice = T("Staff"),
+            #description = "Human Resource Management",
+            restricted = True,
+            module_type = 2,
+        )),
+    ("vol", Storage(
+            name_nice = T("Volunteers"),
+            #description = "Human Resource Management",
             restricted = True,
             module_type = 2,
         )),

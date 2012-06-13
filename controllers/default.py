@@ -165,7 +165,7 @@ $('.marker').mouseout(function() {
                         IMG(_src=URL(c="static", f="img",
                                      args=["ifrc", "graphic_volunteers.png"]),
                             _alt=T("Volunteers")),
-                      _href=URL(c="hrm", f="volunteer",
+                      _href=URL(c="vol", f="volunteer",
                                 args=["search"]))),
                    LI(A(H2(T("Members")),
                         P(T("Add new and manage existing members.")),
