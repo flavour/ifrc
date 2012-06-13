@@ -17,7 +17,6 @@ if module not in deployment_settings.modules:
 # S3 framework functions
 # -----------------------------------------------------------------------------
 def index():
-
     """ Module's Home Page """
 
     module_name = deployment_settings.modules[module].name_nice
@@ -26,36 +25,23 @@ def index():
 
 # =============================================================================
 def shelter_type():
-
     """
         RESTful CRUD controller
         List / add shelter types (e.g. NGO-operated, Government evacuation center,
         School, Hospital -- see Agasti opt_camp_type.)
     """
 
-    tabs = [(T("Basic Details"), None),
-            (s3.crud_strings["cr_shelter"].subtitle_list, "shelter")]
-
-    rheader = lambda r: s3db.cr_shelter_rheader(r, tabs=tabs)
-
-    # @ToDo: Shelters per type display is broken -- always returns none.
-    output = s3_rest_controller(rheader=rheader)
+    output = s3_rest_controller(rheader=s3db.cr_shelter_rheader)
     return output
 
 # -----------------------------------------------------------------------------
 def shelter_service():
-
     """
         RESTful CRUD controller
         List / add shelter services (e.g. medical, housing, food, ...)
     """
 
-    tabs = [(T("Basic Details"), None),
-            (s3.crud_strings["cr_shelter"].subtitle_list, "shelter")]
-
-    rheader = lambda r: s3db.cr_shelter_rheader(r, tabs=tabs)
-
-    output = s3_rest_controller(rheader=rheader)
+    output = s3_rest_controller()
     return output
 
 # =============================================================================
@@ -239,7 +225,6 @@ def cr_shelter_prep(r):
                     title_update = T("Edit Registration"),
                     title_search = T("Search Registations"),
                     subtitle_create = REGISTER_LABEL,
-                    subtitle_list = T("Current Registrations"),
                     label_list_button = T("List Registrations"),
                     label_create_button = T("Register Person"),
                     msg_record_created = T("Registration added"),

@@ -1,4 +1,3 @@
-
 /*
  * Table
  */
@@ -31,6 +30,10 @@ table.dataTable td.dataTables_empty {
 	text-align: center;
 }
 
+/*
+ * DataTables row classes
+ */
+
 table.dataTable tr.odd { background-color: #E2E4FF; }
 table.dataTable tr.even { background-color: white; }
 
@@ -41,6 +44,70 @@ table.dataTable tr.even td.sorting_1 { background-color: #EAEBFF; }
 table.dataTable tr.even td.sorting_2 { background-color: #F2F3FF; }
 table.dataTable tr.even td.sorting_3 { background-color: #F9F9FF; }
 
+table.dataTable tr.even.row_selected td { background-color: #60F6AD; }
+table.dataTable tr.even.row_selected td.sorting_1 { background-color: #40FA8D; }
+table.display tr.odd.row_selected td { background-color: #40FA8D; }
+table.display tr.odd.row_selected td.sorting_1 { background-color: #20F0AD; }
+
+table.dataTable tr.odd.dtalert { background-color: #FFFFC0; }
+table.dataTable tr.odd.dtalert td.sorting_1 { background-color: #FFFFB0; }
+table.dataTable tr.odd.dtalert td.sorting_2 { background-color: #FFFFA0; }
+table.dataTable tr.odd.dtalert td.sorting_3 { background-color: #FFFF90; }
+table.dataTable tr.even.dtalert { background-color: #FFFFA0; }
+table.dataTable tr.even.dtalert td.sorting_1 { background-color: #FFFF90; }
+table.dataTable tr.even.dtalert td.sorting_2 { background-color: #FFFF80; }
+table.dataTable tr.even.dtalert td.sorting_3 { background-color: #FFFF70; }
+
+table.dataTable tr.dtalert .action-btn,
+table.dataTable tr.dtalert .delete-btn {
+	background-color: #D0D004;
+	color: #444420;
+}
+
+table.dataTable tr.dtalert .action-btn:hover,
+table.dataTable tr.dtalert .delete-btn:hover {
+    text-decoration: none;
+    color: #222;
+    background-color: #EEED04;
+    border-right: 1px solid #4589ce;
+    border-bottom: 1px solid #4589ce;
+    border-left: 1px solid #000;
+    border-top: 1px solid #000;
+    padding: 2px 4px 2px 4px;
+}
+
+table.dataTable tr.dtdisable {
+    text-shadow: #CCC 1px 1px 1px;
+	color: #888;
+}
+
+table.dataTable tr.odd.dtwarning { background-color: #FFD9D9; }
+table.dataTable tr.odd.dtwarning td.sorting_1 { background-color: #FFB6B6; }
+table.dataTable tr.odd.dtwarning td.sorting_2 {	background-color: #FFA6A6; }
+table.dataTable tr.odd.dtwarning td.sorting_3 { background-color: #FF9696; }
+table.dataTable tr.even.dtwarning { background-color: #FFA6A6; }
+table.dataTable tr.even.dtwarning td.sorting_1 { background-color: #FF8383; }
+table.dataTable tr.even.dtwarning td.sorting_2 { background-color: #FF7373; }
+table.dataTable tr.even.dtwarning td.sorting_3 { background-color: #FF6363; }
+
+table.dataTable tr.dtwarning .action-btn,
+table.dataTable tr.dtwarning .delete-btn{
+	background-color: #D07060;
+	color: #431;
+    text-shadow: #FFF 0px 0px 0px;
+}
+
+table.dataTable tr.dtwarning .action-btn:hover,
+table.dataTable tr.dtwarning .delete-btn:hover {
+    text-decoration: none;
+    color: #fff;
+    background-color: #bb3377;
+    border-right: 1px solid #4589ce;
+    border-bottom: 1px solid #4589ce;
+    border-left: 1px solid #000;
+    border-top: 1px solid #000;
+    padding: 2px 4px 2px 4px;
+}
 
 /*
  * Table wrapper
@@ -170,7 +237,6 @@ table.dataTable tr.even td.sorting_3 { background-color: #F9F9FF; }
 	background-color: #99B3FF;
 }
 
-
 /*
  * Processing indicator
  */
@@ -190,7 +256,6 @@ table.dataTable tr.even td.sorting_3 { background-color: #F9F9FF; }
 	background-color: white;
 }
 
-
 /*
  * Sorting
  */
@@ -205,7 +270,6 @@ table.dataTable th:active {
 	outline: none;
 }
 
-
 /*
  * Scrolling
  */
@@ -216,8 +280,6 @@ table.dataTable th:active {
 .dataTables_scrollBody {
 	*margin-top: -1px;
 }
-
-
 
 .paginate_enabled_previous { background: url('../../img/jquery.dataTables/back_enabled.png') no-repeat top left; }
 .paginate_enabled_previous:hover { background: url('../../img/jquery.dataTables/back_enabled_hover.png') no-repeat top left; }
@@ -233,3 +295,7 @@ table.dataTable th:active {
 
 .sorting_asc_disabled { background: url('../../img/jquery.dataTables/sort_asc_disabled.png') no-repeat center right; }
 .sorting_desc_disabled { background: url('../../img/jquery.dataTables/sort_desc_disabled.png') no-repeat center right; }
+
+/*
+ * Row classes
+ */

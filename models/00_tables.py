@@ -244,7 +244,7 @@ s3.comments = s3_comments
 currency_type_opts = deployment_settings.get_fin_currencies()
 default_currency = deployment_settings.get_fin_currency_default()
 
-currency_type = S3ReusableField("currency_type", "string",
+currency_type = S3ReusableField("currency_type",
                                 length = 3,
                                 #notnull=True,
                                 requires = IS_IN_SET(currency_type_opts.keys(),
@@ -557,16 +557,14 @@ s3.address_update = address_update
 # Default CRUD strings
 #
 ADD_RECORD = T("Add Record")
-LIST_RECORDS = T("List Records")
 s3.crud_strings = Storage(
     title_create = ADD_RECORD,
     title_display = T("Record Details"),
-    title_list = LIST_RECORDS,
+    title_list = T("Records"),
     title_update = T("Edit Record"),
     title_search = T("Search Records"),
     subtitle_create = T("Add New Record"),
-    subtitle_list = T("Available Records"),
-    label_list_button = LIST_RECORDS,
+    label_list_button = T("List Records"),
     label_create_button = ADD_RECORD,
     label_delete_button = T("Delete Record"),
     msg_record_created = T("Record added"),

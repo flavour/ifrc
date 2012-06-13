@@ -230,18 +230,16 @@ class S3InventoryModel(S3Model):
         # CRUD strings
         INV_ITEM = T("Warehouse Stock")
         ADD_INV_ITEM = T("Add Stock to Warehouse")
-        LIST_INV_ITEMS = T("List Stock in Warehouse")
         s3.crud_strings[tablename] = Storage(
             title_create = ADD_INV_ITEM,
             title_display = T("Warehouse Stock Details"),
-            title_list = LIST_INV_ITEMS,
+            title_list = T("Stock in Warehouse"),
             title_update = T("Edit Warehouse Stock"),
             title_search = T("Search Warehouse Stock"),
             title_report = T("Warehouse Stock Report"),
             title_upload = T("Import Warehouse Stock"),
             subtitle_create = ADD_INV_ITEM,
-            subtitle_list = T("Warehouse Stock"),
-            label_list_button = LIST_INV_ITEMS,
+            label_list_button = T("List Stock in Warehouse"),
             label_create_button = ADD_INV_ITEM,
             label_delete_button = T("Remove Stock from Warehouse"),
             msg_record_created = T("Stock added to Warehouse"),
@@ -729,16 +727,14 @@ class S3TrackingModel(S3Model):
 
         # CRUD strings
         ADD_SEND = T("Add New Shipment")
-        LIST_SEND = T("List Sent Shipments")
         crud_strings[tablename] = Storage(
             title_create = ADD_SEND,
             title_display = T("Sent Shipment Details"),
-            title_list = LIST_SEND,
+            title_list = T("Sent Shipments"),
             title_update = T("Shipment to Send"),
             title_search = T("Search Sent Shipments"),
             subtitle_create = ADD_SEND,
-            subtitle_list = T("Sent Shipments"),
-            label_list_button = LIST_SEND,
+            label_list_button = T("List Sent Shipments"),
             label_create_button = ADD_SEND,
             label_delete_button = T("Delete Sent Shipment"),
             msg_record_created = T("Shipment Created"),
@@ -937,14 +933,20 @@ class S3TrackingModel(S3Model):
                         name="recv_search_text_simple",
                         label=T("Search"),
                         comment=recv_search_comment,
-                        field=[ "from_person",
+                        field=[
+                                "sender_id$first_name",
+                                "sender_id$middle_name",
+                                "sender_id$last_name",
                                 "comments",
                                 "from_site_id$name",
                                 "recipient_id$first_name",
                                 "recipient_id$middle_name",
                                 "recipient_id$last_name",
-                                "site_id$name"
-                                ]
+                                "site_id$name",
+                                "recv_ref",
+                                "send_ref",
+                                "purchase_ref",
+                              ]
                       )),
             advanced=(S3SearchSimpleWidget(
                         name="recv_search_text_advanced",
@@ -1187,16 +1189,14 @@ $(document).ready(function() {
 
         # CRUD strings
         ADD_TRACK_ITEM = T("Add Item to Shipment")
-        LIST_TRACK_ITEMS = T("List of Shipment Items")
         crud_strings[tablename] = Storage(
             title_create = ADD_TRACK_ITEM,
             title_display = T("Shipment Item Details"),
-            title_list = LIST_TRACK_ITEMS,
+            title_list = T("Shipment Items"),
             title_update = T("Edit Shipment Item"),
             title_search = T("Search Shipment Items"),
             subtitle_create = T("Add New Shipment Item"),
-            subtitle_list = T("Shipment Items"),
-            label_list_button = LIST_TRACK_ITEMS,
+            label_list_button = T("List Shipment Items"),
             label_create_button = ADD_TRACK_ITEM,
             label_delete_button = T("Delete Shipment Item"),
             msg_record_created = T("Item Added to Shipment"),
@@ -2042,16 +2042,14 @@ def inv_recv_crud_strings():
     if current.deployment_settings.get_inv_shipment_name() == "order":
         recv_id_label = T("Order")
         ADD_RECV = T("Add Order")
-        LIST_RECV = T("List Orders")
         current.response.s3.crud_strings["inv_recv"] = Storage(
             title_create = ADD_RECV,
             title_display = T("Order Details"),
-            title_list = LIST_RECV,
+            title_list = T("Orders"),
             title_update = T("Edit Order"),
             title_search = T("Search Orders"),
             subtitle_create = ADD_RECV,
-            subtitle_list = T("Orders"),
-            label_list_button = LIST_RECV,
+            label_list_button = T("List Orders"),
             label_create_button = ADD_RECV,
             label_delete_button = T("Delete Order"),
             msg_record_created = T("Order Created"),
@@ -2062,16 +2060,14 @@ def inv_recv_crud_strings():
     else:
         recv_id_label = T("Receive Shipment")
         ADD_RECV = T("Add New Received Shipment")
-        LIST_RECV = T("List Received and Incoming Shipments")
         current.response.s3.crud_strings["inv_recv"] = Storage(
             title_create = ADD_RECV,
             title_display = T("Received Shipment Details"),
-            title_list = LIST_RECV,
+            title_list = T("Received and Incoming Shipments"),
             title_update = T("Edit Received Shipment"),
             title_search = T("Search Received and Incoming Shipments"),
             subtitle_create = ADD_RECV,
-            subtitle_list = T("Received and Incoming Shipments"),
-            label_list_button = LIST_RECV,
+            label_list_button = T("List Received and Incoming Shipments"),
             label_create_button = ADD_RECV,
             label_delete_button = T("Delete Received Shipment"),
             msg_record_created = T("Shipment Created"),
@@ -2590,16 +2586,14 @@ class S3AdjustModel(S3Model):
 
         # CRUD strings
         ADJUST_STOCK = T("Add New Stock Adjustment")
-        LIST_ADJUSTMENTS = T("List Stock Adjustments")
         s3.crud_strings["inv_adj"] = Storage(
             title_create = ADJUST_STOCK,
             title_display = T("Stock Adjustment Details"),
-            title_list = LIST_ADJUSTMENTS,
+            title_list = T("Stock Adjustments"),
             title_update = T("Edit Adjustment"),
             title_search = T("Search Stock Adjustments"),
             subtitle_create = T("Add New Stock Adjustment"),
-            subtitle_list = T("Stock Adjustment"),
-            label_list_button = LIST_ADJUSTMENTS,
+            label_list_button = T("List Stock Adjustments"),
             label_create_button = ADJUST_STOCK,
             label_delete_button = T("Delete Stock Adjustment"),
             msg_record_created = T("Adjustment created"),
@@ -2671,16 +2665,14 @@ class S3AdjustModel(S3Model):
 
         # CRUD strings
         ADJUST_STOCK = T("Add New Stock Items")
-        LIST_ADJUSTMENTS = T("List Items in Stock")
         s3.crud_strings["inv_adj_item"] = Storage(
             title_create = ADJUST_STOCK,
             title_display = T("Item Details"),
-            title_list = LIST_ADJUSTMENTS,
+            title_list = T("Items in Stock"),
             title_update = T("Adjust Item Quantity"),
             title_search = T("Search Stock Items"),
             subtitle_create = T("Add New Item to Stock"),
-            subtitle_list = T("Stock Items"),
-            label_list_button = LIST_ADJUSTMENTS,
+            label_list_button = T("List Items in Stock"),
             label_create_button = ADJUST_STOCK,
             #label_delete_button = T("Remove Item from Stock"), # This should be forbidden - set qty to zero instead
             msg_record_created = T("Item added to stock"),
@@ -2861,6 +2853,7 @@ def inv_adj_rheader(r):
             return rheader
     return None
 
+# =============================================================================
 # Generic function called by the duplicator methods to determine if the
 # record already exists on the database.
 def duplicator(job, query):
@@ -2873,21 +2866,16 @@ def duplicator(job, query):
 
       If the record is a duplicate then it will set the job method to update
     """
-    # ignore this processing if the id is set
-    if job.id:
-        return
-
-    db = current.db
 
     table = job.table
-    _duplicate = db(query).select(table.id, limitby=(0, 1)).first()
+    _duplicate = current.db(query).select(table.id,
+                                          limitby=(0, 1)).first()
     if _duplicate:
         job.id = _duplicate.id
         job.data.id = _duplicate.id
         job.method = job.METHOD.UPDATE
         return _duplicate.id
     return False
-
 
 # =============================================================================
 class InvItemVirtualFields:
