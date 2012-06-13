@@ -2574,6 +2574,7 @@
 'List Users': 'List Users',
 'List Vehicle Details': 'List Vehicle Details',
 'List Vehicles': 'List Vehicles',
+'List Volunteers': 'List Volunteers',
 'List Warehouses': 'List Warehouses',
 'List all': 'List all',
 'List all Assessment Answer': 'List all Assessment Answer',

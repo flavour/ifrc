@@ -188,7 +188,7 @@ class S3HRModel(S3Model):
             msg_record_modified = T("Record updated"),
             msg_record_deleted = T("Record deleted"),
             msg_list_empty = T("No staff or volunteers currently registered"))
-        
+
         s3.crud_strings["hrm_staff"] = Storage(
             title_create = T("Add Staff Member"),
             title_display = T("Staff Member Details"),
@@ -220,7 +220,7 @@ class S3HRModel(S3Model):
             msg_record_modified = T("Volunteer Details updated"),
             msg_record_deleted = T("Volunteer deleted"),
             msg_list_empty = T("No Volunteers currently registered"))
-        
+
         if not settings.get_hrm_show_staff():
             s3.crud_strings[tablename] = s3.crud_strings["hrm_volunteer"]
         elif not settings.get_hrm_show_vols():
@@ -482,8 +482,9 @@ class S3HRModel(S3Model):
 
         data = Storage()
 
-        # Affiliation
+        # Affiliation and record ownership
         s3db.pr_update_affiliations(htable, record)
+        auth.s3_set_record_owner(htable, record, force_update=True)
 
         site_id = record.site_id
         if record.type == 1 and site_id:
@@ -604,7 +605,7 @@ def hrm_service_record (r, **attr):
         person_id = vol.person_id
         organisation_id = vol.organisation_id
 
-        # Person details 
+        # Person details
         table = s3db.hrm_human_resource
         prtable = s3db.pr_person
         org_name = table.organisation_id.represent(organisation_id)
@@ -620,7 +621,7 @@ def hrm_service_record (r, **attr):
         person_details = TABLE(TR(TD(logo),
                                   TD(innerTable)
                                   ))
-        
+
         # Photo
         itable = s3db.pr_image
         query = (itable.pe_id == pe_id) & \
@@ -749,7 +750,7 @@ def hrm_service_record (r, **attr):
                                 date = tetable.start_date.represent(row.start_date),
                                 hours = row.hours,
                             )
-        
+
         # Combined Hours
         _hours = {}
         hour_list = TABLE(TR(TD(T("Programme")), TD(T("Course")), TD(T("Date")), TD(T("Hours"))))
@@ -836,7 +837,7 @@ class S3HRJobModel(S3Model):
                                   # Only included in order to be able to set owned_by_entity to filter appropriately
                                   organisation_id(
                                                   default = auth.user and \
-                                                            self.org_root_organisation(organisation_id=auth.user.organisation_id) or \
+                                                            self.org_root_organisation(organisation_id=auth.user.organisation_id)[0] or \
                                                             None,
                                                   readable = False,
                                                   writable = False,
@@ -844,6 +845,15 @@ class S3HRJobModel(S3Model):
                                   s3.comments(label="Description", comment=None),
                                   *s3.meta_fields())
 
+        vars = current.request.get_vars
+        if "group" in vars and \
+           vars.group == "volunteer":
+            label_create = T("Add New Volunteer Role")
+            tooltip = T("Add a new volunteer role to the catalog.")
+        else:
+            label_create = T("Add New Job Role")
+            tooltip = T("Add a new job role to the catalog.")
+        
         s3.crud_strings[tablename] = Storage(
             title_create = T("Add Job Role"),
             title_display = T("Job Role Details"),
@@ -852,14 +862,13 @@ class S3HRJobModel(S3Model):
             title_search = T("Search Job Roles"),
             subtitle_create = T("Add Job Role"),
             label_list_button = T("List Job Roles"),
-            label_create_button = T("Add New Job Role"),
+            label_create_button = label_create,
             label_delete_button = T("Delete Job Role"),
             msg_record_created = T("Job Role added"),
             msg_record_modified = T("Job Role updated"),
             msg_record_deleted = T("Job Role deleted"),
             msg_list_empty = T("Currently no entries in the catalog"))
 
-        label_create = s3.crud_strings[tablename].label_create_button
         job_role_id = S3ReusableField("job_role_id", db.hrm_job_role,
                                 sortby = "name",
                                 label = T("Job Role"),
@@ -872,7 +881,7 @@ class S3HRJobModel(S3Model):
                                     f="job_role",
                                     label=label_create,
                                     title=label_create,
-                                    tooltip=T("Add a new job role to the catalog.")),
+                                    tooltip=tooltip),
                                 ondelete = "SET NULL")
 
         multi_job_role_id = S3ReusableField("job_role_id",
@@ -1526,7 +1535,7 @@ class S3HRSkillModel(S3Model):
                              # Only included in order to be able to set owned_by_entity to filter appropriately
                              organisation_id(
                                              default = auth.user and \
-                                                       self.org_root_organisation(organisation_id=auth.user.organisation_id) or \
+                                                       self.org_root_organisation(organisation_id=auth.user.organisation_id)[0] or \
                                                        None,
                                              readable = False,
                                              writable = False,
@@ -2704,7 +2713,7 @@ class S3HRProgrammeModel(S3Model):
                              # Only included in order to be able to set owned_by_entity to filter appropriately
                              organisation_id(
                                              default = auth.user and \
-                                                       self.org_root_organisation(organisation_id=auth.user.organisation_id) or \
+                                                       self.org_root_organisation(organisation_id=auth.user.organisation_id)[0] or \
                                                        None,
                                              readable = False,
                                              writable = False,
@@ -2767,7 +2776,9 @@ class S3HRProgrammeModel(S3Model):
                                    label=T("Hours")),
                              # Training records are auto-populated
                              Field("training", "boolean",
+                                   label = T("Training?"),
                                    default=False,
+                                   represent = lambda opt: T("Yes") if opt else T("No"),
                                    readable=False,
                                    writable=False),
                              comments(comment=None),
@@ -2797,7 +2808,7 @@ class S3HRProgrammeModel(S3Model):
                                     "hours",
                                 ]
                         )
-        
+
         # ---------------------------------------------------------------------
         # Pass model-global names to response.s3
         #
@@ -3229,11 +3240,11 @@ def hrm_rheader(r, tabs=[]):
                     (T("Contacts"), "contacts"),
                     (T("Trainings"), "training"),
                     (T("Certificates"), "certification"),
-                    (T("Skills"), "competency"),
+                    #(T("Skills"), "competency"),
                     #(T("Credentials"), "credential"),
                     experience_tab,
                     (T("Positions"), "human_resource"),
-                    (T("Teams"), "group_membership"),
+                    #(T("Teams"), "group_membership"),
                     (T("Assets"), "asset"),
                    ]
         else:
@@ -3253,10 +3264,10 @@ def hrm_rheader(r, tabs=[]):
                     (T("Contacts"), "contacts"),
                     (T("Trainings"), "training"),
                     (T("Certificates"), "certification"),
-                    (T("Skills"), "competency"),
-                    (T("Credentials"), "credential"),
+                    #(T("Skills"), "competency"),
+                    #(T("Credentials"), "credential"),
                     experience_tab,
-                    (T("Teams"), "group_membership"),
+                    #(T("Teams"), "group_membership"),
                     (T("Assets"), "asset"),
                     (T("Roles"), "roles"),
                    ]
@@ -3318,6 +3329,8 @@ def hrm_rheader(r, tabs=[]):
         rheader = DIV(TABLE(
                             TR(TH("%s: " % table.name.label),
                                record.name),
+                            TR(TH("%s: " % table.code.label),
+                               record.code),
                             ),
                       rheader_tabs)
 
