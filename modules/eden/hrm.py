@@ -3221,11 +3221,11 @@ def hrm_rheader(r, tabs=[]):
                     (T("Contacts"), "contacts"),
                     (T("Trainings"), "training"),
                     (T("Certificates"), "certification"),
-                    (T("Skills"), "competency"),
+                    #(T("Skills"), "competency"),
                     #(T("Credentials"), "credential"),
                     experience_tab,
                     (T("Positions"), "human_resource"),
-                    (T("Teams"), "group_membership"),
+                    #(T("Teams"), "group_membership"),
                     (T("Assets"), "asset"),
                    ]
         else:
@@ -3245,10 +3245,10 @@ def hrm_rheader(r, tabs=[]):
                     (T("Contacts"), "contacts"),
                     (T("Trainings"), "training"),
                     (T("Certificates"), "certification"),
-                    (T("Skills"), "competency"),
-                    (T("Credentials"), "credential"),
+                    #(T("Skills"), "competency"),
+                    #(T("Credentials"), "credential"),
                     experience_tab,
-                    (T("Teams"), "group_membership"),
+                    #(T("Teams"), "group_membership"),
                     (T("Assets"), "asset"),
                     (T("Roles"), "roles"),
                    ]
