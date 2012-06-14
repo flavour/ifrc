@@ -1842,7 +1842,7 @@ def org_rheader(r, tabs=[]):
     return rheader
 
 # =============================================================================
-def org_organisation_controller():
+def org_organisation_controller(dashboard=None):
     """
         Organisation Controller, defined in the model for use from
         multiple controllers for unified menus
@@ -1925,10 +1925,12 @@ def org_organisation_controller():
     rheader = s3db.org_rheader
     output = s3_rest_controller("org", "organisation",
                                 native=False, rheader=rheader)
+    if dashboard and isinstance(output, dict):
+        output["dashboard"] = dashboard
     return output
 
 # =============================================================================
-def org_office_controller():
+def org_office_controller(dashboard=None):
     """
         Office Controller, defined in the model for use from
         multiple controllers for unified menus
@@ -2074,6 +2076,9 @@ def org_office_controller():
         rheader = s3db.inv_warehouse_rheader
     else:
         rheader = s3db.org_rheader
-    return s3_rest_controller("org", "office", rheader=rheader)
+    output = s3_rest_controller("org", "office", rheader=rheader)
+    if dashboard and isinstance(output, dict):
+        output["dashboard"] = dashboard
+    return output
 
 # END =========================================================================
