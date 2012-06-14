@@ -221,13 +221,18 @@ class S3AddResourceLink(S3NavigationItem):
         if info is None:
             info = title
 
-        # Fall back to label_create_button
+        if c is None:
+            # Fall back to current controller
+            c = current.request.controller
+
         if label is None:
+            # Fall back to label_create_button
             if t is None:
                 t = "%s_%s" % (c, f)
             label = S3CRUD.crud_string(t, "label_create_button")
 
-        return super(S3AddResourceLink, self).__init__(label, c=c, f=f, t=t,
+        return super(S3AddResourceLink, self).__init__(label,
+                                                       c=c, f=f, t=t,
                                                        m="create",
                                                        vars=vars,
                                                        info=info,

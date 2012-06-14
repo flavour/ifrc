@@ -22,7 +22,7 @@ if auth.permission.format in ("html"):
         homepage("hrm", "org", name=T("Staff"),
                  vars=dict(group="staff"))(
             MM("Staff", c="hrm", f="staff"),
-            MM("Teams", c="hrm", f="group"),
+            #MM("Teams", c="hrm", f="group"),
             MM("Organizations", c="org", f="organisation"),
             MM("Offices", c="org", f="office"),
             MM("Job Roles", c="hrm", f="job_role"),
@@ -31,15 +31,14 @@ if auth.permission.format in ("html"):
             MM("Training Courses", c="hrm", f="course"),
             MM("Certificate List", c="hrm", f="certificate"),
         ),
-        homepage("hrm", name=T("Volunteers"),
-                 vars=dict(group="volunteer"))(
-            MM("Volunteers", c="hrm", f="volunteer"),
-            MM("Teams", c="hrm", f="group"),
-            MM("Job Roles", c="hrm", f="job_role"),
-            #MM("Skill List", c="hrm", f="skill"),
-            MM("Training Events", c="hrm", f="training_event"),
-            MM("Training Courses", c="hrm", f="course"),
-            #MM("Certificate List", c="hrm", f="certificate"),
+        homepage("vol", name=T("Volunteers"))(
+            MM("Volunteers", c="vol", f="volunteer"),
+            #MM("Teams", c="vol", f="group"),
+            MM("Job Roles", c="vol", f="job_role"),
+            #MM("Skill List", c="vol", f="skill"),
+            MM("Training Events", c="vol", f="training_event"),
+            MM("Training Courses", c="vol", f="course"),
+            MM("Certificate List", c="vol", f="certificate"),
         ),
         homepage("member")(
             MM("Members", c="member", f="membership"),
@@ -153,24 +152,11 @@ if auth.permission.format in ("html"):
                         M("Import", f="person", m="import",
                           vars=staff, p="create"),
                     ),
-                    M("Volunteers", c="hrm", f=("volunteer", "person"),
-                      check=manager_mode)(
-                        M("New Volunteer", m="create"),
-                        M("List All"),
-                        M("Search", m="search"),
-                        M("Report", m="report",
-                          vars=Storage(rows="course",
-                                       cols="L1",
-                                       fact="person_id",
-                                       aggregate="count")),
-                        M("Import", f="person", m="import",
-                          vars=volunteers, p="create"),
-                    ),
-                    M("Teams", c="hrm", f="group",
-                      check=manager_mode)(
-                        M("New Team", m="create"),
-                        M("List All"),
-                    ),
+                    # M("Teams", c="hrm", f="group",
+                      # check=manager_mode)(
+                        # M("New Team", m="create"),
+                        # M("List All"),
+                    # ),
                     M("Organizations", c="org", f="organisation",
                       check=manager_mode)(
                         M("New", m="create"),
@@ -222,7 +208,7 @@ if auth.permission.format in ("html"):
                         M("List All"),
                         #M("Skill Equivalence", f="certificate_skill"),
                     ),
-                    M("Profile", c="hrm", f="person",
+                    M("My Profile", c="hrm", f="person",
                       check=personal_mode, vars=dict(mode="personal")),
                     # This provides the link to switch to the manager mode:
                     M("Human Resources", c="hrm", f="index",
@@ -231,6 +217,7 @@ if auth.permission.format in ("html"):
                     M("Personal Profile", c="hrm", f="person",
                       check=manager_mode, vars=dict(mode="personal"))
                 ),
+
         # ---------------------------------------------------------------------
         # Event / IRS Incident Reports (shared)
         "irs": M()(
