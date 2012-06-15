@@ -10,7 +10,7 @@ resourcename = request.function
 if not deployment_settings.has_module(module):
     raise HTTP(404, body="Module disabled: %s" % module)
 
-s3db.hrm_vars(module)
+s3db.hrm_vars()
 
 # =============================================================================
 def index():
@@ -82,7 +82,7 @@ def organisation():
     """ RESTful CRUD controller """
 
     # Defined in the Model for use from Multiple Controllers for unified menus
-    return s3db.org_organisation_controller()
+    return s3db.org_organisation_controller(dashboard=s3db.hrm_dashboard("staff"))
 
 # -----------------------------------------------------------------------------
 def organisation_list_represent(l):
@@ -110,7 +110,7 @@ def office():
     """ RESTful CRUD controller """
 
     # Defined in the Model for use from Multiple Controllers for unified menus
-    return s3db.org_office_controller()
+    return s3db.org_office_controller(dashboard=s3db.hrm_dashboard("staff"))
 
 # =============================================================================
 def person():

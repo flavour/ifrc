@@ -41,6 +41,8 @@ __all__ = ["S3HRModel",
            "hrm_service_record",
            "hrm_rheader",
            "hrm_training_event_controller",
+           "hrm_training_controller",
+           "hrm_dashboard",
            ]
 
 import datetime
@@ -3938,5 +3940,59 @@ def hrm_training_controller(dashboard=None):
     if dashboard and isinstance(output, dict):
         output["dashboard"] = dashboard
     return output
+
+# =============================================================================
+def hrm_dashboard(mode="staff"):
+    """ HRM-specific dashboard (bottom) menu """
+
+    from eden.layouts import S3DashBoardMenuLayout as DB
+
+    if mode == "staff":
+        dashboard = DB()(
+            DB("STAFF",
+                c="hrm",
+                image = "graphic_staff_wide.png",
+                title = "Staff")(
+                DB("Manage Staff Data", f="staff"),
+                DB("Manage Teams Data", f="group"),
+            ),
+            DB("OFFICES",
+                c="org",
+                image = "graphic_office.png",
+                title = "Offices")(
+                DB("Manage Offices Data", f="office"),
+                DB("Manage Organisations Data", f="organisation"),
+            ),
+            DB("CATALOGUES",
+                c="hrm",
+                image="graphic_catalogue.png",
+                title="Catalogues")(
+                DB("Certificates", f="certificate"),
+                DB("Training Courses", f="course"),
+                #DB("Skills", f="skill"),
+                DB("Job Roles", f="job_role")
+            ))
+
+    elif mode == "volunteer":
+        dashboard = DB()(
+            DB("VOLUNTEERS",
+                c="vol",
+                image = "graphic_staff_wide.png",
+                title = "Volunteers")(
+                DB("Manage Volunteer Data", f="volunteer"),
+                DB("Manage Teams Data", f="group"),
+            ),
+            DB("CATALOGUES",
+                c="hrm",
+                image="graphic_catalogue.png",
+                title="Catalogues")(
+                DB("Certificates", f="certificate"),
+                DB("Training Courses", f="course"),
+                #DB("Skills", f="skill"),
+                DB("Job Roles", f="job_role")
+            ))
+    
+
+    return dashboard
 
 # END =========================================================================

@@ -113,24 +113,10 @@ class S3OptionsMenuLayout(S3NavigationItem):
                         if items:
                             items = LI(UL(items, _class="menu-extention"))
 
-
-
-
-
-
-
-
-
-
-
-
-
                         return [LI(A(item.label,
                                      _href=item.url(),
                                      _id=item.attr._id,
                                      _class=_class)), items]
-
-
 
                     else:
                         # Submenu item
@@ -272,28 +258,25 @@ def homepage(module=None, *match, **attr):
         @param module: the module's prefix (controller)
         @param match: additional prefixes
         @param attr: attributes for the navigation item
-
-        @keyword name: override the deployment settings name_nice
-                       for the module
     """
 
     settings = current.deployment_settings
     all_modules = settings.modules
 
     layout = S3MainMenuLayout
-    c = [module] + list(match)
 
-    if "name" in attr:
-        name = attr.pop("name")
-    else:
-        if module is None:
-            module = "default"
-        if module in all_modules:
-            m = all_modules[module]
-            name = m.name_nice
+    if module is None:
+        module = "default"
+    if module in all_modules:
+        m = all_modules[module]
+        c = [module] + list(match)
+        if "name" in attr:
+            name = attr["name"]
+            attr.pop("name")
         else:
-            name = module
-    return layout(name, c=c, f="index", **attr)
+            name = m.name_nice
+        return layout(name, c=c, f="index", **attr)
+    return None
 
 # =============================================================================
 class S3LanguageMenuLayout(S3NavigationItem):
@@ -382,6 +365,8 @@ class S3DashBoardMenuLayout(S3NavigationItem):
             items = None
 
         if item.parent is None:
+            #return items
+        #elif item.parent.parent is None:
             if items:
                 return UL(items, _id="sub-dashboard")
             else:

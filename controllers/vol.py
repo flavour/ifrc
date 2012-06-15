@@ -24,31 +24,6 @@ def index():
         redirect(URL(f="volunteer", args="search"))
 
 # =============================================================================
-hrm_dashboard = UL(LI(A(H2("VOLUNTEERS"),
-                        UL(LI(A("Manage Volunteer Data",
-                                _href=URL(f="volunteer"))),
-                           LI(A("Manage Teams Data",
-                                _href=URL(f="group")))),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_staff_wide.png"]),
-                            _alt="Volunteers"),
-                      _href=URL(f="index"))),
-                   LI(A(H2("CATALOGUES"),
-                        UL(LI(A("Certificates",
-                                _href=URL(f="certificate"))),
-                           LI(A("Training Courses",
-                                _href=URL(f="course"))),
-                           #LI(A("Skills",
-                           #     _href=URL(f="skill"))),
-                           LI(A("Job Roles",
-                                _href=URL(f="job_role")))),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_catalogue.png"]),
-                            _alt="Catalogues"),
-                      _href=URL(f="index"))),
-                   _id="sub-dashboard")
-
-# =============================================================================
 # People
 # =============================================================================
 def human_resource():
@@ -152,7 +127,7 @@ def human_resource():
                         "_class": "action-btn",
                         "label": str(T("Send Message"))})
             if isinstance(output, dict):
-                output["dashboard"] = hrm_dashboard
+                output["dashboard"] = s3db.hrm_dashboard("volunteer")
         elif r.representation == "plain" and \
              r.method !="search":
             # Map Popups
@@ -314,7 +289,7 @@ def volunteer():
                             "label": str(T("Send Message"))
                        })
             if isinstance(output, dict):
-                output["dashboard"] = hrm_dashboard
+                output["dashboard"] = s3db.hrm_dashboard("volunteer")
         elif r.representation == "plain" and \
              r.method !="search":
             # Map Popups
@@ -616,7 +591,7 @@ def person():
                                       _id="add-btn",
                                       _class="action-btn")
             if isinstance(output, dict):
-                output["dashboard"] = hrm_dashboard
+                output["dashboard"] = s3db.hrm_dashboard("volunteer")
 
         return output
     s3.postp = postp
@@ -767,7 +742,7 @@ def job_role():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -788,7 +763,7 @@ def skill():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -807,7 +782,7 @@ def skill_type():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -826,7 +801,7 @@ def competency_rating():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -857,7 +832,7 @@ def course():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -877,7 +852,7 @@ def course_certificate():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -898,7 +873,7 @@ def certificate():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -918,7 +893,7 @@ def certificate_skill():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -929,13 +904,13 @@ def certificate_skill():
 def training():
     """ Training Controller """
 
-    return s3db.hrm_training_controller(dashboard=hrm_dashboard)
+    return s3db.hrm_training_controller(dashboard=s3db.hrm_dashboard("volunteer"))
 
 # -----------------------------------------------------------------------------
 def training_event():
     """ Training Events Controller """
 
-    return s3db.hrm_training_event_controller(dashboard=hrm_dashboard)
+    return s3db.hrm_training_event_controller(dashboard=s3db.hrm_dashboard("volunteer"))
 
 # =============================================================================
 def skill_competencies():
@@ -987,7 +962,7 @@ def programme():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
@@ -1010,7 +985,7 @@ def programme_hours():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            output["dashboard"] = hrm_dashboard
+            output["dashboard"] = s3db.hrm_dashboard("volunteer")
         return output
     s3.postp = postp
 
