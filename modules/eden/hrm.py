@@ -3947,7 +3947,7 @@ def hrm_dashboard(mode="staff"):
                 image = "graphic_staff_wide.png",
                 title = "Staff")(
                 DB("Manage Staff Data", f="staff"),
-                DB("Manage Teams Data", f="group"),
+                #DB("Manage Teams Data", f="group"),
             ),
             DB("OFFICES",
                 c="org",
