@@ -141,240 +141,297 @@ _table_user.site_id.comment = DIV(_class="tooltip",
 def index():
     """ Main Home Page """
 
+    # Custom page
+    custom_page = "applications.%s.private.templates.%s.controllers" % \
+                        (appname, settings.get_template())
+    try:
+        exec("import %s as custom_page" % custom_page)
+    except ImportError:
+        # No Custom Page available, continue with the default
+        page = "private/templates/%s/controllers.py" % \
+                        (appname, settings.get_template())
+        s3_debug("File not loadable: %s" % page)
+    else:
+        page = request.function
+        if page in custom_page.__dict__:
+            exec("output = custom_page.%s()()" % page)
+            return output
+        else:
+            raise(HTTP(404, "Function not found: %s()" % page))
+
+    # Default Homepage
     title = settings.get_system_name()
     response.title = title
 
-    script = """
-$('.marker').mouseover(function() {
-    $(this).children('.marker-window').show();
-})
-$('.marker').mouseout(function() {
-    $(this).children('.marker-window').hide();
-})"""
-    s3.jquery_ready.append(script)
+    item = ""
+    if settings.has_module("cms"):
+        table = s3db.cms_post
+        item = db(table.module == module).select(table.body,
+                                                 limitby=(0, 1)).first()
+        if item:
+            item = DIV(XML(item.body))
+        else:
+            item = ""
 
-    dashboard = UL(LI(A(H2(T("Staff")),
-                        P(T("Add new and manage existing staff.")),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_staff.png"]),
-                            _alt=T("Staff")),
-                      _href=URL(c="hrm", f="staff",
-                                args=["search"]))),
-                   LI(A(H2(T("Volunteers")),
-                        P(T("Add new and manage existing volunteers.")),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_volunteers.png"]),
-                            _alt=T("Volunteers")),
-                      _href=URL(c="vol", f="volunteer",
-                                args=["search"]))),
-                   LI(A(H2(T("Members")),
-                        P(T("Add new and manage existing members.")),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_members.png"]),
-                            _alt=T("Members")),
-                      _href=URL(c="member", f="index"))),
-                   LI(A(H2(T("Warehouses")),
-                        P(T("Stocks and relief items.")),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_warehouse.png"]),
-                            _alt=T("Warehouses")),
-                      _href=URL(c="inv", f="index"))),
-                   LI(A(H2(T("Assets")),
-                        P(T("Manage office inventories and assets.")),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_assets.png"]),
-                            _alt=T("Assests")),
-                      _href=URL(c="asset", f="index"))),
-                   LI(A(H2(T("Assessments")),
-                        P(T("Design, deploy & analyze surveys.")),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_assessments.png"]),
-                            _alt=T("Assessments")),
-                      _href=URL(c="survey", f="index"))),
-                   LI(A(H2(T("Projects")),
-                        P(T("Tracking and analysis of Projects and Activities.")),
-                        IMG(_src=URL(c="static", f="img",
-                                     args=["ifrc", "graphic_tools.png"]),
-                            _alt=T("Projects")),
-                      _href=URL(c="project", f="index"))),
-                   _id="dashboard")
+    if settings.has_module("cr"):
+        table = s3db.cr_shelter
+        SHELTERS = s3.crud_strings["cr_shelter"].title_list
+    else:
+        SHELTERS = ""
 
-    markers = [
-        Storage(name = "Afghan Red Crescent Society",
-                direction = "right",
-                top = 109,
-                left = 271),
-        Storage(name = "Australian Red Cross",
-                direction = "right",
-                top = 349,
-                left = 478),
-        Storage(name = "Bangladesh Red Crescent Society",
-                direction = "right",
-                top = 142,
-                left = 326),
-        Storage(name = "Brunei Darussalam Red Crescent Society",
-                direction = "right",
-                top = 205,
-                left = 402),
-        Storage(name = "Cambodian Red Cross Society",
-                direction = "right",
-                top = 181,
-                left = 374),
-        Storage(name = "Cook Islands Red Cross",
-                direction = "right",
-                top = 291,
-                left = 652),
-        Storage(name = "Fiji Red Cross Society",
-                direction = "right",
-                top = 278,
-                left = 590),
-        Storage(name = "Hong Kong Red Cross Society",
-                direction = "right",
-                top = 146,
-                left = 398),
-        Storage(name = "Indian Red Cross Society",
-                direction = "right",
-                top = 129,
-                left = 287),
-        Storage(name = "Indonesian Red Cross Society",
-                direction = "right",
-                top = 235,
-                left = 378),
-        Storage(name = "Japanese Red Cross Society",
-                direction = "right",
-                top = 94,
-                left = 463),
-        Storage(name = "Kiribati Red Cross Society",
-                direction = "left",
-                top = 214,
-                left = 564),
-        Storage(name = "Lao Red Cross Society",
-                direction = "right",
-                top = 159,
-                left = 366),
-        Storage(name = "Malaysian Red Crescent Society",
-                direction = "right",
-                top = 207,
-                left = 367),
-        Storage(name = "Maldivian Red Crescent",
-                direction = "right",
-                top = 205,
-                left = 278),
-        Storage(name = "Marshall Islands Red Cross Society",
-                direction = "left",
-                top = 200,
-                left = 561),
-        Storage(name = "Micronesia Red Cross Society",
-                direction = "left",
-                top = 200,
-                left = 532),
-        Storage(name = "Mongolian Red Cross Society",
-                direction = "right",
-                top = 54,
-                left = 372),
-        Storage(name = "Myanmar Red Cross Society",
-                direction = "right",
-                top = 165,
-                left = 349),
-        Storage(name = "Nepal Red Cross Society",
-                direction = "right",
-                top = 133,
-                left = 308),
-        Storage(name = "New Zealand Red Cross",
-                direction = "right",
-                top = 368,
-                left = 562),
-        Storage(name = "Pakistan Red Crescent Society",
-                direction = "right",
-                top = 115,
-                left = 278),
-        Storage(name = "Palau Red Cross Society",
-                direction = "right",
-                top = 197,
-                left = 463),
-        Storage(name = "Papua New Guinea Red Cross Society",
-                direction = "right",
-                top = 247,
-                left = 504),
-        Storage(name = "Philippine National Red Cross",
-                direction = "right",
-                top = 170,
-                left = 421),
-        Storage(name = "Red Cross of Viet Nam",
-                direction = "right",
-                top = 150,
-                left = 373),
-        Storage(name = "Red Cross Society of China",
-                direction = "right",
-                top = 81,
-                left = 399),
-        Storage(name = "Red Cross Society of the Democratic People's Republic of Korea",
-                direction = "right",
-                top = 82,
-                left = 423),
-        Storage(name = "Republic of Korea National Red Cross",
-                direction = "right",
-                top = 87,
-                left = 426),
-        Storage(name = "Samoa Red Cross Society",
-                direction = "left",
-                top = 261,
-                left = 621),
-        Storage(name = "Singapore Red Cross Society",
-                direction = "right",
-                top = 214,
-                left = 376),
-        Storage(name = "Solomon Islands Red Cross",
-                direction = "right",
-                top = 247,
-                left = 537),
-        Storage(name = "Sri Lanka Red Cross Society",
-                direction = "right",
-                top = 197,
-                left = 303),
-        Storage(name = "Thai Red Cross Society",
-                direction = "right",
-                top = 172,
-                left = 360),
-        Storage(name = "Timor-Leste Red Cross Society",
-                direction = "right",
-                top = 245,
-                left = 435),
-        Storage(name = "Tonga Red Cross Society",
-                direction = "right",
-                top = 291,
-                left = 563),
-        Storage(name = "Tuvalu Red Cross Society",
-                direction = "right",
-                top = 245,
-                left = 591),
-        Storage(name = "Vanuatu Red Cross Society",
-                direction = "right",
-                top = 276,
-                left = 559),
-        ]
+    # Menu Boxes
+    menu_btns = [#div, label, app, function
+                ["facility", SHELTERS, "cr", "shelter"],
+                ["facility", T("Warehouses"), "inv", "warehouse"],
+                ["facility", T("Hospitals"), "hms", "hospital"],
+                ["facility", T("Offices"), "org", "office"],
+                ["sit", T("Staff"), "hrm", "staff"],
+                ["sit", T("Volunteers"), "vol", "volunteer"],
+                ["sit", T("Incidents"), "irs", "ireport"],
+                ["sit", T("Assessments"), "survey", "series"],
+                ["sit", T("Assets"), "asset", "asset"],
+                ["sit", T("Inventory Items"), "inv", "inv_item"],
+                #["dec", T("Gap Map"), "project", "gap_map"],
+                #["dec", T("Gap Report"), "project", "gap_report"],
+                ["dec", T("Requests"), "req", "req"],
+                ["res", T("Projects"), "project", "project"],
+                ["res", T("Activities"), "project", "activity"],
+                ["res", T("Commitments"), "req", "commit"],
+                ["res", T("Sent Shipments"), "inv", "send"],
+                ["res", T("Received Shipments"), "inv", "recv"]
+                ]
 
-    map = DIV(A("Go to Functional Map",
-                _href=URL(c="gis", f="index"),
-                _class="map-click"),
-              _id="map-home")
+    # Change to (Mitigation)/Preparedness/Response/Recovery?
+    menu_divs = {"facility": DIV( H3(T("Facilities")),
+                                 _id = "facility_box", _class = "menu_box"),
+                 "sit": DIV( H3(T("Situation")),
+                              _id = "menu_div_sit", _class = "menu_div"),
+                 "dec": DIV( H3(T("Decision")),
+                              _id = "menu_div_dec", _class = "menu_div"),
+                 "res": DIV( H3(T("Response")),
+                              _id = "menu_div_res", _class = "menu_div"),
+                }
 
-    for marker in markers:
-        map.append(DIV(A(_href=URL(c="org", f="organisation", args="read",
-                                   vars={"organisation.name": marker.name})),
-                           DIV(SPAN(marker.name),
-                               SPAN(_class="marker-plus"),
-                               _class="marker-window %s" % marker.direction),
-                           _class="marker",
-                           _style="top:%ipx;left:%ipx;" % (marker.top,
-                                                           marker.left)))
-    map.append(DIV(SPAN("Click anywhere on the map for full functionality"),
-                   _class="map-tip"))
+    for div, label, app, function in menu_btns:
+        if settings.has_module(app):
+            # @ToDo: Also check permissions (e.g. for anonymous users)
+            menu_divs[div].append(A(DIV(label,
+                                        _class = "menu-btn-r"),
+                                    _class = "menu-btn-l",
+                                    _href = URL(app,function)
+                                    )
+                                 )
 
-    current.menu.breadcrumbs = None
+    div_arrow = DIV(IMG(_src = "/%s/static/img/arrow_blue_right.png" % \
+                                appname),
+                    _class = "div_arrow")
+    sit_dec_res_box = DIV(menu_divs["sit"],
+                          div_arrow,
+                          menu_divs["dec"],
+                          div_arrow,
+                          menu_divs["res"],
+                          _id = "sit_dec_res_box",
+                          _class = "menu_box fleft swidth"
+                     #div_additional,
+                    )
+    facility_box  = menu_divs["facility"]
+    facility_box.append(A(IMG(_src = "/%s/static/img/map_icon_128.png" % \
+                                    appname),
+                          _href = URL(c="gis", f="index"),
+                          _title = T("Map")
+                          )
+                        )
 
-    return dict(dashboard=dashboard,
-                map=map)
+    datatable_ajax_source = ""
+    # Check logged in AND permissions
+    if AUTHENTICATED in session.s3.roles and \
+       auth.s3_has_permission("read", db.org_organisation):
+        org_items = organisation()
+        datatable_ajax_source = "/%s/default/organisation.aaData" % \
+                                appname
+        s3.actions = None
+        response.view = "default/index.html"
+        auth.permission.controller = "org"
+        auth.permission.function = "site"
+        permitted_facilities = auth.permitted_facilities(redirect_on_error=False)
+        manage_facility_box = ""
+        if permitted_facilities:
+            facility_list = s3_represent_facilities(db, permitted_facilities,
+                                                    link=False)
+            facility_opts = [OPTION(opt[1], _value = opt[0])
+                             for opt in facility_list]
+            if facility_list:
+                manage_facility_box = DIV(H3(T("Manage Your Facilities")),
+                                    SELECT(_id = "manage_facility_select",
+                                            _style = "max-width:400px;",
+                                            *facility_opts
+                                            ),
+                                    A(T("Go"),
+                                        _href = URL(c="default", f="site",
+                                                    args=[facility_list[0][0]]),
+                                        #_disabled = "disabled",
+                                        _id = "manage_facility_btn",
+                                        _class = "action-btn"
+                                        ),
+                                    _id = "manage_facility_box",
+                                    _class = "menu_box fleft")
+                s3.jquery_ready.append( """
+$('#manage_facility_select').change(function() {
+    $('#manage_facility_btn').attr('href', S3.Ap.concat('/default/site/',  $('#manage_facility_select').val()));
+})""" )
+            else:
+                manage_facility_box = DIV()
+
+        org_box = DIV( H3(T("Organizations")),
+                       A(T("Add Organization"),
+                          _href = URL(c="org", f="organisation",
+                                      args=["create"]),
+                          _id = "add-btn",
+                          _class = "action-btn",
+                          _style = "margin-right: 10px;"),
+                        org_items["items"],
+                        _id = "org_box",
+                        _class = "menu_box fleft"
+                        )
+    else:
+        manage_facility_box = ""
+        org_box = ""
+
+    # @ToDo: Replace this with an easily-customisable section on the homepage
+    #settings = db(db.s3_setting.id == 1).select(limitby=(0, 1)).first()
+    #if settings:
+    #    admin_name = settings.admin_name
+    #    admin_email = settings.admin_email
+    #    admin_tel = settings.admin_tel
+    #else:
+    #    # db empty and prepopulate is false
+    #    admin_name = T("Sahana Administrator").xml(),
+    #    admin_email = "support@Not Set",
+    #    admin_tel = T("Not Set").xml(),
+
+    # Login/Registration forms
+    self_registration = settings.get_security_self_registration()
+    registered = False
+    login_form = None
+    login_div = None
+    register_form = None
+    register_div = None
+    if AUTHENTICATED not in session.s3.roles:
+        # This user isn't yet logged-in
+        if request.cookies.has_key("registered"):
+            # This browser has logged-in before
+            registered = True
+
+        if self_registration:
+            # Provide a Registration box on front page
+            request.args = ["register"]
+            if settings.get_terms_of_service():
+                auth.messages.submit_button = T("I accept. Create my account.")
+            else:
+                auth.messages.submit_button = T("Register")
+            register_form = auth()
+            register_div = DIV(H3(T("Register")),
+                               P(XML(T("If you would like to help, then please %(sign_up_now)s") % \
+                                        dict(sign_up_now=B(T("sign-up now"))))))
+
+             # Add client-side validation
+            s3_register_validation()
+
+            if s3.debug:
+                s3.scripts.append( "%s/jquery.validate.js" % s3_script_dir )
+            else:
+                s3.scripts.append( "%s/jquery.validate.min.js" % s3_script_dir )
+            if request.env.request_method == "POST":
+                post_script = """// Unhide register form
+    $('#register_form').removeClass('hide');
+    // Hide login form
+    $('#login_form').addClass('hide');"""
+            else:
+                post_script = ""
+            register_script = """
+    // Change register/login links to avoid page reload, make back button work.
+    $('#register-btn').attr('href', '#register');
+    $('#login-btn').attr('href', '#login');
+    %s
+    // Redirect Register Button to unhide
+    $('#register-btn').click(function() {
+        // Unhide register form
+        $('#register_form').removeClass('hide');
+        // Hide login form
+        $('#login_form').addClass('hide');
+    });
+
+    // Redirect Login Button to unhide
+    $('#login-btn').click(function() {
+        // Hide register form
+        $('#register_form').addClass('hide');
+        // Unhide login form
+        $('#login_form').removeClass('hide');
+    });""" % post_script
+            s3.jquery_ready.append(register_script)
+
+        # Provide a login box on front page
+        request.args = ["login"]
+        auth.messages.submit_button = T("Login")
+        login_form = auth()
+        login_div = DIV(H3(T("Login")),
+                        P(XML(T("Registered users can %(login)s to access the system" % \
+                                dict(login=B(T("login")))))))
+
+    if settings.frontpage.rss:
+        s3.external_stylesheets.append( "http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.css" )
+        s3.scripts.append( "http://www.google.com/jsapi?key=notsupplied-wizard" )
+        s3.scripts.append( "http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.js" )
+        counter = 0
+        feeds = ""
+        for feed in settings.frontpage.rss:
+            counter += 1
+            feeds = "".join((feeds,
+                             "{title: '%s',\n" % feed["title"],
+                             "url: '%s'}" % feed["url"]))
+            # Don't add a trailing comma for old IEs
+            if counter != len(settings.frontpage.rss):
+                feeds += ",\n"
+        feed_control = "".join(("""
+function LoadDynamicFeedControl() {
+  var feeds = [
+    """, feeds, """
+  ];
+  var options = {
+    // milliseconds before feed is reloaded (5 minutes)
+    feedCycleTime : 300000,
+    numResults : 5,
+    stacked : true,
+    horizontal : false,
+    title : '""", str(T("News")), """'
+  };
+  new GFdynamicFeedControl(feeds, 'feed-control', options);
+}
+// Load the feeds API and set the onload callback.
+google.load('feeds', '1');
+google.setOnLoadCallback(LoadDynamicFeedControl);"""))
+        s3.js_global.append( feed_control )
+
+    return dict(title = title,
+                item = item,
+
+                sit_dec_res_box = sit_dec_res_box,
+                facility_box = facility_box,
+                manage_facility_box = manage_facility_box,
+                org_box = org_box,
+
+                r = None, # Required for dataTable to work
+                datatable_ajax_source = datatable_ajax_source,
+                #admin_name=admin_name,
+                #admin_email=admin_email,
+                #admin_tel=admin_tel,
+                self_registration=self_registration,
+                registered=registered,
+                login_form=login_form,
+                login_div=login_div,
+                register_form=register_form,
+                register_div=register_div
+                )
 
 # -----------------------------------------------------------------------------
 def organisation():
