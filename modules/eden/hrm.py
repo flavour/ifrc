@@ -42,7 +42,6 @@ __all__ = ["S3HRModel",
            "hrm_rheader",
            "hrm_training_event_controller",
            "hrm_training_controller",
-           "hrm_dashboard",
            ]
 
 import datetime
@@ -3861,7 +3860,7 @@ def hrm_rheader(r, tabs=[]):
     return rheader
 
 # =============================================================================
-def hrm_training_event_controller(dashboard=None):
+def hrm_training_event_controller():
     """
         Training Event Controller, defined in the model for use from
         multiple controllers for unified menus
@@ -3901,12 +3900,10 @@ def hrm_training_event_controller(dashboard=None):
 
     output = current.rest_controller("hrm", "training_event",
                                      rheader=hrm_rheader)
-    if dashboard and isinstance(output, dict):
-        output["dashboard"] = dashboard
     return output
 
 # =============================================================================
-def hrm_training_controller(dashboard=None):
+def hrm_training_controller():
     """
         Training Controller, defined in the model for use from
         multiple controllers for unified menus
@@ -3938,62 +3935,6 @@ def hrm_training_controller(dashboard=None):
         current.response.s3.filter = query
 
     output = current.rest_controller("hrm", "training")
-    if dashboard and isinstance(output, dict):
-        output["dashboard"] = dashboard
     return output
-
-# =============================================================================
-def hrm_dashboard(mode="staff"):
-    """ HRM-specific dashboard (bottom) menu """
-
-    from eden.layouts import S3DashBoardMenuLayout as DB
-
-    if mode == "staff":
-        dashboard = DB()(
-            DB("STAFF",
-                c="hrm",
-                image = "graphic_staff_wide.png",
-                title = "Staff")(
-                DB("Manage Staff Data", f="staff"),
-                #DB("Manage Teams Data", f="group"),
-            ),
-            DB("OFFICES",
-                c="org",
-                image = "graphic_office.png",
-                title = "Offices")(
-                DB("Manage Offices Data", f="office"),
-                DB("Manage Organisations Data", f="organisation"),
-            ),
-            DB("CATALOGUES",
-                c="hrm",
-                image="graphic_catalogue.png",
-                title="Catalogues")(
-                DB("Certificates", f="certificate"),
-                DB("Training Courses", f="course"),
-                #DB("Skills", f="skill"),
-                DB("Job Roles", f="job_role")
-            ))
-
-    elif mode == "volunteer":
-        dashboard = DB()(
-            DB("VOLUNTEERS",
-                c="vol",
-                image = "graphic_staff_wide.png",
-                title = "Volunteers")(
-                DB("Manage Volunteer Data", f="volunteer"),
-                DB("Manage Teams Data", f="group"),
-            ),
-            DB("CATALOGUES",
-                c="hrm",
-                image="graphic_catalogue.png",
-                title="Catalogues")(
-                DB("Certificates", f="certificate"),
-                DB("Training Courses", f="course"),
-                #DB("Skills", f="skill"),
-                DB("Job Roles", f="job_role")
-            ))
-
-
-    return dashboard
 
 # END =========================================================================
