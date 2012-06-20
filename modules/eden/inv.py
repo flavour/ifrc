@@ -793,7 +793,9 @@ class S3TrackingModel(S3Model):
                                 ],                                      
                   onaccept = self.inv_send_onaccept,
                   create_next = send_item_url,
-                  update_next = send_item_url)
+                  update_next = send_item_url,
+                  orderby=~table.date,
+                  sortby=[[5, "desc"], [1, "asc"]])
 
         # ---------------------------------------------------------------------
         # Received (In/Receive / Donation / etc)
@@ -1018,7 +1020,9 @@ class S3TrackingModel(S3Model):
                   onaccept = self.inv_recv_onaccept,
                   search_method = recv_search,
                   create_next = recv_item_url,
-                  update_next = recv_item_url)
+                  update_next = recv_item_url,
+                  orderby=~table.date,
+                  sortby=[[6, "desc"], [1, "asc"]])
 
         # Components
         add_component("inv_track_item",
@@ -1209,19 +1213,19 @@ $(document).ready(function() {
                         name="track_search_text_simple",
                         label=T("Search"),
                         #comment=recv_search_comment,
-                        field=[ "item_id$name",
-                                "send_id$site_id$name",
-                                "recv_id$site_id$name",
-                                ]
+                        field=["item_id$name",
+                               "send_id$site_id$name",
+                               "recv_id$site_id$name",
+                              ]
                       )),
             advanced=(S3SearchSimpleWidget(
                         name="track_search_text_advanced",
                         label=T("Search"),
                         #comment=recv_search_comment,
-                        field=[ "item_id$name",
-                                "send_id$site_id$name",
-                                "recv_id$site_id$name",
-                                ]
+                        field=["item_id$name",
+                               "send_id$site_id$name",
+                               "recv_id$site_id$name",
+                              ]
                       ),
                       S3SearchMinMaxWidget(
                         name="send_search_date",
@@ -1229,12 +1233,12 @@ $(document).ready(function() {
                         label=T("Sent date"),
                         field="send_id$date"
                       ),
-                      #S3SearchMinMaxWidget(
-                      #  name="recv_search_date",
-                      #  method="range",
-                      #  label=T("Received date"),
-                      #  field="recv_id$date"
-                      #),
+                      S3SearchMinMaxWidget(
+                        name="recv_search_date",
+                        method="range",
+                        label=T("Received date"),
+                        field="recv_id$date"
+                      ),
             ))
 
         # Resource configuration
@@ -1246,6 +1250,7 @@ $(document).ready(function() {
                                  (T("Volume (m3)"), "item_id$volume"),
                                  "item_pack_id",
                                  "send_id",
+                                 "recv_id",
                                  "quantity",
                                  "currency",
                                  "pack_value",

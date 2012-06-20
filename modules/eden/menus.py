@@ -37,11 +37,29 @@ from ..s3 import *
 from layouts import *
 
 # =============================================================================
-class S3MainMenu:
+class S3MainMenu(object):
     """ The default configurations for the main application menu """
 
-    @staticmethod
-    def menu_modules():
+    @classmethod
+    def menu(cls):
+
+        main_menu = MM()(
+
+            # Standard modules-menu, left
+            cls.menu_modules(),
+
+            # Standard service menus, right
+            cls.menu_help(right=True),
+            cls.menu_auth(right=True),
+            cls.menu_lang(right=True),
+            cls.menu_admin(right=True),
+            cls.menu_gis(right=True)
+        )
+        return main_menu
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def menu_modules(cls):
 
         request = current.request
         response = current.response
@@ -77,14 +95,11 @@ class S3MainMenu:
                     if not _module.access:
                         menu_modules.append(MM(_module.name_nice, c=module, f="index"))
                     else:
-                        authorised = False
                         groups = re.split("\|", _module.access)[1:-1]
-                        for group in groups:
-                            if has_role(group):
-                                authorised = True
-                                break
-                        if authorised == True:
-                            menu_modules.append(MM(_module.name_nice, c=module, f="index"))
+                        menu_modules.append(MM(_module.name_nice,
+                                               c=module,
+                                               f="index",
+                                               restrict=groups))
 
         # Modules to display off the 'more' menu
         modules_submenu = []
@@ -96,13 +111,11 @@ class S3MainMenu:
                 if not _module.access:
                     modules_submenu.append(MM(_module.name_nice, c=module, f="index"))
                 else:
-                    authorised = False
                     groups = re.split("\|", _module.access)[1:-1]
-                    for group in groups:
-                        if has_role(group):
-                            authorised = True
-                    if authorised == True:
-                        modules_submenu.append(MM(_module.name_nice, c=module, f="index"))
+                    modules_submenu.append(MM(_module.name_nice,
+                                              c=module,
+                                              f="index",
+                                              restrict=groups))
 
         if modules_submenu:
             # Only show the 'more' menu if there are entries in the list
@@ -112,8 +125,8 @@ class S3MainMenu:
         return menu_modules
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def menu_lang(**attr):
+    @classmethod
+    def menu_lang(cls, **attr):
         """ Language menu """
 
         s3 = current.response.s3
@@ -131,8 +144,8 @@ class S3MainMenu:
         return menu_lang
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def menu_help(**attr):
+    @classmethod
+    def menu_help(cls, **attr):
         """ Help Menu """
 
         menu_help = MM("Help", **attr)(
@@ -142,8 +155,8 @@ class S3MainMenu:
         return menu_help
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def menu_auth(**attr):
+    @classmethod
+    def menu_auth(cls, **attr):
         """ Auth Menu """
 
         T = current.T
@@ -199,8 +212,8 @@ class S3MainMenu:
         return menu_auth
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def menu_admin(**attr):
+    @classmethod
+    def menu_admin(cls, **attr):
         """ Administrator Menu """
 
         session = current.session
@@ -211,7 +224,7 @@ class S3MainMenu:
 
         menu_admin = MM(module.name_nice, c="admin",
                         restrict=[ADMIN], **attr)(
-                            MM("Settings", f="settings"),
+                            MM("Settings", f="setting"),
                             MM("Users", f="user"),
                             MM("Person Registry", c="pr"),
                             MM("Database", c="appadmin", f="index"),
@@ -222,8 +235,8 @@ class S3MainMenu:
         return menu_admin
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def menu_gis(**attr):
+    @classmethod
+    def menu_gis(cls, **attr):
         """ GIS Config Menu """
 
         settings = current.deployment_settings
@@ -303,8 +316,8 @@ class S3MainMenu:
                 )
         return gis_menu
 
-    @staticmethod
-    def menu_climate(**attr):
+    @classmethod
+    def menu_climate(cls, **attr):
         settings = current.deployment_settings
         module = settings.modules["climate"]
         session = current.session
@@ -322,7 +335,7 @@ class S3MainMenu:
         return menu_climate
 
 # =============================================================================
-class S3OptionsMenu:
+class S3OptionsMenu(object):
     """
         The default configurations for options menus
 
@@ -341,9 +354,9 @@ class S3OptionsMenu:
     def __init__(self, name):
         """ Constructor """
 
-        if name in self.__class__.__dict__:
+        try:
             self.menu = getattr(self, name)()
-        else:
+        except:
             self.menu = None
 
     # -------------------------------------------------------------------------
@@ -528,6 +541,7 @@ class S3OptionsMenu:
                     M(shelter, f="shelter")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         # @ToDo Search by type, services, location, available space
                         #M("Search", m="search"),
                         M("Import", m="import"),
@@ -649,11 +663,15 @@ class S3OptionsMenu:
 
         return M()(
                     M("Scenarios", c="scenario", f="scenario")(
-                        M("New Scenario", m="create"),
+                        M("New", m="create"),
                         M("View All"),
                     ),
                     M("Events", c="event", f="event")(
-                        M("New Event", m="create"),
+                        M("New", m="create"),
+                        M("View All")
+                    ),
+                    M("Incidents", c="incident", f="event")(
+                        M("New", m="create"),
                         M("View All")
                     )
                 )
@@ -666,6 +684,7 @@ class S3OptionsMenu:
                     M("Fire Stations", f="station")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         M("Search", m="search"),
                         M("Import Stations", m="import"),
                         M("Import Vehicles", f="station_vehicle", m="import"),
@@ -673,6 +692,7 @@ class S3OptionsMenu:
                     M("Water Sources", f="water_source")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         M("Search", m="search"),
                         M("Import", m="import"),
                     ),
@@ -692,6 +712,7 @@ class S3OptionsMenu:
                     M("Gauges", f="gauge")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         #M("Search", m="search"),
                         M("Import", m="import"),
                     ),
@@ -778,12 +799,13 @@ class S3OptionsMenu:
     def hms(self):
         """ HMS / Hospital Status Assessment and Request Management """
 
-        #s3 = current.response.s3
+        s3 = current.response.s3
 
         return M(c="hms")(
                     M("Hospitals", f="hospital", m="search")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         M("Search", m="search"),
                         #SEP(),
                         #M("Show Map", c="gis", f="map_viewing_client",
@@ -809,7 +831,7 @@ class S3OptionsMenu:
         return M(c="hrm")(
                     M("Staff", f="staff",
                       check=[manager_mode])(
-                        M("New Staff Member", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         M("Search", m="search"),
                         M("Report", m="report",
@@ -822,25 +844,25 @@ class S3OptionsMenu:
                         M("Import", f="person", m="import",
                           vars={"group":"staff"}, p="create"),
                     ),
-                    #M("Teams", f="group",
-                    #  check=manager_mode)(
-                    #    M("New Team", m="create"),
-                    #    M("List All"),
-                    #),
-                    M("Job Role Catalog", f="job_role",
+                    M("Teams", f="group",
                       check=manager_mode)(
-                        M("New Job Role", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                     ),
-                    #M("Skill Catalog", f="skill",
-                    #  check=manager_mode)(
-                    #    M("New Skill", m="create"),
-                    #    M("List All"),
-                    #    #M("Skill Provisions", f="skill_provision"),
-                    #),
+                    M("Job Role Catalog", f="job_role",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Skill Catalog", f="skill",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                        #M("Skill Provisions", f="skill_provision"),
+                    ),
                     M("Training Events", f="training_event",
                       check=manager_mode)(
-                        M("New Training Event", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         M("Search", m="search"),
                         M("Search Training Participants", f="training",
@@ -854,13 +876,13 @@ class S3OptionsMenu:
                     ),
                     M("Training Course Catalog", f="course",
                       check=manager_mode)(
-                        M("New Training Course", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         #M("Course Certificates", f="course_certificate"),
                     ),
                     M("Certificate Catalog", f="certificate",
                       check=manager_mode)(
-                        M("New Certificate", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         #M("Skill Equivalence", f="certificate_skill"),
                     ),
@@ -896,7 +918,7 @@ class S3OptionsMenu:
         return M(c="vol")(
                     M("Volunteers", f="volunteer",
                       check=[manager_mode])(
-                        M("New Volunteer", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         M("Search", m="search"),
                         M("Report", m="report",
@@ -907,25 +929,25 @@ class S3OptionsMenu:
                         M("Import", f="person", m="import",
                           vars={"group":"volunteer"}, p="create"),
                     ),
-                    #M("Teams", f="group",
-                    #  check=manager_mode)(
-                    #    M("New Team", m="create"),
-                    #    M("List All"),
-                    #),
-                    M("Job Role Catalog", f="job_role",
+                    M("Teams", f="group",
                       check=manager_mode)(
-                        M("New Job Role", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                     ),
-                    #M("Skill Catalog", f="skill",
-                    #  check=manager_mode)(
-                    #    M("New Skill", m="create"),
-                    #    M("List All"),
-                    #    #M("Skill Provisions", f="skill_provision"),
-                    #),
+                    M("Job Role Catalog", f="job_role",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Skill Catalog", f="skill",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                        #M("Skill Provisions", f="skill_provision"),
+                    ),
                     M("Training Events", f="training_event",
                       check=manager_mode)(
-                        M("New Training Event", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         M("Search", m="search"),
                         M("Search Training Participants", f="training",
@@ -939,19 +961,19 @@ class S3OptionsMenu:
                     ),
                     M("Training Course Catalog", f="course",
                       check=manager_mode)(
-                        M("New Training Course", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         #M("Course Certificates", f="course_certificate"),
                     ),
                     M("Certificate Catalog", f="certificate",
                       check=manager_mode)(
-                        M("New Certificate", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         #M("Skill Equivalence", f="certificate_skill"),
                     ),
                     M("Programmes", f="programme",
                       check=[manager_mode, show_programmes])(
-                        M("New Programme", m="create"),
+                        M("New", m="create"),
                         M("List All"),
                         M("Import Hours", f="programme_hours", m="import"),
                     ),
@@ -1065,6 +1087,7 @@ class S3OptionsMenu:
                         M("New", m="create"),
                         M("List All"),
                         M("Open Incidents", vars={"open":1}),
+                        M("Map", m="map"),
                         M("Timeline", args="timeline"),
                         M("Import", m="import"),
                         M("Search", m="search"),
@@ -1078,8 +1101,8 @@ class S3OptionsMenu:
                         M("New", m="create"),
                         M("List All"),
                     ),
-                    #M("Ushahidi " + T("Import"), f="ireport", restrict=[ADMIN],
-                    #  args="ushahidi")
+                    M("Ushahidi " + T("Import"), f="ireport", restrict=[ADMIN],
+                      args="ushahidi")
                 )
 
     # -------------------------------------------------------------------------
@@ -1096,6 +1119,7 @@ class S3OptionsMenu:
                         M("New", m="create"),
                         M("List All"),
                         M("Open Incidents", vars={"open":1}),
+                        M("Map", m="map"),
                         M("Timeline", args="timeline"),
                         M("Import", m="import"),
                         M("Search", m="search"),
@@ -1274,6 +1298,7 @@ class S3OptionsMenu:
                     M("Offices", f="office")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         M("Search", m="search"),
                         M("Import", m="import")
                     ),
@@ -1314,7 +1339,6 @@ class S3OptionsMenu:
     def proc(self):
         """ PROC / Procurement """
 
-        # @todo: controller does not exist!
         return M(c="proc")(
                     M("Home", f="index"),
                     M("Procurement Plans", f="plan")(
@@ -1338,144 +1362,138 @@ class S3OptionsMenu:
         ADMIN = session.s3.system_roles.ADMIN
 
         settings = current.deployment_settings
+        #activities = settings.get_project_activities()
+        community = settings.get_project_community()
+        if community:
+            IMPORT = "Import Project Communities"
+        else:
+            IMPORT = "Import Project Locations"
 
-        project_menu = M(c="project")
+        menu = M(c="project")
 
-        if settings.get_project_mode_drr():
-            project_menu(
-                    M("Projects", f="project")(
-                        M("Add New Project", m="create"),
-                        M("List All Projects"),
+        if settings.get_project_mode_3w():
+            if community:
+                menu(
+                     M("Projects", f="project")(
+                        M("New", m="create"),
+                        M("List All"),
                         M("Search", m="search"),
-                    ),
-                    M("Communities", f="community")(
-                        M("List All Communities"),
-                        M("Search Communities", m="search"),
+                     ),
+                     M("Communities", f="location")(
+                        M("List All"),
+                        M("Map", m="map"),
+                        M("Search", m="search"),
                         M("List All Community Contacts", f="community_contact"),
                         M("Search Community Contacts", f="community_contact",
                           m="search"),
-                    ),
-                    M("Reports", f="report")(
-                        M("Who is doing What Where", f="community", m="report"),
-                        M("Beneficiaries", f="beneficiary", m="report"),
-                        M("Funding", f="organisation", args="report"),
-                    ),
-                    M("Import", f="index")(
-                        M("Import Projects", f="project",
-                          m="import", p="create"),
-                        M("Import Project Organizations", f="organisation",
-                          m="import", p="create"),
-                        M("Import Project Communities", f="community",
-                          m="import", p="create"),
-                    ),
-                    M("Activity Types", f="activity_type")(
-                        M("Add New Activity Type", m="create"),
-                        M("List All Activity Types"),
-                        #M("Search", m="search")
-                    ),
-                    M("Hazards", f="hazard")(
-                        M("Add New Hazard", m="create"),
-                        M("List All Hazards"),
-                    ),
-                    M("Project Themes", f="theme")(
-                        M("Add New Theme", m="create"),
-                        M("List All Themes"),
-                    ),
-                    M("Beneficiary Types", f="beneficiary_type")(
-                        M("Add New Type", m="create"),
-                        M("List All Types"),
-                    ),
-                )
-
-        elif settings.get_project_mode_3w():
-            project_menu(
-                    M("Projects", f="project")(
-                        M("Add New Project", m="create"),
-                        M("List All Projects"),
-                        M("Search", m="search"),
-                        M("Import", m="import", p="create"),
-                    ),
-                    M("Project Themes", f="theme")(
-                        M("Add New Theme", m="create"),
-                        M("List All Themes"),
-                    ),
-                )
-
-        elif settings.get_project_mode_task():
-            if auth.s3_has_role("STAFF"):
-                project_menu(
-                        M("Projects", f="project")(
-                            M("Add New Project", m="create"),
-                            M("List All Projects"),
-                            M("Open Tasks for Project", vars={"tasks":1}),
-                        ),
-                        M("Tasks", f="task")(
-                            M("Add New Task", m="create"),
-                            #M("List All Tasks"),
-                            M("Search All Tasks", m="search"),
-                        ),
-                        M("Daily Work", f="time")(
-                            M("My Logged Hours", vars={"mine":1}),
-                            M("Last Week's Work", m="report",
-                              vars=Storage(rows="person_id",
-                                           cols="day",
-                                           fact="hours",
-                                           aggregate="sum",
-                                           week=1)),
-                            M("My Open Tasks", f="task", vars={"mine":1}),
-                        ),
-                        M("Admin", restrict=[ADMIN])(
-                            M("Activity Types", f="activity_type"),
-                            M("Import Tasks", f="task", m="import", p="create"),
-                        ),
-                        M("Reports", f="report")(
-                            M("Activity Report", f="activity", m="report",
-                              vars=Storage(rows="project_id",
-                                           cols="name",
-                                           fact="time_actual",
-                                           aggregate="sum")),
-                            M("Project Time Report", f="time", m="report",
-                              vars=Storage(rows="project",
-                                           cols="person_id",
-                                           fact="hours",
-                                           aggregate="sum")),
-                        ),
+                     )
                     )
             else:
-                project_menu(
-                        M("Projects", f="project")(
-                            M("List All Projects"),
-                            M("Open Tasks for Project", vars={"tasks":1}),
-                        ),
-                        M("Tasks", f="task")(
-                            M("Add New Task", m="create"),
-                            M("List All Tasks"),
-                            M("Search", m="search"),
-                        ),
-
+                menu(
+                     M("Projects", f="project")(
+                        M("New", m="create"),
+                        M("List All"),
+                        M("Map", f="location", m="map"),
+                        M("Search", m="search"),
+                     )
                     )
-
-        else:
-            project_menu(
-                    M("Projects", f="project")(
-                        M("Add New Project", m="create"),
-                        M("List All Projects"),
-                        M("Search", m="search"),
-                        M("Import", m="import", p="create"),
-                    ),
-                    M("Activities", f="activity")(
-                        M("Add New Activity", m="create"),
-                        M("List All Activities"),
-                        M("Search", m="search"),
-                        M("Import", m="import", p="create"),
-                    ),
-                    M("Project Themes", f="theme")(
-                        M("Add New Theme", m="create"),
-                        M("List All Themes"),
-                    ),
+            menu(
+                 M("Reports", f="report")(
+                    M("Who is doing What Where", f="location", m="report"),
+                    M("Beneficiaries", f="beneficiary", m="report"),
+                    M("Funding", f="organisation", args="report"),
+                 ),
+                 M("Import", f="index", p="create")(
+                    M("Import Projects", f="project",
+                      m="import", p="create"),
+                    M("Import Project Organizations", f="organisation",
+                      m="import", p="create"),
+                    M(IMPORT, f="location",
+                      m="import", p="create"),
+                 ),
+                 M("Themes", f="theme")(
+                    M("New", m="create"),
+                    M("List All"),
+                 ),
+                 M("Activity Types", f="activity_type")(
+                    M("New", m="create"),
+                    M("List All"),
+                    #M("Search", m="search")
+                 ),
+                 M("Beneficiary Types", f="beneficiary_type")(
+                    M("New", m="create"),
+                    M("List All"),
+                 ),
                 )
 
-        return project_menu
+            if settings.get_project_mode_drr():
+                menu(
+                     M("Hazards", f="hazard")(
+                        M("New", m="create"),
+                        M("List All"),
+                     )
+                    )
+            # if settings.get_project_sectors():
+                # menu(
+                     # M("Sectors", c="org", f="sector")(
+                        # M("New", m="create"),
+                        # M("List All"),
+                     # )
+                    # )
+
+        elif settings.get_project_mode_task():
+            menu(
+                 M("Projects", f="project")(
+                    M("New", m="create"),
+                    M("List All"),
+                    M("Open Tasks for Project", vars={"tasks":1}),
+                 ),
+                 M("Tasks", f="task")(
+                    M("New", m="create"),
+                    #M("List All Tasks"),
+                    M("Search", m="search"),
+                 ),
+                )
+            if auth.s3_has_role("STAFF"):
+                menu(
+                     M("Daily Work", f="time")(
+                        M("My Logged Hours", vars={"mine":1}),
+                        M("Last Week's Work", m="report",
+                          vars=Storage(rows="person_id",
+                                       cols="day",
+                                       fact="hours",
+                                       aggregate="sum",
+                                       week=1)),
+                        M("My Open Tasks", f="task", vars={"mine":1}),
+                     ),
+                     M("Admin", restrict=[ADMIN])(
+                        M("Activity Types", f="activity_type"),
+                        M("Import Tasks", f="task", m="import", p="create"),
+                     ),
+                     M("Reports", f="report")(
+                        M("Activity Report", f="activity", m="report",
+                          vars=Storage(rows="project_id",
+                                       cols="name",
+                                       fact="time_actual",
+                                       aggregate="sum")),
+                        M("Project Time Report", f="time", m="report",
+                          vars=Storage(rows="project",
+                                       cols="person_id",
+                                       fact="hours",
+                                       aggregate="sum")),
+                     ),
+                    )
+        else:
+            menu(
+                 M("Projects", f="project")(
+                    M("New", m="create"),
+                    M("List All"),
+                    M("Search", m="search"),
+                    M("Import", m="import", p="create"),
+                 ),
+                )
+
+        return menu
 
     # -------------------------------------------------------------------------
     def req(self):
@@ -1515,13 +1533,14 @@ class S3OptionsMenu:
                     M("Vehicles", f="vehicle")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         M("Search", m="search"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def settings_messaging():
+    @classmethod
+    def settings_messaging(cls):
         """ Messaging settings menu items:
 
             These items are used in multiple menus, but each item instance can
@@ -1540,8 +1559,8 @@ class S3OptionsMenu:
         ]
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def breadcrumbs():
+    @classmethod
+    def breadcrumbs(cls):
         """ Breadcrumbs from the current options menu """
 
         # Configure the layout:

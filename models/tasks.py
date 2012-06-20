@@ -26,7 +26,7 @@ def download_kml(record_id, filename, user_id=None):
 tasks["download_kml"] = download_kml
 
 # -----------------------------------------------------------------------------
-if deployment_settings.has_module("msg"):
+if settings.has_module("msg"):
 
     # -------------------------------------------------------------------------
     def process_outbox(contact_method, user_id=None):
@@ -60,17 +60,17 @@ if deployment_settings.has_module("msg"):
 
     tasks["process_inbound_email"] = process_inbound_email
 
-    # -------------------------------------------------------------------------
-    def process_log():
+    # -----------------------------------------------------------------------------
+    def parse_workflow(workflow):
         """
-            Processes the msg_log for unparsed messages.
+        Processes the msg_log for unparsed messages.
         """
         # Run the Task
-        result = msg.process_log()
+        result = msg.parse_import(workflow)
         return result
+        
+    tasks["parse_workflow"] = parse_workflow
     
-    tasks["process_log"] = process_log
-
 # -----------------------------------------------------------------------------
 def sync_synchronize(repository_id, user_id=None, manual=False):
     """
@@ -110,7 +110,7 @@ tasks["sync_synchronize"] = sync_synchronize
 
 # -----------------------------------------------------------------------------
 # Instantiate Scheduler instance with the list of tasks
-response.s3.tasks = tasks
+s3.tasks = tasks
 s3task = s3base.S3Task()
 current.s3task = s3task
 

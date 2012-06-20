@@ -39,6 +39,7 @@ __all__ = ["S3HiddenWidget",
            "S3LocationAutocompleteWidget",
            "S3LatLonWidget",
            "S3OrganisationAutocompleteWidget",
+           "S3OrganisationHierarchyWidget",
            "S3PersonAutocompleteWidget",
            "S3SiteAutocompleteWidget",
            "S3TrainingAutocompleteWidget",
@@ -74,6 +75,8 @@ from gluon import *
 from gluon import current
 from gluon.storage import Storage
 from gluon.sqlhtml import *
+
+import gluon.contrib.simplejson as json
 
 from s3utils import *
 from s3validators import *
@@ -586,6 +589,55 @@ class S3OrganisationAutocompleteWidget(FormWidget):
                     vars={"filter":"~"})
             )
         )
+
+
+# =============================================================================
+class S3OrganisationHierarchyWidget(OptionsWidget):
+    """ Renders an organisation_id SELECT as a menu """
+
+    _class = "widget-org-hierarchy"
+
+    def __init__(self, primary_options=None):
+        """
+            [{"id":12, "pe_id":4, "name":"Organisation Name"}]
+        """
+        self.primary_options = primary_options
+
+    def __call__(self, field, value, **attributes):
+
+        s3 = current.response.s3
+        table = current.s3db.org_organisation
+        options = self.primary_options
+        name = attributes.get("_name", field.name)
+
+        if options is None:
+            requires = field.requires
+            if isinstance(requires, (list, tuple)) and \
+               len(requires):
+                requires = requires[0]
+            if requires is not None:
+                if isinstance(requires, IS_EMPTY_OR):
+                    requires = requires.other
+                if hasattr(requires, "options"):
+                    options = requires.options()
+                    ids = [option[0] for option in options if option[0]]
+                    rows = current.db(table.id.belongs(ids)).select(table.id,
+                                                                    table.pe_id,
+                                                                    table.name,
+                                                                    orderby=table.name)
+                    options = []
+                    for row in rows:
+                        options.append(row.as_dict())
+                else:
+                    raise SyntaxError, "widget cannot determine options of %s" % field
+
+        javascript_array = "%s_options = %s;" % (name,
+                                                 json.dumps(options))
+        s3.js_global.append(javascript_array)
+        s3.scripts.append("%s/%s" % (s3.script_dir, "s3.orghierarchy.js"))
+        s3.stylesheets.append("S3/jquery.ui.menu.css")
+
+        return self.widget(field, value, **attributes)
 
 # =============================================================================
 class S3PersonAutocompleteWidget(FormWidget):
@@ -2461,11 +2513,11 @@ class S3AutocompleteOrAddWidget(FormWidget):
         - an add widget which is used to add an object.
             It fills the field with that object after successful addition
     """
-    def __init__(
-        self,
-        autocomplete_widget,
-        add_widget
-    ):
+    def __init__(self,
+                 autocomplete_widget,
+                 add_widget
+                ):
+
         self.autocomplete_widget = autocomplete_widget
         self.add_widget = add_widget
 
@@ -2491,15 +2543,14 @@ class S3AddObjectWidget(FormWidget):
             after a successful submission, the response callback is handed the
             response.
     """
-    def __init__(
-        self,
-        form_url,
-        table_name,
+    def __init__(self,
+                 form_url,
+                 table_name,
+                 dummy_field_selector,
+                 on_show,
+                 on_hide
+                ):
 
-        dummy_field_selector,
-        on_show,
-        on_hide
-    ):
         self.form_url = form_url
         self.table_name = table_name
 
@@ -2980,7 +3031,7 @@ class S3EmbedComponentWidget(FormWidget):
             select = "select_component($('#%s').val());" % real_input
             if pp is not None:
                 select = "%s%s" % (pp, select)
-            widget = S3AutocompleteWidget(prefix=prefix,
+            widget = S3AutocompleteWidget(prefix,
                                           resourcename=resourcename,
                                           fieldname=self.autocomplete,
                                           link_filter=self.link_filter,
