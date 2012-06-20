@@ -42,7 +42,6 @@ __all__ = ["S3HRModel",
            "hrm_rheader",
            "hrm_training_event_controller",
            "hrm_training_controller",
-           "hrm_dashboard",
            ]
 
 import datetime
@@ -634,7 +633,7 @@ class S3HRJobModel(S3Model):
         else:
             label_create = T("Add New Job Role")
             tooltip = T("Add a new job role to the catalog.")
-        
+
         s3.crud_strings[tablename] = Storage(
             title_create = T("Add Job Role"),
             title_display = T("Job Role Details"),
@@ -2604,22 +2603,29 @@ def hrm_vars():
         session.s3.hrm = Storage()
     hrm_vars = session.s3.hrm
 
-    # Automatically choose an organisation
-    if "orgs" not in hrm_vars:
-        # Find all organisations the current user is a staff
-        # member of (+all their branches)
-        user = auth.user.pe_id
-        branches = s3db.pr_get_role_branches(user,
-                                             roles="Staff",
-                                             entity_type="org_organisation")
-        otable = s3db.org_organisation
-        query = (otable.pe_id.belongs(branches))
-        orgs = current.db(query).select(otable.id)
-        orgs = [org.id for org in orgs]
-        if orgs:
-            hrm_vars.orgs = orgs
-        else:
-            hrm_vars.orgs = None
+    s3_has_role = current.auth.s3_has_role
+    if s3_has_role("HR_READ") or \
+       s3_has_role("HR_EDIT") or \
+       s3_has_role("HR_ADMIN"):
+        if "orgs" not in hrm_vars:
+            # Find all organisations the current user is a staff
+            # member of (+all their branches)
+            # @todo: more logical to rely on accessible_query here
+            user = current.auth.user.pe_id
+            branches = s3db.pr_get_role_branches(user,
+                                                 roles="Staff",
+                                                 entity_type="org_organisation")
+            otable = s3db.org_organisation
+            query = (otable.pe_id.belongs(branches))
+            orgs = current.db(query).select(otable.id)
+            orgs = [org.id for org in orgs]
+            if orgs:
+                hrm_vars.orgs = orgs
+            else:
+                hrm_vars.orgs = None
+    else:
+        # No HR Role so don't check Orgs
+        hrm_vars.orgs = None
 
     # Set mode
     hrm_vars.mode = current.request.vars.get("mode", None)
@@ -2656,7 +2662,7 @@ def hrm_hr_represent(id):
 
     return repr_str
 
-# -------------------------------------------------------------------------
+# =============================================================================
 def hrm_human_resource_represent(id,
                                  show_link = False,
                                  none_value = None
@@ -3854,7 +3860,7 @@ def hrm_rheader(r, tabs=[]):
     return rheader
 
 # =============================================================================
-def hrm_training_event_controller(dashboard=None):
+def hrm_training_event_controller():
     """
         Training Event Controller, defined in the model for use from
         multiple controllers for unified menus
@@ -3894,12 +3900,10 @@ def hrm_training_event_controller(dashboard=None):
 
     output = current.rest_controller("hrm", "training_event",
                                      rheader=hrm_rheader)
-    if dashboard and isinstance(output, dict):
-        output["dashboard"] = dashboard
     return output
 
 # =============================================================================
-def hrm_training_controller(dashboard=None):
+def hrm_training_controller():
     """
         Training Controller, defined in the model for use from
         multiple controllers for unified menus
@@ -3931,62 +3935,6 @@ def hrm_training_controller(dashboard=None):
         current.response.s3.filter = query
 
     output = current.rest_controller("hrm", "training")
-    if dashboard and isinstance(output, dict):
-        output["dashboard"] = dashboard
     return output
-
-# =============================================================================
-def hrm_dashboard(mode="staff"):
-    """ HRM-specific dashboard (bottom) menu """
-
-    from eden.layouts import S3DashBoardMenuLayout as DB
-
-    if mode == "staff":
-        dashboard = DB()(
-            DB("STAFF",
-                c="hrm",
-                image = "graphic_staff_wide.png",
-                title = "Staff")(
-                DB("Manage Staff Data", f="staff"),
-                #DB("Manage Teams Data", f="group"),
-            ),
-            DB("OFFICES",
-                c="org",
-                image = "graphic_office.png",
-                title = "Offices")(
-                DB("Manage Offices Data", f="office"),
-                DB("Manage Organisations Data", f="organisation"),
-            ),
-            DB("CATALOGUES",
-                c="hrm",
-                image="graphic_catalogue.png",
-                title="Catalogues")(
-                DB("Certificates", f="certificate"),
-                DB("Training Courses", f="course"),
-                #DB("Skills", f="skill"),
-                DB("Job Roles", f="job_role")
-            ))
-
-    elif mode == "volunteer":
-        dashboard = DB()(
-            DB("VOLUNTEERS",
-                c="vol",
-                image = "graphic_staff_wide.png",
-                title = "Volunteers")(
-                DB("Manage Volunteer Data", f="volunteer"),
-                DB("Manage Teams Data", f="group"),
-            ),
-            DB("CATALOGUES",
-                c="hrm",
-                image="graphic_catalogue.png",
-                title="Catalogues")(
-                DB("Certificates", f="certificate"),
-                DB("Training Courses", f="course"),
-                #DB("Skills", f="skill"),
-                DB("Job Roles", f="job_role")
-            ))
-    
-
-    return dashboard
 
 # END =========================================================================

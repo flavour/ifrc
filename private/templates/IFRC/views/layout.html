@@ -109,7 +109,7 @@
      {{include "breadcrumbs.html"}}
      <a id='main-content'></a>
      {{include}}
-     {{try:}}{{=dashboard}}{{except:}}{{pass}}
+     {{try:}}{{if current.menu.dashboard is not None:}}{{=current.menu.dashboard}}{{pass}}{{except:}}{{pass}}
     </div>
   </div>
   <div id='footer'>

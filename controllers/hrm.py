@@ -110,8 +110,6 @@ def human_resource():
                                    vars = {"hrm_id": "[id]"}),
                         "_class": "action-btn",
                         "label": str(T("Send Message"))})
-            if isinstance(output, dict):
-                output["dashboard"] = s3db.hrm_dashboard("staff")
 
         elif r.representation == "plain" and \
              r.method !="search":
@@ -212,9 +210,6 @@ def staff():
                             "_class": "action-btn",
                             "label": str(T("Send Message"))
                         })
-            if isinstance(output, dict):
-                output["dashboard"] = s3db.hrm_dashboard("staff")
-
         elif r.representation == "plain" and \
              r.method !="search":
             # Map Popups
@@ -527,9 +522,6 @@ def person():
                                       _href=URL(c="asset", f="asset"),
                                       _id="add-btn",
                                       _class="action-btn")
-            if isinstance(output, dict):
-                output["dashboard"] = s3db.hrm_dashboard("staff")
-
         return output
     s3.postp = postp
 
@@ -644,8 +636,6 @@ def group():
                                    vars = {"group_id": "[id]"}),
                         "_class": "action-btn",
                         "label": str(T("Send Notification"))})
-
-            output["dashboard"] = s3db.hrm_dashboard("staff")
         return output
     s3.postp = postp
 
@@ -676,13 +666,6 @@ def job_role():
         return True
     s3.prep = prep
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("staff")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller()
     return output
 
@@ -696,13 +679,6 @@ def skill():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
-
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("staff")
-        return output
-    s3.postp = postp
 
     output = s3_rest_controller()
     return output
@@ -752,13 +728,6 @@ def course():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("staff")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller(rheader=s3db.hrm_rheader)
     return output
 
@@ -770,13 +739,6 @@ def course_certificate():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
-
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("staff")
-        return output
-    s3.postp = postp
 
     output = s3_rest_controller()
     return output
@@ -792,13 +754,6 @@ def certificate():
         return True
     s3.prep = prep
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("staff")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller(rheader=s3db.hrm_rheader)
     return output
 
@@ -811,13 +766,6 @@ def certificate_skill():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("staff")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller()
     return output
 
@@ -825,13 +773,13 @@ def certificate_skill():
 def training():
     """ Training Controller """
 
-    return s3db.hrm_training_controller(dashboard=s3db.hrm_dashboard("staff"))
+    return s3db.hrm_training_controller()
 
 # -----------------------------------------------------------------------------
 def training_event():
     """ Training Events Controller """
 
-    return s3db.hrm_training_event_controller(dashboard=s3db.hrm_dashboard("staff"))
+    return s3db.hrm_training_event_controller()
 
 # =============================================================================
 def skill_competencies():

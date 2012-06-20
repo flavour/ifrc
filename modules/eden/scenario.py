@@ -274,7 +274,7 @@ class S3ScenarioHRModel(S3Model):
     """
 
     names = ["scenario_human_resource"]
- 
+
     def model(self):
 
         T = current.T
@@ -320,7 +320,7 @@ class S3ScenarioMapModel(S3Model):
     """
 
     names = ["scenario_config"]
- 
+
     def model(self):
 
         T = current.T
@@ -367,7 +367,7 @@ class S3ScenarioSiteModel(S3Model):
     """
 
     names = ["scenario_site"]
- 
+
     def model(self):
 
         T = current.T

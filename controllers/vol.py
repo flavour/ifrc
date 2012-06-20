@@ -43,7 +43,7 @@ def human_resource():
                            action=s3db.hrm_service_record
                           )
 
-    
+
     _type = table.type
     _type.default = 2
     s3.filter = (_type == 2)
@@ -129,8 +129,6 @@ def human_resource():
                                    vars = {"hrm_id": "[id]"}),
                         "_class": "action-btn",
                         "label": str(T("Send Message"))})
-            if isinstance(output, dict):
-                output["dashboard"] = s3db.hrm_dashboard("volunteer")
         elif r.representation == "plain" and \
              r.method !="search":
             # Map Popups
@@ -291,8 +289,6 @@ def volunteer():
                             "_class": "action-btn",
                             "label": str(T("Send Message"))
                        })
-            if isinstance(output, dict):
-                output["dashboard"] = s3db.hrm_dashboard("volunteer")
         elif r.representation == "plain" and \
              r.method !="search":
             # Map Popups
@@ -593,8 +589,6 @@ def person():
                                       _href=URL(c="asset", f="asset"),
                                       _id="add-btn",
                                       _class="action-btn")
-            if isinstance(output, dict):
-                output["dashboard"] = s3db.hrm_dashboard("volunteer")
 
         return output
     s3.postp = postp
@@ -742,13 +736,6 @@ def job_role():
         return True
     s3.prep = prep
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller("hrm", resourcename)
     return output
 
@@ -763,13 +750,6 @@ def skill():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller("hrm", resourcename)
     return output
 
@@ -782,13 +762,6 @@ def skill_type():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller("hrm", resourcename)
     return output
 
@@ -800,13 +773,6 @@ def competency_rating():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
-
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
 
     output = s3_rest_controller("hrm", resourcename)
     return output
@@ -832,13 +798,6 @@ def course():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller("hrm", resourcename,
                                 rheader=s3db.hrm_rheader)
     return output
@@ -851,13 +810,6 @@ def course_certificate():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
-
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
 
     output = s3_rest_controller("hrm", resourcename)
     return output
@@ -873,13 +825,6 @@ def certificate():
         return True
     s3.prep = prep
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller("hrm", resourcename,
                                 rheader=s3db.hrm_rheader)
     return output
@@ -893,13 +838,6 @@ def certificate_skill():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller("hrm", resourcename)
     return output
 
@@ -907,13 +845,13 @@ def certificate_skill():
 def training():
     """ Training Controller """
 
-    return s3db.hrm_training_controller(dashboard=s3db.hrm_dashboard("volunteer"))
+    return s3db.hrm_training_controller()
 
 # -----------------------------------------------------------------------------
 def training_event():
     """ Training Events Controller """
 
-    return s3db.hrm_training_event_controller(dashboard=s3db.hrm_dashboard("volunteer"))
+    return s3db.hrm_training_event_controller()
 
 # =============================================================================
 def skill_competencies():
@@ -962,13 +900,6 @@ def programme():
         session.error = T("Access denied")
         redirect(URL(f="index"))
 
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
-
     output = s3_rest_controller("hrm", resourcename,
                                 rheader=s3db.hrm_rheader)
     return output
@@ -984,13 +915,6 @@ def programme_hours():
     if mode is not None:
         session.error = T("Access denied")
         redirect(URL(f="index"))
-
-    # Post-process
-    def postp(r, output):
-        if r.interactive:
-            output["dashboard"] = s3db.hrm_dashboard("volunteer")
-        return output
-    s3.postp = postp
 
     output = s3_rest_controller("hrm", resourcename)
     return output
