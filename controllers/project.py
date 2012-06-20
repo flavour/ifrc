@@ -24,9 +24,9 @@ def index():
     else:
         redirect(URL(f="project"))
 
-    module_name = deployment_settings.modules[module].name_nice
-    response.title = module_name
-    return dict(module_name=module_name)
+    #module_name = deployment_settings.modules[module].name_nice
+    #response.title = module_name
+    #return dict(module_name=module_name)
 
 # =============================================================================
 def create():
@@ -95,7 +95,7 @@ def project():
                             del project_organisation_roles[host_role]
                             otable.role.requires = \
                                 IS_NULL_OR(IS_IN_SET(project_organisation_roles))
-                elif r.component_name in ("activity", "community"):
+                elif r.component_name in ("activity", "location"):
                     # Default the Location Selector list of countries to those found in the project
                     countries = r.record.countries_id
                     if countries:
@@ -115,6 +115,15 @@ def project():
                         statuses = response.s3.project_task_active_statuses
                         filter = (r.component.table.status.belongs(statuses))
                         r.resource.add_component_filter("task", filter)
+                elif r.component_name == "beneficiary":
+                    db.project_beneficiary.project_location_id.requires = IS_NULL_OR(
+                        IS_ONE_OF(db,
+                                  "project_location.id",
+                                  s3db.project_location_represent,
+                                  sort=True,
+                                  filterby="project_id",
+                                  filter_opts=[r.id])
+                                )
                 elif r.component_name == "human_resource":
                     from eden.hrm import hrm_human_resource_represent
 
@@ -358,10 +367,11 @@ def activity():
                               csv_template="activity")
 
 # -----------------------------------------------------------------------------
-def community():
+def location():
     """
-        RESTful CRUD controller to display project community information
+        RESTful CRUD controller to display project location information
     """
+
     tablename = "%s_%s" % (module, resourcename)
     table = s3db[tablename]
 
@@ -384,25 +394,63 @@ def community():
     # Pre-process
     def postp(r, output):
         if r.representation == "plain":
+            # Replace the Map Popup contents with custom content
+            item = TABLE()
             def represent(record, field):
                 if field.represent:
                     return field.represent(record[field])
                 else:
                     return record[field]
-            # Add VirtualFields to Map Popup
-            # Can't inject into SQLFORM, so need to simply replace
-            item = TABLE()
-            table.id.readable = False
-            table.location_id.readable = False
-            fields = [table[f] for f in table.fields if table[f].readable]
-            record = r.record
-            for field in fields:
-                item.append(TR(TD(field.label), TD(represent(record, field))))
-            hierarchy = gis.get_location_hierarchy()
-            item.append(TR(TD(hierarchy["L4"]), TD(record["name"])))
-            for field in ["L3", "L2", "L1"]:
-                item.append(TR(TD(hierarchy[field]), TD(record[field])))
-            output["item"] = item
+
+            if settings.get_project_community():
+                # The Community is the primary resource
+                record = r.record
+                table.id.readable = False
+                table.location_id.readable = False
+                fields = [table[f] for f in table.fields if table[f].readable]
+                for field in fields:
+                    data = record[field]
+                    if data:
+                        represent = field.represent
+                        if represent:
+                            item.append(TR(TD(field.label),
+                                           TD(represent(data))))
+                        else:
+                            item.append(TR(TD(field.label), TD(data)))
+                hierarchy = gis.get_location_hierarchy()
+                for field in ["L4", "L3", "L2", "L1"]:
+                    if field in hierarchy and record[field]:
+                        item.append(TR(TD(hierarchy[field]),
+                                       TD(record[field])))
+                output["item"] = item
+            else:
+                # The Project is the primary resource
+                project_id = r.record.project_id
+                ptable = s3db.project_project
+                query = (ptable.id == project_id)
+                project = db(query).select(limitby=(0, 1)).first()
+                ptable.id.readable = False
+                fields = [ptable[f] for f in ptable.fields if ptable[f].readable]
+                for field in fields:
+                    data = project[field]
+                    if data:
+                        represent = field.represent
+                        if represent:
+                            item.append(TR(TD(field.label),
+                                           TD(represent(data))))
+                        else:
+                            item.append(TR(TD(field.label), TD(data)))
+                title = s3.crud_strings["project_project"].title_display
+                # Assume authorised to see details
+                popup_url = URL(f="project", args=[project_id])
+                details_btn = A(T("Show Details"), _href=popup_url,
+                                _id="details-btn", _target="_blank")
+                output = dict(
+                        item = item,
+                        title = title,
+                        details_btn = details_btn,
+                    )
+            
         return output
     response.s3.postp = postp
 
@@ -414,7 +462,7 @@ def community():
     rheader = lambda r: s3db.project_rheader(r, tabs)
     return s3_rest_controller(interactive_report=True,
                               rheader=rheader,
-                              csv_template="community")
+                              csv_template="location")
 
 # -----------------------------------------------------------------------------
 def community_contact():

@@ -51,7 +51,7 @@ def vehicle():
     field.writable = False
 
     # Only show vehicles
-    response.s3.filter = (field == VEHICLE)
+    s3.filter = (field == VEHICLE)
 
     # Remove type from list_fields
     list_fields = s3mgr.model.get_config("asset_asset", "list_fields")
@@ -90,6 +90,7 @@ def vehicle():
         title_list = T("Vehicles"),
         title_update = T("Edit Vehicle"),
         title_search = T("Search Vehicles"),
+        title_map = T("Map of Vehicles"),
         subtitle_create = T("Add New Vehicle"),
         label_list_button = T("List Vehicles"),
         label_create_button = ADD_VEHICLE,
@@ -128,7 +129,6 @@ def vehicle():
                     search_method = vehicle_search)
 
     # Defined in Model
-    return asset_controller()
+    return s3db.asset_controller()
 
 # END =========================================================================
-

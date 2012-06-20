@@ -2160,18 +2160,19 @@ class AuthS3(Auth):
             return True
 
         db = current.db
-        session = current.session
+        s3 = current.session.s3
 
         # Trigger HTTP basic auth
         self.s3_logged_in()
 
         # Get the realms
-        if not session.s3:
+        if not s3:
             return False
+        realms = None
         if self.user:
             realms = self.user.realms
-        else:
-            realms = Storage([(r, None) for r in session.s3.roles])
+        elif s3.roles:
+            realms = Storage([(r, None) for r in s3.roles])
         if not realms:
             return False
 
@@ -3224,6 +3225,7 @@ class S3Permission(object):
         "create": CREATE,
         "import": CREATE,
         "read": READ,
+        "map": READ,
         "report": READ,
         "search": READ,
         "update": UPDATE,
@@ -6340,7 +6342,7 @@ class S3EntityRoleManager(S3Method):
                     ...
                 },
 
-                "paginated_list": [
+                "pagination_list": [
                     (
                         "User One",
                         "1"
@@ -6410,7 +6412,7 @@ class S3EntityRoleManager(S3Method):
             pagination_offset = int(r.get_vars.get("page_offset", 0))
             # the number of pages of assigned roles
             pagination_pages = int(math.ceil(len(self.assigned_roles) / float(pagination_size)))
-            # the list of objects to show on this page
+            # the list of objects to show on this page sorted by name
             pagination_list = [(self.objects[id], id) for id in self.assigned_roles]
             pagination_list = sorted(pagination_list)[pagination_offset * pagination_size:pagination_offset * pagination_size + pagination_size]
 

@@ -82,6 +82,12 @@ class S3Cube(S3CRUD):
         return output
 
     # -------------------------------------------------------------------------
+    def _process_report_options(self, form):
+        dupe = form.vars.rows == form.vars.cols
+        if dupe:
+           form.errors.cols = "Duplicate label selected"
+
+    # -------------------------------------------------------------------------
     def report(self, r, **attr):
         """
             Generate a pivot table report
@@ -92,17 +98,18 @@ class S3Cube(S3CRUD):
 
         T = current.T
         manager = current.manager
-        session = current.session
         response = current.response
-        table = self.table
+        session = current.session
+        s3 = session.s3
 
+        table = self.table
         tablename = self.tablename
 
         # Report options  -----------------------------------------------------
         #
 
         # Get the session options
-        session_options = session.s3.report_options
+        session_options = s3.report_options
         if session_options and tablename in session_options:
             session_options = session_options[tablename]
         else:
@@ -156,14 +163,21 @@ class S3Cube(S3CRUD):
             # We only compare to the session if POSTing to prevent cross-site
             # scripting.
             if r.http == "POST" and \
-                form.accepts(form_values, session, formname="report", keepvalues=True) or \
-                form.accepts(form_values, formname="report", keepvalues=True):
+                form.accepts(form_values,
+                             session,
+                             formname="report",
+                             keepvalues=True,
+                             onvalidation=self._process_report_options) or \
+                form.accepts(form_values,
+                             formname="report",
+                             keepvalues=True,
+                             onvalidation=self._process_report_options):
 
                 # The form is valid so save the form values into the session
-                if 'report_options' not in session.s3:
-                    session.s3.report_options = Storage()
+                if "report_options" not in s3:
+                    s3.report_options = Storage()
 
-                session.s3.report_options[tablename] = Storage([(k, v) for k, v in
+                s3.report_options[tablename] = Storage([(k, v) for k, v in
                                                         form_values.iteritems() if v])
 
             # Use the values to generate the query filter
@@ -223,7 +237,7 @@ class S3Cube(S3CRUD):
         resource = self.resource
         representation = r.representation
 
-        if self.method == "report":
+        if not form.errors and self.method == "report":
 
             # Generate the report ---------------------------------------------
             #

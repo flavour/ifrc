@@ -309,7 +309,7 @@ class S3OrganisationModel(S3Model):
             msg_list_empty = T("No Organizations currently registered"))
 
         # @ToDo: Deployment_setting
-        organisation_dropdown_not_ac = True
+        organisation_dropdown_not_ac = False
         if organisation_dropdown_not_ac:
             help = T("If you don't see the Organization in the list, you can add a new one by clicking link 'Add Organization'.")
             widget = None
@@ -1318,6 +1318,7 @@ class S3OfficeModel(S3Model):
                                         #unique=True,
                                         label=T("Code")),
                                   organisation_id(widget = S3OrganisationAutocompleteWidget(default_from_profile = True)),
+                                  #organisation_id(widget = S3OrganisationHierarchyWidget()),
                                   Field("type", "integer", label = T("Type"),
                                         requires = IS_NULL_OR(IS_IN_SET(org_office_type_opts)),
                                         represent = lambda opt: \
@@ -1364,6 +1365,7 @@ class S3OfficeModel(S3Model):
             title_update = T("Edit Office"),
             title_search = T("Search Offices"),
             title_upload = T("Import Offices"),
+            title_map = T("Map of Offices"),
             subtitle_create = T("Add New Office"),
             label_list_button = T("List Offices"),
             label_create_button = T("Add New Office"),
@@ -1866,7 +1868,6 @@ def org_organisation_controller(dashboard=None):
             model = manager.model
             list_fields = model.get_config(r.tablename, "list_fields") or []
             model.configure(r.tablename, list_fields = list_fields + ["pe_id"])
-
         if r.interactive:
             r.table.country.default = gis.get_default_country("code")
 
@@ -1965,13 +1966,20 @@ def org_office_controller(dashboard=None):
                     comment=T("Search for office by text."),
                     field=["name", "comments", "email"]
                   ),
-                  S3SearchOptionsWidget(
+                  #~ S3SearchOptionsWidget(
+                    #~ name="office_search_org",
+                    #~ label=T("Organization"),
+                    #~ comment=T("Search for office by organization."),
+                    #~ field="organisation_id",
+                    #~ represent ="%(name)s",
+                    #~ cols = 3
+                  #~ ),
+                  S3SearchOrgHierarchyWidget(
                     name="office_search_org",
                     label=T("Organization"),
                     comment=T("Search for office by organization."),
                     field="organisation_id",
                     represent ="%(name)s",
-                    cols = 3
                   ),
                   S3SearchLocationHierarchyWidget(
                     name="office_search_location",

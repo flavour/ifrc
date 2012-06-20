@@ -51,7 +51,6 @@ class S3Config(Storage):
         self.frontpage.rss = []
         self.fin = Storage()
         self.gis = Storage()
-        self.osm = Storage()    # Backwards-compatiblity, deprecate soon
         self.mail = Storage()
         self.twitter = Storage()
         self.L10n = Storage()
@@ -66,27 +65,45 @@ class S3Config(Storage):
         self.hrm = Storage()
         self.project = Storage()
         self.save_search = Storage()
+        self.parser = Storage()
+    # -------------------------------------------------------------------------
+    # Template
+    def get_template(self):
+        """
+            Which deployment template to use for config.py, parser.py, menus.py, etc
+            http://eden.sahanafoundation.org/wiki/BluePrint/Templates
+        """
+        return self.base.get("template", "default")
 
-        T = current.T
+    def exec_template(self, path):
+        """
+            Execute the template
+        """
+        #from gluon.compileapp import build_environment
+        from gluon.fileutils import read_file
+        from gluon.restricted import restricted
+        #environment = build_environment(request, response, session)
+        code = read_file(path)
+        #restricted(code, environment, layer=path)
+        restricted(code, layer=path)
+        return
 
-        # These are copied from modules/s3/s3aaa.py
-        self.aaa.acl =  Storage(CREATE = 0x0001,
-                                READ   = 0x0002,
-                                UPDATE = 0x0004,
-                                DELETE = 0x0008,
-                                ALL = 0x000F    # CREATE | READ | UPDATE | DELETE
-                                )
-        self.CURRENCIES = {
-            "USD" :T("United States Dollars"),
-            "EUR" :T("Euros"),
-            "GBP" :T("Great British Pounds"),
-            "CHF" :T("Swiss Francs")
-        }
+    # -------------------------------------------------------------------------
+    # Theme
+    def get_theme(self):
+        """
+            Which templates folder to use for views/layout.html
+        """
+        return self.base.get("theme", "default")
 
     # -------------------------------------------------------------------------
     # Auth settings
     def get_auth_hmac_key(self):
+        """
+            salt to encrypt passwords - normally randmosied during 1st run
+        """
         return self.auth.get("hmac_key", "akeytochange")
+
     def get_auth_facebook(self):
         """
             Read the FaceBook OAuth settings
@@ -98,9 +115,11 @@ class S3Config(Storage):
             return dict(id=id, secret=secret)
         else:
             return False
+
     def get_auth_gmail_domains(self):
         """ List of domains which can use GMail SMTP for Authentication """
         return self.auth.get("gmail_domains", [])
+
     def get_auth_google(self):
         """
             Read the Google OAuth settings
@@ -112,6 +131,7 @@ class S3Config(Storage):
             return dict(id=id, secret=secret)
         else:
             return False
+
     def get_auth_openid(self):
         return self.auth.get("openid", False)
     def get_auth_registration_requires_verification(self):
@@ -155,24 +175,28 @@ class S3Config(Storage):
             organisation_id = None
         return organisation_id
     def get_auth_registration_requests_image(self):
-        " Have the registration form request an Image "
+        """ Have the registration form request an Image """
         return self.auth.get("registration_requests_image", False)
     def get_auth_registration_roles(self):
-        " The list of role UUIDs to assign to newly-registered users "
+        """ The list of role UUIDs to assign to newly-registered users """
         return self.auth.get("registration_roles", [])
     def get_auth_registration_volunteer(self):
-        " Redirect the newly-registered user to their volunteer details page "
+        """ Redirect the newly-registered user to their volunteer details page """
         return self.auth.get("registration_volunteer", False)
     def get_auth_always_notify_approver(self):
         return self.auth.get("always_notify_approver", True)
+    def get_auth_record_approval(self):
+        """ Use record approval (False by default) """
+        return self.auth.get("record_approcal", False)
+    def get_auth_record_approver_role(self):
+        """ UID of the record approver role """
+        return self.auth.get("record_approver_role", "APPROVER")
 
-    # @ToDo: Deprecate
-    def get_aaa_default_uacl(self):
-        return self.aaa.get("default_uacl", self.aaa.acl.READ)
-    def get_aaa_default_oacl(self):
-        return self.aaa.get("default_oacl", self.aaa.acl.READ |
-                                            self.aaa.acl.UPDATE)
     def get_aaa_role_modules(self):
+        """
+            Which modules are includes in the Role Manager
+            - to assign discrete permissions to via UI
+        """
         T = current.T
         return self.aaa.get("role_modules", OrderedDict([
             ("staff", "Staff"),
@@ -185,6 +209,9 @@ class S3Config(Storage):
             ("irs", "Incidents")
         ]))
     def get_aaa_access_levels(self):
+        """
+            Access levels for the Role Manager UI
+        """
         T = current.T
         return self.aaa.get("access_levels", OrderedDict([
             ("reader", "Reader"),
@@ -267,7 +294,13 @@ class S3Config(Storage):
     # Finance settings
     # @ToDo: Make these customisable per User/Facility
     def get_fin_currencies(self):
-        return self.fin.get("currencies", self.CURRENCIES)
+        T = current.T
+        currencies = {
+            "EUR" :T("Euros"),
+            "GBP" :T("Great British Pounds"),
+            "USD" :T("United States Dollars"),
+        }
+        return self.fin.get("currencies", currencies)
     def get_fin_currency_default(self):
         return self.fin.get("currency_default", "USD") # Dollars
     def get_fin_currency_writable(self):
@@ -618,7 +651,7 @@ class S3Config(Storage):
         return self.inv.get("catalog_default", "Other Items")
 
     # -------------------------------------------------------------------------
-    # Organsiation
+    # Organisation
     def get_org_site_code_len(self):
         return self.org.get("site_code_len", 10)
 
@@ -677,15 +710,27 @@ class S3Config(Storage):
 
     def get_project_mode_drr(self):
         """
-            Enable DRR mode in the projects module
+            Enable DRR extensions in the projects module
         """
         return self.project.get("mode_drr", False)
+
+    def get_project_activities(self):
+        """
+            Use Activities in Projects
+        """
+        return self.project.get("activities", False)
 
     def get_project_codes(self):
         """
             Use Codes in Projects
         """
         return self.project.get("codes", False)
+
+    def get_project_community(self):
+        """
+            Label project_location as 'Community'
+        """
+        return self.project.get("community", False)
 
     def get_project_milestones(self):
         """
@@ -737,6 +782,11 @@ class S3Config(Storage):
             Enable the Saved Search widget
         """
         return self.save_search.get("widget", True)
+    # -------------------------------------------------------------------------
+    # Message Parser Settings
+    def get_parser_enabled(self):
+            return self.parser.get("parser_enabled")
+
 
     # -------------------------------------------------------------------------
     # Active modules list
