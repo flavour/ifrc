@@ -141,7 +141,11 @@ _table_user.site_id.comment = DIV(_class="tooltip",
 def index():
     """ Main Home Page """
 
-    # Custom page
+    #page = request.args(0)
+    #if page:
+    # Go to a custom page
+    # Arg 1 = function in /private/templates/<template>/controllers.py
+    # other Args & Vars passed through
     custom_page = "applications.%s.private.templates.%s.controllers" % \
                         (appname, settings.get_template())
     try:
@@ -149,10 +153,9 @@ def index():
     except ImportError:
         # No Custom Page available, continue with the default
         page = "private/templates/%s/controllers.py" % \
-                        (appname, settings.get_template())
+                    settings.get_template()
         s3_debug("File not loadable: %s" % page)
     else:
-        page = request.function
         if page in custom_page.__dict__:
             exec("output = custom_page.%s()()" % page)
             return output

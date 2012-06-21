@@ -7,6 +7,12 @@
 {{if response.refresh:}}{{=XML(response.refresh)}}{{pass}}
 <meta name="application-name" content="{{=appname}}" />
 <meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0;">
+{{if "MSIE" in request.wsgi.environ.get("HTTP_USER_AGENT",[]):}}
+<link href="/{{=appname}}/static/themes/DRRPP/css/font_ie.css" rel="stylesheet" type="text/css" media="screen" charset="utf-8" />
+{{else:}}
+<link href="/{{=appname}}/static/themes/DRRPP/css/font_other.css" rel="stylesheet" type="text/css" media="screen" charset="utf-8" />
+{{pass}}
+<link rel="shortcut icon" href="/{{=appname}}/static/themes/DRRPP/favicon.ico" type="image/x-icon">
 <style type="text/css">
 {{if s3.rtl:}}
  div{direction:rtl;}
@@ -14,7 +20,7 @@
  body{direction:ltr;}
 {{pass}}
 </style>
-{{if session.s3.debug:}}
+{{if s3.debug:}}
  {{include "s3_include_debug.html"}}
  <link href="/{{=appname}}/static/styles/IFRC/xtheme-ifrc.css" rel="stylesheet" type="text/css" />
  {{=s3_include_debug()}}
@@ -72,52 +78,40 @@
 {{else:}}
 </head>
 <body>
- <div id='container'>
-  <div id='header'>
-  <div id='society-icon'><img src='/{{=appname}}/static/img/ifrc/dummy_flag.png' alt='Red Cross/Red Crescent'></div>
-  <div id='logo'><h1><a href='/{{=appname}}/default/index' title='Return to Home Page'>Resource Mapping System</a></h1><div id='region' class='big'>Asia<br>Pacific</div></div>
-   <div id='personal-menu'>
-    {{if auth.is_logged_in():}}
-     <div class="username fright">{{=auth.user.email}}</div>
-    {{pass}}
-    {{=current.menu.personal}}
-    <p>Managing material and human resources together to better prepare for future hazards and vulnerabilities.</p>
-   </div>
-   <a href='#main-content' class='skipnavigation'>Skip to Content</a>
-   {{=current.menu.main}}
-   <!--<div id='searchbox'><form><div><input type='text' name='search' title='Search' class='text-search'></div>
-   <div><select name='category' class='catsearch'>
-   <option value='' selected>Option1</option>
-   <option value=''>Option2</option>
-   </select></div><a href='' class='submit-search'>Submit</a></form></div>-->
+ <div id='header'>
+  <a href='{{=URL(r=request, c="default", f="index")}}'><div id='logo'></div></a>
+  <div id='strapline'>
+    <h1>Sharing information on disaster risk reduction initiatives for effective coordination in Asia Pacific</h1>
   </div>
-  <div id='wrapper'>
+  <div id='menu_top'>{{#=current.menu.main}}</div>
+  {{if s3.cd_to_live_btn:}}
+   {{=s3.cd_to_live_btn}}
+  {{pass}}
+</div>
+</div>
+<div id='menu_modules'>
+{{=current.menu.main}}
+{{if current.menu.options:}}
+ {{=current.menu.options}}
+{{pass}}
+</div>
+{{pass}}
+<div class='container'>
+ <div class='header'></div>
+  <div id='content' class='clearfix'>
    {{if response.error:}}<div class='error'>{{=response.error}}</div>{{pass}}
    {{if response.warning:}}<div class='warning'>{{=response.warning}}</div>{{pass}}
    {{if response.information:}}<div class='information'>{{=response.information}}</div>{{pass}}
    {{if response.confirmation:}}<div class='confirmation'>{{=response.confirmation}}</div>{{pass}}
    {{if response.flash:}}<div class='confirmation'>{{=response.flash}}</div>{{pass}}
-   {{if current.menu.options or response.menu_left:}}
-    <div id='left-col'>
-     {{if current.menu.options:}}{{=current.menu.options}}{{pass}}
-     {{if response.menu_left:}}{{=response.menu_left}}{{pass}}
-    </div>
-    <div id='right-col'>
-   {{else:}}
-    <div id='single-col'>
-   {{pass}}
-     {{include "breadcrumbs.html"}}
-     <a id='main-content'></a>
-     {{include}}
-     {{try:}}{{if current.menu.dashboard is not None:}}{{=current.menu.dashboard}}{{pass}}{{except:}}{{pass}}
-    </div>
+   {{include}}
   </div>
-  <div id='footer'>
-   {{include "../private/templates/IFRC/views/footer.html"}}
-   {{if session.s3.debug:}}{{=s3.toolbar()}}{{pass}}
-  </div>
- </div>
-{{pass}}
+  <div class='footer'></div>
+</div>
+<div id='footer'>
+ {{include "../private/templates/DRRPP/views/footer.html"}}
+ {{if s3.debug:}}{{=s3.toolbar()}}{{pass}}
+</div>
 {{for script in s3.scripts:}}
  {{=SCRIPT(_src = script)}}
 {{pass}}
@@ -129,12 +123,6 @@ $(document).ready(function() {
 {{for script in s3.jquery_ready:}}
  {{=XML(script)}}
 {{pass}}
- $('#nav').children('li').mouseover(function(){
-  $(this).children('.sub-menu').show();
- })
- $('#nav').children('li').mouseout(function(){
-  $(this).children('.sub-menu').hide();
- })
 });
 //]]></script>
 </body>
