@@ -142,6 +142,7 @@ def index():
     """ Main Home Page """
 
     #page = request.args(0)
+    page = "index"
     #if page:
     # Go to a custom page
     # Arg 1 = function in /private/templates/<template>/controllers.py
