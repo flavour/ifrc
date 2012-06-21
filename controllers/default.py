@@ -141,27 +141,40 @@ _table_user.site_id.comment = DIV(_class="tooltip",
 def index():
     """ Main Home Page """
 
-    #page = request.args(0)
-    page = "index"
-    #if page:
-    # Go to a custom page
-    # Arg 1 = function in /private/templates/<template>/controllers.py
-    # other Args & Vars passed through
-    custom_page = "applications.%s.private.templates.%s.controllers" % \
-                        (appname, settings.get_template())
-    try:
-        exec("import %s as custom_page" % custom_page)
-    except ImportError:
-        # No Custom Page available, continue with the default
-        page = "private/templates/%s/controllers.py" % \
-                    settings.get_template()
-        s3_debug("File not loadable: %s" % page)
-    else:
-        if page in custom_page.__dict__:
-            exec("output = custom_page.%s()()" % page)
-            return output
+    page = request.args(0)
+    if page:
+        # Go to a custom page
+        # Arg 1 = function in /private/templates/<template>/controllers.py
+        # other Args & Vars passed through
+        controller = "applications.%s.private.templates.%s.controllers" % \
+                            (appname, settings.get_template())
+        try:
+            exec("import %s as custom" % controller)
+        except ImportError:
+            # No Custom Page available, continue with the default
+            page = "private/templates/%s/controllers.py" % \
+                        settings.get_template()
+            s3_debug("File not loadable: %s" % page)
         else:
-            raise(HTTP(404, "Function not found: %s()" % page))
+            if page in custom.__dict__:
+                exec("output = custom.%s()()" % page)
+                return output
+            else:
+                raise(HTTP(404, "Function not found: %s()" % page))
+    elif settings.get_template() != "default":
+        # Try a Custom Homepage
+        controller = "applications.%s.private.templates.%s.controllers" % \
+                            (appname, settings.get_template())
+        try:
+            exec("import %s as custom" % controller)
+        except ImportError:
+            # No Custom Page available, continue with the default
+            # @ToDo: cache this result
+            pass
+        else:
+            if "index" in custom.__dict__:
+                output = custom.index()()
+                return output
 
     # Default Homepage
     title = settings.get_system_name()
