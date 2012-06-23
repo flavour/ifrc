@@ -58,25 +58,24 @@ except ImportError:
 
 KML_NAMESPACE = "http://earth.google.com/kml/2.2"
 
+try:
+    import json # try stdlib (Python 2.6)
+except ImportError:
+    try:
+        import simplejson as json # try external module
+    except:
+        import gluon.contrib.simplejson as json # fallback to pure-Python module
+
 from gluon import *
 from gluon.dal import Rows
 from gluon.storage import Storage, Messages
 from gluon.tools import fetch
-import gluon.contrib.simplejson as json
 from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
+from s3fields import s3_all_meta_field_names
 from s3search import S3Search
 from s3track import S3Trackable
 from s3utils import s3_debug, s3_fullname
-
-SHAPELY = False
-try:
-    import shapely
-    import shapely.geometry
-    from shapely.wkt import loads as wkt_loads
-    SHAPELY = True
-except ImportError:
-    s3_debug("WARNING: %s: Shapely GIS library not installed" % __name__)
 
 DEBUG = False
 if DEBUG:
@@ -252,19 +251,6 @@ class GIS(object):
         self.hierarchy_level_keys = ["L0", "L1", "L2", "L3", "L4"]
         self.hierarchy_levels = {}
         self.max_allowed_level_num = 4
-        self.region_level_keys = ["L0", "L1", "L2", "L3", "L4", "GR"]
-        # Info for countries. These will be filled in once the gis_location
-        # table is available and populated with L0 countries.
-        # countries and site countries are lists (or Rows) of Storage, ordered
-        # by country name. Each element contains L0 location id (key "id"),
-        # country code (key "code"), and name (key "name").
-        self.countries = None  # id, code, and name for all countries
-        self.site_countries = None  # same for this site's countries
-        # These will be OrderedDicts of id or code vs. country name.
-        self.countries_by_id = None
-        self.countries_by_code = None
-        self.site_countries_by_id = None
-        self.site_countries_by_code = None
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -956,6 +942,7 @@ class GIS(object):
 
         session = current.session
         s3 = current.response.s3
+        all_meta_field_names = s3_all_meta_field_names()
 
         # If an id has been supplied, try it first. If it matches what's in
         # response, there's no work to do.
@@ -1034,7 +1021,7 @@ class GIS(object):
                                         left=left,
                                         orderby=ctable.pe_type)
                 cache["ids"] = []
-                exclude = list(s3.all_meta_field_names)
+                exclude = list(all_meta_field_names)
                 append = exclude.append
                 for fieldname in ["delete_record", "update_record",
                                   "pe_path",
@@ -1094,7 +1081,7 @@ class GIS(object):
             cache["ids"] = [config_id]
             projection = row["gis_projection"]
             marker = row["gis_marker"]
-            fields = filter(lambda key: key not in s3.all_meta_field_names,
+            fields = filter(lambda key: key not in all_meta_field_names,
                             config)
             for key in fields:
                 cache[key] = config[key]
@@ -1312,7 +1299,7 @@ class GIS(object):
         T = current.T
         all_levels = OrderedDict()
         all_levels.update(self.get_location_hierarchy())
-        all_levels["GR"] = T("Location Group")
+        #all_levels["GR"] = T("Location Group")
         #all_levels["XX"] = T("Imported")
 
         if level:
@@ -1369,23 +1356,27 @@ class GIS(object):
         return edit
 
     # -------------------------------------------------------------------------
-    def get_countries(self, key_type="id"):
+    @staticmethod
+    def get_countries(key_type="id"):
         """
             Returns country code or L0 location id versus name for all countries.
+
+            The lookup is cached in the session
 
             If key_type is "code", these are returned as an OrderedDict with
             country code as the key.  If key_type is "id", then the location id
             is the key.  In all cases, the value is the name.
         """
 
-        settings = current.deployment_settings
+        session = current.session
+        if "gis" not in session:
+            session.gis = Storage()
+        gis = session.gis
 
-        cached = False
-        if settings.countries:
-            # This may have been changed since the initial config
-            cached = False
-        elif self.countries:
+        if gis.countries_by_id:
             cached = True
+        else:
+            cached = False
 
         if not cached:
             s3db = current.s3db
@@ -1394,9 +1385,6 @@ class GIS(object):
             query = (table.level == "L0") & \
                     (ttable.tag == "ISO2") & \
                     (ttable.location_id == table.id)
-            _countries = settings.get_gis_countries()
-            if _countries:
-                query = query & (ttable.value.belongs(_countries))
             countries = current.db(query).select(table.id,
                                                  table.name,
                                                  ttable.value,
@@ -1407,23 +1395,22 @@ class GIS(object):
             countries_by_id = OrderedDict()
             countries_by_code = OrderedDict()
             for row in countries:
-                _location = row["gis_location"]
-                countries_by_id[_location.id] = _location.name
-                countries_by_code[row["gis_location_tag"].value] = _location.name
+                location = row["gis_location"]
+                countries_by_id[location.id] = location.name
+                countries_by_code[row["gis_location_tag"].value] = location.name
 
-            # Don't expose these while they're being built. Set countries last
-            # so it can be used to tell when all exist.
-            self.countries_by_id = countries_by_id
-            self.countries_by_code = countries_by_code
-            self.countries = countries
+            # Cache in the session
+            gis.countries_by_id = countries_by_id
+            gis.countries_by_code = countries_by_code
 
         if key_type == "id":
-            return self.countries_by_id
+            return gis.countries_by_id
         else:
-            return self.countries_by_code
+            return gis.countries_by_code
 
     # -------------------------------------------------------------------------
-    def get_country(self, key, key_type="id"):
+    @staticmethod
+    def get_country(key, key_type="id"):
         """
             Returns country name for given code or id from L0 locations.
 
@@ -1432,11 +1419,11 @@ class GIS(object):
         """
 
         if key:
-            if self.countries or self.get_countries(key_type):
+            if current.gis.get_countries(key_type):
                 if key_type == "id":
-                    return self.countries_by_id[key]
+                    return current.session.gis.countries_by_id[key]
                 else:
-                    return self.countries_by_code[key]
+                    return current.session.gis.countries_by_code[key]
 
         return None
 
@@ -1518,11 +1505,12 @@ class GIS(object):
             gis_location table
         """
 
+        from shapely.geos import ReadingError
+        from shapely.wkt import loads as wkt_loads
+
         db = current.db
         s3db = current.s3db
-        session = current.session
-        T = current.T
-        locations = db.gis_location
+        locations = s3db.gis_location
 
         try:
             location_id = int(location)
@@ -1585,10 +1573,11 @@ class GIS(object):
         if lon_min is None:
             # We have no BBOX so go straight to the full geometry check
             for row in features:
-                wkt = row.gis_location.wkt
+                _location = row.gis_location
+                wkt = _location.wkt
                 if wkt is None:
-                    lat = row.gis_location.lat
-                    lon = row.gis_location.lon
+                    lat = _location.lat
+                    lon = _location.lon
                     if lat is not None and lon is not None:
                         wkt = self.latlon_to_wkt(lat, lon)
                     else:
@@ -1598,7 +1587,7 @@ class GIS(object):
                     if shape.intersects(polygon):
                         # Save Record
                         output.records.append(row)
-                except shapely.geos.ReadingError:
+                except ReadingError:
                     s3_debug(
                         "Error reading wkt of location with id",
                         value=row.id
@@ -1614,10 +1603,11 @@ class GIS(object):
             for row in features.find(lambda row: in_bbox(row)):
                 # Search within this subset with a full geometry check
                 # Uses Shapely.
-                wkt = row.gis_location.wkt
+                _location = row.gis_location
+                wkt = _location.wkt
                 if wkt is None:
-                    lat = row.gis_location.lat
-                    lon = row.gis_location.lon
+                    lat = _location.lat
+                    lon = _location.lon
                     if lat is not None and lon is not None:
                         wkt = self.latlon_to_wkt(lat, lon)
                     else:
@@ -1627,7 +1617,7 @@ class GIS(object):
                     if shape.intersects(polygon):
                         # Save Record
                         output.records.append(row)
-                except shapely.geos.ReadingError:
+                except ReadingError:
                     s3_debug(
                         "Error reading wkt of location with id",
                         value = row.id,
@@ -2572,7 +2562,7 @@ class GIS(object):
         s3db = current.s3db
         cache = s3db.cache
         table = s3db.gis_location
-        table = s3db.gis_location_tag
+        ttable = s3db.gis_location_tag
 
         if level == "L1":
             layer = {
@@ -3093,6 +3083,10 @@ class GIS(object):
 
         import codecs
 
+        from shapely.geometry import point
+        from shapely.geos import ReadingError
+        from shapely.wkt import loads as wkt_loads
+
         db = current.db
         s3db = current.s3db
         cache = s3db.cache
@@ -3225,7 +3219,7 @@ class GIS(object):
                 lon = float(lon)
                 wkt = self.latlon_to_wkt(lat, lon)
 
-                shape = shapely.geometry.point.Point(lon, lat)
+                shape = point.Point(lon, lat)
 
                 # Add Bounds
                 lon_min = lon_max = lon
@@ -3249,7 +3243,7 @@ class GIS(object):
                             parent = row.id
                             # Should be just a single parent
                             break
-                    except shapely.geos.ReadingError:
+                    except ReadingError:
                         s3_debug("Error reading wkt of location with id", row.id)
 
                 # Add entry to database
@@ -3317,8 +3311,14 @@ class GIS(object):
             geom_type = GEOM_TYPES["point"]
             bbox = (lon, lat, lon, lat)
         else:
+            try:
+                from shapely.wkt import loads as wkt_loads
+                SHAPELY = True
+            except:
+                SHAPELY = False
+
             if SHAPELY:
-                shape = shapely.wkt.loads(wkt)
+                shape = wkt_loads(wkt)
                 centroid = shape.centroid
                 lat = centroid.y
                 lon = centroid.x
@@ -3423,6 +3423,7 @@ class GIS(object):
 
         if vars.wkt:
             # Parse WKT for LineString, Polygon, etc
+            from shapely.wkt import loads as wkt_loads
             try:
                 shape = wkt_loads(vars.wkt)
             except:
@@ -3461,6 +3462,10 @@ class GIS(object):
             except:
                 form.errors.gis_feature_type = messages.centroid_error
 
+            if current.deployment_settings.get_gis_spatialdb():
+                # Also populate the spatial field
+                vars.the_geom = vars.wkt
+
         elif (vars.lon is None and vars.lat is None) or \
              (vars.lon == "" and vars.lat == ""):
             # No Geometry available
@@ -3480,10 +3485,6 @@ class GIS(object):
                 vars.lon_min = vars.lon_max = vars.lon
                 vars.lat_min = vars.lat_max = vars.lat
 
-        if vars.wkt and current.deployment_settings.get_gis_spatialdb():
-            # Also populate the spatial field
-            vars.the_geom = vars.wkt
-
         return
 
     # -------------------------------------------------------------------------
@@ -3492,8 +3493,8 @@ class GIS(object):
         """
             Returns a query of all Locations inside the given bounding box
         """
-        s3db = current.s3db
-        table = s3db.gis_location
+
+        table = current.s3db.gis_location
         query = (table.lat_min <= lat_max) & \
                 (table.lat_max >= lat_min) & \
                 (table.lon_min <= lon_max) & \
@@ -3501,18 +3502,21 @@ class GIS(object):
         return query
 
     # -------------------------------------------------------------------------
-    def get_features_by_bbox(self, lon_min, lat_min, lon_max, lat_max):
+    @staticmethod
+    def get_features_by_bbox(lon_min, lat_min, lon_max, lat_max):
         """
             Returns Rows of Locations whose shape intersects the given bbox.
         """
-        db = current.db
-        return db(self.query_features_by_bbox(lon_min,
-                                              lat_min,
-                                              lon_max,
-                                              lat_max)).select()
+
+        query = current.gis.query_features_by_bbox(lon_min,
+                                                   lat_min,
+                                                   lon_max,
+                                                   lat_max)
+        return current.db(query).select()
 
     # -------------------------------------------------------------------------
-    def _get_features_by_shape(self, shape):
+    @staticmethod
+    def get_features_by_shape(shape):
         """
             Returns Rows of locations which intersect the given shape.
 
@@ -3520,22 +3524,24 @@ class GIS(object):
             @ToDo: provide an option to use PostGIS/Spatialite
         """
 
-        db = current.db
-        s3db = current.s3db
-        table = s3db.gis_location
-        in_bbox = self.query_features_by_bbox(*shape.bounds)
+        from shapely.geos import ReadingError
+        from shapely.wkt import loads as wkt_loads
+
+        table = current.s3db.gis_location
+        in_bbox = current.gis.query_features_by_bbox(*shape.bounds)
         has_wkt = (table.wkt != None) & (table.wkt != "")
 
-        for loc in db(in_bbox & has_wkt).select():
+        for loc in current.db(in_bbox & has_wkt).select():
             try:
                 location_shape = wkt_loads(loc.wkt)
                 if location_shape.intersects(shape):
                     yield loc
-            except shapely.geos.ReadingError:
+            except ReadingError:
                 s3_debug("Error reading wkt of location with id", loc.id)
 
     # -------------------------------------------------------------------------
-    def _get_features_by_latlon(self, lat, lon):
+    @staticmethod
+    def get_features_by_latlon(lat, lon):
         """
             Returns a generator of locations whose shape intersects the given LatLon.
 
@@ -3543,25 +3549,24 @@ class GIS(object):
             @todo: provide an option to use PostGIS/Spatialite
         """
 
-        point = shapely.geometry.point.Point(lon, lat)
-        return self._get_features_by_shape(point)
+        from shapely.geometry import point
+
+        return current.gis.get_features_by_shape(point.Point(lon, lat))
 
     # -------------------------------------------------------------------------
-    def _get_features_by_feature(self, feature):
+    @staticmethod
+    def get_features_by_feature(feature):
         """
             Returns all Locations whose geometry intersects the given feature.
 
             Relies on Shapely.
             @ToDo: provide an option to use PostGIS/Spatialite
         """
-        shape = wkt_loads(feature.wkt)
-        return self.get_features_by_shape(shape)
 
-    # -------------------------------------------------------------------------
-    if SHAPELY:
-        get_features_by_shape = _get_features_by_shape
-        get_features_by_latlon = _get_features_by_latlon
-        get_features_by_feature = _get_features_by_feature
+        from shapely.wkt import loads as wkt_loads
+
+        shape = wkt_loads(feature.wkt)
+        return current.gis.get_features_by_shape(shape)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3572,9 +3577,15 @@ class GIS(object):
             If shapely is present, and a location has wkt, bounds of the geometry
             are used.  Otherwise, the (lat, lon) are used as bounds.
         """
+
+        try:
+            from shapely.wkt import loads as wkt_loads
+            SHAPELY = True
+        except:
+            SHAPELY = False
+
         db = current.db
-        s3db = current.s3db
-        table = s3db.gis_location
+        table = current.s3db.gis_location
 
         # Query to find all locations without bounds set
         no_bounds = (table.lon_min == None) & \
@@ -3611,7 +3622,7 @@ class GIS(object):
     def simplify(wkt, tolerance=0.001, preserve_topology=True, output="wkt"):
         """
             Simplify a complex Polygon
-            - NB This uses Python, better performance will be gaiend by doing
+            - NB This uses Python, better performance will be gained by doing
                  this direct from the database if you are using PostGIS:
             ST_Simplify() is available as
             db(query).select(table.the_geom.st_simplify(tolerance).st_astext().with_alias('wkt')).first().wkt
@@ -3620,6 +3631,8 @@ class GIS(object):
             @ToDo: Reduce the number of decimal points to 4
                    - requires patching modules/geojson?
         """
+
+        from shapely.wkt import loads as wkt_loads
 
         try:
             # Enable C-based speedups available from 1.2.10+
@@ -3894,7 +3907,7 @@ class GIS(object):
 
         # JS Loader
         html_append(SCRIPT(_type="text/javascript",
-                           _src=URL(c="static", f="scripts/S3/yepnope.1.5.4-min.js")))
+                           _src=URL(c="static", f="scripts/yepnope.1.5.4-min.js")))
 
         scripts = []
         scripts_append = scripts.append
@@ -4835,7 +4848,7 @@ class Layer(object):
         ltable = s3db.gis_layer_config
 
         fields = table.fields
-        metafields = s3.all_meta_field_names
+        metafields = s3_all_meta_field_names()
         fields = [table[f] for f in fields if f not in metafields]
         fields.append(ltable.enabled)
         fields.append(ltable.visible)

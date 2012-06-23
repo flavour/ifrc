@@ -116,7 +116,7 @@ class S3MembersModel(S3Model):
                                   # Location (from pr_address component)
                                   location_id(readable=False,
                                               writable=False),
-                                   *(s3.lx_fields() + s3.meta_fields()))
+                                   *(s3_lx_fields() + s3_meta_fields()))
 
         s3.crud_strings[tablename] = Storage(
             title_create = T("Add Member"),
@@ -284,7 +284,7 @@ class S3MembersModel(S3Model):
 
         if data.location_id:
             # Populate the Lx fields
-            current.response.s3.lx_update(mtable, record.id)
+            s3_lx_update(mtable, record.id)
 
     # -------------------------------------------------------------------------
     @staticmethod

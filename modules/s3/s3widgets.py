@@ -71,12 +71,17 @@ except ImportError:
     print >> sys.stderr, "ERROR: lxml module needed for XML handling"
     raise
 
+try:
+    import json # try stdlib (Python 2.6)
+except ImportError:
+    try:
+        import simplejson as json # try external module
+    except:
+        import gluon.contrib.simplejson as json # fallback to pure-Python module
+
 from gluon import *
-from gluon import current
 from gluon.storage import Storage
 from gluon.sqlhtml import *
-
-import gluon.contrib.simplejson as json
 
 from s3utils import *
 from s3validators import *
@@ -87,7 +92,7 @@ repr_select = lambda l: len(l.name) > 48 and "%s..." % l.name[:44] or l.name
 class S3HiddenWidget(StringWidget):
 
     """
-        Standard String widget, but with a class of hidden
+        Standard String widget, but with a class of hide
 
         - currently unused
     """
@@ -99,7 +104,7 @@ class S3HiddenWidget(StringWidget):
             value = (value != None and str(value)) or "",
             )
         attr = StringWidget._attributes(field, default, **attributes)
-        attr["_class"] = "hidden %s" % attr["_class"]
+        attr["_class"] = "hide %s" % attr["_class"]
 
         return TAG[""](
                         INPUT(**attr),
@@ -108,7 +113,6 @@ class S3HiddenWidget(StringWidget):
 
 # =============================================================================
 class S3DateWidget(FormWidget):
-
     """
         Standard Date widget, but with a modified yearRange to support Birth dates
 
@@ -130,31 +134,29 @@ class S3DateWidget(FormWidget):
 
     def __call__(self, field, value, **attributes):
 
-        response = current.response
-
         # Need to convert value into ISO-format
         # (widget expects ISO, but value comes in custom format)
-        format=current.deployment_settings.get_L10n_date_format()
+        format = current.deployment_settings.get_L10n_date_format()
         v, error = IS_DATE_IN_RANGE(format=format)(value)
         if not error:
             value = v.isoformat()
 
         default = dict(
-            _type = "text",
-            value = (value != None and str(value)) or "",
-            )
+                        _type = "text",
+                        value = (value != None and str(value)) or "",
+                    )
         attr = StringWidget._attributes(field, default, **attributes)
 
         attr["_class"] = "date"
 
         selector = str(field).replace(".", "_")
 
-        response.s3.jquery_ready.append("""
-$( '#%s' ).datepicker( 'option', 'minDate', '-%sm' );
-$( '#%s' ).datepicker( 'option', 'maxDate', '+%sm' );
-$( '#%s' ).datepicker( 'option', 'yearRange', 'c-100:c+100' );
-$( '#%s' ).datepicker( 'option', 'dateFormat', '%s' );
-""" % (selector,
+        current.response.s3.jquery_ready.append('''
+$('#%s').datepicker('option','minDate','-%sm');
+$('#%s').datepicker('option','maxDate','+%sm');
+$('#%s').datepicker('option','yearRange','c-100:c+100');
+$('#%s').datepicker('option','dateFormat','%s');
+''' % (selector,
        self.past,
        selector,
        self.future,
@@ -169,7 +171,6 @@ $( '#%s' ).datepicker( 'option', 'dateFormat', '%s' );
 
 # =============================================================================
 class S3DateTimeWidget(FormWidget):
-
     """
         Standard DateTime widget, based on the widget above, but instead of using
         jQuery datepicker we use Anytime.
@@ -192,7 +193,6 @@ class S3DateTimeWidget(FormWidget):
 
         format = str(self.format)
         request = current.request
-        session = current.session
         s3 = current.response.s3
 
         if isinstance(value, datetime.datetime):
@@ -211,7 +211,7 @@ class S3DateTimeWidget(FormWidget):
         selector = str(field).replace(".", "_")
 
         now = request.utcnow
-        offset = IS_UTC_OFFSET.get_offset_value(session.s3.utc_offset)
+        offset = IS_UTC_OFFSET.get_offset_value(current.session.s3.utc_offset)
         if offset:
             now = now + datetime.timedelta(seconds=offset)
         timedelta = datetime.timedelta
@@ -221,14 +221,14 @@ class S3DateTimeWidget(FormWidget):
         earliest = earliest.strftime(format)
         latest = latest.strftime(format)
 
-        s3_script_dir = "/%s/static/scripts/S3" % request.application
+        script_dir = "/%s/static/scripts" % request.application
         if s3.debug and \
-           "%s/anytime.js" % s3_script_dir not in s3.scripts:
-            s3.scripts.append( "%s/anytime.js" % s3_script_dir )
-            s3.stylesheets.append( "S3/anytime.css" )
-        elif "%s/anytimec.js" % s3_script_dir not in s3.scripts:
-            s3.scripts.append( "%s/anytimec.js" % s3_script_dir )
-            s3.stylesheets.append( "S3/anytimec.css" )
+           "%s/anytime.js" % script_dir not in s3.scripts:
+            s3.scripts.append("%s/anytime.js" % script_dir)
+            s3.stylesheets.append("plugins/anytime.css")
+        elif "%s/anytimec.js" % script_dir not in s3.scripts:
+            s3.scripts.append("%s/anytimec.js" % script_dir)
+            s3.stylesheets.append("plugins/anytimec.css")
 
         s3.jquery_ready.append('''
 $('#{0}').AnyTime_picker({{
@@ -238,11 +238,9 @@ $('#{0}').AnyTime_picker({{
     latest: "{2}",
     format: "{3}",
 }});
-
 clear_button = $('<input type="button" value="clear"/>').click(function(e){{
     $("#{0}").val("");
 }});
-
 $('#{0}').after(clear_button);'''.format(selector,
                                          earliest,
                                          latest,
@@ -253,10 +251,8 @@ $('#{0}').after(clear_button);'''.format(selector,
                         requires = field.requires
                       )
 
-
 # =============================================================================
 class S3BooleanWidget(BooleanWidget):
-
     """
         Standard Boolean widget, with an option to hide/reveal fields conditionally.
     """
@@ -288,21 +284,21 @@ class S3BooleanWidget(BooleanWidget):
         show = ""
         for _field in fields:
             fieldname = "%s_%s" % (tablename, _field)
-            hide += """
+            hide += '''
 $( '#%s__row1' ).hide();
 $( '#%s__row' ).hide();
-""" % (fieldname, fieldname)
-            show += """
+''' % (fieldname, fieldname)
+            show += '''
 $( '#%s__row1' ).show();
 $( '#%s__row' ).show();
-""" % (fieldname, fieldname)
+''' % (fieldname, fieldname)
 
         if fields:
             checkbox = "%s_%s" % (tablename, field.name)
-            click_start = """
+            click_start = '''
 $( '#%s' ).click(function() {
     if (this.checked) {
-""" % checkbox
+''' % checkbox
             middle = "} else {\n"
             click_end = "}})"
             if click_to_show:
@@ -321,7 +317,6 @@ $( '#%s' ).click(function() {
 
 # =============================================================================
 class S3UploadWidget(UploadWidget):
-
     """
         Subclassed to not show the delete checkbox when field is mandatory
             - This now been included as standard within Web2Py from r2867
@@ -374,7 +369,6 @@ class S3UploadWidget(UploadWidget):
 
 # =============================================================================
 class S3AutocompleteWidget(FormWidget):
-
     """
         Renders a SELECT as an INPUT field with AJAX Autocomplete
     """
@@ -411,7 +405,7 @@ class S3AutocompleteWidget(FormWidget):
         attr = StringWidget._attributes(field, default, **attributes)
 
         # Hide the real field
-        attr["_class"] = attr["_class"] + " hidden"
+        attr["_class"] = attr["_class"] + " hide"
 
         real_input = str(field).replace(".", "_")
         dummy_input = "dummy_%s" % real_input
@@ -447,7 +441,7 @@ class S3AutocompleteWidget(FormWidget):
                                  request.application,
                             _height=32, _width=32,
                             _id="%s_throbber" % dummy_input,
-                            _class="throbber hidden"),
+                            _class="throbber hide"),
                         INPUT(**attr),
                         requires = field.requires
                       )
@@ -455,7 +449,6 @@ class S3AutocompleteWidget(FormWidget):
 
 # =============================================================================
 class S3LocationAutocompleteWidget(FormWidget):
-
     """
         Renders a gis_location SELECT as an INPUT field with AJAX Autocomplete
 
@@ -546,7 +539,6 @@ class S3LocationAutocompleteWidget(FormWidget):
 
 # =============================================================================
 class S3OrganisationAutocompleteWidget(FormWidget):
-
     """
         Renders an org_organisation SELECT as an INPUT field with AJAX Autocomplete.
         Differs from the S3AutocompleteWidget in that it can default to the setting in the profile.
@@ -634,14 +626,14 @@ class S3OrganisationHierarchyWidget(OptionsWidget):
         javascript_array = "%s_options = %s;" % (name,
                                                  json.dumps(options))
         s3.js_global.append(javascript_array)
-        s3.scripts.append("%s/%s" % (s3.script_dir, "s3.orghierarchy.js"))
-        s3.stylesheets.append("S3/jquery.ui.menu.css")
+        s3.scripts.append("/%s/static/scripts/S3/s3.orghierarchy.js" % \
+            current.request.application)
+        s3.stylesheets.append("jquery-ui/jquery.ui.menu.css")
 
         return self.widget(field, value, **attributes)
 
 # =============================================================================
 class S3PersonAutocompleteWidget(FormWidget):
-
     """
         Renders a pr_person SELECT as an INPUT field with AJAX Autocomplete.
         Differs from the S3AutocompleteWidget in that it uses 3 name fields
@@ -676,7 +668,7 @@ class S3PersonAutocompleteWidget(FormWidget):
         attr = StringWidget._attributes(field, default, **attributes)
 
         # Hide the real field
-        attr["_class"] = "%s hidden" % attr["_class"]
+        attr["_class"] = "%s hide" % attr["_class"]
 
         real_input = str(field).replace(".", "_")
         dummy_input = "dummy_%s" % real_input
@@ -685,14 +677,14 @@ class S3PersonAutocompleteWidget(FormWidget):
                   args="search.json",
                   vars={"filter":"~"})
 
-        js_autocomplete = "".join(("""
+        js_autocomplete = "".join(('''
 var data = { val:$('#%s').val(), accept:false };
 $('#%s').autocomplete({
     source: '%s',
     delay: %d,
     minLength: %d,
     search: function(event, ui) {
-        $( '#%s_throbber' ).removeClass('hidden').show();
+        $( '#%s_throbber' ).removeClass('hide').show();
         return true;
     },
     response: function(event, ui, content) {
@@ -727,7 +719,7 @@ $('#%s').autocomplete({
         $( '#%s' ).val( name );
         $( '#%s' ).val( ui.item.id )
                   .change();
-        """ % (dummy_input,
+        ''' % (dummy_input,
                dummy_input,
                url,
                self.delay,
@@ -736,7 +728,7 @@ $('#%s').autocomplete({
                dummy_input,
                dummy_input,
                dummy_input,
-               real_input), self.post_process, """
+               real_input), self.post_process, '''
         data.accept = true;
         return false;
     }
@@ -769,7 +761,7 @@ $('#%s').blur(function() {
         data.val = $('#%s').val();
     }
     data.accept = false;
-});""" % (dummy_input, dummy_input, real_input, dummy_input, dummy_input)))
+});''' % (dummy_input, dummy_input, real_input, dummy_input, dummy_input)))
 
         if value:
             # Provide the representation for the current/default Value
@@ -798,14 +790,13 @@ $('#%s').blur(function() {
                                  request.application,
                             _height=32, _width=32,
                             _id="%s_throbber" % dummy_input,
-                            _class="throbber hidden"),
+                            _class="throbber hide"),
                         INPUT(**attr),
                         requires = field.requires
                       )
 
 # =============================================================================
 class S3SiteAutocompleteWidget(FormWidget):
-
     """
         Renders an org_site SELECT as an INPUT field with AJAX Autocomplete.
         Differs from the S3AutocompleteWidget in that it uses name & type fields
@@ -835,7 +826,7 @@ class S3SiteAutocompleteWidget(FormWidget):
         attr = StringWidget._attributes(field, default, **attributes)
 
         # Hide the real field
-        attr["_class"] = "%s hidden" % attr["_class"]
+        attr["_class"] = "%s hide" % attr["_class"]
 
         real_input = str(field).replace(".", "_")
         dummy_input = "dummy_%s" % real_input
@@ -849,25 +840,25 @@ class S3SiteAutocompleteWidget(FormWidget):
         case = -1
         for instance_type in auth.org_site_types.keys():
             case = case + 1
-            cases += """
+            cases += '''
                     case '%s':
                         return '%s';
-            """ % (instance_type,
+            ''' % (instance_type,
                    auth.org_site_types[instance_type])
 
-        js_autocomplete = "".join(("""
+        js_autocomplete = "".join(('''
 function s3_site_lookup(instance_type) {
     switch (instance_type) {
         %s
     }
-}""" % cases, """
+}''' % cases, '''
 var data = { val:$('#%s').val(), accept:false };
 $('#%s').autocomplete({
     source: '%s',
     delay: %d,
     minLength: %d,
     search: function(event, ui) {
-        $( '#%s_throbber' ).removeClass('hidden').show();
+        $( '#%s_throbber' ).removeClass('hide').show();
         return true;
     },
     response: function(event, ui, content) {
@@ -896,7 +887,7 @@ $('#%s').autocomplete({
         $( '#%s' ).val( name );
         $( '#%s' ).val( ui.item.site_id )
                   .change();
-        """ % (dummy_input,
+        ''' % (dummy_input,
                dummy_input,
                url,
                self.delay,
@@ -905,7 +896,7 @@ $('#%s').autocomplete({
                dummy_input,
                dummy_input,
                dummy_input,
-               real_input), self.post_process, """
+               real_input), self.post_process, '''
         data.accept = true;
         return false;
     }
@@ -935,7 +926,7 @@ $('#%s').blur(function() {
         data.val = $('#%s').val();
     }
     data.accept = false;
-});""" % (dummy_input, dummy_input, real_input, dummy_input, dummy_input)))
+});''' % (dummy_input, dummy_input, real_input, dummy_input, dummy_input)))
 
         if value:
             # Provide the representation for the current/default Value
@@ -964,14 +955,13 @@ $('#%s').blur(function() {
                                  request.application,
                             _height=32, _width=32,
                             _id="%s_throbber" % dummy_input,
-                            _class="throbber hidden"),
+                            _class="throbber hide"),
                         INPUT(**attr),
                         requires = field.requires
                       )
 
 # =============================================================================
 class S3TrainingAutocompleteWidget(FormWidget):
-
     """
         Renders an hrm_training_event SELECT as an INPUT field with AJAX Autocomplete.
         Differs from the S3AutocompleteWidget in that it uses course, site and date fields
@@ -1003,7 +993,7 @@ class S3TrainingAutocompleteWidget(FormWidget):
                     args="search.json",
                     vars={"filter":"~"})
             ),
-            name_getter = """function (item) {
+            name_getter = '''function (item) {
     var name = '';
     if (item.course != null) {
         name += item.course;
@@ -1015,7 +1005,7 @@ class S3TrainingAutocompleteWidget(FormWidget):
         name += ' [' + item.date + ']';
     }
     return name;
-}""",
+}''',
         )
 
 # -----------------------------------------------------------------------------
@@ -1045,12 +1035,12 @@ def S3GenericAutocompleteTemplate(
     attr = StringWidget._attributes(field, default, **attributes)
 
     # Hide the real field
-    attr["_class"] = attr["_class"] + " hidden"
+    attr["_class"] = attr["_class"] + " hide"
 
     real_input = str(field).replace(".", "_")
     dummy_input = "dummy_%s" % real_input
 
-    js_autocomplete = "".join(("""
+    js_autocomplete = "".join(('''
 var data = { val:$('#%(dummy_input)s').val(), accept:false };
 var get_name = %(name_getter)s;
 var get_id = %(id_getter)s;
@@ -1059,7 +1049,7 @@ $('#%(dummy_input)s').autocomplete({
     delay: %(delay)d,
     minLength: %(min_length)d,
     search: function(event, ui) {
-        $('#%(dummy_input)s_throbber').removeClass('hidden').show();
+        $('#%(dummy_input)s_throbber').removeClass('hide').show();
         return true;
     },
     response: function(event, ui, content) {
@@ -1074,9 +1064,9 @@ $('#%(dummy_input)s').autocomplete({
         var item = ui.item
         $('#%(dummy_input)s').val(get_name(ui.item));
         $('#%(real_input)s').val(get_id(ui.item)).change();
-        """ % locals(),
+        ''' % locals(),
         post_process or "",
-        """
+        '''
         data.accept = true;
         return false;
     }
@@ -1098,7 +1088,7 @@ $('#%(dummy_input)s').blur(function() {
         data.val = $('#%(dummy_input)s').val();
     }
     data.accept = false;
-});""" % locals()))
+});''' % locals()))
 
     if value:
         # Provide the representation for the current/default Value
@@ -1127,7 +1117,7 @@ $('#%(dummy_input)s').blur(function() {
                              request.application,
                         _height=32, _width=32,
                         _id="%s_throbber" % dummy_input,
-                        _class="throbber hidden"),
+                        _class="throbber hide"),
                     INPUT(**attr),
                     requires = field.requires
                   )
@@ -1185,7 +1175,6 @@ class S3LocationDropdownWidget(FormWidget):
 
 # =============================================================================
 class S3LocationSelectorWidget(FormWidget):
-
     """
         Renders a gis_location Foreign Key to allow inline display/editing of linked fields.
 
@@ -1250,10 +1239,8 @@ class S3LocationSelectorWidget(FormWidget):
 
         auth = current.auth
         settings = current.deployment_settings
-        request = current.request
         response = current.response
         s3 = current.response.s3
-        manager = current.manager
         cache = s3.cache
 
         locations = s3db.gis_location
@@ -1266,7 +1253,7 @@ class S3LocationSelectorWidget(FormWidget):
                         value = (value != None and str(value)) or "")
         attr = StringWidget._attributes(field, defaults, **attributes)
         # Hide the real field
-        attr["_class"] = "hidden"
+        attr["_class"] = "hide"
 
         # Is this a Site?
         site = ""
@@ -1297,8 +1284,20 @@ class S3LocationSelectorWidget(FormWidget):
             if tablename in auth.org_site_types:
                 site = tablename
 
-        # Full list of countries
+        # Full list of countries (by ID)
         countries = gis.get_countries()
+
+        # Countries we should select from
+        _countries = settings.get_gis_countries()
+        if _countries:
+            __countries = gis.get_countries(key_type="code")
+            countrynames = []
+            for k, v in __countries.iteritems():
+                if k in _countries:
+                    countrynames.append(v)
+            for k, v in countries.iteritems():
+                if v not in countrynames:
+                    del countries[k]
 
         # Read Options
         config = gis.get_config()
@@ -1342,16 +1341,16 @@ class S3LocationSelectorWidget(FormWidget):
         latlon_selector = settings.get_gis_latlon_selector()
         # Navigate Away Confirm?
         if settings.get_ui_navigate_away_confirm():
-            navigate_away_confirm = """
-S3.navigate_away_confirm = true;"""
+            navigate_away_confirm = '''
+S3.navigate_away_confirm = true;'''
         else:
             navigate_away_confirm = ""
 
         # Which tab should the widget open to by default?
         # @ToDo: Act on this server-side instead of client-side
-        if response.s3.gis.tab:
-            tab = """
-S3.gis.tab = '%s';""" % response.s3.gis.tab
+        if s3.gis.tab:
+            tab = '''
+S3.gis.tab = '%s';''' % s3.gis.tab
         else:
             # Default to Create
             tab = ""
@@ -1372,7 +1371,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
             if auth.s3_has_permission("update", locations, record_id=value):
                 # Update mode
                 # - we assume this location could be shared by other resources
-                create = "hidden"   # Hide sections which are meant for create forms
+                create = "hide"   # Hide sections which are meant for create forms
                 update = ""
                 query = (locations.id == value)
                 this_location = db(query).select(locations.uuid,
@@ -1478,7 +1477,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
             if auth.s3_has_permission("update", locations):
                 # Create mode
                 create = ""
-                update = "hidden"   # Hide sections which are meant for update forms
+                update = "hide"   # Hide sections which are meant for update forms
                 uuid = ""
                 represent = ""
                 level = None
@@ -1488,8 +1487,6 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                 #addr_street_encoded = ""
                 postcode = ""
                 if map_selector:
-                    # Load the Models
-                    manager.load("gis_layer_openstreetmap")
                     map_popup = gis.show_map(
                                              add_feature = True,
                                              add_feature_active = True,
@@ -1558,7 +1555,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
             L0_rows = INPUT(value = id,
                             _id="gis_location_%s" % level,
                             _name="gis_location_%s" % level,
-                            _class="hidden box_middle")
+                            _class="hide box_middle")
         else:
             if default_L0:
                 attr_dropdown = OptionsWidget._attributes(field,
@@ -1600,7 +1597,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                              _id="gis_location_%s__row" % level))
         row = TR(INPUT(_id="gis_location_%s_search" % level,
                        _disabled="disabled"), TD(),
-                 _class="hidden locselect box_middle",
+                 _class="hide locselect box_middle",
                  _id="gis_location_%s_search__row" % level)
         L0_rows.append(row)
 
@@ -1623,7 +1620,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                         _title="%s|%s|%s" % (label, AUTOCOMPLETE_HELP, NEW_HELP))
 
         hidden = ""
-        throbber = "/%s/static/img/ajax-loader.gif" % request.application
+        throbber = "/%s/static/img/ajax-loader.gif" % current.request.application
         Lx_rows = DIV()
         if value:
             # Display Read-only Fields
@@ -1658,7 +1655,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                     name = defaults[level].name
                 else:
                     # Hide empty levels
-                    hidden = "hidden"
+                    hidden = "hide"
                     id = ""
                     name = ""
                 try:
@@ -1672,14 +1669,14 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                 widget = DIV(INPUT(value=id,
                                    _id="gis_location_%s" % level,
                                    _name="gis_location_%s" % level,
-                                   _class="hidden"),
+                                   _class="hide"),
                              INPUT(value=name,
                                    _id="gis_location_%s_ac" % level,
                                    _disabled="disabled"),
                              IMG(_src=throbber,
                                  _height=32, _width=32,
                                  _id="gis_location_%s_throbber" % level,
-                                 _class="throbber hidden"))
+                                 _class="throbber hide"))
                 row = TR(TD(widget), TD(),
                          _id="gis_location_%s__row" % level,
                          _class="%s locselect box_middle" % hidden)
@@ -1704,7 +1701,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                 elif level not in location_hierarchy:
                     # Hide unused levels
                     # (these can then be enabled for other regions)
-                    hidden = "hidden"
+                    hidden = "hide"
                 try:
                     label = LABEL("%s:" % location_hierarchy[level])
                 except:
@@ -1723,14 +1720,14 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                 widget = DIV(INPUT(value=default_id,
                                    _id="gis_location_%s" % level,
                                    _name="gis_location_%s" % level,
-                                   _class="hidden"),
+                                   _class="hide"),
                                 INPUT(value=default_name,
                                       _id="gis_location_%s_ac" % level,
                                       _class="%s" % hidden),
                                 IMG(_src=throbber,
                                     _height=32, _width=32,
                                     _id="gis_location_%s_throbber" % level,
-                                    _class="throbber hidden"))
+                                    _class="throbber hide"))
                 row = TR(TD(widget),
                          TD(ac_help_widget(level)),
                          _class="%s locselect box_middle" % hidden,
@@ -1738,7 +1735,7 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                 Lx_rows.append(row)
                 row = TR(INPUT(_id="gis_location_%s_search" % level,
                                _disabled="disabled"), TD(),
-                         _class="hidden locselect box_middle",
+                         _class="hide locselect box_middle",
                          _id="gis_location_%s_search__row" % level)
                 Lx_rows.append(row)
 
@@ -1746,9 +1743,9 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
         if settings.get_gis_building_name():
             hidden = ""
             if hide_address:
-                hidden = "hidden"
+                hidden = "hide"
             elif value and not represent:
-                hidden = "hidden"
+                hidden = "hide"
             name_rows = DIV(TR(LABEL("%s:" % NAME_LABEL), TD(),
                                _id="gis_location_name_label__row",
                                _class="%s locselect box_middle" % hidden),
@@ -1758,15 +1755,15 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                             TR(INPUT(_id="gis_location_name_search",
                                      _disabled="disabled"), TD(),
                                _id="gis_location_name_search__row",
-                               _class="hidden locselect box_middle"))
+                               _class="hide locselect box_middle"))
         else:
             name_rows = ""
 
         hidden = ""
         if hide_address:
-            hidden = "hidden"
+            hidden = "hide"
         elif value and not addr_street:
-            hidden = "hidden"
+            hidden = "hide"
         street_rows = DIV(TR(LABEL("%s:" % STREET_LABEL), TD(),
                              _id="gis_location_street_label__row",
                              _class="%s locselect box_middle" % hidden),
@@ -1776,18 +1773,18 @@ S3.gis.tab = '%s';""" % response.s3.gis.tab
                           TR(INPUT(_id="gis_location_street_search",
                                    _disabled="disabled"), TD(),
                              _id="gis_location_street_search__row",
-                             _class="hidden locselect box_middle"))
+                             _class="hide locselect box_middle"))
         if config.geocoder:
-            geocoder = """
-S3.gis.geocoder = true;"""
+            geocoder = '''
+S3.gis.geocoder = true;'''
         else:
             geocoder = ""
 
         hidden = ""
         if hide_address:
-            hidden = "hidden"
+            hidden = "hide"
         elif value and not postcode:
-            hidden = "hidden"
+            hidden = "hide"
         postcode_rows = DIV(TR(LABEL("%s:" % POSTCODE_LABEL), TD(),
                                _id="gis_location_postcode_label__row",
                                _class="%s locselect box_middle" % hidden),
@@ -1797,15 +1794,15 @@ S3.gis.geocoder = true;"""
                             TR(INPUT(_id="gis_location_postcode_search",
                                      _disabled="disabled"), TD(),
                                _id="gis_location_postcode_search__row",
-                               _class="hidden locselect box_middle"))
+                               _class="hide locselect box_middle"))
 
         hidden = ""
         no_latlon = ""
         if not latlon_selector:
-            hidden = "hidden"
+            hidden = "hide"
             no_latlon = "S3.gis.no_latlon = true;\n"
         elif value and lat is None:
-            hidden = "hidden"
+            hidden = "hide"
         latlon_help = locations.lat.comment
         converter_button = locations.lon.comment
         converter_button = ""
@@ -1818,7 +1815,7 @@ S3.gis.geocoder = true;"""
                           TR(INPUT(_id="gis_location_lat_search",
                                    _disabled="disabled"), TD(),
                              _id="gis_location_lat_search__row",
-                             _class="hidden locselect box_middle"),
+                             _class="hide locselect box_middle"),
                           TR(LABEL("%s:" % LON_LABEL), TD(),
                                _id="gis_location_lon_label__row",
                                _class="%s locselect box_middle" % hidden),
@@ -1828,7 +1825,7 @@ S3.gis.geocoder = true;"""
                           TR(INPUT(_id="gis_location_lon_search",
                                    _disabled="disabled"), TD(),
                              _id="gis_location_lon_search__row",
-                             _class="hidden locselect box_middle"))
+                             _class="hide locselect box_middle"))
 
         # Map Selector
         PLACE_ON_MAP = T("Place on Map")
@@ -1855,7 +1852,7 @@ S3.gis.geocoder = true;"""
                            IMG(_src=throbber,
                                _height=32, _width=32,
                                _id="gis_location_search_throbber",
-                               _class="throbber hidden"),
+                               _class="throbber hide"),
                            _id="gis_location_search_div")
 
         label = LABEL("%s:" % AUTOCOMPLETE_HELP)
@@ -1863,15 +1860,15 @@ S3.gis.geocoder = true;"""
         select_button = A(T("Select This Location"),
                           _style="cursor:pointer; cursor:hand",
                           _id="gis_location_search_select-btn",
-                          _class="hidden action-btn")
+                          _class="hide action-btn")
 
         search_rows = DIV(TR(label, TD(),
                              _id="gis_location_search_label__row",
-                             _class="hidden locselect box_middle"),
+                             _class="hide locselect box_middle"),
                           TR(TD(widget),
                              TD(select_button),
                              _id="gis_location_search__row",
-                             _class="hidden locselect box_middle"))
+                             _class="hide locselect box_middle"))
         # @ToDo: Hierarchical Filter
         Lx_search_rows = ""
 
@@ -1880,14 +1877,14 @@ S3.gis.geocoder = true;"""
         COUNTRY_REQUIRED = T("Country is required!")
 
         # Settings to be read by static/scripts/S3/s3.locationselector.widget.js
-        js_location_selector = """
+        js_location_selector = '''
 %s%s%s%s%s%s
 S3.gis.location_id = '%s';
 S3.gis.site = '%s';
 S3.i18n.gis_place_on_map = '%s';
 S3.i18n.gis_view_on_map = '%s';
 S3.i18n.gis_name_required = '%s';
-S3.i18n.gis_country_required = '%s';""" % (country_snippet,
+S3.i18n.gis_country_required = '%s';''' % (country_snippet,
                                            geocoder,
                                            navigate_away_confirm,
                                            no_latlon,
@@ -1977,13 +1974,13 @@ class S3LatLonWidget(DoubleWidget):
                   )
 
         if not s3.lat_lon_i18n_appended:
-            s3.js_global.append("""
+            s3.js_global.append('''
 S3.i18n.gis_only_numbers =
   {degrees: '%s', minutes: '%s',seconds: '%s', decimal: '%s'};
 S3.i18n.gis_range_error =
   {degrees: {lat: '%s', lon: '%s'}, minutes: '%s', seconds: '%s',
     decimal: {lat: '%s', lon: '%s'}}
-"""     %  (T("Degrees must be a number."),
+'''     %  (T("Degrees must be a number."),
             T("Minutes must be a number."),
             T("Seconds must be a number."),
             T("Degrees must be a number."),
@@ -2016,7 +2013,6 @@ S3.i18n.gis_range_error =
 
 # =============================================================================
 class S3CheckboxesWidget(OptionsWidget):
-
     """
         Generates a TABLE tag with <num_column> columns of INPUT
         checkboxes (multiple allowed)
@@ -2153,11 +2149,10 @@ class S3CheckboxesWidget(OptionsWidget):
 
 # =============================================================================
 class S3MultiSelectWidget(MultipleOptionsWidget):
-
     """
         Standard MultipleOptionsWidget, but using the jQuery UI:
         http://www.quasipartikel.at/multiselect/
-        static/scripts/S3/ui.multiselect.js
+        static/scripts/ui.multiselect.js
     """
 
     def __init__(self):
@@ -2170,24 +2165,24 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
 
         selector = str(field).replace(".", "_")
 
-        s3.js_global.append("""
+        s3.js_global.append('''
 S3.i18n.addAll = '%s';
 S3.i18n.removeAll = '%s';
 S3.i18n.itemsCount = '%s';
 S3.i18n.search = '%s';
-""" % (T("Add all"),
+''' % (T("Add all"),
        T("Remove all"),
        T("items selected"),
        T("search")))
 
-        s3.jquery_ready.append("""
+        s3.jquery_ready.append('''
 $( '#%s' ).removeClass('list');
 $( '#%s' ).addClass('multiselect');
 $( '#%s' ).multiselect({
         dividerLocation: 0.5,
         sortable: false
     });
-""" % (selector,
+''' % (selector,
        selector,
        selector))
 
@@ -2198,7 +2193,6 @@ $( '#%s' ).multiselect({
 
 # =============================================================================
 class S3ACLWidget(CheckboxesWidget):
-
     """
         Widget class for ACLs
 
@@ -2321,7 +2315,7 @@ class CheckboxesWidgetS3(OptionsWidget):
             T = current.T
             opts.append(TR(TD(SPAN(T("no options available"),
                                    _class="no-options-available"),
-                              INPUT(_type="hidden",
+                              INPUT(_type="hide",
                                     _name=field.name,
                                     _value=None))))
 
@@ -2369,6 +2363,7 @@ class S3AddPersonWidget(FormWidget):
         s3db = current.s3db
 
         request = current.request
+        appname = request.application
         session = current.session
         s3 = current.response.s3
 
@@ -2379,12 +2374,12 @@ class S3AddPersonWidget(FormWidget):
         default = dict(_type = "text",
                        value = (value != None and str(value)) or "")
         attr = StringWidget._attributes(field, default, **attributes)
-        attr["_class"] = "hidden"
+        attr["_class"] = "hide"
 
         if self.select_existing:
             _class ="box_top"
         else:
-            _class = "hidden"
+            _class = "hide"
 
         if self.controller is None:
             controller = request.controller
@@ -2408,8 +2403,7 @@ class S3AddPersonWidget(FormWidget):
                              _id="edit_selected_person_link",
                              _class="action-btn hide",
                              _style="padding-left:15px;"),
-                           IMG(_src="/%s/static/img/ajax-loader.gif" % \
-                                    request.application,
+                           IMG(_src="/%s/static/img/ajax-loader.gif" % appname,
                                _height=32,
                                _width=32,
                                _id="person_load_throbber",
@@ -2494,7 +2488,7 @@ class S3AddPersonWidget(FormWidget):
         else:
             script = "s3.select_person.min.js"
 
-        s3.scripts.append( "%s/%s" % (s3.script_dir, script))
+        s3.scripts.append("/%s/static/scripts/S3/%s" % (appname, script))
 
         # Overall layout of components
         return TAG[""](select_row,
@@ -2561,19 +2555,16 @@ class S3AddObjectWidget(FormWidget):
         T = current.T
         s3 = current.response.s3
 
-        script_name = "%s/%s" % (
-                s3.script_dir,
-                [
-                    "jquery.ba-resize.min.js",
-                    "jquery.ba-resize.js",
-                ][current.deployment_settings.base.debug]
-            )
+        if s3.debug:
+            script_name = "/%s/static/scripts/jquery.ba-resize.js"
+        else:
+            script_name = "/%s/static/scripts/jquery.ba-resize.min.js"
 
         if script_name not in s3.scripts:
             s3.scripts.append(script_name)
         return TAG[""](
             # @ToDo: this might be better moved to its own script.
-            SCRIPT("""
+            SCRIPT('''
 $(function () {
     var form_field = $('#%(form_field_name)s')
     var throbber = $('<div id="%(form_field_name)s_ajax_throbber" class="ajax_throbber"/>')
@@ -2709,7 +2700,7 @@ $(function () {
     var add_object_link = $('<a>%(Add)s</a>')
     add_object_link.click(request_add_form)
     add_object_link.insertAfter(form_field)
-})""" % dict(
+})''' % dict(
             field_name = field.name,
             form_field_name = "_".join((self.table_name, field.name)),
             form_url = self.form_url,
@@ -2765,9 +2756,8 @@ class S3SearchAutocompleteWidget(FormWidget):
         hidden_input = INPUT(value = value or "",
                              requires = field.requires,
                              _id = "%s_%s" % (tablename, field.name),
-                             _class = "hidden_input",
+                             _class = "hide hide_input",
                              _name = field.name,
-                             _style= "display: none;",
                             )
 
         return TAG[""](
@@ -2964,12 +2954,12 @@ class S3EmbedComponentWidget(FormWidget):
         default = dict(_type = "text",
                        value = (value != None and str(value)) or "")
         attr = StringWidget._attributes(field, default, **attributes)
-        attr["_class"] = "hidden"
+        attr["_class"] = "hide"
 
         if self.select_existing:
             _class ="box_top"
         else:
-            _class = "hidden"
+            _class = "hide"
 
         # Post-process selection/deselection
         if self.post_process is not None:
@@ -3095,7 +3085,7 @@ class S3EmbedComponentWidget(FormWidget):
         else:
             script = "s3.embed_component.min.js"
 
-        s3.scripts.append( "%s/%s" % (s3.script_dir, script))
+        s3.scripts.append("/%s/static/scripts/S3/%s" % (appname, script))
 
         # Overall layout of components
         return TAG[""](select_row,
@@ -3147,7 +3137,6 @@ def s3_richtext_widget(field, value):
 
 # =============================================================================
 class S3SliderWidget(FormWidget):
-
     """
         Standard Slider Widget
 
@@ -3177,7 +3166,7 @@ class S3SliderWidget(FormWidget):
         localfield = str(field).split(".")
         sliderinput = INPUT(_name=localfield[1],
                             _id=inputid,
-                            _class="hidden",
+                            _class="hide",
                             _value=self.value)
 
         response.s3.jquery_ready.append("S3.slider('%s','%f','%f','%f','%f');\n" % \

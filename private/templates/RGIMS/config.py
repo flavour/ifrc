@@ -53,7 +53,7 @@ settings.req.req_type = ["Stock"]
 
 # Inventory Management
 settings.inv.send_form_name = "Tally Out Sheet"
-settings.inv.send_short_name = "TO"
+settings.inv.send_short_name = "TOS"
 settings.inv.send_ref_field_name = "Tally Out Number"
 settings.inv.recv_form_name = "Acknowledgement Receipt for Donations Received Form"
 settings.inv.recv_shortname = "ARDR"
@@ -153,7 +153,7 @@ settings.modules = OrderedDict([
             module_type = None, # Not displayed
         )),
     ("inv", Storage(
-            name_nice = T("Warehouse"),
+            name_nice = T("Warehouses"),
             #description = "Receiving and Sending Items",
             restricted = True,
             module_type = 1

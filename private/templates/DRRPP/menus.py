@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from gluon import *
+from gluon import current
 from s3 import *
 from eden.layouts import *
 try:
@@ -11,97 +11,79 @@ import eden.menus as default
 
 # =============================================================================
 class S3MainMenu(default.S3MainMenu):
-    """
-        Custom Application Main Menu:
+    """ Custom Application Main Menu """
 
-        The main menu consists of several sub-menus, each of which can
-        be customized separately as a method of this class. The overall
-        composition of the menu is defined in the menu() method, which can
-        be customized as well:
-
-        Function        Sub-Menu                Access to (standard)
-
-        menu_modules()  the modules menu        the Eden modules
-        menu_gis()      the GIS menu            GIS configurations
-        menu_admin()    the Admin menu          System/User Administration
-        menu_lang()     the Language menu       Selection of the GUI locale
-        menu_auth()     the User menu           Login, Logout, User Profile
-        menu_help()     the Help menu           Contact page, About page
-
-        The standard uses the MM layout class for main menu items - but you
-        can of course use a custom layout class which you define in layouts.py.
-
-        Additional sub-menus can simply be defined as additional functions in
-        this class, and then be included in the menu() method.
-
-        Each sub-menu function returns a list of menu items, only the menu()
-        function must return a layout class instance.
-    """
-
-    -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     @classmethod
     def menu(cls):
-        """ Compose Menu (example) """
+        """ Compose Menu """
 
+        # Modules menus
         main_menu = MM()(
-
-            # Standard modules-menu, left
             cls.menu_modules(),
-
-            # Standard service menus, right
-            # @note: always define right-hand items in reverse order!
-            cls.menu_help(right=True),
-            cls.menu_auth(right=True),
-            #cls.menu_lang(right=True),
-            cls.menu_admin(right=True),
-            #cls.menu_gis(right=True)
         )
+
+        # Additional menus
+        current.menu.top = cls.menu_top()
+
         return main_menu
 
-    -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     @classmethod
     def menu_modules(cls):
-        """ Custom Modules Menu (example) """
+        """ Custom Modules Menu """
 
         return [
-            homepage(),
-            homepage("gis"),
-            MM("project", c="project")(),
+            MM("Home", c="default", f="index"),
+            MM("Project List", c="project", f="project"),
+            MM("Project Analysis", c="project", f="analysis"),
+            MM("Regional Organizations", "project", f="organisation"),
+            MM("DRR Frameworks", c="project", f="framework"),
+            MM("My Page", c="default", f="index", args="mypage"),
         ]
 
-# =============================================================================
-#class S3OptionsMenu(default.S3OptionsMenu):
-    #"""
-        #Custom Controller Menus
+    # -------------------------------------------------------------------------
+    @classmethod
+    def menu_top(cls, **attr):
+        """ Custom Top Menu """
 
-        #The options menu (left-hand options menu) is individual for each
-        #controller, so each controller has its own options menu function
-        #in this class.
+        auth = current.auth
 
-        #Each of these option menu functions can be customized separately,
-        #by simply overriding (re-defining) the default function. The
-        #options menu function must return an instance of the item layout.
+        if not auth.is_logged_in():
+            self_registration = current.deployment_settings.get_security_self_registration()
+            request = current.request
+            login_next = URL(args=request.args, vars=request.vars)
+            if request.controller == "default" and \
+               request.function == "user" and \
+               "_next" in request.get_vars:
+                login_next = request.get_vars["_next"]
 
-        #The standard menu uses the M item layout class, but you can of
-        #course also use any other layout class which you define in
-        #layouts.py (can also be mixed).
+            menu_top = MT()(
+                    MT("Login", c="default", f="user", m="login",
+                       _id="auth_menu_login",
+                       vars=dict(_next=login_next), **attr),
+                    MT("Register", c="default", f="user", args="register",
+                       vars=dict(_next=login_next),
+                       check=self_registration),
+                    MT("About", c="default", f="about"),
+                    MT("User Manual", c="static", f="DRR_Portal_User_Manual.pdf"),
+                    MT("Contact", url="mailto:admin@drrprojects.net"),
+                )
+        else:
+            # Logged-in
+            user = auth.user
+            welcome = "Welcome %s %s" % (user.first_name, user.last_name)
 
-        #Make sure additional helper functions in this class don't match
-        #any current or future controller prefix (e.g. by using an
-        #underscore prefix).
-    #"""
+            menu_top = MT()(
+                    MT(welcome, c="default", f="user",
+                       translate=False, link=False, _id="auth_menu_email",
+                       **attr),
+                    MT("Logout", c="default", f="user", args="logout", _id="auth_menu_logout"),
+                    MT("About", c="default", f="about"),
+                    MT("User Manual", c="static", f="DRR_Portal_User_Manual.pdf"),
+                    MT("Contact", url="mailto:admin@drrprojects.net"),
+                )
 
-    #def cr(self):
-        #""" CR / Shelter Registry (example) """
-
-        #return M(c="cr")(
-                    #M("Camp", f="shelter")(
-                        #M("New", m="create"),
-                        #M("List All"),
-                        #M("Map", m="map"),
-                        #M("Import", m="import"),
-                    #)
-                #)
+        return menu_top
 
 # END =========================================================================
-

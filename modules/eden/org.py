@@ -42,9 +42,18 @@ __all__ = ["S3OrganisationModel",
            "org_office_controller",
            ]
 
+try:
+    import json # try stdlib (Python 2.6)
+except ImportError:
+    try:
+        import simplejson as json # try external module
+    except:
+        import gluon.contrib.simplejson as json # fallback to pure-Python module
+
 from gluon import *
 from gluon.dal import Row
 from gluon.storage import Storage
+
 from ..s3 import *
 from eden.layouts import S3AddResourceLink
 
@@ -78,11 +87,11 @@ class S3OrganisationModel(S3Model):
         SELECT_LOCATION = messages.SELECT_LOCATION
 
         add_component = self.add_component
-        comments = s3.comments
+        comments = s3_comments
         configure = self.configure
         crud_strings = s3.crud_strings
         define_table = self.define_table
-        meta_fields = s3.meta_fields
+        meta_fields = s3_meta_fields
 
         # ---------------------------------------------------------------------
         # Sector
@@ -872,7 +881,6 @@ class S3OrganisationModel(S3Model):
             branch_id = record.branch_id
             organisation_id = record.organisation_id
             if branch_id and organisation_id and not record.deleted:
-                import gluon.contrib.simplejson as json
                 query = (ltable.branch_id == branch_id) & \
                         (ltable.organisation_id == organisation_id) & \
                         (ltable.id != record.id) & \
@@ -915,8 +923,8 @@ class S3OrganisationTypeTagModel(S3Model):
                                   # key is a reserved word in MySQL
                                   Field("tag", label=T("Key")),
                                   Field("value", label=("Value")),
-                                  s3.comments(),
-                                  *s3.meta_fields())
+                                  s3_comments(),
+                                  *s3_meta_fields())
 
         # ---------------------------------------------------------------------
         # Pass variables back to global scope (response.s3.*)
@@ -977,7 +985,7 @@ class S3SiteModel(S3Model):
                                         label=T("Name")),
                                   location_id(),
                                   organisation_id(),
-                                  *s3.ownerstamp())
+                                  *s3_ownerstamp())
 
         # ---------------------------------------------------------------------
         site_id = self.super_link("site_id", "org_site",
@@ -1157,8 +1165,8 @@ class S3FacilityModel(S3Model):
         tablename = "org_facility_type"
         table = define_table(tablename,
                              Field("name"),
-                             s3.comments(),
-                             *s3.meta_fields()
+                             s3_comments(),
+                             *s3_meta_fields()
                              )
 
         # CRUD strings
@@ -1211,8 +1219,8 @@ class S3FacilityModel(S3Model):
                                    label=T("Type")),
                              organisation_id(widget = S3OrganisationAutocompleteWidget(default_from_profile = True)),
                              location_id(),
-                             s3.comments(),
-                             *(s3.address_fields() + s3.meta_fields()))
+                             s3_comments(),
+                             *(s3_address_fields() + s3_meta_fields()))
 
         # CRUD strings
         ADD_FAC = T("Add Facility")
@@ -1305,7 +1313,7 @@ class S3RoomModel(S3Model):
         table = self.define_table(tablename,
                                   site_id, # site_id
                                   Field("name", length=128, notnull=True),
-                                  *s3.meta_fields())
+                                  *s3_meta_fields())
 
         # CRUD strings
         ADD_ROOM = T("Add Room")
@@ -1467,8 +1475,8 @@ class S3OfficeModel(S3Model):
                                           (bool and [T("Obsolete")] or [NONE])[0],
                                         default = False),
                                   #document_id(),  # Better to have multiple Documents on a Tab
-                                  s3.comments(),
-                                  *(s3.address_fields() + s3.meta_fields()))
+                                  s3_comments(),
+                                  *(s3_address_fields() + s3_meta_fields()))
 
         if not settings.get_gis_building_name():
             table.building_name.readable = False
@@ -1517,7 +1525,7 @@ class S3OfficeModel(S3Model):
 
         self.configure(tablename,
                        super_entity=("pr_pentity", "org_site"),
-                       onvalidation=s3.address_onvalidation,
+                       onvalidation=s3_address_onvalidation,
                        deduplicate=self.org_office_deduplicate,
                        list_fields=[ "id",
                                      "name",
@@ -1610,6 +1618,9 @@ def org_organisation_logo(id, type="png"):
 
         The type can either be png or bmp and is the format of the saved image
     """
+
+    if not id:
+        return None
 
     s3db = current.s3db
     if isinstance(id, Row):
@@ -1763,6 +1774,7 @@ def org_site_represent(id, show_link=True):
     db = current.db
     s3db = current.s3db
     represent = current.messages.NONE
+    T = current.T
 
     stable = s3db.org_site
 
@@ -1805,7 +1817,7 @@ def org_site_represent(id, show_link=True):
 
         if type == 5:
             instance_type = "inv_warehouse"
-            instance_type_nice = T("Warehouse")
+            instance_type_nice = current.T("Warehouse")
             # add the url to the stock tab for the warehouse
             tab = "inv_item"
 
@@ -2016,7 +2028,7 @@ def org_organisation_controller():
                 # Don't want to see in Create forms
                 # inc list_create (list_fields over-rides)
                 otable = r.component.table
-                s3.address_hide(otable)
+                s3_address_hide(otable)
                 # Process Base Location
                 #manager.configure(table._tablename,
                 #                  onaccept=s3.address_onaccept)
@@ -2034,8 +2046,8 @@ def org_organisation_controller():
                 tn = r.link.tablename
                 manager.configure(tn,
                                   post_process="hide_host_role($('#%s').val());")
-                script = "s3.hide_host_role.js"
-                s3.scripts.append( "%s/%s" % (s3.script_dir, script))
+                s3.scripts.append("/%s/static/scripts/S3/s3.hide_host_role.js" % \
+                    current.request.application)
         return True
     s3.prep = prep
 
@@ -2163,7 +2175,7 @@ def org_office_controller():
                 # inc list_create (list_fields over-rides)
                 table.obsolete.writable = False
                 table.obsolete.readable = False
-                s3.address_hide(table)
+                s3_address_hide(table)
 
             if r.component:
 
