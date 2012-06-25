@@ -58,9 +58,10 @@ import re
 import time
 from datetime import datetime, timedelta
 
-from gluon import current, Field, IS_MATCH, IS_NOT_IN_DB, IS_IN_SET, IS_INT_IN_RANGE, IS_FLOAT_IN_RANGE, IS_EMAIL
+from gluon import current
+from gluon.dal import Field
 from gluon.languages import lazyT
-from gluon.validators import Validator
+from gluon.validators import Validator, IS_DATE_IN_RANGE, IS_MATCH, IS_NOT_IN_DB, IS_IN_SET, IS_INT_IN_RANGE, IS_FLOAT_IN_RANGE, IS_EMAIL
 from gluon.storage import Storage
 
 def translate(text):
@@ -435,7 +436,6 @@ class IS_ONE_OF_EMPTY(Validator):
         if self.ktable in db:
 
             table = db[self.ktable]
-            auth = current.auth
 
             if self.fields == "all":
                 fields = [f for f in table if isinstance(f, Field)]
@@ -448,7 +448,7 @@ class IS_ONE_OF_EMPTY(Validator):
                 # Caching breaks Colorbox dropdown refreshes
                 #dd = dict(orderby=orderby, groupby=groupby, cache=(current.cache.ram, 60))
                 dd = dict(orderby=orderby, groupby=groupby)
-                query = auth.s3_accessible_query("read", table)
+                query = current.auth.s3_accessible_query("read", table)
                 if "deleted" in table:
                     query = ((table["deleted"] == False) & query)
                 if self.filterby and self.filterby in table:
@@ -501,12 +501,14 @@ class IS_ONE_OF_EMPTY(Validator):
     def __call__(self, value):
 
         try:
-            table = self.dbset._db[self.ktable]
+            dbset = self.dbset
+            table = dbset._db[self.ktable]
             deleted_q = ("deleted" in table) and (table["deleted"] == False) or False
             filter_opts_q = False
-            if self.filterby and self.filterby in table:
+            filterby = self.filterby
+            if filterby and filterby in table:
                 if self.filter_opts:
-                    filter_opts_q = table[self.filterby].belongs(self.filter_opts)
+                    filter_opts_q = table[filterby].belongs(self.filter_opts)
 
             if self.multiple:
                 if isinstance(value, list):
@@ -525,8 +527,9 @@ class IS_ONE_OF_EMPTY(Validator):
                     else:
                         return (value, self.error_message)
                 else:
+                    field = table[self.kfield]
                     for v in values:
-                        q = (table[self.kfield] == v)
+                        q = (field == v)
                         query = query is not None and query | q or q
                     if filter_opts_q != False:
                         query = query is not None and \
@@ -534,7 +537,7 @@ class IS_ONE_OF_EMPTY(Validator):
                     if deleted_q != False:
                         query = query is not None and \
                                 (deleted_q & (query)) or deleted_q
-                    if self.dbset(query).count() < 1:
+                    if dbset(query).count() < 1:
                         return (value, self.error_message)
                     return (values, None)
             elif self.theset:
@@ -555,7 +558,7 @@ class IS_ONE_OF_EMPTY(Validator):
                 if deleted_q != False:
                     query = query is not None and \
                             (deleted_q & (query)) or deleted_q
-                if self.dbset(query).count():
+                if dbset(query).count():
                     if self._and:
                         return self._and(value)
                     else:
@@ -1225,17 +1228,17 @@ class IS_ADD_PERSON_WIDGET(Validator):
                  error_message=None,
                  mark_required=True):
 
-        self.error_message = error_message or \
-                             current.T("Could not add person record")
-
+        self.error_message = error_message
         self.mark_required = mark_required
 
     def __call__(self, value):
 
+        T = current.T
         db = current.db
         manager = current.manager
+        validate = manager.validate
         request = current.request
-        T = current.T
+        settings = current.deployment_settings
 
         try:
             person_id = int(value)
@@ -1255,7 +1258,7 @@ class IS_ADD_PERSON_WIDGET(Validator):
 
             # No email?
             if not value:
-                email_required = current.deployment_settings.get_hrm_email_required()
+                email_required = settings.get_hrm_email_required()
                 if email_required:
                     return (value, error_message)
                 return (value, None)
@@ -1294,12 +1297,21 @@ class IS_ADD_PERSON_WIDGET(Validator):
 
             if person_id:
                 # Update the person record
-                query = ptable.id == person_id
+                query = (ptable.id == person_id)
 
                 # Validate and update the person record
                 data = Storage()
                 for f in ptable._filter_fields(_vars):
-                    value, error = manager.validate(ptable, None, f, _vars[f])
+                    if f == "date_of_birth":
+                        # Need to convert value into ISO-format
+                        # (widget expects ISO, but value comes in custom format)
+                        format = settings.get_L10n_date_format()
+                        v, error = IS_DATE_IN_RANGE(format=format)(_vars[f])
+                        if not error:
+                            value = v.isoformat()
+                            _vars[f] = value
+                    else:
+                        value, error = validate(ptable, None, f, _vars[f])
                     if error:
                         return (None, None)
                     else:
@@ -1347,7 +1359,16 @@ class IS_ADD_PERSON_WIDGET(Validator):
 
                 # Validate and add the person record
                 for f in ptable._filter_fields(_vars):
-                    value, error = manager.validate(ptable, None, f, _vars[f])
+                    if f == "date_of_birth":
+                        # Need to convert value into ISO-format
+                        # (widget expects ISO, but value comes in custom format)
+                        format = settings.get_L10n_date_format()
+                        v, error = IS_DATE_IN_RANGE(format=format)(_vars[f])
+                        if not error:
+                            value = v.isoformat()
+                            _vars[f] = value
+                    else:
+                        value, error = validate(ptable, None, f, _vars[f])
                     if error:
                         return (None, None)
                 person_id = ptable.insert(**ptable._filter_fields(_vars))
@@ -1359,7 +1380,10 @@ class IS_ADD_PERSON_WIDGET(Validator):
                 if person_id:
                     # Update the super-entities
                     manager.model.update_super(ptable, dict(id=person_id))
-                    person = ptable[person_id]
+                    # Read the created pe_id
+                    query = (ptable.id == person_id)
+                    person = db(query).select(ptable.pe_id,
+                                              limitby=(0, 1)).first()
 
                     # Add contact information as provided
                     ctable.insert(pe_id=person.pe_id,
@@ -1371,7 +1395,8 @@ class IS_ADD_PERSON_WIDGET(Validator):
                                       value=_vars.mobile_phone)
                 else:
                     # Something went wrong
-                    return (person_id, self.error_message)
+                    return (person_id, self.error_message or \
+                                       T("Could not add person record"))
 
         return (person_id, None)
 
@@ -1402,7 +1427,7 @@ class IS_UTC_OFFSET(Validator):
             offset_str[-4:].isdigit():
             offset_hrs = int(offset_str[-5] + offset_str[-4:-2])
             offset_min = int(offset_str[-5] + offset_str[-2:])
-            offset = 3600*offset_hrs + 60*offset_min
+            offset = 3600 * offset_hrs + 60 * offset_min
             return offset
         else:
             return None

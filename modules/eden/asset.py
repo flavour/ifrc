@@ -37,7 +37,9 @@ __all__ = ["S3AssetModel",
 from gluon import *
 from gluon.sqlhtml import RadioWidget
 from gluon.storage import Storage
+
 from ..s3 import *
+from layouts import S3AddResourceLink
 
 ASSET_TYPE_VEHICLE   = 1   # => Extra Tab(s) for Registration Documents, Fuel Efficiency
 ASSET_TYPE_RADIO     = 2   # => Extra Tab(s) for Radio Channels/Frequencies
@@ -179,7 +181,7 @@ class S3AssetModel(S3Model):
                                    represent = s3_date_represent,
                                    widget = S3DateWidget()),
                              Field("purchase_price", "double",
-                                   default=0.00,
+#                                   default=0.00,
                                    represent=lambda v, row=None: IS_FLOAT_AMOUNT.represent(v, precision=2)),
                              s3_currency("purchase_currency"),
                              # Base Location, which should always be a Site & set via Log
@@ -220,6 +222,8 @@ class S3AssetModel(S3Model):
                                                                    sort=True)),
                                    represent = self.asset_represent,
                                    label = T("Asset"),
+                                   comment = S3AddResourceLink(c="asset", f="asset",
+                                                tooltip=T("If you don't see the asset in the list, you can add a new one by clicking link 'Add Asset'.")),
                                    ondelete = "CASCADE")
 
         table.virtualfields.append(AssetVirtualFields())
@@ -279,7 +283,9 @@ class S3AssetModel(S3Model):
 
         # Resource Configuration
         configure(tablename,
-                  super_entity=("supply_item_entity", "sit_trackable"),
+                  create_next = URL(c="asset", f="asset",
+                                    args=["[id]"]),
+                  super_entity = ("supply_item_entity", "sit_trackable"),
                   search_method=asset_search,
                   report_options=Storage(
                         search=[
