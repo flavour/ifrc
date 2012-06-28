@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
 
-"""
-    S3XML Toolkit
+""" S3XML Toolkit
 
     @see: U{B{I{S3XRC}} <http://eden.sahanafoundation.org/wiki/S3XRC>}
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
     @requires: U{B{I{lxml}} <http://codespeak.net/lxml>}
-
-    @author: Dominic König <dominic[at]aidiq.com>
 
     @copyright: 2009-2012 (c) Sahana Software Foundation
     @license: MIT
@@ -39,7 +36,6 @@ __all__ = ["S3XML"]
 
 import os
 import sys
-import csv
 import datetime
 import urllib2
 
@@ -55,6 +51,7 @@ from gluon import *
 from gluon.storage import Storage
 
 from s3codec import S3Codec
+from s3utils import s3_get_reference
 
 try:
     from lxml import etree
@@ -501,19 +498,14 @@ class S3XML(S3Codec):
             val = ids = record[f]
             if type(ids) is not list:
                 ids = [ids]
-            multiple = False
-            fieldtype = str(table[f].type)
-            if fieldtype[:9] == "reference":
-                ktablename = fieldtype[10:]
-            elif fieldtype[:14] == "list:reference":
-                ktablename = fieldtype[15:]
-                multiple = True
-            else:
+            ktablename, pkey, multiple = s3_get_reference(table[f])
+            if not ktablename:
                 continue
             ktable = db[ktablename]
             ktable_fields = ktable.fields
             k_id = ktable._id
-            pkey = k_id.name
+            if pkey is None:
+                pkey = k_id.name
 
             if multiple:
                 query = k_id.belongs(ids)
@@ -637,11 +629,6 @@ class S3XML(S3Codec):
             @param locations: locations dict
         """
 
-        if id not in record:
-            # e.g. Super-Entity
-            # - we only map entity instances
-            return
-
         gis = current.gis
         if not gis:
             return
@@ -649,7 +636,6 @@ class S3XML(S3Codec):
         db = current.db
         s3db = current.s3db
         request = current.request
-        get_vars = request.get_vars
         settings = current.deployment_settings
 
         format = current.auth.permission.format
@@ -725,12 +711,12 @@ class S3XML(S3Codec):
                     geometry.set("value", geojson)
             elif wkts:
                 # Nothing gets here currently
-                # tbc: KML Polygons (or will we do these outside XSLT, like for GeoJSON?)
+                # tbc: KML Polygons (or we should also do these outside XSLT)
                 polygon = True
                 wkt = wkts[tablename][record.id]
                 # Convert the WKT in XSLT
                 attr[ATTRIBUTE.wkt] = wkt
-            elif "polygons" in get_vars:
+            elif "polygons" in request.get_vars:
                 # Calculate the Polygons 1/feature since we didn't do it earlier
                 # - no current case for this
                 if WKTFIELD in fields:
@@ -806,7 +792,11 @@ class S3XML(S3Codec):
                 if format == "geojson":
                     # Assume being used within the Sahana Mapping client so use local URLs
                     # to keep filesize down
-                    url = "%s/%i.plain" % (url, record.id)
+                    try:
+                        url = "%s/%i.plain" % (url, record.id)
+                    except:
+                        # This is a Super-Entity without an id
+                        url = ""
                 else:
                     # Assume being used outside the Sahana Mapping client so use public URLs
                     url = "%s%s/%i" % (settings.get_base_public_url(), url, record.id)
@@ -1826,6 +1816,8 @@ class S3XML(S3Codec):
 
             @todo: add a character encoding parameter to skip the guessing
         """
+
+        import csv
 
         # Increase field sixe to ne able to import WKTs
         csv.field_size_limit(2**20 * 100)  # 100 megs

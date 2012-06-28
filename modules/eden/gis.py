@@ -304,7 +304,7 @@ class S3LocationModel(S3Model):
                              # *meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                     gis_location_id = location_id,
@@ -659,7 +659,7 @@ class S3LocationNameModel(S3Model):
                                   *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                 )
@@ -707,7 +707,7 @@ class S3LocationTagModel(S3Model):
                        deduplicate=self.gis_location_tag_deduplicate)
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                 )
@@ -789,7 +789,7 @@ class S3LocationGroupModel(S3Model):
                              *meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                 )
@@ -866,7 +866,7 @@ class S3LocationHierarchyModel(S3Model):
                        )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                 gis_hierarchy_form_setup = self.gis_hierarchy_form_setup,
@@ -1413,7 +1413,7 @@ class S3GISConfigModel(S3Model):
             # msg_list_empty = T("No Menu Entries currently defined"))
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                 gis_config_form_setup = self.gis_config_form_setup,
@@ -2042,7 +2042,7 @@ class S3LayerEntityModel(S3Model):
                                                  _title="%s|%s" % (T("GPS Marker"),
                                                                    T("Defines the icon used for display of features on handheld GPS."))),
                                    # This is the list of GPS Markers for Garmin devices
-                                   requires = IS_NULL_OR(IS_IN_SET(current.gis.gps_symbols,
+                                   requires = IS_NULL_OR(IS_IN_SET(current.gis.gps_symbols(),
                                                                    zero=T("Use default")))),
                              *meta_fields())
 
@@ -3169,6 +3169,7 @@ class S3MapModel(S3Model):
         table = define_table(tablename,
                              Field("name", length=128, notnull=True, unique=True),
                              Field("file", "upload", autodelete = True,
+                                   custom_retrieve = self.gis_cache2_retrieve,
                                    # upload folder needs to be visible to the download() function as well as the upload
                                    uploadfolder = os.path.join(request.folder,
                                                                "uploads",
@@ -3196,6 +3197,21 @@ class S3MapModel(S3Model):
         return Storage(
             )
 
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def gis_cache2_retrieve(filename, path=None):
+        """
+            custom_retrieve to override web2py DAL's standard retrieve,
+            as that checks filenames for uuids, so doesn't work with
+            pre-populated files in static
+        """
+
+        if not path:
+            path = current.s3db.gis_cache2.file.uploadfolder
+
+        f = open(os.path.join(path, filename), "rb")
+        return (filename, f)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3372,7 +3388,7 @@ class S3GISThemeModel(S3Model):
         )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                     gis_layer_theme_id = layer_theme_id,

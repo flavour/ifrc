@@ -74,8 +74,6 @@ class S3OrganisationModel(S3Model):
 
     def model(self):
 
-        import copy
-
         T = current.T
         db = current.db
         gis = current.gis
@@ -613,7 +611,7 @@ class S3OrganisationModel(S3Model):
                              *meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                     org_sector_id = sector_id,
@@ -929,7 +927,7 @@ class S3OrganisationTypeTagModel(S3Model):
                                   *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                 )
@@ -995,7 +993,7 @@ class S3SiteModel(S3Model):
                                   #readable = True,
                                   label = T("Facility"),
                                   default = auth.user.site_id if auth.is_logged_in() else None,
-                                  represent = org_site_represent,
+                                  represent = lambda id: org_site_represent(id, show_link=True),
                                   orderby = "org_site.name",
                                   sort = True,
                                   # Comment these to use a Dropdown & not an Autocomplete
@@ -1040,7 +1038,7 @@ class S3SiteModel(S3Model):
                        )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                     org_site_id = site_id
@@ -1249,7 +1247,7 @@ class S3FacilityModel(S3Model):
                        )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                 )
@@ -1361,7 +1359,7 @@ class S3RoomModel(S3Model):
                                   ondelete = "SET NULL")
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                     org_room_id = room_id,
@@ -1545,7 +1543,7 @@ class S3OfficeModel(S3Model):
                                     ])
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (response.s3.*)
+        # Pass variables back to global scope (s3db.*)
         #
         return Storage(
                     org_office_type_opts = org_office_type_opts,
@@ -1792,6 +1790,7 @@ def org_site_represent(site_id, show_link=True):
     if isinstance(site_id, Row) and "instance_type" in site_id:
         # Do not repeat the lookup if already done by IS_ONE_OF
         site = site_id
+        site_id = site.site_id
     else:
         site = db(stable._id == site_id).select(stable.site_id,
                                                 stable.name,
