@@ -38,7 +38,6 @@ __all__ = ["S3ProjectModel",
            "project_project_represent",
            "project_location_represent",
            "project_rheader",
-           "project_location_represent",
            "project_task_controller",
            ]
 
@@ -100,7 +99,6 @@ class S3ProjectModel(S3Model):
         T = current.T
         db = current.db
         request = current.request
-        s3 = current.response.s3
         settings = current.deployment_settings
 
         person_id = self.pr_person_id
@@ -126,11 +124,9 @@ class S3ProjectModel(S3Model):
 
         # Shortcuts
         add_component = self.add_component
-        comments = s3_comments
         configure = self.configure
-        crud_strings = s3.crud_strings
+        crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
-        meta_fields = s3_meta_fields
         super_link = self.super_link
 
         # ---------------------------------------------------------------------
@@ -140,13 +136,10 @@ class S3ProjectModel(S3Model):
         #
         tablename = "project_theme"
         table = define_table(tablename,
-                             Field("name",
-                                   length=128,
-                                   notnull=True,
-                                   unique=True),
-                             comments(),
+                             Field("name", length=128, notnull=True, unique=True),
+                             s3_comments(),
                              format = "%(name)s",
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration?
 
@@ -195,13 +188,10 @@ class S3ProjectModel(S3Model):
         #
         tablename = "project_hazard"
         table = define_table(tablename,
-                             Field("name",
-                                   length=128,
-                                   notnull=True,
-                                   unique=True),
-                             comments(),
+                             Field("name", length=128, notnull=True, unique=True),
+                             s3_comments(),
                              format="%(name)s",
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration?
 
@@ -270,13 +260,13 @@ class S3ProjectModel(S3Model):
                              Field("start_date", "date",
                                    label = T("Start Date"),
                                    represent = s3_date_represent,
-                                   requires = IS_NULL_OR(IS_DATE(format = s3_date_format)),
+                                   requires = IS_NULL_OR(IS_DATE(format=s3_date_format)),
                                    widget = S3DateWidget()
                                    ),
                              Field("end_date", "date",
                                    label = T("End Date"),
                                    represent = s3_date_represent,
-                                   requires = IS_NULL_OR(IS_DATE(format = s3_date_format)),
+                                   requires = IS_NULL_OR(IS_DATE(format=s3_date_format)),
                                    widget = S3DateWidget()
                                    ),
                              Field("calendar",
@@ -331,11 +321,11 @@ class S3ProjectModel(S3Model):
                                    writable = mode_drr,
                                    label = T("Objectives")),
                              human_resource_id(label=T("Contact Person")),
-                             comments(comment=DIV(_class="tooltip",
-                                                  _title="%s|%s" % (T("Comments"),
-                                                                    T("Outcomes, Impact, Challenges")))),
+                             s3_comments(comment=DIV(_class="tooltip",
+                                                     _title="%s|%s" % (T("Comments"),
+                                                                       T("Outcomes, Impact, Challenges")))),
                              format="%(name)s",
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration?
 
@@ -541,7 +531,7 @@ class S3ProjectModel(S3Model):
         define_table("project_human_resource",
                      project_id(),
                      human_resource_id(),
-                     *meta_fields()
+                     *s3_meta_fields()
                     )
 
         configure("project_human_resource",
@@ -562,7 +552,7 @@ class S3ProjectModel(S3Model):
                              Field("name", length=128,
                                    notnull=True, unique=True),
                              format="%(name)s",
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration?
 
@@ -644,9 +634,9 @@ class S3ProjectModel(S3Model):
                                    writable = False,
                                    label = "%s (%s)" % (T("Time Taken"),
                                                         T("hours"))),
-                             comments(),
+                             s3_comments(),
                              format="%(name)s",
-                             *(s3_lx_fields() + meta_fields()))
+                             *(s3_lx_fields() + s3_meta_fields()))
         # CRUD Strings
         ACTIVITY = T("Activity")
         ACTIVITY_TOOLTIP = T("If you don't see the activity in the list, you can add a new one by clicking link 'Add Activity'.")
@@ -999,31 +989,31 @@ class S3ProjectModel(S3Model):
 
         if r.representation == "html" and r.name == "project":
 
-            T = current.T
-            request = current.request
+            appname = current.request.application
             response = current.response
             s3 = response.s3
 
             calendar = r.record.calendar
 
             # Add core Simile Code
-            s3.scripts.append("/%s/static/scripts/simile/timeline/timeline-api.js" % request.application)
+            s3.scripts.append("/%s/static/scripts/simile/timeline/timeline-api.js" % appname)
 
             # Pass vars to our JS code
-            s3.js_global.append("S3.timeline.calendar = '%s';" % calendar)
+            s3.js_global.append('''S3.timeline.calendar="%s"''' % calendar)
 
             # Add our control script
             if s3.debug:
-                s3.scripts.append("/%s/static/scripts/S3/s3.timeline.js" % request.application)
+                s3.scripts.append("/%s/static/scripts/S3/s3.timeline.js" % appname)
             else:
-                s3.scripts.append("/%s/static/scripts/S3/s3.timeline.min.js" % request.application)
+                s3.scripts.append("/%s/static/scripts/S3/s3.timeline.min.js" % appname)
 
             # Create the DIV
-            item = DIV(_id="s3timeline", _style="height: 400px; border: 1px solid #aaa; font-family: Trebuchet MS, sans-serif; font-size: 85%;")
+            item = DIV(_id="s3timeline",
+                       _style="height:400px;border:1px solid #aaa;font-family:Trebuchet MS,sans-serif;font-size:85%;")
 
             output = dict(item=item)
 
-            output["title"] = T("Project Calendar")
+            output["title"] = current.T("Project Calendar")
 
             # Maintain RHeader for consistency
             if "rheader" in attr:
@@ -1114,7 +1104,7 @@ class S3Project3WModel(S3Model):
     names = ["project_beneficiary_type",
              "project_beneficiary",
              "project_location",
-             "project_location_contact",
+             "project_community_contact",
              "project_organisation",
              "project_organisation_roles",
              "project_organisation_lead_role",
@@ -1124,7 +1114,7 @@ class S3Project3WModel(S3Model):
 
         T = current.T
         db = current.db
-        s3 = current.response.s3
+
         settings = current.deployment_settings
         community = settings.get_project_community()
         theme_percentages = settings.get_project_theme_percentages()
@@ -1136,18 +1126,15 @@ class S3Project3WModel(S3Model):
         multi_activity_type_id = self.project_multi_activity_type_id
         multi_theme_percentage_id = self.project_multi_theme_percentage_id
 
-        messages = current.messages
-        NONE = messages.NONE
+        NONE = current.messages.NONE
         
         s3_date_format = settings.get_L10n_date_format()
         s3_date_represent = lambda dt: S3DateTime.date_represent(dt, utc=True)
 
         add_component = self.add_component
-        comments = s3_comments
         configure = self.configure
-        crud_strings = s3.crud_strings
+        crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
-        meta_fields = s3_meta_fields
         super_link = self.super_link
 
         # ---------------------------------------------------------------------
@@ -1178,9 +1165,9 @@ class S3Project3WModel(S3Model):
                              # @ToDo: Replace with a 'family size' value & auto-calculate?
                              Field("number_families", "integer",
                                    label = T("Number of Families")),
-                             comments(),
+                             s3_comments(),
                              #format=lambda r: self.gis_location_lx_represent(r.location_id),
-                             *(s3_lx_fields() + meta_fields()))
+                             *(s3_lx_fields() + s3_meta_fields()))
 
         table.virtualfields.append(S3ProjectLocationVirtualFields())
 
@@ -1393,7 +1380,7 @@ class S3Project3WModel(S3Model):
                              person_id(widget=S3AddPersonWidget(controller="pr"),
                                        requires=IS_ADD_PERSON_WIDGET(),
                                        comment=None),
-                             *meta_fields())
+                             *s3_meta_fields())
 
         table.virtualfields.append(S3ProjectCommunityContactVirtualFields())
 
@@ -1461,7 +1448,7 @@ class S3Project3WModel(S3Model):
                                    unique=True,
                                    requires = IS_NOT_IN_DB(db,
                                                            "project_beneficiary_type.name")),
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration?
 
@@ -1517,17 +1504,17 @@ class S3Project3WModel(S3Model):
                              Field("start_date", "date",
                                    label = T("Start Date"),
                                    represent = s3_date_represent,
-                                   requires = IS_NULL_OR(IS_DATE(format = s3_date_format)),
+                                   requires = IS_NULL_OR(IS_DATE(format=s3_date_format)),
                                    widget = S3DateWidget()
                                    ),
                              Field("end_date", "date",
                                    label = T("End Date"),
                                    represent = s3_date_represent,
-                                   requires = IS_NULL_OR(IS_DATE(format = s3_date_format)),
+                                   requires = IS_NULL_OR(IS_DATE(format=s3_date_format)),
                                    widget = S3DateWidget()
                                    ),
-                             comments(),
-                             *meta_fields())
+                             s3_comments(),
+                             *s3_meta_fields())
 
         # CRUD Strings
         ADD_BNF = T("Add Beneficiaries")
@@ -1577,20 +1564,32 @@ class S3Project3WModel(S3Model):
             pbtable = db.project_beneficiary
             pquery = (ptable.deleted == False)
             pbquery = (pbtable.deleted == False)
-            p_start_date_min = db(pquery).select(ptable.start_date.min(),
-                                                 limitby=(0, 1)).first()
-            pb_start_date_min = db(pbquery).select(pbtable.start_date.min(),
-                                                   limitby=(0, 1)).first()
-            start_year = min(p_start_date_min.start_date,
-                             pb_start_date_min.start_date).year
+            pmin = ptable.start_date.min()
+            pbmin = pbtable.start_date.min()
+            p_start_date_min = db(pquery).select(pmin,
+                                                 limitby=(0, 1)).first()[pmin]
+            pb_start_date_min = db(pbquery).select(pbmin,
+                                                   limitby=(0, 1)).first()[pbmin]
+            if p_start_date_min and pb_start_date_min:
+                start_year = min(p_start_date_min,
+                                 pb_start_date_min).year
+            else:
+                start_year = (p_start_date_min and p_start_date_min.year) or \
+                             (pb_start_date_min and pb_start_date_min.year)
 
-            p_end_date_max = db(pquery).select(ptable.end_date.max(),
-                                               limitby=(0, 1)).first()
-            pb_end_date_max = db(pbquery).select(pbtable.end_date.max(),
-                                                 limitby=(0, 1)).first()
-            end_year = max(p_end_date_max.end_date,
-                           pb_end_date_max.end_date).year
-            
+            pmax = ptable.end_date.max()
+            pbmax = pbtable.end_date.max()
+            p_end_date_max = db(pquery).select(pmax,
+                                               limitby=(0, 1)).first()[pmax]
+            pb_end_date_max = db(pbquery).select(pbmax,
+                                                 limitby=(0, 1)).first()[pbmax]
+            if p_end_date_max and pb_end_date_max:
+                end_year = max(p_end_date_max,
+                               pb_end_date_max).year
+            else:
+                end_year = (p_end_date_max and p_end_date_max.year) or \
+                           (pb_end_date_max and pb_end_date_max.year)
+
             if not start_year or not end_year:
                 return {start_year:start_year} or {end_year:end_year}
             years = {}
@@ -1687,8 +1686,8 @@ class S3Project3WModel(S3Model):
                                    widget = IS_FLOAT_AMOUNT.widget,
                                    label = T("Funds Contributed by this Organization")),
                              s3_currency(),
-                             comments(),
-                             *meta_fields())
+                             s3_comments(),
+                             *s3_meta_fields())
 
         # Field configuration?
 
@@ -1748,25 +1747,22 @@ class S3Project3WModel(S3Model):
     def project_beneficiary_type_represent(type_id, row=None):
         """ FK representation """
 
-        db = current.db
-        s3db = current.s3db
-        UNKNOWN_OPT = current.messages.UNKNOWN_OPT
-
         if isinstance(type_id, Row):
             if "name" in type_id:
                 return type_id.name
             elif "id" in type_id:
                 type_id = type_id.id
             else:
-                return UNKNOWN_OPT
+                return current.messages.UNKNOWN_OPT
 
-        bnf_type = s3db.project_beneficiary_type
+        bnf_type = current.s3db.project_beneficiary_type
         query = bnf_type.id == type_id
-        row = db(query).select(bnf_type.name, limitby=(0, 1)).first()
+        row = current.db(query).select(bnf_type.name,
+                                       limitby=(0, 1)).first()
         if row:
             return row.name
         else:
-            return UNKNOWN_OPT
+            return current.messages.UNKNOWN_OPT
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -1775,7 +1771,6 @@ class S3Project3WModel(S3Model):
 
         db = current.db
         s3db = current.s3db
-
         btable = s3db.project_beneficiary
         ctable = s3db.project_location
 
@@ -1861,23 +1856,20 @@ class S3Project3WModel(S3Model):
     def project_organisation_onvalidation(form, lead_role=None):
         """ Form validation """
 
-        db = current.db
-        s3db = current.s3db
-        s3 = current.response.s3
-
-        otable = s3db.project_organisation
-
         if lead_role is None:
-            lead_role = s3.project_organisation_lead_role
+            lead_role = current.response.s3.project_organisation_lead_role
 
-        project_id = form.vars.project_id
-        organisation_id = form.vars.organisation_id
-        if str(form.vars.role) == str(lead_role) and project_id:
+        vars = form.vars
+        project_id = vars.project_id
+        organisation_id = vars.organisation_id
+        if str(vars.role) == str(lead_role) and project_id:
+            otable = current.s3db.project_organisation
             query = (otable.deleted != True) & \
                     (otable.project_id == project_id) & \
                     (otable.role == lead_role) & \
                     (otable.organisation_id != organisation_id)
-            row = db(query).select(otable.id, limitby=(0, 1)).first()
+            row = current.db(query).select(otable.id,
+                                           limitby=(0, 1)).first()
             if row:
                 form.errors.role = T("Lead Implementer for this project is already set, please choose another role.")
         return
@@ -1892,26 +1884,28 @@ class S3Project3WModel(S3Model):
             project.organisation to point to the same organisation.
         """
 
-        s3 = current.response.s3
-
-        if str(form.vars.role) == str(s3.project_organisation_lead_role):
+        vars = form.vars
+        if str(vars.role) == \
+           str(current.response.s3.project_organisation_lead_role):
             db = current.db
-
-            organisation_id = form.vars.organisation_id
-            project_organisation = current.s3db.project_organisation
-            project_project = current.s3db.project_project
+            s3db = current.s3db
+            organisation_id = vars.organisation_id
+            project_organisation = s3db.project_organisation
+            project_project = s3db.project_project
 
             # Query to get the project ID via the new project
             # organisation record
-            project = (project_organisation.id == form.vars.id) & \
-                      (project_project.id == project_organisation.project_id)
-            project = db(project).select(project_project.id).first()
+            query = (project_organisation.id == vars.id) & \
+                    (project_project.id == project_organisation.project_id)
+            project = db(query).select(project_project.id,
+                                       limitby=(0, 1)).first()
 
             if project:
                 # Set the organisation property of the project
                 # to match the new lead organisation
-                db(project_project.id == project.id) \
-                    .update(organisation_id=organisation_id)
+                db(project_project.id == project.id).update(
+                        organisation_id=organisation_id
+                    )
 
         return
 
@@ -1927,29 +1921,21 @@ class S3Project3WModel(S3Model):
 
         db = current.db
         s3db = current.s3db
-        s3 = current.response.s3
-
         potable = s3db.project_organisation
         ptable = s3db.project_project
+        query = (potable.id == row.get("id"))
+        deleted_row = db(query).select(potable.deleted_fk,
+                                       potable.role,
+                                       limitby=(0, 1)).first()
 
-        # Query for the row that was deleted
-        deleted_record = (potable.id == row.get('id'))
-        deleted_row = db(deleted_record).select(potable.deleted_fk,
-                                                potable.role).first()
-
-        # Get organisation role
-        role = deleted_row.role
-
-        if str(role) == str(s3.project_organisation_lead_role):
+        if str(deleted_row.role) == \
+           str(current.response.s3.project_organisation_lead_role):
             # Get the project_id
             deleted_fk = json.loads(deleted_row.deleted_fk)
-            project_id = deleted_fk['project_id']
-
-            # Query to look up the project
-            project = (ptable.id == project_id)
+            project_id = deleted_fk["project_id"]
 
             # Set the project organisation_id to NULL (using None)
-            db(project).update(organisation_id=None)
+            db(ptable.id == project_id).update(organisation_id=None)
 
         return
 
@@ -1999,7 +1985,8 @@ class S3ProjectAnnualBudgetModel(S3Model):
 
         T = current.T
         db = current.db
-        s3 = current.response.s3
+
+        crud_strings = current.response.s3.crud_strings
 
         # ---------------------------------------------------------------------
         # Annual Budgets
@@ -2021,13 +2008,13 @@ class S3ProjectAnnualBudgetModel(S3Model):
                                 requires=IS_FLOAT_AMOUNT(),
                                 label=T("Amount"),
                                 ),
-                         s3_currency(required=True),
+                          s3_currency(required=True),
                           *s3_meta_fields()
                         )
 
 
         # CRUD Strings
-        s3.crud_strings[tablename] = Storage(
+        crud_strings[tablename] = Storage(
             title_create = T("New Annual Budget"),
             title_display = T("Annual Budget"),
             title_list = T("Annual Budgets"),
@@ -2073,11 +2060,9 @@ class S3ProjectFrameworkModel(S3Model):
 
         T = current.T
         db = current.db
-        s3 = current.response.s3
 
-        crud_strings = s3.crud_strings
+        crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
-        meta_fields = s3_meta_fields
 
         # ---------------------------------------------------------------------
         # Project Frameworks
@@ -2095,7 +2080,7 @@ class S3ProjectFrameworkModel(S3Model):
                      Field("time_frame",
                            label = T("Time Frame"),
                           ),
-                     *meta_fields()
+                     *s3_meta_fields()
                     )
 
 
@@ -2151,7 +2136,7 @@ class S3ProjectFrameworkModel(S3Model):
         define_table(tablename,
                      framework_id(),
                      self.org_organisation_id(),
-                     *meta_fields()
+                     *s3_meta_fields()
                     )
 
         # CRUD Strings
@@ -2210,10 +2195,11 @@ class S3ProjectThemeModel(S3Model):
 
         T = current.T
         db = current.db
-        s3 = current.response.s3
 
         project_id = self.project_project_id
         theme_id = self.project_theme_id
+
+        crud_strings = current.response.s3.crud_strings
 
         tablename = "project_theme_percentage"
         self.define_table(tablename,
@@ -2223,8 +2209,7 @@ class S3ProjectThemeModel(S3Model):
                           theme_id(requires=IS_ONE_OF(db,
                                                       "project_theme.id",
                                                       "%(name)s")),
-                          Field("percentage",
-                                "integer",
+                          Field("percentage", "integer",
                                 label = T("Percentage"),
                                 default = 0,
                                 requires = IS_INT_IN_RANGE(0, 101),
@@ -2234,7 +2219,7 @@ class S3ProjectThemeModel(S3Model):
 
 
         # CRUD Strings
-        s3.crud_strings[tablename] = Storage(
+        crud_strings[tablename] = Storage(
             title_create = T("New Theme"),
             title_display = T("Theme"),
             title_list = T("Themes"),
@@ -2325,7 +2310,6 @@ class S3ProjectTaskModel(S3Model):
         T = current.T
         auth = current.auth
         request = current.request
-        s3 = current.response.s3
         settings = current.deployment_settings
 
         person_id = self.pr_person_id
@@ -2344,12 +2328,10 @@ class S3ProjectTaskModel(S3Model):
 
         # Shortcuts
         add_component = self.add_component
-        comments = s3_comments
         configure = self.configure
-        crud_strings = s3.crud_strings
+        crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
         super_link = self.super_link
-        meta_fields = s3_meta_fields
 
         # ---------------------------------------------------------------------
         # Project Milestone
@@ -2365,10 +2347,10 @@ class S3ProjectTaskModel(S3Model):
                              Field("date", "date",
                                    label = T("Date"),
                                    represent = s3_date_represent,
-                                   requires = IS_NULL_OR(IS_DATE(format = s3_date_format))),
-                             comments(),
+                                   requires = IS_NULL_OR(IS_DATE(format=s3_date_format))),
+                             s3_comments(),
                              format="%(name)s",
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # CRUD Strings
         ADD_MILESTONE = T("Add Milestone")
@@ -2525,7 +2507,7 @@ class S3ProjectTaskModel(S3Model):
                                    represent = lambda opt, row=None: \
                                                project_task_status_opts.get(opt,
                                                                             UNKNOWN_OPT)),
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configurations
         # Comment these if you don't need a Site associated with Tasks
@@ -2657,9 +2639,11 @@ class S3ProjectTaskModel(S3Model):
         task_id = S3ReusableField("task_id", db.project_task,
                                   label = T("Task"),
                                   sortby="name",
-                                  requires = IS_NULL_OR(IS_ONE_OF(db, "project_task.id", "%(name)s")),
+                                  requires = IS_NULL_OR(
+                                                IS_ONE_OF(db, "project_task.id",
+                                                          "%(name)s")),
                                   represent = lambda id, row=None: \
-                                                (id and [db.project_task[id].name] or [NONE])[0],
+                                    (id and [db.project_task[id].name] or [NONE])[0],
                                   comment = S3AddResourceLink(c="project",
                                                               f="task",
                                                               title=ADD_TASK,
@@ -2736,7 +2720,7 @@ class S3ProjectTaskModel(S3Model):
         table = define_table(tablename,
                              task_id(),
                              project_id(),
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration
         # CRUD Strings
@@ -2752,7 +2736,7 @@ class S3ProjectTaskModel(S3Model):
         table = define_table(tablename,
                              task_id(),
                              activity_id(),
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration
         # CRUD Strings
@@ -2782,7 +2766,7 @@ class S3ProjectTaskModel(S3Model):
                              Field("body", "text",
                                    notnull=True,
                                    label = T("Comment")),
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # Field configuration?
 
@@ -2819,9 +2803,9 @@ class S3ProjectTaskModel(S3Model):
                                    label = "%s (%s)" % (T("Time"),
                                                         T("hours")),
                                    represent=lambda v, row=None: IS_FLOAT_AMOUNT.represent(v, precision=2)),
-                             comments(),
+                             s3_comments(),
                              format="%(comments)s",
-                             *meta_fields())
+                             *s3_meta_fields())
 
         # CRUD Strings
         ADD_TIME = T("Log Time Spent")
@@ -3104,10 +3088,6 @@ class S3ProjectTaskModel(S3Model):
             - if a location is supplied, this will be formatted as an OpenGeoSMS
         """
 
-        T = current.T
-        msg = current.msg
-        response = current.response
-
         if r.representation == "html" and \
            r.name == "task" and r.id and not r.component:
 
@@ -3116,6 +3096,7 @@ class S3ProjectTaskModel(S3Model):
                                record.description)
 
             # Encode the message as an OpenGeoSMS
+            msg = current.msg
             message = msg.prepare_opengeosms(record.location_id,
                                              code="ST",
                                              map="google",
@@ -3142,8 +3123,8 @@ class S3ProjectTaskModel(S3Model):
                 if rheader:
                     output["rheader"] = rheader
 
-            output["title"] = T("Send Task Notification")
-            response.view = "msg/compose.html"
+            output["title"] = current.T("Send Task Notification")
+            current.response.view = "msg/compose.html"
             return output
 
         else:
@@ -3223,21 +3204,15 @@ class S3ProjectTaskHRMModel(S3Model):
 
     def model(self):
 
-        s3 = current.response.s3
-
-        task_id = self.project_task_id
-        human_resource_id = self.hrm_human_resource_id
-        job_role_id = self.hrm_job_role_id
-
-        # Shortcuts
         define_table = self.define_table
+        task_id = self.project_task_id
 
         # ---------------------------------------------------------------------
         # Link Tasks <> Human Resources
         tablename = "project_task_human_resource"
         table = define_table(tablename,
                              task_id(),
-                             human_resource_id(),
+                             self.hrm_human_resource_id(),
                              *s3_meta_fields())
 
         # ---------------------------------------------------------------------
@@ -3245,7 +3220,7 @@ class S3ProjectTaskHRMModel(S3Model):
         tablename = "project_task_job_role"
         table = define_table(tablename,
                              task_id(),
-                             job_role_id(),
+                             self.hrm_job_role_id(),
                              *s3_meta_fields())
 
         # ---------------------------------------------------------------------
@@ -3268,17 +3243,12 @@ class S3ProjectTaskIReportModel(S3Model):
 
     def model(self):
 
-        s3 = current.response.s3
-
-        task_id = self.project_task_id
-        ireport_id = self.irs_ireport_id
-
         # Link Tasks <-> Incident Reports
         #
         tablename = "project_task_ireport"
         table = self.define_table(tablename,
-                                  task_id(),
-                                  ireport_id(),
+                                  self.project_task_id(),
+                                  self.irs_ireport_id(),
                                   *s3_meta_fields())
 
         self.configure(tablename,
@@ -3365,10 +3335,8 @@ def project_location_represent(id, row=None):
 def project_assignee_represent(id):
     """ Represent the Person a Task is assigned-to or list views """
 
-    output = current.messages.NONE
-
     if not id:
-        return output
+        return current.messages.NONE
 
     db = current.db
     s3db = current.s3db
@@ -3384,7 +3352,7 @@ def project_assignee_represent(id):
                                   cache=cache,
                                   limitby=(0, 1)).first()
         if not record:
-            return output
+            return current.messages.UNKNOWN_OPT
 
         instance_type = record.instance_type
 
@@ -3398,19 +3366,20 @@ def project_assignee_represent(id):
                                   cache=cache,
                                   limitby=(0, 1)).first()
         if record:
-            output = record.initials or s3_fullname(record)
+            return record.initials or s3_fullname(record)
+        else:
+            return current.messages.UNKNOWN_OPT
     elif instance_type in ("pr_group", "org_organisation"):
         # Team or Organisation
         record = db(query).select(table.name,
                                   cache=cache,
                                   limitby=(0, 1)).first()
         if record:
-            output = record.name
-    else:
-        # Should not happen of correctly filtered, return default
-        pass
-
-    return output
+            return record.name
+        else:
+            return current.messages.UNKNOWN_OPT
+        
+    return current.messages.UNKNOWN_OPT
 
 # =============================================================================
 def project_theme_represent(id):
@@ -3431,7 +3400,7 @@ def project_theme_represent(id):
                                                   limitby=(0, 1)).first()
 
     if not theme:
-        return current.messages.NONE
+        return current.messages.UNKNOWN_OPT
 
     return theme.name
 
@@ -3575,8 +3544,7 @@ class S3ProjectOrganisationVirtualFields:
         """ Name of the lead organisation of the project """
 
         s3db = current.s3db
-        settings = current.deployment_settings
-        LEAD_ROLE = settings.get_project_organisation_lead_role()
+        LEAD_ROLE = current.deployment_settings.get_project_organisation_lead_role()
 
         otable = s3db.org_organisation
         ltable = s3db.project_organisation
@@ -3625,8 +3593,7 @@ class S3ProjectActivityVirtualFields:
     def organisation(self):
         """ Name of the lead organisation of the project """
 
-        settings = current.deployment_settings
-        LEAD_ROLE = settings.get_project_organisation_lead_role()
+        LEAD_ROLE = current.deployment_settings.get_project_organisation_lead_role()
 
         s3db = current.s3db
         otable = s3db.org_organisation
@@ -3701,8 +3668,7 @@ class S3ProjectLocationVirtualFields:
     def organisation(self):
         """ Name of the lead organisation of the project """
 
-        settings = current.deployment_settings
-        LEAD_ROLE = settings.get_project_organisation_lead_role()
+        LEAD_ROLE = current.deployment_settings.get_project_organisation_lead_role()
 
         s3db = current.s3db
         otable = s3db.org_organisation
@@ -3783,7 +3749,6 @@ class S3ProjectBeneficiaryVirtualFields:
 
         ctable = current.s3db.project_location
         query = (ctable.id == project_location_id)
-
         project_location = current.db(query).select(ctable.location_id,
                                                     limitby=(0,1)).first()
 
@@ -4021,21 +3986,20 @@ def project_ckeditor():
     s3.scripts.append(adapter)
 
     # Toolbar options: http://docs.cksource.com/CKEditor_3.x/Developers_Guide/Toolbar
-    js = "".join(('''
-S3.i18n.reply = "''', str(current.T("Reply")), '''";
-var img_path = S3.Ap.concat('/static/img/jCollapsible/');
-var ck_config = {toolbar:[['Bold','Italic','-','NumberedList','BulletedList','-','Link','Unlink','-','Smiley','-','Source','Maximize']],toolbarCanCollapse:false,removePlugins:'elementspath'};
-function comment_reply(id) {
- $('#project_comment_task_id__row').hide();
- $('#project_comment_task_id__row1').hide();
- $('#comment-title').html(S3.i18n.reply);
- var editor = $('#project_comment_body').ckeditorGet();
- editor.destroy();
- $('#project_comment_body').ckeditor(ck_config);
- $('#comment-form').insertAfter($('#comment-' + id));
- $('#project_comment_parent').val(id);
- var task_id = $('#comment-' + id).attr('task_id');
- $('#project_comment_task_id').val(task_id);
+    js = "".join((
+'''S3.i18n.reply="''', str(current.T("Reply")), '''"
+var img_path=S3.Ap.concat('/static/img/jCollapsible/')
+var ck_config={toolbar:[['Bold','Italic','-','NumberedList','BulletedList','-','Link','Unlink','-','Smiley','-','Source','Maximize']],toolbarCanCollapse:false,removePlugins:'elementspath'}
+function comment_reply(id){
+ $('#project_comment_task_id__row').hide()
+ $('#project_comment_task_id__row1').hide()
+ $('#comment-title').html(S3.i18n.reply)
+ $('#project_comment_body').ckeditorGet().destroy()
+ $('#project_comment_body').ckeditor(ck_config)
+ $('#comment-form').insertAfter($('#comment-'+id))
+ $('#project_comment_parent').val(id)
+ var task_id = $('#comment-'+id).attr('task_id')
+ $('#project_comment_task_id').val(task_id)
 }'''))
 
     s3.js_global.append(js)
@@ -4299,8 +4263,6 @@ def project_task_controller():
         multiple controllers for unified menus
     """
 
-    s3_rest_controller = current.rest_controller
-
     T = current.T
     auth = current.auth
     request = current.request
@@ -4510,7 +4472,7 @@ def project_task_controller():
         return output
     s3.postp = postp
 
-    return s3_rest_controller("project", "task",
-                              rheader=s3db.project_rheader)
+    return current.rest_controller("project", "task",
+                                   rheader=s3db.project_rheader)
 
 # END =========================================================================
