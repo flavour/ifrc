@@ -192,7 +192,7 @@ class S3MembersModel(S3Model):
             """
             ttable = self.member_membership_type
 
-            if org:
+            if root_org:
                 query = (ttable.deleted == False) & \
                         ((ttable.organisation_id == root_org) | \
                          (ttable.organisation_id == None))
@@ -228,24 +228,28 @@ class S3MembersModel(S3Model):
                                 T("expired"):T("expired"),
                             },
                       ),
-                      S3SearchLocationHierarchyWidget(
+                      S3SearchOptionsWidget(
                         name="member_search_L1",
                         field="L1",
+                        location_level="L1",
                         cols = 3,
                       ),
-                      S3SearchLocationHierarchyWidget(
+                      S3SearchOptionsWidget(
                         name="member_search_L2",
                         field="L2",
+                        location_level="L2",
                         cols = 3,
                       ),
-                      S3SearchLocationHierarchyWidget(
+                      S3SearchOptionsWidget(
                         name="member_search_L3",
                         field="L3",
+                        location_level="L3",
                         cols = 3,
                       ),
-                      S3SearchLocationHierarchyWidget(
+                      S3SearchOptionsWidget(
                         name="member_search_L4",
                         field="L4",
+                        location_level="L4",
                         cols = 3,
                       ),
                       S3SearchLocationWidget(
