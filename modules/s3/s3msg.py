@@ -9,9 +9,6 @@
     Messages get sent to the Outbox (& Log)
     From there, Cron tasks collect them & send them
 
-    @author: Praneeth Bodduluri <lifeeth[at]gmail.com>
-    @author: Fran Boon <fran[at]aidiq.com>
-
     @copyright: 2009-2012 (c) Sahana Software Foundation
     @license: MIT
 
@@ -38,8 +35,7 @@
 
 """
 
-__all__ = ["S3Msg",
-           "S3Compose"]
+__all__ = ["S3Msg", "S3Compose"]
 
 import datetime
 import string
@@ -1041,6 +1037,9 @@ class S3Msg(object):
 
         # Initialize Twitter API
         twitter_settings = self.get_twitter_api()
+        if not twitter_settings:
+            # Abort
+            return False
         tweepy = self.tweepy
 
         twitter_api = None
@@ -1086,6 +1085,9 @@ class S3Msg(object):
 
         # Initialize Twitter API
         twitter_settings = self.get_twitter_api()
+        if not twitter_settings:
+            # Abort
+            return False
         tweepy = self.tweepy
 
         twitter_api = None

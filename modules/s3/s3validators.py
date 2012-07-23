@@ -49,10 +49,11 @@ __all__ = ["single_phone_number_pattern",
            "IS_LOCATION",
            "IS_LOCATION_SELECTOR",
            "IS_SITE_SELECTOR",
-           "IS_ADD_PERSON_WIDGET",
            "IS_ACL",
+           "IS_ADD_PERSON_WIDGET",
+           "IS_COMBO_BOX",
+           "IS_IN_SET_LAZY",
            "QUANTITY_INV_ITEM",
-           "IS_IN_SET_LAZY"
            ]
 
 import re
@@ -330,7 +331,6 @@ class IS_HTML_COLOUR(IS_MATCH):
                 ):
         IS_MATCH.__init__(self, "^[0-9a-fA-F]{6}$", error_message)
 
-
 # =============================================================================
 regex1 = re.compile("[\w_]+\.[\w_]+")
 regex2 = re.compile("%\((?P<name>[^\)]+)\)s")
@@ -372,7 +372,7 @@ class IS_ONE_OF_EMPTY(Validator):
                  left=None,
                  multiple=False,
                  zero="",
-                 sort=False,
+                 sort=True,
                  _and=None,
                 ):
 
@@ -517,6 +517,29 @@ class IS_ONE_OF_EMPTY(Validator):
                 else:
                     labels = map(lambda r: r[self.kfield], records)
             self.labels = labels
+            
+            if labels and self.sort:
+                orig_labels = self.labels
+                orig_theset = self.theset
+                
+                labels = []
+                theset = []
+                
+                for label in orig_labels:
+                    try:
+                        labels.append(label.flatten())
+                    except:
+                        labels.append(label)
+                orig_labels = list(labels)
+                labels.sort()
+
+                for label in labels:
+                     orig_index = orig_labels.index(label)
+                     theset.append(orig_theset[orig_index])
+
+                self.labels = labels
+                self.theset = theset
+
         else:
             self.theset = None
             self.labels = None
@@ -1825,6 +1848,58 @@ class IS_ACL(IS_IN_SET):
         return (acl, None)
 
 # =============================================================================
+class IS_COMBO_BOX(Validator):
+    """
+        Designed for use with an Autocomplete.
+        - catches any new entries & creates the appropriate record
+        @ToDo: Audit
+    """
+
+    def __init__(self,
+                 tablename,
+                 requires,  # The normal validator
+                 error_message = None,
+                ):
+        self.tablename = tablename
+        self.requires = requires
+        self.error_message = error_message
+
+    # -------------------------------------------------------------------------
+    def __call__(self, value):
+
+        if not value:
+            # Do the normal validation
+            return self.requires(value)
+        elif isinstance(value, int):
+            # If this is an ID then this is an update form
+            # @ToDo: Can we assume that?
+
+            # Do the normal validation
+            return self.requires(value)
+        else:
+            # Name => create form
+            tablename = self.tablename
+            db = current.db
+            table = db[tablename]
+
+            # Test for duplicates
+            query = (table.name == value)
+            r = db(query).select(table.id,
+                                 limitby=(0, 1)).first()
+            if r:
+                # Use Existing record
+                value = r.id
+                return (value, None)
+            if not current.auth.s3_has_permission("create", table):
+                return (None, current.auth.messages.access_denied)
+            value = table.insert(name=value)
+            # onaccept
+            onaccept = current.s3db.get_config(tablename, "onaccept")
+            if onaccept:
+                onaccept(form=Storage(vars=Storage(id=value)))
+            return (value, None)
+
+# =============================================================================
 class QUANTITY_INV_ITEM(object):
     """
         For Inventory module
@@ -1869,7 +1944,7 @@ class QUANTITY_INV_ITEM(object):
                              inv_item_record.supply_item_pack.quantity
             if send_quantity > inv_quantity:
                 return (value,
-                        "Only %s %s (%s) in the Inventory." %
+                        "Only %s %s (%s) in the Warehouse Stock." %
                         (inv_quantity,
                          inv_item_record.supply_item_pack.name,
                          inv_item_record.supply_item_pack.quantity)

@@ -64,6 +64,9 @@ def loadAllTests():
     
     # Create a Category
     addTests(loadTests(CreateCategory))
+    
+    # Create Members
+    addTests(loadTests(CreateMember))
 
     return suite
 
@@ -96,6 +99,8 @@ parser.add_argument("--html-path",
                     default = ""
                    )
 parser.add_argument("--html-name-date",
+                    action='store_const',
+                    const=True,
                     help = "Include just the date in the name of the HTML report."
                    )
 suite_desc = """This will execute a standard testing schedule. The valid values
@@ -221,7 +226,7 @@ else:
 
 config.html = False
 if args["nohtml"]:
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.TextTestRunner(verbosity=config.verbose).run(suite)
 else:
     try:
         path = args["html_path"]
@@ -237,13 +242,14 @@ else:
         config.html = True
         from tests.runner import EdenHTMLTestRunner
         runner = EdenHTMLTestRunner(
-                                    stream=fp,
-                                    title="Sahana Eden",
+                                    stream = fp,
+                                    title = "Sahana Eden",
+                                    verbosity = config.verbose,
                                    )
         runner.run(suite)
     except ImportError:
         config.html = False
-        unittest.TextTestRunner(verbosity=2).run(suite)
+        unittest.TextTestRunner(verbosity=config.verbose).run(suite)
 
 # Cleanup
 if browser_open and not args["keep_browser_open"]:

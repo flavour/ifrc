@@ -116,6 +116,7 @@ class S3HRModel(S3Model):
                                     requires=IS_ADD_PERSON_WIDGET(),
                                     comment=None
                                     ),
+                                  self.org_site_id,
                                   Field("type", "integer",
                                         requires = IS_IN_SET(hrm_type_opts,
                                                              zero=None),
@@ -167,7 +168,6 @@ class S3HRModel(S3Model):
                                         readable=False,
                                         writable=False
                                         ),
-                                  self.org_site_id,
                                   Field("site_contact", "boolean",
                                         label = T("Facility Contact"),
                                         represent = lambda opt: \
@@ -175,6 +175,8 @@ class S3HRModel(S3Model):
                                              T("Yes"))[opt == True],
                                         ),
                                   *s3_meta_fields())
+        
+        table.site_id.label = T("Office/Warehouse/Facility") 
 
         crud_strings["hrm_staff"] = Storage(
             title_create = T("Add Staff Member"),
@@ -451,7 +453,9 @@ class S3HRModel(S3Model):
         """
         human_resource_id = S3ReusableField("human_resource_id", "integer",
                                             readable=False, writable=False)
-        return Storage(hrm_human_resource_id = human_resource_id)
+        return Storage(
+                hrm_human_resource_id = human_resource_id
+            )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -627,13 +631,14 @@ class S3HRSiteModel(S3Model):
             record = db(ltable.id == id).select(ltable.deleted_fk,
                                                 limitby=(0, 1)).first()
 
-            deleted_fks = json.loads(record.deleted_fk)
-            human_resource_id = deleted_fks["human_resource_id"]
-            db(table.id == human_resource_id).update(
-                                                    location_id=None,
-                                                    site_id=None,
-                                                    site_contact=False
-                                                    )
+            if record:
+                deleted_fks = json.loads(record.deleted_fk)
+                human_resource_id = deleted_fks["human_resource_id"]
+                db(table.id == human_resource_id).update(
+                                                        location_id=None,
+                                                        site_id=None,
+                                                        site_contact=False
+                                                        )
         else:
             human_resource_id = form.vars.human_resource_id
 
@@ -1572,15 +1577,15 @@ class S3HRSkillModel(S3Model):
         # Users can add their own but these are confirmed only by specific roles
         #
 
+        participant_id_comment = self.pr_person_comment(
+                                    T("Participant"),
+                                    T("Type the first few characters of one of the Participant's names."),
+                                    child="person_id")
         tablename = "hrm_training"
         table = define_table(tablename,
                              #@ToDo: Create a way to add new people to training as staff/volunteers
                              person_id(empty=False,
-                                       comment = DIV(_class="tooltip",
-                                          _title="%s|%s" % (T("Participant"),
-                                                            T("Start typing the Participant's name.")
-                                                            )
-                                          )
+                                       comment = participant_id_comment,
                                 ),
                              # Just used when created from participation in an Event
                              Field("training_event_id", db.hrm_training_event,
@@ -2680,7 +2685,7 @@ class S3HRProgrammeModel(S3Model):
         table = define_table(tablename,
                              self.pr_person_id(
                                represent = lambda id: \
-                                   self.pr_person_represent(id, showlink=True)
+                                   self.pr_person_represent(id, show_link=True)
                                ),
                              programme_id(),
                              s3_date(future=0),
@@ -4040,7 +4045,7 @@ def hrm_rheader(r, tabs=[]):
 
                 # Already formatted as HTML
                 active = TD(record.active)
-                
+
                 row1 = TR(TH("%s:" % T("Programme")),
                           record.programme,
                           TH("%s:" % T("Active?")),

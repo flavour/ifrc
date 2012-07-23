@@ -74,11 +74,11 @@ def s3_debug(message, value=None):
     try:
         output = "S3 Debug: %s" % str(message)
         if value:
-            "%s: %s" % (output, str(value))
+            output = "%s: %s" % (output, str(value))
     except:
         output = u"S3 Debug: %s" % unicode(message)
         if value:
-            u"%s: %s" % (output, unicode(value))
+            output = u"%s: %s" % (output, unicode(value))
 
     print >> sys.stderr, output
 
@@ -117,7 +117,7 @@ def s3_dev_toolbar():
 
 # =============================================================================
 def s3_mark_required(fields,
-                     mark_required=None,
+                     mark_required=[],
                      label_html=(lambda field_label:
                                  DIV("%s:" % field_label,
                                      SPAN(" *", _class="req")))):
@@ -139,14 +139,14 @@ def s3_mark_required(fields,
     for field in fields:
         if field.writable:
             validators = field.requires
-            if isinstance(validators, IS_EMPTY_OR):
+            if isinstance(validators, IS_EMPTY_OR) and field.name not in mark_required:
                 # Allow notnull fields to be marked as not required
                 # if we populate them onvalidation
                 labels[field.name] = "%s:" % field.label
                 continue
             else:
                 required = field.required or field.notnull or \
-                            mark_required and field.name in mark_required
+                            field.name in mark_required
             if not validators and not required:
                 labels[field.name] = "%s:" % field.label
                 continue
@@ -458,7 +458,7 @@ def s3_represent_facilities(db, site_ids, link=True):
     return results
 
 # =============================================================================
-def s3_comments_represent(text, showlink=True):
+def s3_comments_represent(text, show_link=True):
     """
         Represent Comments Fields
 
@@ -467,7 +467,7 @@ def s3_comments_represent(text, showlink=True):
 
     if len(text) < 80:
         return text
-    elif not showlink:
+    elif not show_link:
         return "%s..." % text[:76]
     else:
         import uuid
@@ -872,7 +872,7 @@ $('#regform').validate({
   first_name:{
    required:true
   },''', mobile, '''
-  email: {
+  email:{
    required:true,
    email:true
   },''', org1, '''
@@ -885,7 +885,7 @@ $('#regform').validate({
   }
  },
  messages:{
-  firstname:"''', str(T("Enter your firstname")), '''",
+  first_name:"''', str(T("Enter your first name")), '''",
   password:{
    required:"''', str(T("Provide a password")), '''"
   },

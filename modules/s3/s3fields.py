@@ -67,8 +67,9 @@ from gluon.dal import Query, SQLCustomType
 from gluon.storage import Storage
 
 from s3utils import S3DateTime, s3_auth_user_represent, s3_auth_group_represent
-from s3widgets import S3DateWidget
-
+from s3validators import IS_ONE_OF
+from s3widgets import S3DateWidget, S3AutocompleteWidget
+    
 try:
     db = current.db
 except:
@@ -401,9 +402,6 @@ def s3_role_required():
         Role Required to access a resource
         - used by GIS for map layer permissions management
     """
-
-    from s3validators import IS_ONE_OF
-    from s3widgets import S3AutocompleteWidget
 
     T = current.T
     db = current.db
@@ -751,6 +749,8 @@ def s3_comments(name="comments", **attr):
     T = current.T
     if "label" not in attr:
         attr["label"] = T("Comments")
+    if "represent" not in attr:
+        attr["represent"] = lambda comments: comments or current.messages.NONE
     if "widget" not in attr:
         attr["widget"] = s3_comments_widget
     if "comment" not in attr:
