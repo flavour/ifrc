@@ -287,7 +287,7 @@ class register():
         # Combo box for Organisation
         table.organisation_id.widget = S3OrganisationAutocompleteWidget(new_items=True)
         table.organisation_id.requires = IS_COMBO_BOX("org_organisation",
-                                                      current.s3db.org_organisation_id.attr.requires),
+                                                      current.s3db.org_organisation_id.attr.requires)
 
         # Custom onaccept to process custom fields
         _settings.register_onaccept = register_onaccept
@@ -630,8 +630,38 @@ class contact():
         return dict(form=form)
 
 # =============================================================================
+class about():
+    """
+        Custom About page
+    """
+
+    def __call__(self):
+        return "tbc"
+
+# =============================================================================
+class analysis():
+    """
+        Custom page for Project Analysis
+    """
+
+    def __call__(self):
+        return "tbc"
+
+# =============================================================================
+class mypage():
+    """
+        Custom page for a User to manage their Saved Search & Subscriptions
+    """
+
+    def __call__(self):
+        return "tbc"
+
+# =============================================================================
 class organisations():
     """
+        Custom page to show 2 dataTables on a single page:
+        * Regional Organisations
+        * Committees, Forums, Mechanism, Meetings and Networks
     """
 
     def __call__(self):
@@ -691,8 +721,10 @@ class organisations():
         s3request = current.manager.parse_request("org",
                                                   "organisation",
                                                   extension="aadata")
-        f = (S3FieldSelector("project.id") != None) & \
-            (S3FieldSelector("organisation_type_id$name").anyof(["Regional Organisation"]))
+        # (S3FieldSelector("project.id") != None) & \
+        f = (S3FieldSelector("organisation_type_id$name").anyof(["Regional Organisation",
+                                                                 "Regional Office",
+                                                                 "Regional Center"]))
         s3request.resource.add_filter(f)
 
         field_list = [
@@ -719,8 +751,9 @@ class organisations():
         s3request = current.manager.parse_request("org",
                                                   "organisation",
                                                   extension="aadata")
-        f = (S3FieldSelector("project.id") != None) & \
-            (S3FieldSelector("organisation_type_id$name").anyof(["Committees / Mechanism / Forum"]))
+        #(S3FieldSelector("project.id") != None) & \
+        f = (S3FieldSelector("organisation_type_id$name").anyof(["Committees/Mechanism/Forum",
+                                                                 "Network"]))
         s3request.resource.add_filter(f)
 
         field_list = [
