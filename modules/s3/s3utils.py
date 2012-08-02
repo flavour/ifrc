@@ -623,7 +623,7 @@ def s3_auth_group_represent(opt):
     return ", ".join(roles)
 
 # =============================================================================
-def s3_include_debug():
+def s3_include_debug(js =  True, css = True):
     """
         Generates html to include:
             the js scripts listed in /static/scripts/tools/sahana.js.cfg
@@ -647,42 +647,44 @@ def s3_include_debug():
     folder = request.folder
     appname = request.application
     theme = current.deployment_settings.get_theme()
-
-    # JavaScript
-    scripts_dir = os.path.join(folder, "static", "scripts")
-    sys.path.append(os.path.join(scripts_dir, "tools"))
-    import mergejsmf
-
-    configDictCore = {
-        ".": scripts_dir,
-        "web2py": scripts_dir,
-        #"T2":     scripts_dir_path,
-        "S3":     scripts_dir
-    }
-    configFilename = "%s/tools/sahana.js.cfg"  % scripts_dir
-    (fs, files) = mergejsmf.getFiles(configDictCore, configFilename)
-
-    # Restore prints
-    #sys.stdout = save_stdout
-
     include = ""
-    for file in files:
-        include = '%s\n<script src="/%s/static/scripts/%s" type="text/javascript"></script>' \
-            % (include, appname, file)
+
+    if js:
+    # JavaScript
+        scripts_dir = os.path.join(folder, "static", "scripts")
+        sys.path.append(os.path.join(scripts_dir, "tools"))
+        import mergejsmf
+    
+        configDictCore = {
+            ".": scripts_dir,
+            "web2py": scripts_dir,
+            #"T2":     scripts_dir_path,
+            "S3":     scripts_dir
+        }
+        configFilename = "%s/tools/sahana.js.cfg"  % scripts_dir
+        (fs, files) = mergejsmf.getFiles(configDictCore, configFilename)
+    
+        # Restore prints
+        #sys.stdout = save_stdout
+    
+        for file in files:
+            include = '%s\n<script src="/%s/static/scripts/%s" type="text/javascript"></script>' \
+                % (include, appname, file)
 
     # CSS
-    include = "%s\n <!-- CSS Syles -->" % include
-    css_cfg = "%s/private/templates/%s/css.cfg" % (folder, theme)
-    try:
-        f = open(css_cfg, "r")
-    except:
-        raise HTTP(500, "Theme configuration file missing: private/templates/%s/css.cfg" % theme)
-    files = f.readlines()
-    files = files[:-1]
-    for file in files:
-        include = '%s\n<link href="/%s/static/styles/%s" rel="stylesheet" type="text/css" />' \
-            % (include, appname, file[:-1])
-    f.close()
+    if css:
+        include = "%s\n <!-- CSS Syles -->" % include
+        css_cfg = "%s/private/templates/%s/css.cfg" % (folder, theme)
+        try:
+            f = open(css_cfg, "r")
+        except:
+            raise HTTP(500, "Theme configuration file missing: private/templates/%s/css.cfg" % theme)
+        files = f.readlines()
+        files = files[:-1]
+        for file in files:
+            include = '%s\n<link href="/%s/static/styles/%s" rel="stylesheet" type="text/css" />' \
+                % (include, appname, file[:-1])
+        f.close()
 
     return XML(include)
 
@@ -1594,7 +1596,7 @@ class S3SQLTable(object):
                         continue
 
                     try:
-                        value = S3FieldSelector.extract(resource, row, col["name"])
+                        value = S3FieldSelector.extract(resource, row, lf)
                     except:
                         # field not found in row
                         value = None
@@ -1855,14 +1857,19 @@ class S3BulkImporter(object):
             app = details[0].strip('" ')
             res = details[1].strip('" ')
             request = current.request
+
             csvFileName = details[2].strip('" ')
-            (csvPath, csvFile) = os.path.split(csvFileName)
-            if csvPath != "":
-                path = os.path.join(request.folder,
-                                    "private",
-                                    "templates",
-                                    csvPath)
-            csv = os.path.join(path, csvFile)
+            if csvFileName[:7] == "http://":
+                csv = csvFileName
+            else:
+                (csvPath, csvFile) = os.path.split(csvFileName)
+                if csvPath != "":
+                    path = os.path.join(request.folder,
+                                        "private",
+                                        "templates",
+                                        csvPath)
+                csv = os.path.join(path, csvFile)
+
             xslFileName = details[3].strip('" ')
             templateDir = os.path.join(request.folder,
                                        "static",
@@ -1960,11 +1967,26 @@ class S3BulkImporter(object):
                 return
 
             # Check if the source file is accessible
-            try:
-                csv = open(task[3], "r")
-            except IOError:
-                self.errorList.append(errorString % task[3])
-                return
+            filename = task[3]
+            if filename[:7] == "http://":
+                import urllib2
+                req = urllib2.Request(url=filename)
+                try:
+                    f = urllib2.urlopen(req)
+                except urllib2.HTTPError, e:
+                    self.errorList.append("Could not access %s: %s" % (filename, e.read()))
+                    return
+                except:
+                    self.errorList.append(errorString % filename)
+                    return
+                else:
+                    csv = f
+            else:
+                try:
+                    csv = open(filename, "r")
+                except IOError:
+                    self.errorList.append(errorString % filename)
+                    return
 
             # Check if the stylesheet is accessible
             try:
