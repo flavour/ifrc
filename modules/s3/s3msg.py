@@ -112,6 +112,7 @@ class S3Msg(object):
                 "SMS":      current.deployment_settings.get_ui_label_mobile_phone(),
                 "TWITTER":  T("Twitter"),
                 #"XMPP":    "XMPP",
+                "TWILIO":   T("Twilio SMS")
             }
 
         self.GATEWAY_OPTS = {
@@ -198,6 +199,12 @@ class S3Msg(object):
         wtable = s3db.msg_workflow
         otable = s3db.msg_outbox
         ctable = s3db.pr_contact
+        parser = S3Parsing.parser
+        linsert = ltable.insert
+        oinsert = otable.insert
+        contact_method = ctable.contact_method
+        value = ctable.value
+        lid = ltable.id
         
         query = (wtable.workflow_task_id == workflow) & \
                 (wtable.source_task_id == source)
@@ -211,23 +218,24 @@ class S3Msg(object):
             
             for row in rows:
                 message = row.message
-                reply = S3Parsing.parser(workflow, message)
-                db(ltable.id == row.id).update(reply = reply,
-                                               is_parsed = True)
-                reply = ltable.insert(recipient = row.sender,
-                                      subject ="Parsed Reply",
-                                      message = reply)
                 try:
                     email = row.sender.split("<")[1].split(">")[0]
-                    query = (ctable.contact_method == "EMAIL") & \
-                        (ctable.value == email) 
+                    query = (contact_method == "EMAIL") & \
+                        (value == email) 
                     pe_ids = db(query).select(ctable.pe_id)
                 except:
                     raise ValueError("Email address not defined!")
                 
+                reply = parser(workflow, message, email)
+                db(lid == row.id).update(reply = reply,
+                                               is_parsed = True)
+                reply = linsert(recipient = row.sender,
+                                      subject ="Parsed Reply",
+                                      message = reply)
+                
                 if pe_ids:
                     for pe_id in pe_ids:
-                        otable.insert(message_id = reply.id,
+                        oinsert(message_id = reply.id,
                                       address = row.sender, pe_id = pe_id.pe_id)
                 db.commit()
 
@@ -1352,6 +1360,60 @@ class S3Msg(object):
         for record in records:
             if record.vars.split(":") == ["{\"username\""," \"%s\"}" %username] :
                 return record.id
+    # =============================================================================
+    @staticmethod
+    def twilio_inbound_sms(account_name):
+        """ Fetches the inbound sms from twilio API."""
+        
+        s3db = current.s3db
+        db = current.db
+        ttable = s3db.msg_twilio_inbound_settings
+        query = (ttable.account_name == account_name) & \
+            (ttable.deleted == False)
+        account = db(query).select(limitby=(0,1)).first()
+        if account:
+            url = account.url
+            account_sid = account.account_sid
+            auth_token = account.auth_token
+            
+            url += "/%s/SMS/Messages.json"%str(account_sid)
+            
+            import urllib, urllib2
+            # this creates a password manager 
+            passman = urllib2.HTTPPasswordMgrWithDefaultRealm()
+            passman.add_password(None, url, account_sid, auth_token)
+  
+            # create the AuthHandler
+            authhandler = urllib2.HTTPBasicAuthHandler(passman)
+            opener = urllib2.build_opener(authhandler)            
+            urllib2.install_opener(opener)
+            
+            downloaded_sms = []
+            itable = s3db.msg_twilio_inbox
+            ltable = s3db.msg_log
+            query = itable.deleted == False
+            messages = db(query).select(itable.sid)
+            downloaded_sms = [message.sid for message in messages]
+            try:
+                smspage = urllib2.urlopen(url)
+                import json
+                minsert = itable.insert
+                linsert = ltable.insert
+                sms_list = json.loads(smspage.read())
+                for sms in  sms_list["sms_messages"]:
+                    if (sms["direction"] == "inbound") and \
+                       (sms["sid"] not in downloaded_sms):
+                        minsert(sid=sms["sid"],body=sms["body"], \
+                                status=sms["status"],sender=sms["from"], \
+                                received_on=sms["date_sent"])
+                        linsert(sender=sms["from"], message=sms["body"], \
+                                 source_task_id=account_name, inbound=True)
+                                        
+            except urllib2.HTTPError, e:
+                return "Error:" + str(e.code)
+            db.commit()
+            return
+        
 # =============================================================================
 class S3Compose(S3CRUD):
     """ RESTful method for messaging """

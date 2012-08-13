@@ -357,6 +357,8 @@ class S3SMSModel(S3Model):
              "msg_modem_settings",
              "msg_api_settings",
              "msg_smtp_to_sms_settings",
+             "msg_twilio_inbound_settings",
+             "msg_twilio_inbox"
             ]
 
     def model(self):
@@ -364,7 +366,7 @@ class S3SMSModel(S3Model):
         #T = current.T
 
         define_table = self.define_table
-
+        configure = self.configure
         # ---------------------------------------------------------------------
         # Settings
         tablename = "msg_setting"
@@ -421,6 +423,36 @@ class S3SMSModel(S3Model):
                              #Field("preference", "integer", default = 5),
                              *s3_meta_fields())
 
+        # ---------------------------------------------------------------------
+        tablename = "msg_twilio_inbound_settings"
+        table = define_table(tablename,
+                             Field("account_name"),
+                             Field("url",
+                                   default = \
+                                   "https://api.twilio.com/2010-04-01/Accounts"
+                                   ),
+                             Field("account_sid", length=64,
+                                   requires=IS_NOT_EMPTY()),
+                             Field("auth_token", length=64,
+                                   requires=IS_NOT_EMPTY()),
+                             *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
+        tablename = "msg_twilio_inbox"
+        table = define_table(tablename,
+                             Field("sid", length=64),
+                             Field("body", "text"),
+                             Field("status"),
+                             Field("sender"),
+                             Field("received_on"),
+                             *s3_meta_fields())
+
+        configure(tablename,
+                  list_fields = ["body",
+                                 "sender",
+                                 "received_on"
+                                 ]
+                  )
         # ---------------------------------------------------------------------
         return Storage()
 
@@ -657,7 +689,8 @@ class S3ParsingModel(S3Model):
         Message Parsing Model
     """
 
-    names = ["msg_workflow"]
+    names = ["msg_workflow",
+             "msg_sessions"]
 
     def model(self):
 
@@ -674,36 +707,33 @@ class S3ParsingModel(S3Model):
         S3Parsing = mymodule.S3Parsing()
         
         mtable = self.msg_inbound_email_settings
-        # source_opts contains the available message sources.
-        source_opts = []
-        append = source_opts.append
-        records = current.db(mtable.deleted == False).select(mtable.username)
-        for record in records:
-            append(record.username)
-
-        # Dynamic lookup of the parsing functions in S3Parsing class.
-        parsers = inspect.getmembers(S3Parsing, predicate=inspect.isfunction)
-        parse_opts = []
-        for parser in parsers:
-            parse_opts += [parser[0]]
 
         tablename = "msg_workflow"
         table = self.define_table(tablename,
                                   Field("source_task_id",
                                         label = T("Inbound Message Source"),
-                                        requires = IS_IN_SET(source_opts,
-
-                                                             zero = None),
                                         represent = lambda id: \
                                         self.source_represent(id, 
                                                               show_link=True)),
                                   Field("workflow_task_id",
-                                        label = T("Workflow"),
-                                        requires = IS_IN_SET(parse_opts,
-
-                                                             zero=None)), 
+                                        label = T("Workflow")), 
                                   *s3_meta_fields())
-
+        # ---------------------------------------------------------------------
+        # user_opts contains the available users.
+        now = current.request.utcnow
+        
+        tablename = "msg_session"
+        table = self.define_table(tablename,
+                                  Field("email"),
+                                  Field("created_datetime","datetime",
+                                        default = now),
+                                  Field("expiration_time", "integer"),
+                                  Field("is_expired","boolean",
+                                        default = False),
+                                  Field("sender"),
+                                  *s3_meta_fields())
+                                  
+        
         return Storage()
     # -------------------------------------------------------------------------
     @staticmethod
