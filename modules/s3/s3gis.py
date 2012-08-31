@@ -73,6 +73,7 @@ from s3fields import s3_all_meta_field_names
 from s3search import S3Search
 from s3track import S3Trackable
 from s3utils import s3_debug, s3_fullname, s3_has_foreign_key
+from s3method import S3Method
 
 DEBUG = False
 if DEBUG:
@@ -573,7 +574,7 @@ class GIS(object):
             else:
                 # This level is suitable
                 return parent.lat_min, parent.lon_min, parent.lat_max, parent.lon_max, parent.name
-               
+
             return -90, -180, 90, 180, None
 
         # Minimum Bounding Box
@@ -1600,7 +1601,7 @@ class GIS(object):
     def get_features_in_radius(self, lat, lon, radius, tablename=None, category=None):
         """
             Returns Features within a Radius (in km) of a LatLon Location
-            
+
             Unused
         """
 
@@ -2299,6 +2300,218 @@ class GIS(object):
             # Convert radians to kilometers
             distance = RADIUS_EARTH * c
             return distance
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def export_admin_areas(countries=[],
+                           levels=["L0", "L1", "L2", "L3"],
+                           format="geojson",
+                           simplify=0.001,
+                           ):
+        """
+            Export admin areas to /static/cache for use by interactive web-mapping services
+            - designed for use by the Vulnerability Mapping
+
+            simplify = False to disable simplification
+
+            Only L0 supported for now
+            Only GeoJSON supported for now (may add KML &/or OSM later)
+        """
+
+        db = current.db
+        s3db = current.s3db
+        table = s3db.gis_location
+        ifield = table.id
+        if countries:
+            ttable = s3db.gis_location_tag
+            cquery = (table.level == "L0") & \
+                     (ttable.location_id == ifield) & \
+                     (ttable.tag == "ISO2") & \
+                     (ttable.value.belongs(countries))
+        else:
+            # All countries
+            cquery = (table.level == "L0")
+
+        if current.deployment_settings.get_gis_spatialdb():
+            spatial = True
+            if simplify:
+                # Do the Simplify & GeoJSON direct from the DB
+                field = table.the_geom.st_simplify(simplify).st_asgeojson(precision=4).with_alias("geojson")
+            else:
+                # Do the GeoJSON direct from the DB
+                field = table.the_geom.st_asgeojson(precision=4).with_alias("geojson")
+        else:
+            spatial = False
+            field = table.wkt
+            if simplify:
+                _simplify = GIS.simplify
+            else:
+                from shapely.wkt import loads as wkt_loads
+                from ..geojson import dumps
+
+        folder = os.path.join(current.request.folder, "static", "cache")
+
+        features = []
+        append = features.append
+
+        if "L0" in levels:
+            countries = db(cquery).select(ifield,
+                                          field,
+                                          )
+            for row in countries:
+                if spatial:
+                    geojson = row.geojson
+                elif simplify:
+                    geojson = _simplify(row.wkt, tolerance=simplify, output="geojson")
+                else:
+                    shape = wkt_loads(row.wkt)
+                    # Compact Encoding
+                    geojson = dumps(shape, separators=(",", ":"))
+                f = dict(
+                        type = "Feature",
+                        properties = {"id": row.id},
+                        geometry = json.loads(geojson) if geojson else {}
+                        )
+                append(f)
+
+            data = dict(
+                        type = "FeatureCollection",
+                        features = features
+                    )
+            # Output to file
+            filename = os.path.join(folder, "countries.geojson")
+            File = open(filename, "w")
+            File.write(json.dumps(data))
+            File.close()
+
+        if "L1" in levels:
+            if "L0" not in levels:
+                countries = db(cquery).select(ifield)
+            q1 = (table.level == "L1") & \
+                 (table.deleted != True)
+            for country in countries:
+                query = q1 & (table.parent == country.id)
+                features = []
+                append = features.append
+                rows = db(query).select(ifield,
+                                        field,
+                                        )
+                for row in rows:
+                    if spatial:
+                        geojson = row.geojson
+                    elif simplify:
+                        geojson = _simplify(row.wkt, tolerance=simplify, output="geojson")
+                    else:
+                        shape = wkt_loads(row.wkt)
+                        # Compact Encoding
+                        geojson = dumps(shape, separators=(",", ":"))
+                    f = dict(
+                            type = "Feature",
+                            properties = {"id": row.id},
+                            geometry = json.loads(geojson) if geojson else {}
+                            )
+                    append(f)
+
+                data = dict(
+                            type = "FeatureCollection",
+                            features = features
+                        )
+                # Output to file
+                filename = os.path.join(folder, "1_%s.geojson" % country.id)
+                File = open(filename, "w")
+                File.write(json.dumps(data))
+                File.close()
+
+        if "L2" in levels:
+            if "L0" not in levels and "L1" not in levels:
+                countries = db(cquery).select(ifield)
+            q1 = (table.level == "L1") & \
+                 (table.deleted != True)
+            for country in countries:
+                query = q1 & (table.parent == country.id)
+                l1s = db(query).select(ifield)
+                q2 = (table.level == "L2") & \
+                     (table.deleted != True)
+                for l1 in l1s:
+                    query = q2 & (table.parent == l1.id)
+                    features = []
+                    append = features.append
+                    rows = db(query).select(ifield,
+                                            field,
+                                            )
+                    for row in rows:
+                        if spatial:
+                            geojson = row.geojson
+                        elif simplify:
+                            geojson = _simplify(row.wkt, tolerance=simplify, output="geojson")
+                        else:
+                            shape = wkt_loads(row.wkt)
+                            # Compact Encoding
+                            geojson = dumps(shape, separators=(",", ":"))
+                        f = dict(
+                                type = "Feature",
+                                properties = {"id": row.id},
+                                geometry = json.loads(geojson) if geojson else {}
+                                )
+                        append(f)
+
+                    data = dict(
+                                type = "FeatureCollection",
+                                features = features
+                            )
+                    # Output to file
+                    filename = os.path.join(folder, "2_%s.geojson" % l1.id)
+                    File = open(filename, "w")
+                    File.write(json.dumps(data))
+                    File.close()
+
+        if "L3" in levels:
+            if "L0" not in levels and "L1" not in levels and "L2" not in levels:
+                countries = db(cquery).select(ifield)
+            q1 = (table.level == "L1") & \
+                 (table.deleted != True)
+            for country in countries:
+                query = q1 & (table.parent == country.id)
+                l1s = db(query).select(ifield)
+                q2 = (table.level == "L2") & \
+                     (table.deleted != True)
+                for l1 in l1s:
+                    query = q2 & (table.parent == l1.id)
+                    l2s = db(query).select(ifield)
+                    q3 = (table.level == "L3") & \
+                         (table.deleted != True)
+                    for l2 in l2s:
+                        query = q3 & (table.parent == l2.id)
+                        features = []
+                        append = features.append
+                        rows = db(query).select(ifield,
+                                                field,
+                                                )
+                        for row in rows:
+                            if spatial:
+                                geojson = row.geojson
+                            elif simplify:
+                                geojson = _simplify(row.wkt, tolerance=simplify, output="geojson")
+                            else:
+                                shape = wkt_loads(row.wkt)
+                                # Compact Encoding
+                                geojson = dumps(shape, separators=(",", ":"))
+                            f = dict(
+                                    type = "Feature",
+                                    properties = {"id": row.id},
+                                    geometry = json.loads(geojson) if geojson else {}
+                                    )
+                            append(f)
+
+                        data = dict(
+                                    type = "FeatureCollection",
+                                    features = features
+                                )
+                        # Output to file
+                        filename = os.path.join(folder, "3_%s.geojson" % l2.id)
+                        File = open(filename, "w")
+                        File.write(json.dumps(data))
+                        File.close()
 
     # -------------------------------------------------------------------------
     def import_admin_areas(self,
@@ -3435,12 +3648,13 @@ class GIS(object):
                                           lon=L0_lon)
             else:
                 db(table.id == id).update(path=_path,
+                                          inherited=False,
                                           L0=L0_name,
                                           L1=name)
             # Ensure that any locations which inherit their latlon from this one get updated
             query = (table.parent == id) and \
                     (table.inherited == True)
-            fields = [table.id, table.name, table.path, table.parent,
+            fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
                       table.lat, table.lon, table.inherited]
             rows = db(query).select(*fields)
@@ -3535,13 +3749,14 @@ class GIS(object):
                                           lon=Lx_lon)
             else:
                 db(table.id == id).update(path=_path,
+                                          inherited=False,
                                           L0=L0_name,
                                           L1=L1_name,
                                           L2=name)
             # Ensure that any locations which inherit their latlon from this one get updated
             query = (table.parent == id) and \
                     (table.inherited == True)
-            fields = [table.id, table.name, table.path, table.parent,
+            fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
                       table.lat, table.lon, table.inherited]
             rows = db(query).select(*fields)
@@ -3633,7 +3848,8 @@ class GIS(object):
                     L1_name = None
                     L2_name = None
                 else:
-                    raise ValueError
+                    s3_debug("S3GIS: Invalid level '%s'" % Lx.level)
+                    return
                 Lx_lat = Lx.lat
                 Lx_lon = Lx.lon
             else:
@@ -3672,6 +3888,7 @@ class GIS(object):
                                           lon=Lx_lon)
             else:
                 db(table.id == id).update(path=_path,
+                                          inherited=False,
                                           L0=L0_name,
                                           L1=L1_name,
                                           L2=L2_name,
@@ -3679,14 +3896,14 @@ class GIS(object):
             # Ensure that any locations which inherit their latlon from this one get updated
             query = (table.parent == id) and \
                     (table.inherited == True)
-            fields = [table.id, table.name, table.path, table.parent,
+            fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
                       table.lat, table.lon, table.inherited]
             rows = db(query).select(*fields)
             for row in rows:
                 self.update_location_tree(row)
             return _path
-            
+
         # L4
         L4 = feature.get("L4", False)
         if level == "L4":
@@ -3844,6 +4061,7 @@ class GIS(object):
                                           lon=Lx_lon)
             else:
                 db(table.id == id).update(path=_path,
+                                          inherited=False,
                                           L0=L0_name,
                                           L1=L1_name,
                                           L2=L2_name,
@@ -3852,7 +4070,7 @@ class GIS(object):
             # Ensure that any locations which inherit their latlon from this one get updated
             query = (table.parent == id) and \
                     (table.inherited == True)
-            fields = [table.id, table.name, table.path, table.parent,
+            fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
                       table.lat, table.lon, table.inherited]
             rows = db(query).select(*fields)
@@ -3870,6 +4088,7 @@ class GIS(object):
                                                L4 is False:
             # Get the whole feature
             feature = db(table.id == id).select(table.name,
+                                                table.level,
                                                 table.parent,
                                                 table.path,
                                                 table.lat,
@@ -4011,7 +4230,10 @@ class GIS(object):
             Lx_lon = Lx.lon
         else:
             _path = id
-            L0_name = None
+            if feature.level == "L0":
+                L0_name = name
+            else:
+                L0_name = None
             L1_name = None
             L2_name = None
             L3_name = None
@@ -4049,6 +4271,7 @@ class GIS(object):
                                       lon=Lx_lon)
         else:
             db(table.id == id).update(path=_path,
+                                      inherited=False,
                                       L0=L0_name,
                                       L1=L1_name,
                                       L2=L2_name,
@@ -4325,6 +4548,8 @@ class GIS(object):
         try:
             shape = wkt_loads(wkt)
         except:
+            wkt = wkt[10] if wkt else wkt
+            s3_debug("Invalid Shape: %s" % wkt)
             return None
         simplified = shape.simplify(tolerance, preserve_topology)
         if output == "wkt":
@@ -6801,5 +7026,214 @@ class YahooGeocoder(Geocoder):
         url = self.url
         page = fetch(url)
         return page
+
+# -----------------------------------------------------------------------------
+class S3ExportPOI(S3Method):
+    """ Export point-of-interest resources for a location """
+
+    # -------------------------------------------------------------------------
+    def apply_method(self, r, **attr):
+        """
+            Apply method.
+
+            @param r: the S3Request
+            @param attr: controller options for this request
+        """
+
+        manager = current.manager
+        output = dict()
+
+        if r.http == "GET":
+            output = self.export(r, **attr)
+        else:
+            r.error(405, manager.ERROR.BAD_METHOD)
+
+        return output
+
+    # -------------------------------------------------------------------------
+    def export(self, r, **attr):
+        """
+            Export POI resources.
+
+            URL options:
+
+                - "resources"   list of tablenames to export records from
+
+                - "msince"      datetime in ISO format, to override the
+                                feed's last update datetime, "off" to turn off
+                                msince completely
+
+                - "update_feed" false to skip the update of the feed's last
+                                update datetime, useful for trial exports
+
+            Supported formats:
+
+                .xml            S3XML
+                .osm            OSM XML Format
+                .kml            Google KML
+
+            (other formats can be requested, but may give unexpected results)
+
+            @param r: the S3Request
+            @param attr: controller options for this request
+        """
+
+        import datetime, time
+        tfmt = current.xml.ISOFORMAT
+
+        # Determine request Lx
+        current_lx = r.record
+        if not current_lx: # or not current_lx.level:
+            # Must have a location
+            r.error(400, current.manager.error.BAD_REQUEST)
+        else:
+            self.lx = current_lx.id
+
+        # Parse the ?resources= parameter
+        tables = []
+        if "resources" in r.get_vars:
+            resources = r.get_vars["resources"]
+            if not isinstance(resources, list):
+                resources = [resources]
+            [tables.extend(t.split(",")) for t in resources]
+
+        # Parse the ?update_feed= parameter
+        update_feed = True
+        if "update_feed" in r.get_vars:
+            update_feed = r.get_vars["update_feed"]
+            if update_feed.lower() == "false":
+                update_feed = False
+            else:
+                update_feed = True
+
+        # Parse the ?msince= parameter
+        msince = "auto"
+        if "msince" in r.get_vars:
+            msince = r.get_vars["msince"]
+            if msince.lower() == "off":
+                msince = None
+            else:
+                try:
+                    (y, m, d, hh, mm, ss, t0, t1, t2) = \
+                        time.strptime(msince, tfmt)
+                    msince = datetime.datetime(y, m, d, hh, mm, ss)
+                except ValueError:
+                    msince = None
+
+        # Export a combined three
+        tree = self.export_combined_tree(tables,
+                                         msince=msince,
+                                         update_feed=update_feed)
+
+        xml = current.xml
+        manager = current.manager
+
+        # Set response headers
+        headers = current.response.headers
+        representation = r.representation
+        if r.representation in manager.json_formats:
+            as_json = True
+            default = "application/json"
+        else:
+            as_json = False
+            default = "text/xml"
+        headers["Content-Type"] = manager.content_type.get(representation,
+                                                           default)
+
+        # Find XSLT stylesheet and transform
+        stylesheet = r.stylesheet()
+        if tree and stylesheet is not None:
+            args = Storage(domain=manager.domain,
+                           base_url=manager.s3.base_url,
+                           utcnow=datetime.datetime.utcnow().strftime(tfmt))
+            tree = xml.transform(tree, stylesheet, **args)
+        if tree:
+            if as_json:
+                output = xml.tree2json(tree, pretty_print=True)
+            else:
+                output = xml.tostring(tree, pretty_print=True)
+
+        return output
+
+    # -------------------------------------------------------------------------
+    def export_combined_tree(self, tables, msince="auto", update_feed=False):
+        """
+            Export a combined tree of all records in tables, which
+            are in Lx, and have been updated since msince.
+
+            @param tables: list of table names
+            @param msince: minimum modified_on datetime, "auto" for
+                           automatic from feed data, None to turn it off
+            @param update_feed: update the last_update datetime in the feed
+        """
+
+        manager = current.manager
+
+        elements = []
+        results = 0
+        for tablename in tables:
+
+            # Define the resource
+            # @todo: use new-style resource constructor
+            prefix, name = tablename.split("_", 1)
+            try:
+                resource = manager.define_resource(prefix, name,
+                                                   components=[])
+            except AttributeError:
+                # Table not defined (module deactivated?)
+                continue
+
+            # Check
+            if "location_id" not in resource.fields:
+                # Hardly a POI resource without location_id
+                continue
+
+            # Add Lx filter
+            self._add_lx_filter(resource)
+
+            # Get the feed data
+            ftable = current.s3db.gis_poi_feed
+            query = (ftable.tablename == tablename) & \
+                    (ftable.location_id == self.lx)
+            feed = current.db(query).select(limitby=(0, 1)).first()
+            if msince == "auto" and feed is not None:
+                _msince = feed.last_update
+            else:
+                _msince = msince
+
+            # Export the tree and append its element to the element list
+            tree = resource.export_tree(msince=_msince,
+                                        references=["location_id"])
+
+            # Update the feed data
+            if update_feed:
+                muntil = resource.muntil
+                if feed is None:
+                    ftable.insert(location_id = self.lx,
+                                  tablename = tablename,
+                                  last_update = muntil)
+                else:
+                    feed.update_record(last_update = muntil)
+
+            elements.extend([c for c in tree.getroot()])
+
+        # Combine all elements in one tree and return it
+        tree = current.xml.tree(elements, results=len(elements))
+        return tree
+
+    # -------------------------------------------------------------------------
+    def _add_lx_filter(self, resource):
+        """
+            Add a Lx filter for the current location to this
+            resource.
+
+            @param resource: the resource
+        """
+
+        from s3resource import S3FieldSelector as FS
+        query = (FS("location_id$path").contains("/%s/" % self.lx)) | \
+                (FS("location_id$path").like("%s/%%" % self.lx))
+        resource.add_filter(query)
+        return
 
 # END =========================================================================

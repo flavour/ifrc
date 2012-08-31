@@ -28,7 +28,7 @@
      
      <!-- Member-A -->
      <resource name="member_membership" uuid="%(org)s Member-A">
-       <data field="first_name">"%(org)s Member-A"</data>
+       <reference field="person_id" resource="pr_person" uuid="%(org)s Member-A"/>
      </resource>
 
      <!-- Project-B (Org) -->
@@ -44,7 +44,7 @@
      </resource>
 
      <!-- Warehouse-A -->
-     <resource name="org_office" uuid="%(org)s Warehouse-A">
+     <resource name="inv_warehouse" uuid="%(org)s Warehouse-A">
        <data field="name">%(org)s Warehouse-A</data>
        <data field="type">5</data>
        

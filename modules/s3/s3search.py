@@ -1190,6 +1190,7 @@ class S3Search(S3CRUD):
             @param attr: request parameters
         """
 
+        from s3.s3utils import S3DataTable
         # Get environment
         T = current.T
         session = current.session
@@ -1382,9 +1383,6 @@ class S3Search(S3CRUD):
         elif not items:
             items = self.crud_string(tablename, "msg_no_match")
 
-        output["items"] = items
-        output["sortby"] = sortby
-
         if isinstance(items, DIV):
             filter = session.s3.filter
             app = request.application
@@ -1397,22 +1395,6 @@ class S3Search(S3CRUD):
                 sep = " | "
             else:
                 link = sep = ""
-
-            list_formats = DIV(link, sep,
-                               "%s: " % T("Export to"),
-                               A(IMG(_src="/%s/static/img/pdficon_small.gif" % app),
-                                 _title=T("Export in PDF format"),
-                                 _href=r.url(method="", representation="pdf",
-                                             vars=filter)),
-                               A(IMG(_src="/%s/static/img/icon-xls.png" % app),
-                                 _title=T("Export in XLS format"),
-                                 _href=r.url(method="", representation="xls",
-                                             vars=filter)),
-                               A(IMG(_src="/%s/static/img/RSS_16.png" % app),
-                                 _title=T("Export in RSS format"),
-                                 _href=r.url(method="", representation="rss",
-                                             vars=filter)),
-                               _id="list_formats")
             tabs = []
 
             if "location_id" in table or \
@@ -1421,12 +1403,6 @@ class S3Search(S3CRUD):
                 # (this same map is also used by the Map Search Widget, if-present)
                 tabs.append((T("Map"), "map"))
                 app = request.application
-                list_formats.append(A(IMG(_src="/%s/static/img/kml_icon.png" % app),
-                                      _title=T("Export in KML format"),
-                                      _href=r.url(method="",
-                                                  representation="kml",
-                                                  vars=filter)),
-                                    )
                 # Build URL to load the features onto the map
                 if query:
                     vars = query.serialize_url(resource=resource)
@@ -1468,13 +1444,25 @@ class S3Search(S3CRUD):
             list_formats = ""
             tabs = []
 
+        attr = S3DataTable.getConfigData()
+        items = S3DataTable.htmlConfig(items,
+                                       "list",
+                                       sortby, # order by
+                                       "", # the filter string
+                                       None, # the rfields
+                                       **attr
+                                       )
+        items[0].insert(0, sep)
+        items[0].insert(0, link)
+        output["items"] = items
+        output["sortby"] = sortby
 
         # Search Tabs
         search_tabs = s3_search_tabs(r, tabs)
         output["search_tabs"] = search_tabs
 
         # List Formats
-        output["list_formats"] = list_formats
+#        output["list_formats"] = list_formats
 
         # Title and subtitle
         output["title"] = self.crud_string(tablename, "title_search")
@@ -2077,17 +2065,29 @@ class S3LocationSearch(S3Search):
             fieldname = str.lower(_vars.field)
             field = table[fieldname]
 
-            # Default fields to return
-            fields = [table.id,
-                      table.name,
-                      table.level,
-                      table.parent,
-                      table.path,
-                      table.uuid,
-                      table.lat,
-                      table.lon,
-                      table.addr_street,
-                      table.addr_postcode]
+            if _vars.simple:
+                fields = [table.id,
+                          table.name,
+                          table.level,
+                          table.path,
+                          table.L0,
+                          table.L1,
+                          table.L2,
+                          table.L3
+                          ]
+            else:
+                # Default fields to return
+                fields = [table.id,
+                          table.name,
+                          table.level,
+                          table.parent,
+                          table.path,
+                          table.uuid,
+                          table.lat,
+                          table.lon,
+                          table.addr_street,
+                          table.addr_postcode
+                          ]
 
             # Optional fields
             if "level" in _vars and _vars.level:
@@ -2201,7 +2201,8 @@ class S3LocationSearch(S3Search):
                           table.lat,
                           table.lon,
                           table.addr_street,
-                          table.addr_postcode]
+                          table.addr_postcode
+                          ]
             else:
                 output = current.xml.json_message(
                                 False,

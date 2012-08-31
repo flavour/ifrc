@@ -178,11 +178,10 @@ _settings.on_failed_authorization = URL(c="default", f="user",
                                         args="not_authorized")
 _settings.reset_password_requires_verification = True
 _settings.verify_email_next = URL(c="default", f="index")
-# Notify Approver of new pending user registration. Action may be required.
-_settings.verify_email_onaccept = auth.s3_verify_email_onaccept
 
 # Auth Messages
 _messages = auth.messages
+
 _messages.verify_email = "Click on the link %(url)s%(key)s to verify your email" % \
     dict(url="%s/default/user/verify_email/" % s3.base_url,
          key="%(key)s")
@@ -197,7 +196,6 @@ _messages.help_mobile_phone = T("Entering a phone number is optional, but doing 
 # Require Admin approval for self-registered users
 _settings.registration_requires_approval = settings.get_auth_registration_requires_approval()
 _messages.registration_pending = settings.get_auth_registration_pending()
-_messages.registration_pending_approval = settings.get_auth_registration_pending_approval()
 
 _messages["approve_user"] = \
 """Your action is required to approve a New User for %(system_name)s:
@@ -217,6 +215,17 @@ No action is required.""" \
        name_format = \
 """%(first_name)s %(last_name)s
 %(email)s""")
+
+_messages["confirmation_email_subject"] = T("Resource Mapping System account has been activated")
+_messages["confirmation_email"] = "%s %s. %s %s/%s/default/help\n\n%s,\n\n%s" % \
+    (T("Your request for Red Cross and Red Crescent Resource Mapping System (RMS) has been approved and you can now access the system at"),
+     deployment_settings.get_base_public_url(),
+     T("If you have any questions or need support, please see"),
+     deployment_settings.get_base_public_url(),
+     request.application,
+     T("With best regards"),
+     T("RMS Team")
+     )
 
 # We don't wish to clutter the groups list with 1 per user.
 _settings.create_user_groups = False
@@ -357,20 +366,6 @@ s3mgr.json_formats = ["geojson", "s3json"]
 s3mgr.csv_formats = ["hrf", "s3csv"]
 
 s3mgr.ROWSPERPAGE = 20
-
-##########
-# Messages
-##########
-s3.messages = Messages(T)
-system_name = settings.get_system_name_short()
-s3.messages.confirmation_email_subject = T("Resource Mapping System account has been activated")
-s3.messages.confirmation_email = "%s %s. %s %s/%s/default/help\n\n%s,\n\n%s" % (T("Your request for Red Cross and Red Crescent Resource Mapping System (RMS) has been approved and you can now access the system at"),
-                                                 deployment_settings.get_base_public_url(),
-                                                 T("If you have any questions or need support, please see"),
-                                                 deployment_settings.get_base_public_url(),
-                                                 request.application,
-                                                 T("With best regards"),
-                                                 T("RMS Team"))
 
 # Valid Extensions for Image Upload fields
 s3.IMAGE_EXTENSIONS = ["png", "PNG", "jpg", "JPG", "jpeg", "JPEG", "gif", "GIF", "tif", "TIF", "tiff", "TIFF", "bmp", "BMP", "raw", "RAW"]

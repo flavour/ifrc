@@ -44,11 +44,11 @@ class S3MainMenu(default.S3MainMenu):
             homepage("hrm", "org", name=T("Staff"),
                     vars=dict(group="staff"))(
                 MM("Staff", c="hrm", f="staff"),
-                #MM("Teams", c="hrm", f="group"),
+                MM("Teams", c="hrm", f="group"),
                 MM("National Societies", c="org", f="organisation",
                     vars = red_cross_filter),
                 MM("Offices", c="org", f="office"),
-                MM("Job Roles", c="hrm", f="job_role"),
+                MM("Job Roles", c="hrm", f="job_title"),
                 #MM("Skill List", c="hrm", f="skill"),
                 MM("Training Events", c="hrm", f="training_event"),
                 MM("Training Courses", c="hrm", f="course"),
@@ -56,8 +56,8 @@ class S3MainMenu(default.S3MainMenu):
             ),
             homepage("vol", name=T("Volunteers"))(
                 MM("Volunteers", c="vol", f="volunteer"),
-                #MM("Teams", c="vol", f="group"),
-                MM("Job Roles", c="vol", f="job_role"),
+                MM("Teams", c="vol", f="group"),
+                MM("Job Roles", c="vol", f="job_title"),
                 #MM("Skill List", c="vol", f="skill"),
                 MM("Training Events", c="vol", f="training_event"),
                 MM("Training Courses", c="vol", f="course"),
@@ -87,6 +87,9 @@ class S3MainMenu(default.S3MainMenu):
             homepage("project")(
                 MM("Projects", c="project", f="project"),
                 MM("Communities", c="project", f="location"),
+            ),
+            homepage("vulnerability")(
+                MM("Map", c="vulnerability", f="index"),
             ),
             #homepage("event", "irs")(
             #    MM("Events", c="event", f="event"),
@@ -127,7 +130,7 @@ class S3MainMenu(default.S3MainMenu):
                     image = "graphic_staff_wide.png",
                     title = "Staff")(
                     DB("Manage Staff Data", f="staff"),
-                    #DB("Manage Teams Data", f="group"),
+                    DB("Manage Teams Data", f="group"),
                 ),
                 DB("OFFICES",
                     c="org",
@@ -255,7 +258,6 @@ class S3OptionsMenu(default.S3OptionsMenu):
                                  ADMIN in session.s3.roles
 
         staff = {"group":"staff"}
-        volunteers = {"group":"volunteer"}
 
         return M()(
                     M("Staff", c="hrm", f=("staff", "person"),
@@ -266,11 +268,11 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Import", f="person", m="import",
                           vars=staff, p="create"),
                     ),
-                    # M("Teams", c="hrm", f="group",
-                      # check=manager_mode)(
-                        # M("New Team", m="create"),
-                        # M("List All"),
-                    # ),
+                    M("Teams", c="hrm", f="group",
+                      check=manager_mode)(
+                        M("New Team", m="create"),
+                        M("List All"),
+                    ),
                     M("National Societies", c="org", 
                                             f="organisation",
                                             vars = red_cross_filter,
@@ -333,6 +335,108 @@ class S3OptionsMenu(default.S3OptionsMenu):
                       check=[personal_mode, is_org_admin]),
                     # This provides the link to switch to the personal mode:
                     M("Personal Profile", c="hrm", f="person",
+                      check=manager_mode, vars=dict(mode="personal"))
+                )
+
+    # -------------------------------------------------------------------------
+    def vol(self):
+        """ Volunteer Management """
+
+        s3 = current.session.s3
+        ADMIN = s3.system_roles.ADMIN
+
+        # Custom conditions for the check-hook, as lambdas in order
+        # to have them checked only immediately before rendering:
+        manager_mode = lambda i: s3.hrm.mode is None
+        personal_mode = lambda i: s3.hrm.mode is not None
+        is_org_admin = lambda i: s3.hrm.orgs and True or \
+                                 ADMIN in s3.roles
+
+        settings = current.deployment_settings
+        job_roles = lambda i: settings.get_hrm_job_roles()
+        show_programmes = lambda i: settings.get_hrm_vol_experience() == "programme"
+        show_tasks = lambda i: settings.has_module("project") and \
+                               settings.get_project_mode_task()
+        use_teams = lambda i: settings.get_hrm_use_teams()
+
+        if job_roles(""):
+            jt_catalog_label = "Job Title Catalog"
+        else:
+            jt_catalog_label = "Volunteer Role Catalog"
+
+        return M(c="vol")(
+                    M("Volunteers", f="volunteer",
+                      check=[manager_mode])(
+                        M("New", m="create"),
+                        M("List All"),
+                        M("Search", m="search"),
+                        M("Import", f="person", m="import",
+                          vars={"group":"volunteer"}, p="create"),
+                    ),
+                    M("Teams", f="group",
+                      check=[manager_mode, use_teams])(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Job Role Catalog", f="job_title",
+                      check=[manager_mode, job_roles])(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M(jt_catalog_label, f="job_title",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    #M("Skill Catalog", f="skill",
+                    #  check=manager_mode)(
+                    #    M("New", m="create"),
+                    #    M("List All"),
+                    #    #M("Skill Provisions", f="skill_provision"),
+                    #),
+                    M("Training Events", f="training_event",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                        M("Search", m="search"),
+                        M("Search Training Participants", f="training",
+                          m="search"),
+                        M("Import Participant List", f="training", m="import"),
+                    ),
+                    M("Training Course Catalog", f="course",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                        #M("Course Certificates", f="course_certificate"),
+                    ),
+                    M("Certificate Catalog", f="certificate",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                        #M("Skill Equivalence", f="certificate_skill"),
+                    ),
+                    M("Programmes", f="programme",
+                      check=[manager_mode, show_programmes])(
+                        M("New", m="create"),
+                        M("List All"),
+                        M("Import Hours", f="programme_hours", m="import"),
+                    ),
+                    M("Reports", f="volunteer", m="report",
+                      check=manager_mode)(
+                        M("Volunteer Report", m="report"),
+                        M("Training Report", f="training", m="report"),
+                    ),
+                    M("My Profile", f="person",
+                      check=personal_mode, vars=dict(mode="personal")),
+                    M("My Tasks", f="task",
+                      check=[personal_mode, show_tasks],
+                      vars=dict(mode="personal",
+                                mine=1)),
+                    # This provides the link to switch to the manager mode:
+                    M("Volunteer Management", f="index",
+                      check=[personal_mode, is_org_admin]),
+                    # This provides the link to switch to the personal mode:
+                    M("Personal Profile", f="person",
                       check=manager_mode, vars=dict(mode="personal"))
                 )
 
