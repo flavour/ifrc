@@ -49,7 +49,7 @@ from s3utils import s3_debug, S3DateTime, s3_get_foreign_key
 from s3validators import *
 from s3widgets import S3OrganisationHierarchyWidget, s3_grouped_checkboxes_widget
 
-from s3resource import S3FieldSelector
+from s3resource import S3FieldSelector, S3Resource
 
 __all__ = ["S3SearchWidget",
            "S3SearchSimpleWidget",
@@ -528,9 +528,7 @@ class S3SearchOptionsWidget(S3SearchWidget):
         if field_name.find("$") != -1:
             kfield_name, field_name = field_name.split("$")
             tablename = resource.table[kfield_name].type[10:]
-            prefix, resource_name = tablename.split("_", 1)
-            resource = current.manager.define_resource(prefix,
-                                                       resource_name)
+            resource = S3Resource(tablename)
         return resource, field_name, kfield_name
 
     # -------------------------------------------------------------------------
@@ -865,7 +863,7 @@ class S3SearchCredentialsWidget(S3SearchOptionsWidget):
     """
 
     def widget(self, resource, vars):
-        c = current.manager.define_resource("hrm", "credential")
+        c = S3Resource("hrm_credential")
         return S3SearchOptionsWidget.widget(self, c, vars)
 
     # -------------------------------------------------------------------------
@@ -899,7 +897,7 @@ class S3SearchSkillsWidget(S3SearchOptionsWidget):
 
     # -------------------------------------------------------------------------
     def widget(self, resource, vars):
-        c = current.manager.define_resource("hrm", "competency")
+        c = S3Resource("hrm_competency")
         return S3SearchOptionsWidget.widget(self, c, vars)
 
     # -------------------------------------------------------------------------
@@ -1440,9 +1438,8 @@ class S3Search(S3CRUD):
 
             if tabs:
                 tabs.insert(0, ((T("List"), None)))
-            s3.datatable_ajax_source = URL(extension="aaData",
-                                           args=None,
-                                           vars=vars)
+            if not s3.datatable_ajax_source:
+                s3.datatable_ajax_source = str(r.url(representation = "aaData"))
             s3.formats.pdf = r.url(method="")
             s3.formats.xls = r.url(method="")
             s3.formats.rss = r.url(method="")
@@ -1976,7 +1973,7 @@ class S3Search(S3CRUD):
                           distinct=True)
 
         # Get the rows
-        rows = resource.select(field, **attributes)
+        rows = resource._load(field, **attributes)
 
         if not errors:
             output = [{ "id"   : row[get_fieldname],
@@ -2313,7 +2310,7 @@ class S3OrganisationSearch(S3Search):
             limitby = resource.limitby(start=0, limit=limit)
             if limitby is not None:
                 attributes["limitby"] = limitby
-            rows = resource.select(*fields, **attributes)
+            rows = resource._load(*fields, **attributes)
             output = []
             append = output.append
             db = current.db

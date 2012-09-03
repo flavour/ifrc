@@ -333,8 +333,10 @@ def organisation():
         Function to handle pagination for the org list on the homepage
     """
     from s3.s3utils import S3DataTable
-    table = db.org_organisation
-    resource = current.manager.define_resource("org", "organisation")
+
+    resource = s3db.resource("org_organisation")
+    table = resource.table
+
     list_fields = ["id","name"]
     limit = int(current.request.get_vars["iDisplayLength"]) if request.extension == "aaData" else 1
     rfields = resource.resolve_selectors(list_fields)[0]
@@ -342,15 +344,15 @@ def organisation():
     resource.add_filter(filter)
     if isinstance(orderby, bool):
         orderby = table.name
-    rows = resource._select(list_fields,
-                            orderby=orderby,
-                            start=0,
-                            limit=limit,
+    rows = resource.select(list_fields,
+                           orderby=orderby,
+                           start=0,
+                           limit=limit,
+                           )
+    data = resource.extract(rows,
+                            list_fields,
+                            represent=True,
                             )
-    data = resource._extract(rows,
-                             list_fields,
-                             represent=True,
-                             )
     dt = S3DataTable(rfields, data)
     dt.defaultActionButtons(resource)
     response.s3.no_formats = True
@@ -449,7 +451,7 @@ def user():
 
     arg = request.args(0)
     auth.settings.on_failed_authorization = URL(f="error")
-    
+
     auth.configure_user_fields()
 
     _table_user = auth.settings.table_user
