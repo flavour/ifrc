@@ -29,9 +29,11 @@ def index():
         # Start of TEST CODE for multiple dataTables,
         #this also required views/inv/index.html to be modified
         from s3.s3utils import S3DataTable
-        vars = request.get_vars
+        request = current.request
+        vars = current.request.get_vars
         if request.extension == "html" or request.vars.id == "warehouse_list_1":
             resource = s3db.resource("inv_warehouse")
+            totalrows = resource.count()
             list_fields = ["id",
                            "name",
                            "organisation_id",
@@ -54,24 +56,24 @@ def index():
             dt = S3DataTable(rfields, data)
             dt.defaultActionButtons(resource)
             if request.extension == "html":
-                warehouses = dt.html(#totalrows,
-                                     #filteredrows,
+                warehouses = dt.html(totalrows,
+                                     filteredrows,
                                      "warehouse_list_1",
-                                     dt_bFilter = "true",
-                                     dt_group = 2,
-                                     dt_ajax_url = URL(c="inv",
-                                                       f="index",
-                                                       extension="aaData",
-                                                       vars={"id": "warehouse_list_1"},
-                                                       ),
+                                     dt_bFilter="true",
+                                     dt_group=2,
+                                     dt_ajax_url=URL(c="inv",
+                                                  f="index",
+                                                  extension="aaData",
+                                                  vars={"id":"warehouse_list_1"},
+                                                  ),
                                      dt_text_maximum_len = 16,
                                      dt_text_condense_len = 12,
                                      )
             else:
-                warehouse = dt.json("warehouse_list_1",
-                                    int(request.vars.sEcho),
-                                    totalrows,
+                warehouse = dt.json(totalrows,
                                     filteredrows,
+                                    "warehouse_list_1",
+                                    int(request.vars.sEcho),
                                     )
                 return warehouse
         # Second Table
@@ -83,6 +85,7 @@ def index():
                     inventory = "Adjustment not currently supported... :-) you selected the following items: %s" % request.post_vars.selected
             else:
                 resource = s3db.resource("inv_inv_item")
+                totalrows = resource.count()
                 table = resource.table
                 stable = s3db.supply_item
                 list_fields = ["id",
@@ -148,7 +151,9 @@ def index():
                             warningList.append(row.id)
                         else:
                             alertList.append(row.id)
-                    inventory = dt.html("inventory_list_1",
+                    inventory = dt.html(totalrows,
+                                        filteredrows,
+                                        "inventory_list_1",
                                         dt_bFilter="true",
                                         dt_group=[1,2],
                                         dt_group_totals=[formatted_site_list],
@@ -171,10 +176,10 @@ def index():
 
                     s3.actions = None
                 elif request.extension == "aaData":
-                    inventory = dt.json("inventory_list_1",
-                                        int(request.vars.sEcho),
-                                        totalrows,
+                    inventory = dt.json(totalrows,
                                         filteredrows,
+                                        "inventory_list_1",
+                                        int(request.vars.sEcho),
                                         dt_action_col=-1,
                                         dt_bulk_actions = "Adjust",
                                         dt_group_totals=[formatted_site_list],
@@ -188,7 +193,8 @@ def index():
                                    pdf_groupby="site_id",
                                    )
                     s3.filter = filter
-                    r = s3mgr.parse_request("inv", "inv_item", vars={"orderby" : orderby})
+                    r = s3_request("inv", "inv_item",
+                                   vars={"orderby" : orderby})
                     r.resource = resource
                     output = r(
                                pdf_groupby='site_id',
@@ -198,6 +204,7 @@ def index():
         # Third table
         if request.extension == "html" or request.vars.id == "supply_list_1":
             resource = s3db.resource("supply_item")
+            totalrows = displayrows = resource.count()
             list_fields = ["id",
                            "name",
                            "um",
@@ -216,7 +223,9 @@ def index():
             dt = S3DataTable(rfields, data)
             dt.defaultActionButtons(resource)
             if request.extension == "html":
-                supply_items = dt.html("supply_list_1",
+                supply_items = dt.html(totalrows,
+                                       displayrows,
+                                       "supply_list_1",
                                        dt_displayLength=10,
                                        dt_action_col=1,
                                        dt_ajax_url=URL(c="inv",
@@ -228,14 +237,14 @@ def index():
                                        dt_text_condense_len = 12,
                                        )
             else:
-                supply_items = dt.json("supply_list_1",
+                supply_items = dt.json(totalrows,
+                                       displayrows,
+                                       "supply_list_1",
                                        int(request.vars.sEcho),
-                                       11,
-                                       11,
                                        dt_action_col=1,
                                        )
                 return supply_items
-        r = s3mgr.parse_request(prefix = "inv", name = "inv_item")
+        r = s3_request(prefix = "inv", name = "inv_item")
         return dict(module_name=module_name,
                     warehouses = warehouses,
                     inventory = inventory,

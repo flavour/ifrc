@@ -12,6 +12,224 @@ from gluon.storage import Storage
 from s3.s3aaa import S3EntityRoleManager
 
 # =============================================================================
+class LinkToPersonTests(unittest.TestCase):
+    """ Test s3_link_to_person """
+
+    def setUp(self):
+
+        s3db = current.s3db
+
+        # Create organisation
+        otable = s3db.org_organisation
+        org = Storage(name="LTPRTestOrg")
+        org_id = otable.insert(**org)
+        self.assertTrue(org_id is not None)
+        org["id"] = org_id
+        s3db.update_super(otable, org)
+        self.org_id = org_id
+        self.org_pe_id = org.pe_id
+
+        # Create person record
+        ptable = s3db.pr_person
+        person = Storage(first_name="TestLTPR",
+                         last_name="User")
+        person_id = ptable.insert(**person)
+        self.assertTrue(person_id is not None)
+        person["id"] = person_id
+        s3db.update_super(ptable, person)
+        self.person_id = person_id
+        self.pe_id = person.pe_id
+
+        # Add email contact
+        ctable = s3db.pr_contact
+        contact = Storage(pe_id=self.pe_id,
+                          contact_method="EMAIL",
+                          value="testltpr@example.com")
+        contact_id = ctable.insert(**contact)
+        self.assertTrue(contact_id is not None)
+
+    def testLinkToNewPerson(self):
+        """ Test linking a user account to a new person record """
+
+        auth = current.auth
+        s3db = current.s3db
+
+        # Create new user record
+        utable = auth.settings.table_user
+        user = Storage(first_name="TestLTPR2",
+                       last_name="User",
+                       email="testltpr2@example.com",
+                       password="XYZ")
+        user_id = utable.insert(**user)
+        self.assertTrue(user_id is not None)
+        user["id"] = user_id
+
+        # Link to person
+        person_id = auth.s3_link_to_person(user, self.org_id)
+
+        # Check the person_id
+        self.assertNotEqual(person_id, None)
+        self.assertFalse(isinstance(person_id, list))
+        self.assertNotEqual(person_id, self.person_id)
+
+        # Get the person record
+        ptable = s3db.pr_person
+        person = ptable[person_id]
+        self.assertNotEqual(person, None)
+
+        # Check the owner
+        self.assertEqual(person.owned_by_entity, self.org_pe_id)
+
+        # Check the link
+        ltable = s3db.pr_person_user
+        query = (ltable.user_id == user_id) & \
+                (ltable.pe_id == person.pe_id)
+        links = current.db(query).select()
+        self.assertEqual(len(links), 1)
+
+    def testLinkToExistingPerson(self):
+        """ Test linking a user account to a pre-existing person record """
+
+        auth = current.auth
+        s3db = current.s3db
+
+        # Create new user record
+        utable = auth.settings.table_user
+        user = Storage(first_name="TestLTPR",
+                       last_name="User",
+                       email="testltpr@example.com",
+                       password="XYZ")
+        user_id = utable.insert(**user)
+        self.assertTrue(user_id is not None)
+        user["id"] = user_id
+
+        # Link to person record
+        person_id = auth.s3_link_to_person(user, self.org_id)
+
+        # Check the person_id
+        self.assertNotEqual(person_id, None)
+        self.assertFalse(isinstance(person_id, list))
+        self.assertEqual(person_id, self.person_id)
+
+        # Get the person record
+        ptable = s3db.pr_person
+        person = ptable[person_id]
+        self.assertNotEqual(person, None)
+
+        # Check the link
+        ltable = s3db.pr_person_user
+        query = (ltable.user_id == user_id) & \
+                (ltable.pe_id == person.pe_id)
+        links = current.db(query).select()
+        self.assertEqual(len(links), 1)
+
+    def testUpdateLinkedPerson(self):
+        """ Test update of a pre-linked person record upon user account update """
+
+        auth = current.auth
+        s3db = current.s3db
+
+        # Create new user record
+        utable = auth.settings.table_user
+        user = Storage(first_name="TestLTPR",
+                       last_name="User",
+                       email="testltpr@example.com",
+                       password="XYZ")
+        user_id = utable.insert(**user)
+        self.assertTrue(user_id is not None)
+        user["id"] = user_id
+
+        # Link to person
+        person_id = auth.s3_link_to_person(user, self.org_id)
+
+        # Check the person_id
+        self.assertNotEqual(person_id, None)
+        self.assertFalse(isinstance(person_id, list))
+        self.assertEqual(person_id, self.person_id)
+
+        # Update the user record
+        update = Storage(first_name="TestLTPR2",
+                         last_name="User",
+                         email="testltpr2@example.com")
+        current.db(utable.id == user_id).update(**update)
+        update["id"] = user_id
+
+        # Link to person record again
+        update_id = auth.s3_link_to_person(user, self.org_id)
+
+        # Check unchanged person_id
+        self.assertEqual(update_id, person_id)
+
+        # Check updated person record
+        ptable = s3db.pr_person
+        person = ptable[update_id]
+        self.assertEqual(person.first_name, update["first_name"])
+        self.assertEqual(person.last_name, update["last_name"])
+
+        # Check updated contact record
+        ctable = s3db.pr_contact
+        query = (ctable.pe_id == self.pe_id) & \
+                (ctable.contact_method == "EMAIL")
+        contacts = current.db(query).select()
+        self.assertEqual(len(contacts), 2)
+        emails = [contact.value for contact in contacts]
+        self.assertTrue(user.email in emails)
+        self.assertTrue(update.email in emails)
+
+    def testMultipleUserRecords(self):
+        """ Test s3_link_to_person with multiple user accounts """
+
+        auth = current.auth
+        s3db = current.s3db
+
+        # Create new user records
+        utable = auth.settings.table_user
+        users = []
+        user1 = Storage(first_name="TestLTPR1",
+                       last_name="User",
+                       email="testltpr1@example.com",
+                       password="XYZ")
+        user_id = utable.insert(**user1)
+        self.assertTrue(user_id is not None)
+        user1["id"] = user_id
+        users.append(user1)
+
+        user2 = Storage(first_name="TestLTPR2",
+                       last_name="User",
+                       email="testltpr2@example.com",
+                       password="XYZ")
+        user_id = utable.insert(**user2)
+        self.assertTrue(user_id is not None)
+        user2["id"] = user_id
+        users.append(user2)
+
+        user3 = Storage(first_name="TestLTPR3",
+                       last_name="User",
+                       email="testltpr3@example.com",
+                       password="XYZ")
+        user_id = utable.insert(**user3)
+        self.assertTrue(user_id is not None)
+        user3["id"] = user_id
+        users.append(user3)
+
+        person_ids = auth.s3_link_to_person(users, self.org_id)
+        self.assertTrue(isinstance(person_ids, list))
+        self.assertEqual(len(person_ids), 3)
+
+        auth.s3_impersonate("testltpr2@example.com")
+        pe_id = auth.user.pe_id
+        ptable = s3db.pr_person
+        query = (ptable.pe_id == pe_id)
+        person2 = current.db(query).select().first()
+        self.assertNotEqual(person2, None)
+        self.assertTrue(person2.id in person_ids)
+
+    def tearDown(self):
+
+        current.auth.s3_impersonate(None)
+        current.db.rollback()
+
+# =============================================================================
 class RoleTests(unittest.TestCase):
     """
         Example how one could easily prepare a complex resource
@@ -2551,6 +2769,9 @@ class RecordApprovalTests(unittest.TestCase):
 
         AUTHENTICATED = auth.get_system_roles().AUTHENTICATED
 
+        otable = s3db.org_organisation
+        otable_requires_approval = s3db.get_config(otable, "requires_approval", False)
+
         try:
             # Set record approval on
             deployment_settings.auth.record_approval = True
@@ -2566,15 +2787,27 @@ class RecordApprovalTests(unittest.TestCase):
             org.update(id=org_id)
             s3db.update_super(otable, org)
 
+            s3db.configure(otable, requires_approval=True)
+
             has_permission = auth.s3_has_permission
 
             # Normal user must not see unapproved record
+            deployment_settings.auth.record_approver_role = "ADMIN"
+            session = current.session
+            session.approver_role = None
             auth.s3_impersonate("normaluser@example.com")
             permitted = has_permission("read", otable, record_id=org_id, c="org", f="organisation")
             self.assertFalse(permitted)
 
-            # Normal user can see unapproved record
-            # if they have the approver role and method is "approve"
+            # Normal user can not review/approve/reject the record
+            permitted = has_permission("review", otable, record_id=org_id, c="org", f="organisation")
+            self.assertFalse(permitted)
+            permitted = has_permission("approve", otable, record_id=org_id, c="org", f="organisation")
+            self.assertFalse(permitted)
+            permitted = has_permission("reject", otable, record_id=org_id, c="org", f="organisation")
+            self.assertFalse(permitted)
+
+            # Normal user can see unapproved record if they have the approver role
             deployment_settings.auth.record_approver_role = "AUTHENTICATED"
             session = current.session
             session.approver_role = None
@@ -2582,19 +2815,33 @@ class RecordApprovalTests(unittest.TestCase):
             self.assertEqual(session.approver_role, AUTHENTICATED)
             self.assertTrue(session.approver_role in auth.user.realms)
             permitted = has_permission("read", otable, record_id=org_id, c="org", f="organisation")
-            self.assertFalse(permitted)
-            permitted = has_permission("approve", otable, record_id=org_id, c="org", f="organisation")
             self.assertTrue(permitted)
 
-            # Admin can always see the record
-            auth.s3_impersonate("admin@example.com")
-            permitted = has_permission("read", otable, record_id=org_id, c="org", f="organisation")
+            # Normal user can review/approve/reject if they have the approver role
+            permitted = has_permission("review", otable, record_id=org_id, c="org", f="organisation")
+            self.assertTrue(permitted)
+            permitted = has_permission("approve", otable, record_id=org_id, c="org", f="organisation")
+            self.assertTrue(permitted)
+            permitted = has_permission("reject", otable, record_id=org_id, c="org", f="organisation")
             self.assertTrue(permitted)
 
             # Approve the record
-            db(otable.id==org_id).update(approved_by=auth.user.id)
+            resource = s3db.resource(otable, id=org_id, unapproved=True)
+            resource.approve()
 
-            # Normal user can see the record
+            # Normal user can not review/approve/reject once the record is approved
+            auth.s3_impersonate("normaluser@example.com")
+            permitted = has_permission("review", otable, record_id=org_id, c="org", f="organisation")
+            self.assertFalse(permitted)
+            permitted = has_permission("approve", otable, record_id=org_id, c="org", f="organisation")
+            self.assertFalse(permitted)
+            permitted = has_permission("reject", otable, record_id=org_id, c="org", f="organisation")
+            self.assertFalse(permitted)
+
+            # Normal user can now see the record without having the approver role
+            deployment_settings.auth.record_approver_role = "ADMIN"
+            session = current.session
+            session.approver_role = None
             auth.s3_impersonate("normaluser@example.com")
             permitted = has_permission("read", otable, record_id=org_id, c="org", f="organisation")
             self.assertTrue(permitted)
@@ -2606,6 +2853,8 @@ class RecordApprovalTests(unittest.TestCase):
 
         finally:
             deployment_settings.auth.record_approval = False
+            s3db.configure("org_organisation",
+                           requires_approval=otable_requires_approval)
 
     def testAccessibleQueryWithRecordApproval(self):
         """ Test accessible_query with record approval """
@@ -2618,6 +2867,9 @@ class RecordApprovalTests(unittest.TestCase):
         session = current.session
 
         table = s3db.pr_person
+
+        otable = s3db.org_organisation
+        org_requires_approval = s3db.get_config(otable, "requires_approval")
 
         try:
             # Set record approval on
@@ -2636,6 +2888,7 @@ class RecordApprovalTests(unittest.TestCase):
             self.assertFalse("approved_by" in str(query))
 
             table = s3db.org_organisation
+            s3db.clear_config("org_organisation", "requires_approval")
 
             # Approval not required by default
             session.approver_role = None
@@ -2669,9 +2922,14 @@ class RecordApprovalTests(unittest.TestCase):
             query = accessible_query("approve", table, c="org", f="organisation")
             self.assertTrue("(org_organisation.approved_by IS NULL)" in str(query))
 
-            # See no unapproved records in read, though
+            # See only approved records in read
             query = accessible_query("read", table, c="org", f="organisation")
             self.assertTrue("(org_organisation.approved_by IS NOT NULL)" in str(query))
+
+            # See all records with both
+            query = accessible_query(["read", "approve"], table, c="org", f="organisation")
+            self.assertFalse("(org_organisation.approved_by IS NOT NULL)" in str(query))
+            self.assertFalse("(org_organisation.approved_by IS NULL)" in str(query))
 
             # Turn of record approval and check the default query
             deployment_settings.auth.record_approval = False
@@ -2679,6 +2937,8 @@ class RecordApprovalTests(unittest.TestCase):
             self.assertEqual(str(query), "(org_organisation.id > 0)")
 
         finally:
+            s3db.configure("org_organisation",
+                           requires_approval=org_requires_approval)
             deployment_settings.auth.record_approval = False
 
     def tearDown(self):
@@ -2798,7 +3058,7 @@ class DelegationTests(unittest.TestCase):
         from s3.s3aaa import S3Permission
         auth.permission = S3Permission(auth)
         auth.s3_impersonate("normaluser@example.com")
-        user = auth.user.id
+        user = auth.user.pe_id
 
         try:
 
@@ -3671,6 +3931,7 @@ if __name__ == "__main__":
         EntityRoleManagerTests,
         RecordApprovalTests,
         OwnerEntityTests,
+        LinkToPersonTests,
     )
 
 # END ========================================================================

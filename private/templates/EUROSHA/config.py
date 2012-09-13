@@ -64,6 +64,9 @@ settings.security.policy = 7 # Realm w Hierarchy
 settings.security.map = True
 
 # Owner Entity
+# If the fallback options for the realm a record belong to will be 
+# the user's organisation, the the user's pe_id instead of None 
+# Is this now still needed?
 def eurosha_owner_entity(table, row):
     user = current.auth.user
     if user is not None:
@@ -76,6 +79,8 @@ settings.auth.owner_entity = eurosha_owner_entity
 # Set this if there will be multiple areas in which work is being done,
 # and a menu to select among them is wanted.
 settings.gis.menu = "Country"
+# PoIs to export in KML/OSM feeds from Admin locations
+settings.gis.poi_export_resources = ["cr_shelter", "hms_hospital", "org_office", "transport_airport", "transport_seaport"]
 
 # Enable this for a UN-style deployment
 settings.ui.cluster = True
@@ -159,6 +164,11 @@ settings.modules = OrderedDict([
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
         )),
+    ("translate", Storage(
+            name_nice = T("Translation Functionality"),
+            #description = "Selective translation of strings based on module.",
+            module_type = None,
+        )),
     ("gis", Storage(
             name_nice = T("Map"),
             #description = "Situation Awareness & Geospatial Analysis",
@@ -234,6 +244,12 @@ settings.modules = OrderedDict([
             #description = "Tracking of Projects, Activities and Tasks",
             restricted = True,
             module_type = 7
+        )),
+    ("cr", Storage(
+            name_nice = T("Shelters"),
+            #description = "Tracks the location, capacity and breakdown of victims in Shelters",
+            restricted = True,
+            module_type = 10
         )),
     ("hms", Storage(
             name_nice = T("Hospitals"),

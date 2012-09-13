@@ -73,8 +73,7 @@ from s3fields import s3_all_meta_field_names
 from s3search import S3Search
 from s3track import S3Trackable
 from s3utils import s3_debug, s3_fullname, s3_has_foreign_key
-from s3method import S3Method
-from s3resource import S3Resource
+from s3rest import S3Method
 
 DEBUG = False
 if DEBUG:
@@ -1367,7 +1366,12 @@ class GIS(object):
             gis.countries_by_id = countries_by_id
             gis.countries_by_code = countries_by_code
 
-        if key_type == "id":
+            if key_type == "id":
+                return countries_by_id
+            else:
+                return countries_by_code
+
+        elif key_type == "id":
             return gis.countries_by_id
         else:
             return gis.countries_by_code
@@ -2305,7 +2309,7 @@ class GIS(object):
     # -------------------------------------------------------------------------
     @staticmethod
     def export_admin_areas(countries=[],
-                           levels=["L0", "L1", "L2", "L3"],
+                           levels=["L0", "L1", "L2", "L3", "L4"],
                            format="geojson",
                            simplify=0.001,
                            ):
@@ -2388,11 +2392,17 @@ class GIS(object):
             File.write(json.dumps(data))
             File.close()
 
+        q1 = (table.level == "L1") & \
+             (table.deleted != True)
+        q2 = (table.level == "L2") & \
+             (table.deleted != True)
+        q3 = (table.level == "L3") & \
+             (table.deleted != True)
+        q4 = (table.level == "L4") & \
+             (table.deleted != True)
         if "L1" in levels:
             if "L0" not in levels:
                 countries = db(cquery).select(ifield)
-            q1 = (table.level == "L1") & \
-                 (table.deleted != True)
             for country in countries:
                 if not spatial or "L0" not in levels:
                     _id = country.id
@@ -2436,8 +2446,6 @@ class GIS(object):
         if "L2" in levels:
             if "L0" not in levels and "L1" not in levels:
                 countries = db(cquery).select(ifield)
-            q1 = (table.level == "L1") & \
-                 (table.deleted != True)
             for country in countries:
                 if not spatial or "L0" not in levels:
                     id = country.id
@@ -2445,8 +2453,6 @@ class GIS(object):
                     id = country["gis_location"].id
                 query = q1 & (table.parent == id)
                 l1s = db(query).select(ifield)
-                q2 = (table.level == "L2") & \
-                     (table.deleted != True)
                 for l1 in l1s:
                     query = q2 & (table.parent == l1.id)
                     features = []
@@ -2486,8 +2492,6 @@ class GIS(object):
         if "L3" in levels:
             if "L0" not in levels and "L1" not in levels and "L2" not in levels:
                 countries = db(cquery).select(ifield)
-            q1 = (table.level == "L1") & \
-                 (table.deleted != True)
             for country in countries:
                 if not spatial or "L0" not in levels:
                     id = country.id
@@ -2495,13 +2499,9 @@ class GIS(object):
                     id = country["gis_location"].id
                 query = q1 & (table.parent == id)
                 l1s = db(query).select(ifield)
-                q2 = (table.level == "L2") & \
-                     (table.deleted != True)
                 for l1 in l1s:
                     query = q2 & (table.parent == l1.id)
                     l2s = db(query).select(ifield)
-                    q3 = (table.level == "L3") & \
-                         (table.deleted != True)
                     for l2 in l2s:
                         query = q3 & (table.parent == l2.id)
                         features = []
@@ -2537,6 +2537,58 @@ class GIS(object):
                         File = open(filename, "w")
                         File.write(json.dumps(data))
                         File.close()
+
+        if "L4" in levels:
+            if "L0" not in levels and "L1" not in levels and "L2" not in levels and "L3" not in levels:
+                countries = db(cquery).select(ifield)
+            for country in countries:
+                if not spatial or "L0" not in levels:
+                    id = country.id
+                else:
+                    id = country["gis_location"].id
+                query = q1 & (table.parent == id)
+                l1s = db(query).select(ifield)
+                for l1 in l1s:
+                    query = q2 & (table.parent == l1.id)
+                    l2s = db(query).select(ifield)
+                    for l2 in l2s:
+                        query = q3 & (table.parent == l2.id)
+                        l3s = db(query).select(ifield)
+                        for l3 in l3s:
+                            query = q4 & (table.parent == l3.id)
+                            features = []
+                            append = features.append
+                            rows = db(query).select(ifield,
+                                                    field,
+                                                    )
+                            for row in rows:
+                                if spatial:
+                                    id = row["gis_location"].id
+                                    geojson = row.geojson
+                                elif simplify:
+                                    id = row.id
+                                    geojson = _simplify(row.wkt, tolerance=simplify, output="geojson")
+                                else:
+                                    id = row.id
+                                    shape = wkt_loads(row.wkt)
+                                    # Compact Encoding
+                                    geojson = dumps(shape, separators=(",", ":"))
+                                f = dict(
+                                        type = "Feature",
+                                        properties = {"id": id},
+                                        geometry = json.loads(geojson) if geojson else {}
+                                        )
+                                append(f)
+
+                            data = dict(
+                                        type = "FeatureCollection",
+                                        features = features
+                                    )
+                            # Output to file
+                            filename = os.path.join(folder, "4_%s.geojson" % l3.id)
+                            File = open(filename, "w")
+                            File.write(json.dumps(data))
+                            File.close()
 
     # -------------------------------------------------------------------------
     def import_admin_areas(self,
@@ -7114,13 +7166,16 @@ class S3ExportPOI(S3Method):
         else:
             self.lx = current_lx.id
 
-        # Parse the ?resources= parameter
         tables = []
+        # Parse the ?resources= parameter
         if "resources" in r.get_vars:
             resources = r.get_vars["resources"]
-            if not isinstance(resources, list):
-                resources = [resources]
-            [tables.extend(t.split(",")) for t in resources]
+        else:
+            # Fallback to deployment_setting
+            resources = current.deployment_settings.get_gis_poi_export_resources()
+        if not isinstance(resources, list):
+            resources = [resources]
+        [tables.extend(t.split(",")) for t in resources]
 
         # Parse the ?update_feed= parameter
         update_feed = True
@@ -7200,7 +7255,7 @@ class S3ExportPOI(S3Method):
 
             # Define the resource
             try:
-                resource = S3Resource(prefix, name, components=[])
+                resource = current.s3db.resource(tablename, components=[])
             except AttributeError:
                 # Table not defined (module deactivated?)
                 continue

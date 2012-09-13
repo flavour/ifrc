@@ -78,7 +78,7 @@ except ImportError:
     print >> sys.stderr, "ERROR: lxml module needed for XML handling"
     raise
 
-from s3method import S3Method
+from s3rest import S3Method
 from s3utils import S3DateTime
 import s3codec
 
@@ -3063,12 +3063,10 @@ class S3PDFDataSource:
         headers = [f.label for f in lfields if f.show]
         if orderby != None:
             orderby = fields[0].field
-        self.records = resource.sqltable(fields=list_fields,
-                                         start=None,
-                                         limit=None,
-                                         orderby=orderby,
-                                         no_ids=True,
-                                         as_rows=True)
+        self.records = resource.select(fields=list_fields,
+                                       start=None,
+                                       limit=None,
+                                       orderby=orderby)
 
         # Pass to getLabels
         self.labels = headers

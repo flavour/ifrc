@@ -336,11 +336,11 @@ class S3Model(object):
     # Resource configuration
     # -------------------------------------------------------------------------
     @staticmethod
-    def resource(table, **attr):
+    def resource(prefix, name=None, **attr):
 
-        return S3Resource(table, **attr)
+        return S3Resource(prefix, name=name, **attr)
 
-    # -------------------------------------------------------------------------
+   # -------------------------------------------------------------------------
     @staticmethod
     def configure(tablename, **attr):
         """

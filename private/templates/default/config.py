@@ -59,7 +59,7 @@ T = current.T
 #settings.auth.registration_organisation_hidden = True
 # Uncomment this to default the Organisation during registration
 #settings.auth.registration_organisation_default = "My Organisation"
-# Uncomment & populate these to set the default roles assigned to newly-registered users
+# Uncomment to set the default role UUIDs assigned to newly-registered users
 #settings.auth.registration_roles = ["STAFF", "PROJECT_EDIT"]
 # Uncomment this to enable record approval
 #settings.auth.record_approval = True
@@ -169,6 +169,8 @@ settings.L10n.decimal_separator = "."
 #settings.gis.duplicate_features = True
 # Mouse Position: 'normal', 'mgrs' or 'off'
 #settings.gis.mouse_position = "mgrs"
+# PoIs to export in KML/OSM feeds from Admin locations
+#settings.gis.poi_export_resources = ["cr_shelter", "hms_hospital", "org_office"]
 
 # Messaging Settings
 # If you wish to use a parser.py in another folder than "default"
@@ -409,6 +411,11 @@ settings.modules = OrderedDict([
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
+        )),
+    ("translate", Storage(
+            name_nice = T("Translation Functionality"),
+            #description = "Selective translation of strings based on module.",
+            module_type = None,
         )),
     # Uncomment to enable internal support requests
     #("support", Storage(

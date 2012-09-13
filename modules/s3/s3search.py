@@ -48,6 +48,7 @@ from s3navigation import s3_search_tabs
 from s3utils import s3_debug, S3DateTime, s3_get_foreign_key
 from s3validators import *
 from s3widgets import S3OrganisationHierarchyWidget, s3_grouped_checkboxes_widget
+from s3export import S3Exporter
 
 from s3resource import S3FieldSelector, S3Resource
 
@@ -64,6 +65,7 @@ __all__ = ["S3SearchWidget",
            "S3PersonSearch",
            "S3HRSearch",
            "S3PentitySearch",
+           "S3CAPSearch",
            ]
 
 MAX_RESULTS = 1000
@@ -590,10 +592,9 @@ class S3SearchOptionsWidget(S3SearchWidget):
             else:
                 opt_values = []
 
-                rows = resource.sqltable(fields=[field_name],
-                                         start=None,
-                                         limit=None,
-                                         as_rows=True)
+                rows = resource.select(fields=[field_name],
+                                       start=None,
+                                       limit=None)
                 if rows:
                     if field_type.startswith("list"):
                         for row in rows:
@@ -1239,6 +1240,12 @@ class S3Search(S3CRUD):
                     session_options = Storage()
                 form_values = session_options
 
+        # Remove the existing session filter if this is a new
+        # search (@todo: do not store the filter in session)
+        if r.http == "GET" and r.representation != "aadata":
+            if "filter" in session.s3:
+                del session.s3["filter"]
+
         # Build the search forms
         simple_form, advanced_form = self.build_forms(r, form_values)
 
@@ -1266,16 +1273,28 @@ class S3Search(S3CRUD):
                                            form_values)
 
         search_url = None
+        search_url_vars = Storage()
         if not errors:
             if hasattr(query, "serialize_url"):
+                search_url_vars = query.serialize_url(resource)
                 search_url = r.url(method = "",
-                                   vars = query.serialize_url(resource))
+                                   vars = search_url_vars)
             resource.add_filter(query)
             search_vars = dict(simple=False,
                                advanced=True,
                                criteria=form_values)
         else:
             search_vars = dict()
+
+        s3.formats.pdf = r.url(method="",
+                               vars=search_url_vars,
+                               representation="pdf")
+        s3.formats.xls = r.url(method="",
+                               vars=search_url_vars,
+                               representation="xls")
+        s3.formats.rss = r.url(method="",
+                               vars=search_url_vars,
+                               representation="rss")
 
         if representation == "plain":
             # Map popup filter
@@ -1305,21 +1324,7 @@ class S3Search(S3CRUD):
             form.append(advanced_form)
         output["form"] = form
 
-        # Build session filter (for SSPag)
-        if not s3.no_sspag:
-            limit = 1
-            ids = resource.get_id()
-            if ids:
-                if not isinstance(ids, list):
-                    ids = str(ids)
-                else:
-                    ids = ",".join([str(i) for i in ids])
-                session.s3.filter = {"%s.id" % resource.name: ids}
-        else:
-            limit = None
-
         # List fields
-        linkto = self._linkto(r)
         if not list_fields:
             fields = resource.readable_fields()
             list_fields = [f.name for f in fields]
@@ -1331,6 +1336,36 @@ class S3Search(S3CRUD):
             fields.insert(0, table[table.fields[0]])
         if list_fields[0] != table.fields[0]:
             list_fields.insert(0, table.fields[0])
+
+        # Count rows
+        totalrows = resource.count()
+        displayrows = totalrows
+
+        # How many records per page?
+        if s3.dataTable_iDisplayLength:
+            display_length = s3.dataTable_iDisplayLength
+        else:
+            display_length = 25
+
+        # Server-side pagination?
+        if not s3.no_sspag:
+            dt_pagination = "true"
+            limit = 2 * display_length
+
+            # Build session filter for data tables
+            # @todo: do not use session to store filter
+            ids = resource.get_id()
+            if ids:
+                if not isinstance(ids, list):
+                    ids = str(ids)
+                else:
+                    ids = ",".join([str(i) for i in ids])
+                session.s3.filter = {"%s.id" % resource.name: ids}
+
+        else:
+            limit = None
+            dt_pagination = "false"
+
         if not orderby:
             orderby = fields[0]
 
@@ -1340,61 +1375,35 @@ class S3Search(S3CRUD):
                 if str(f.type) == "text" and not f.represent:
                     f.represent = self.truncate
 
-        # Get the result table
-        items = resource.sqltable(fields=list_fields,
-                                  limit=limit,
-                                  orderby=orderby,
-                                  distinct=True,
-                                  linkto=linkto,
-                                  download_url=self.download_url,
-                                  format=representation)
-
         # Remove the dataTables search box to avoid confusion
         s3.dataTable_NobFilter = True
 
-        if items:
-            if not s3.no_sspag:
-                # Pre-populate SSPag cache (avoids the 1st Ajax request)
-                totalrows = resource.count(distinct=True)
-                if totalrows:
-                    if s3.dataTable_iDisplayLength:
-                        limit = 2 * s3.dataTable_iDisplayLength
-                    else:
-                        limit = 50
-                    sqltable = resource.sqltable(fields=list_fields,
-                                                 start=0,
-                                                 limit=limit,
-                                                 orderby=orderby,
-                                                 distinct=True,
-                                                 linkto=linkto,
-                                                 download_url=self.download_url,
-                                                 as_page=True,
-                                                 format=representation)
+        # Get the data table
+        dt = resource.datatable(fields=list_fields,
+                                start=None,
+                                limit=limit,
+                                #left=left,
+                                #distinct=distinct,
+                                orderby=orderby)
 
-                    aadata = dict(aaData=sqltable or [])
-                    aadata.update(iTotalRecords=totalrows,
-                                  iTotalDisplayRecords=totalrows)
-                    response.aadata = jsons(aadata)
-                    s3.start = 0
-                    s3.limit = limit
+        if dt is None:
+            datatable = self.crud_string(tablename, "msg_no_match")
+            s3.no_formats = True
+        else:
+            datatable = dt.html(totalrows, displayrows, "list",
+                                dt_pagination=dt_pagination,
+                                dt_displayLength=display_length,
+                                dt_permalink=search_url)
 
-        elif not items:
-            items = self.crud_string(tablename, "msg_no_match")
+        # Add items to output
+        output["items"] = datatable
 
+        items = output["items"]
         if isinstance(items, DIV):
             filter = session.s3.filter
             app = request.application
 
-            # Permalink
-            if search_url:
-                link = A(T("Link to this result"),
-                         _href=search_url,
-                         _class="permalink")
-                sep = " | "
-            else:
-                link = sep = ""
             tabs = []
-
             if "location_id" in table or \
                "site_id" in table:
                 # Add a map for search results
@@ -1438,21 +1447,29 @@ class S3Search(S3CRUD):
 
             if tabs:
                 tabs.insert(0, ((T("List"), None)))
-            if not s3.datatable_ajax_source:
-                s3.datatable_ajax_source = str(r.url(representation = "aaData"))
-            s3.formats.pdf = r.url(method="")
-            s3.formats.xls = r.url(method="")
-            s3.formats.rss = r.url(method="")
-            attr = S3DataTable.getConfigData()
-            items = S3DataTable.htmlConfig(items,
-                                           "list",
-                                           sortby, # order by
-                                           filter, # the filter string
-                                           None, # the rfields
-                                           **attr
-                                           )
-            items[0].insert(0, sep)
-            items[0].insert(0, link)
+
+            # @todo: this needs rework
+            #        - s3FormatRequest must retain any URL filters
+            #        - s3FormatRequest must remove the "search" method
+            #        - other data formats could have other list_fields,
+            #          hence applying the datatable sorting/filters is
+            #          not transparent
+
+            #if not s3.datatable_ajax_source:
+                #s3.datatable_ajax_source = str(r.url(representation = "aaData"))
+            #s3.formats.pdf = r.url(method="")
+            #s3.formats.xls = r.url(method="")
+            #s3.formats.rss = r.url(method="")
+            #attr = S3DataTable.getConfigData()
+            #items = S3DataTable.htmlConfig(items,
+                                           #"list",
+                                           #sortby, # order by
+                                           ##filter, # the filter string
+                                           #None, # the rfields
+                                           #**attr
+                                           #)
+            #items[0].insert(0, sep)
+            #items[0].insert(0, link)
         else:
             tabs = []
 
@@ -1562,7 +1579,7 @@ class S3Search(S3CRUD):
         ADD = self.crud_string(tablename, "label_create_button")
         href_add = r.url(method="create", representation=representation)
         insertable = self._config("insertable", True)
-        authorised = self.permit("create", tablename)
+        authorised = self._permitted("create")
         if authorised and insertable and representation != "plain":
             add_link = self.crud_button(ADD, _href=href_add,
                                         _id="add-btn", _class="action-lnk")
@@ -1761,7 +1778,7 @@ class S3Search(S3CRUD):
                                          % MAX_SEARCH_RESULTS)])
 
             if output is None:
-                output = resource.exporter.json(resource,
+                output = S3Exporter().json(resource,
                                                 start=0,
                                                 limit=limit,
                                                 fields=fields,
@@ -2228,7 +2245,7 @@ class S3LocationSearch(S3Search):
                 output = jsons([])
 
         if output is None:
-            output = resource.exporter.json(resource,
+            output = S3Exporter().json(resource,
                                             start=0,
                                             limit=limit,
                                             fields=fields,
@@ -2403,11 +2420,10 @@ class S3PersonSearch(S3Search):
                       "last_name",
                       ]
 
-            rows = resource.sqltable(fields=fields,
-                                     start=0,
-                                     limit=limit,
-                                     orderby="pr_person.first_name",
-                                     as_rows=True)
+            rows = resource.select(fields=fields,
+                                   start=0,
+                                   limit=limit,
+                                   orderby="pr_person.first_name")
 
             if rows:
                 items = [{
@@ -2496,11 +2512,10 @@ class S3HRSearch(S3Search):
             if show_orgs:
                 fields.append("organisation_id$name")
 
-            rows = resource.sqltable(fields=fields,
-                                     start=0,
-                                     limit=limit,
-                                     orderby="pr_person.first_name",
-                                     as_rows=True)
+            rows = resource.select(fields=fields,
+                                   start=0,
+                                   limit=limit,
+                                   orderby="pr_person.first_name")
 
             if rows:
                 items = [{
@@ -2586,7 +2601,7 @@ class S3PentitySearch(S3Search):
 
         resource.add_filter(ptable.pe_id == table.pe_id)
 
-        output = resource.exporter.json(resource, start=0, limit=limit,
+        output = S3Exporter().json(resource, start=0, limit=limit,
                                         fields=[table.pe_id], orderby=field)
         items = json.loads(output)
 
@@ -2598,7 +2613,7 @@ class S3PentitySearch(S3Search):
             resource.clear_query()
             resource.add_filter(query)
             resource.add_filter(gtable.pe_id == table.pe_id)
-            output = resource.exporter.json(resource,
+            output = S3Exporter().json(resource,
                                             start=0,
                                             limit=limit,
                                             fields=[table.pe_id],
@@ -2613,7 +2628,7 @@ class S3PentitySearch(S3Search):
             resource.clear_query()
             resource.add_filter(query)
             resource.add_filter(otable.pe_id == table.pe_id)
-            output = resource.exporter.json(resource,
+            output = S3Exporter().json(resource,
                                             start=0,
                                             limit=limit,
                                             fields=[table.pe_id],
@@ -2627,6 +2642,13 @@ class S3PentitySearch(S3Search):
         output = json.dumps(items)
         response.headers["Content-Type"] = "application/json"
         return output
+
+# =============================================================================
+class S3CAPSearch(S3Search):
+    """
+        Search method with specifics for Alerts
+    """
+    pass
 
 # =============================================================================
 class S3SearchOrgHierarchyWidget(S3SearchOptionsWidget):

@@ -145,6 +145,7 @@ class S3PersonEntity(S3Model):
                            pr_group = T("Group"),
                            org_organisation = T("Organization"),
                            org_office = T("Office"),
+                           inv_warehouse = T("Warehouse"),
                            # If we want these, then pe_id needs adding to their
                            # tables & configuring as a super-entity
                            #cr_shelter = shelter,
@@ -162,7 +163,7 @@ class S3PersonEntity(S3Model):
         # Search method
         pentity_search = S3PentitySearch(name = "pentity_search_simple",
                                          label = T("Name and/or ID"),
-                                         comment = T(""),
+                                         comment = "",
                                          field = ["pe_label"])
 
         pentity_search.pentity_represent = pr_pentity_represent
@@ -865,6 +866,44 @@ class S3PersonModel(S3Model):
                               last_name = vars.last_name,
                              )
 
+   # -------------------------------------------------------------------------
+    @staticmethod
+    def pr_person_onaccept(form):
+        """ Onaccept callback
+            Update any user associated with this person
+
+        """
+
+        db = current.db
+        s3db = current.s3db
+        auth = current.auth
+
+        vars = form.vars
+        person_id = vars.id
+
+        ptable = s3db.pr_person
+        ltable = s3db.pr_person_user
+        utable = auth.settings.table_user
+
+        # Find a user for this person
+        query = (ptable.id == person_id) & \
+                (ltable.pe_id == ptable.pe_id) & \
+                (utable.id == ltable.user_id)
+        user = db(query).select(utable.id,
+                                utable.first_name,
+                                utable.last_name,
+                                limitby=(0, 1)).first()
+
+        # If there is a user and their first or last name have changed
+        if user and \
+           ( user.first_name != vars.first_name or \
+             user.last_name != vars.last_name ):
+            # Update the user record
+            query = utable.id == user.id
+            db(query).update( first_name = vars.first_name,
+                              last_name = vars.last_name,
+                             )
+
     # -------------------------------------------------------------------------
     @staticmethod
     def person_deduplicate(item):
@@ -917,9 +956,17 @@ class S3PersonModel(S3Model):
                                       ptable.date_of_birth,
                                       etable.value,
                                       stable.value,
-                                      left=left)
+                                      left=left,
+                                      orderby=["pr_person.created_on ASC"])
 
         duplicates = Storage()
+
+        def rank(a, b, match, mismatch):
+            if a and b:
+                return match if a == b else mismatch
+            else:
+                return untested
+
         for row in candidates:
             row_fname = row[ptable.first_name]
             row_lname = row[ptable.last_name]
@@ -929,36 +976,27 @@ class S3PersonModel(S3Model):
             row_sms = row[stable.value]
 
             check = 0
+
             if fname and row_fname:
-                if fname.lower() == row_fname.lower():
-                    check += 2
-                else:
-                    check -= 2
+                check += rank(fname.lower(), row_fname.lower(), +2, -2)
+
             if lname and row_lname:
-                if lname.lower() == row_lname.lower():
-                    check += 2
-                else:
-                    check -= 2
+                check += rank(lname.lower(), row_lname.lower(), +2, -2)
+
             if dob and row_dob:
-                if dob == row_dob:
-                    check += 2
-                else:
-                    check -= 2
-            if initials and row_initials:
-                if initials.lower() == row_initials.lower():
-                    check += 1
-                else:
-                    check -= 1
+                check += rank(dob, row_dob, +3, -2)
+
             if email and row_email:
-                if email.lower() == row_email.lower():
-                    check += 1
-                else:
-                    check -= 1
+                check += rank(email.lower(), row_email.lower(), +2, -5)
+            elif not email:
+                # Treat missing email as mismatch
+                check -= 2 if initials else 3 if not row_email else 4
+
+            if initials and row_initials:
+                check += rank(initials.lower(), row_initials.lower(), +4, -1)
+
             if sms and row_sms:
-                if sms.lower() == row_sms.lower():
-                    check += 1
-                else:
-                    check -= 1
+                check += rank(sms.lower(), row_sms.lower(), +1, -1)
 
             if check in duplicates:
                 continue
@@ -2038,8 +2076,8 @@ class S3SavedSearch(S3Model):
                                         writable = False,
                                         default = auth.user_id),
                                   Field("search_vars","text",
-                                        label = T("Search Criteria"),
-                                        represent=lambda id:s3_search_vars_represent(id)),
+                                        label = T("Search Criteria")),
+                                        #represent=lambda id:s3_search_vars_represent(id)),
                                   Field("subscribed","boolean",
                                         default=False),
                                   self.pr_person_id(
@@ -3002,6 +3040,11 @@ def pr_pentity_represent(id, show_label=True, default_label="[No ID Tag]"):
                                               limitby=(0, 1)).first()
         if office:
             pe_str = "%s (%s)" % (office.name, instance_type_nice)
+    elif instance_type == "inv_warehouse":
+        warehouse = db(table.pe_id == id).select(table.name,
+                                                 limitby=(0, 1)).first()
+        if warehouse:
+            pe_str = "%s (%s)" % (warehouse.name, instance_type_nice)
     else:
         pe_str = "[%s] (%s)" % (label,
                                 instance_type_nice)

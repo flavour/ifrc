@@ -10,18 +10,19 @@ resourcename = request.function
 # S3 framework functions
 # -----------------------------------------------------------------------------
 def index():
-
     """ Module's Home Page """
 
     module_name = deployment_settings.modules[module].name_nice
     response.title = module_name
     return dict(module_name=module_name)
 
-
 # =============================================================================
 @auth.s3_requires_membership(1)
 def setting():
-    """ Custom page to link to those Settings which can be edited through the web interface """
+    """
+        Custom page to link to those Settings which can be edited through the web interface
+    """
+
     return dict()
 
 # =============================================================================
@@ -70,8 +71,8 @@ def role():
 def user():
     """ RESTful CRUD controller """
 
-    tablename = "auth_user"
-    table = db[tablename]
+    table = auth.settings.table_user
+    tablename = table._tablename
 
     auth.configure_user_fields()
 
@@ -88,7 +89,6 @@ def user():
             session.error = T("Cannot disable your own account!")
             redirect(URL(args=[]))
 
-        table = auth.settings.table_user
         query = (table.id == r.id)
         db(query).update(registration_key = "disabled")
         session.confirmation = T("User Account has been Disabled")
@@ -149,7 +149,7 @@ def user():
         msg_list_empty = T("No Users currently registered"))
 
     def rheader(r, tabs = []):
-        if not r.interactive or r.representation != "html":
+        if r.representation != "html":
             return None
 
         id = r.id
@@ -186,8 +186,9 @@ def user():
                         )
                 rheader.append(btn)
 
-            tabs = [ (T("User Details"), None),
-                     (T("Roles"), "roles")]
+            tabs = [(T("User Details"), None),
+                    (T("Roles"), "roles")
+                    ]
             rheader_tabs = s3_rheader_tabs(r, tabs)
             rheader.append(rheader_tabs)
         return rheader
@@ -219,9 +220,10 @@ def user():
 
     def postp(r, output):
         # Only show the disable button if the user is not currently disabled
-        query = (r.table.registration_key != "disabled") & \
-                (r.table.registration_key != "pending")
-        rows = db(query).select(r.table.id)
+        table = r.table
+        query = (table.registration_key != "disabled") & \
+                (table.registration_key != "pending")
+        rows = db(query).select(table.id)
         restrict = [str(row.id) for row in rows]
         s3.actions = [
                         dict(label=str(UPDATE), _class="action-btn",
@@ -241,8 +243,8 @@ def user():
                              restrict = restrict)
                       ]
         # Only show the approve button if the user is currently pending
-        query = (r.table.registration_key == "pending")
-        rows = db(query).select(r.table.id)
+        query = (table.registration_key == "pending")
+        rows = db(query).select(table.id)
         restrict = [str(row.id) for row in rows]
         s3.actions.append(
                 dict(label=str(T("Approve")), _class="action-btn",
@@ -251,10 +253,9 @@ def user():
                      restrict = restrict)
             )
         # Add some highlighting to the rows
-        rtable = r.table
-        query = (rtable.registration_key.belongs(["disabled", "pending"]))
-        rows = db(query).select(rtable.id,
-                                rtable.registration_key)
+        query = (table.registration_key.belongs(["disabled", "pending"]))
+        rows = db(query).select(table.id,
+                                table.registration_key)
         s3.dataTableStyleDisabled = s3.dataTableStyleWarning = [str(row.id) for row in rows if row.registration_key == "disabled"]
         s3.dataTableStyleAlert = [str(row.id) for row in rows if row.registration_key == "pending"]
 
@@ -263,7 +264,7 @@ def user():
                   dict(col=6, key="None", display=str(T("Active"))),
                   dict(col=6, key="pending", display=str(T("Pending"))),
                   dict(col=6, key="disabled", display=str(T("Disabled")))
-                 ]
+                  ]
         s3.dataTableDisplay = values
 
         # Add client-side validation
@@ -272,7 +273,7 @@ def user():
         return output
     s3.postp = postp
 
-    output = s3_rest_controller("auth", resourcename,
+    output = s3_rest_controller("auth", "user",
                                 rheader=rheader)
     return output
 
@@ -629,6 +630,281 @@ def create_portable_app(web2py_source, copy_database=False, copy_uploads=False):
                             "attachment; filename=portable-sahana.zip"
 
     return response.stream(portable_app)
+
+# =============================================================================
+# Translation Functionality
+# =============================================================================
+def translate():
+    """
+        Translation controller to enable four major workflows :-
+
+        1) Select modules which require translation. The list of strings
+           belonging to selected modules can be exported in .xls or .po format
+
+        2) Upload csv file containing strings with their translations which
+           are then merged with existing language file
+
+        3) Display the percentage of translation for each module for a given
+           language file
+
+        4) Upload a text file containing a list of new-line separated strings
+           which are to be considered for translation in the future. These 
+           strings are termed as "user-supplied" strings and are picked up by
+           the first workflow when preparing the spreadsheet for translation
+
+        Note : The above functionalities require a considerable amount of
+               main memory to execute successfully.
+    """
+
+    if not request.vars.opt:
+        return dict()
+
+    from s3.s3translate import TranslateAPI, StringsToExcel, TranslateReportStatus, TranslateReadFiles
+    from math import ceil
+
+    def postp(r, output):
+        # Create a custom form
+        form = FORM()
+
+        # Prevent redirection
+        r.next = None
+
+        # Remove the false error from the form
+        # error : "Invalid form (re-opened in another window?)"
+        if response.error and not output["form"]["error"]:
+            response.error = None
+
+        opt = request.vars.opt
+        if opt == "1":
+            # Select modules for Translation
+            if form.accepts(request.vars, session):
+
+                modlist = []
+                # If only one module is selected
+                if type(form.request_vars.module_list)==str:
+                    modlist.append(form.request_vars.module_list)
+                # If multiple modules are selected
+                else:
+                    modlist = form.request_vars.module_list
+
+                # If no module is selected
+                if modlist is None:
+                    modlist = []
+
+                # If "Select All" option is chosen
+                if "all" in modlist:
+                    A = TranslateAPI()
+                    modlist = A.get_modules()
+                    if "core" in form.request_vars.module_list:
+                        modlist.append("core")
+
+                # Obtaining the language file from the language code
+                code = form.request_vars.new_code
+                if code == "":
+                    code = form.request_vars.code
+
+                code += ".py"
+
+                # Obtaining the type of file to export to
+                filetype = form.request_vars.filetype
+                if filetype is None:
+                    filetype = "xls"
+                elif filetype == "on":
+                    filetype = "po"
+
+                # Generating the xls file for download
+                X = StringsToExcel()
+                output = X.convert_to_xls(code, modlist, [], filetype)
+                return output
+
+            # Creating a form with checkboxes for list of modules
+            A = TranslateAPI()
+            modlist = A.get_modules()
+            modlist.sort()
+            modcount = len(modlist)
+
+            langlist = A.get_langcodes()
+            langlist.sort()
+
+            table = TABLE(_class="translation_module_table")
+            table.append(BR())
+
+            # Setting number of columns in the form
+            NO_OF_COLUMNS = 3
+
+            # Displaying "NO_OF_COLUMNS" modules per row so as to utilize the page completely
+            num = 0
+            max_rows = int(ceil(modcount / float(NO_OF_COLUMNS)))
+
+            while num < max_rows:
+                row = TR(TD(num + 1),
+                         TD(INPUT(_type="checkbox", _name="module_list",
+                                  _value=modlist[num])),
+                         TD(modlist[num]))
+                for c in range(1, NO_OF_COLUMNS):
+                    cmax_rows = num + c*max_rows
+                    if cmax_rows < modcount:
+                        row.append(TD(cmax_rows + 1))
+                        row.append(TD(INPUT(_type="checkbox",
+                                            _name="module_list",
+                                            _value=modlist[cmax_rows])))
+                        row.append(TD(modlist[cmax_rows]))
+                num += 1
+                table.append(row)
+
+            div = DIV()
+            div.append(table)
+            div.append(BR())
+            row = TR(TD(INPUT(_type="checkbox", _name="module_list",
+                              _value="core", _checked="yes")),
+                     TD(T("Include core files")))
+            div.append(row)
+            div.append(BR())
+            row = TR(TD(INPUT(_type="checkbox", _name="module_list",
+                              _value="all")),
+                     TD(T("Select all modules")))
+            div.append(row)
+            div.append(BR())
+
+            # Providing option to export strings in pootle format
+            row = TR(TD(INPUT(_type="checkbox", _name="filetype")),
+                     TD(T("Export as Pootle (.po) file (Excel (.xls) is default)")))
+            row.append(BR())
+            row.append(BR())
+            div.append(row)
+
+            # Drop-down for available language codes
+            lang_col = TD()
+            lang_dropdown = SELECT(_name = "code")
+            for lang in langlist:
+                lang_dropdown.append(lang)
+            lang_col.append(lang_dropdown)
+
+            row = TR(TD(T("Select language code: ")), TD(lang_col))
+            row.append(TD(T(" Or add a new language code:")))
+            row.append(TD(INPUT(_type="text", _name="new_code")))
+            div.append(row)
+            div.append(BR())
+
+
+            div.append(BR())
+            div.append(INPUT(_type='submit',_value='Submit'))
+            form.append(div)
+            # Adding the custom form to the output
+            output["title"] = T("Select the required modules")
+            output["form"] = form
+
+        elif opt == "2":
+            # Upload translated files
+            div = DIV()
+            div.append(BR())
+            div.append(T("Note: Make sure that all the text cells are quoted in the csv file before uploading"))
+            form = output["form"]
+            form.append(div)
+            output["form"] = form
+
+        elif opt == "3":
+            # View Translation Percentage
+            if form.accepts(request.vars, session):
+                # Retrieve the translation percentage for each module
+                code = form.request_vars.code
+                S = TranslateReportStatus()
+
+                if form.request_vars.update_master == "on":
+                    S.create_master_file()
+
+                percent_dict = S.get_translation_percentages(code)
+
+                modlist = []
+                for mod in sorted(percent_dict.keys()):
+                    if mod != "complete_file":
+                        modlist.append(mod)
+                modcount = len(modlist)
+
+                table = TABLE(_class="translation_module_table")
+                table.append(BR())
+
+                # Set number of columns in the table
+                NO_OF_COLUMNS = 3
+
+                # Display "NO_OF_COLUMNS" modules per row so as to utilize the page completely
+                num = 0
+                max_rows = int(ceil(modcount/float(NO_OF_COLUMNS)))
+
+                while num < max_rows:
+                    row = TR(TD(modlist[num]), TD(percent_dict[modlist[num]]))
+                    for c in range(1, NO_OF_COLUMNS):
+                        cmax_rows = num + c*max_rows
+                        if cmax_rows < modcount:
+                            row.append(TD(modlist[cmax_rows]))
+                            row.append(TD(percent_dict[modlist[cmax_rows]]))
+                    num += 1
+                    table.append(row)
+
+                # Add the table to output to display it
+                div = DIV()
+                div.append(table)
+                div.append(BR())
+                div.append(TR(TD("Overall translation percentage of the file: "),
+                              TD(percent_dict["complete_file"])))
+                form.append(div)
+                output["title"] = T("Module-wise Percentage of Translated Strings")
+                output["form"] = form
+                s3.has_required = False
+
+            else:
+                # Display the form to view translated percentage
+                A = TranslateAPI()
+                langlist = A.get_langcodes()
+                langlist.sort()
+                # Drop-down for selecting language codes
+                lang_col = TD()
+                lang_dropdown = SELECT(_name="code")
+                for lang in langlist:
+                    lang_dropdown.append(lang)
+                lang_col.append(lang_dropdown)
+
+                div = DIV()
+                row = TR(TD(T("Language code: ")), TD(lang_col))
+                div.append(row)
+                div.append(BR())
+                row = TR(TD(INPUT(_type="checkbox", _name="update_master")),
+                         TD(T("Update Master file")))
+                div.append(row)
+                div.append(BR())
+                div.append(BR())
+                div.append(INPUT(_type="submit", _value=T("Submit")))
+                form.append(div)
+                # Add the custom form to the output
+                output["title"] = T("Select the language file")
+                output["form"] = form
+
+        elif opt == "4":
+            # Add strings manually
+            if form.accepts(request.vars, session):
+                # Retrieve strings from the uploaded file
+                f = request.vars.upload.file
+                strings = []
+                R = TranslateReadFiles()
+                for line in f:
+                    strings.append(line)
+                # Update the file containing user strings
+                R.merge_user_strings_file(strings)
+                response.confirmation = T("File Uploaded")
+
+            div = DIV()
+            div.append(T("Upload a text file containing new-line separated strings:"))
+            div.append(INPUT(_type="file", _name="upload"))
+            div.append(BR())
+            div.append(INPUT(_type="submit", _value=T("Submit")))
+            form.append(div)
+            output["form"] = form
+
+        return output
+    s3.postp = postp
+
+    output = s3_rest_controller("translate", "language")
+    return output
 
 # -----------------------------------------------------------------------------
 def result():

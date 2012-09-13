@@ -18,6 +18,7 @@ settings.auth.registration_requires_verification = True
 settings.auth.registration_requests_organisation = True
 settings.auth.registration_organisation_required = True
 settings.auth.registration_requests_site = True
+settings.auth.record_approval = True
 
 # -----------------------------------------------------------------------------
 # Security Policy
@@ -174,6 +175,11 @@ settings.modules = OrderedDict([
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
+        )),
+    ("translate", Storage(
+            name_nice = T("Translation Functionality"),
+            #description = "Selective translation of strings based on module.",
+            module_type = None,
         )),
     # Uncomment to enable internal support requests
     ("support", Storage(
