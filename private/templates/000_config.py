@@ -80,10 +80,10 @@ settings.auth.hmac_key = "akeytochange"
 #settings.mail.tls = True
 #settings.mail.login = "username:password"
 # From Address
-settings.mail.sender = "'Sahana' <sahana@your.org>"
+#settings.mail.sender = "'Sahana' <sahana@example.org>"
 # Default email address to which requests to approve new user accounts gets sent
 # This can be overridden for specific domains/organisations via the auth_domain table
-settings.mail.approver = "useradmin@your.org"
+#settings.mail.approver = "useradmin@example.org"
 # Daily Limit on Sending of emails
 #settings.mail.limit = 1000
 
@@ -134,8 +134,8 @@ settings.frontpage.rss = [
 # Register an app at http://twitter.com/apps
 # (select Aplication Type: Client)
 # You'll get your consumer_key and consumer_secret from Twitter
-#settings.msg_twitter_oauth_consumer_key = ""
-#settings.msg_twitter_oauth_consumer_secret = ""
+#settings.msg.twitter_oauth_consumer_key = ""
+#settings.msg.twitter_oauth_consumer_secret = ""
 
 # UI options
 # Should user be prompted to save before navigating away?

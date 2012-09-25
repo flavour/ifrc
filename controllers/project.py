@@ -31,6 +31,29 @@ def index():
     #return dict(module_name=module_name)
 
 # =============================================================================
+def inline():
+    """ Test controller for inline link tables """
+
+    from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent
+
+    crud_form = S3SQLCustomForm(
+                    "name",
+                    # Project Organisations
+                    S3SQLInlineComponent(
+                        "organisation",
+                        label=T("Participating Organisations"),
+                        fields=["organisation_id",
+                                "role",
+                                "amount"],
+                    ),
+                )
+
+    s3db.configure("project_project", crud_form=crud_form)
+
+    return s3_rest_controller("project", "project")
+
+
+# =============================================================================
 def create():
     """ Redirect to project/create """
     redirect(URL(f="project", args="create"))
@@ -53,9 +76,10 @@ def project():
         def postp(r, output):
             if r.interactive:
                 if not r.component:
-                    read_url = URL(f="task", args="search",
+                    # @ToDo: Fix the filtering in project_task_controller()
+                    read_url = URL(f="task", #args="search",
                                    vars={"project":"[id]"})
-                    update_url = URL(f="task", args="search",
+                    update_url = URL(f="task", #args="search",
                                      vars={"project":"[id]"})
                     s3mgr.crud.action_buttons(r, deletable=False,
                                               read_url=read_url,

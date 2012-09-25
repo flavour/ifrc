@@ -279,6 +279,9 @@ class S3ProjectModel(S3Model):
         # Project
         #
 
+        LEAD_ROLE = settings.get_project_organisation_lead_role()
+        org_label = settings.get_project_organisation_roles()[LEAD_ROLE]
+
         # HFA
         project_hfa_opts = {
             1: T("HFA1: Ensure that disaster risk reduction is a national and a local priority with a strong institutional basis for implementation."),
@@ -294,9 +297,10 @@ class S3ProjectModel(S3Model):
                              # multi_orgs deployments use the separate project_organisation table
                              # - although Lead Org is still cached here to avoid the need for a virtual field to lookup
                              organisation_id(
-                                          readable=False if multi_orgs else True,
-                                          writable=False if multi_orgs else True,
-                                        ),
+                                label = org_label,
+                                requires = self.org_organisation_requires(updateable=True),
+                                widget = None,
+                                ),
                              Field("name", unique = True,
                                    label = T("Name"),
                                    # Require unique=True if using IS_NOT_ONE_OF like here (same table,
@@ -465,10 +469,7 @@ class S3ProjectModel(S3Model):
         project_search = S3Search(advanced = advanced)
 
         # Resource Configuration
-        if multi_orgs:
-            create_next = URL(c="project", f="project",
-                              args=["[id]", "organisation"])
-        elif theme_percentages:
+        if theme_percentages:
             create_next = URL(c="project", f="project",
                               args=["[id]", "theme_percentage"])
         elif mode_task:
@@ -497,11 +498,7 @@ class S3ProjectModel(S3Model):
             if use_codes:
                 append("code")
             append("name")
-            if multi_orgs:
-                LEAD_ROLE = settings.get_project_organisation_lead_role()
-                append((settings.get_project_organisation_roles()[LEAD_ROLE], "organisation_id"))
-            else:
-                append("organisation_id")
+            append("organisation_id")
             if use_sectors:
                 append("sector_id")
             if mode_3w:
@@ -526,6 +523,7 @@ class S3ProjectModel(S3Model):
                   super_entity="doc_entity",
                   deduplicate=self.project_project_deduplicate,
                   onvalidation=self.project_project_onvalidation,
+                  onaccept=self.project_project_onaccept,
                   create_next=create_next,
                   search_method=project_search,
                   list_fields=list_fields,
@@ -546,16 +544,19 @@ class S3ProjectModel(S3Model):
 
         # Reusable Field
         project_id = S3ReusableField("project_id", table,
-                                     sortby="name",
-                                     requires = IS_NULL_OR(
-                                                    IS_ONE_OF(db, "project_project.id",
-                                                              project_project_represent_no_link
-                                                              )),
-                                     represent = project_project_represent,
-                                     comment = S3AddResourceLink(c="project", f="project",
-                                                                 tooltip=T("If you don't see the project in the list, you can add a new one by clicking link 'Add Project'.")),
-                                     label = T("Project"),
-                                     ondelete = "CASCADE")
+            sortby="name",
+            requires = IS_NULL_OR(
+                            IS_ONE_OF(db(current.auth.s3_accessible_query("update",
+                                                                          table)),
+                                      "project_project.id",
+                                      project_project_represent_no_link
+                                      )),
+            represent = project_project_represent,
+            comment = S3AddResourceLink(c="project", f="project",
+                                        tooltip=T("If you don't see the project in the list, you can add a new one by clicking link 'Add Project'.")),
+            label = T("Project"),
+            ondelete = "CASCADE"
+            )
 
         # ---------------------------------------------------------------------
         # Custom Methods
@@ -739,6 +740,32 @@ class S3ProjectModel(S3Model):
             # Populate code from name
             form.vars.code = form.vars.name
         return
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def project_project_onaccept(form):
+        """
+            Create/update project_organisation record from the organisation_id
+        """
+
+        db = current.db
+        ptable = db.project_project
+        otable = db.project_organisation
+        vars = form.vars
+
+        lead_role = current.deployment_settings.get_project_organisation_lead_role()
+
+        query = (otable.project_id == vars.id) & \
+                (otable.role == lead_role)
+
+        # Update the lead organisation
+        count = db(query).update(organisation_id = vars.organisation_id)
+        if not count:
+            # If there is no record to update, then create a new one
+            otable.insert(project_id = vars.id,
+                          organisation_id = vars.organisation_id,
+                          role = lead_role,
+                          )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1341,16 +1368,19 @@ class S3Project3WModel(S3Model):
 
         # Reusable Field
         project_location_id = S3ReusableField("project_location_id", table,
-                                      requires = IS_NULL_OR(
-                                                    IS_ONE_OF(db, "project_location.id",
-                                                              project_location_represent,
-                                                              sort=True)),
-                                      represent = project_location_represent,
-                                      label = LOCATION,
-                                      comment = S3AddResourceLink(ADD_LOCATION,
-                                                                  c="project", f="location",
-                                                                  tooltip=LOCATION_TOOLTIP),
-                                      ondelete = "CASCADE")
+            requires = IS_NULL_OR(
+                        IS_ONE_OF(db(current.auth.s3_accessible_query("update",
+                                                                      table)),
+                                  "project_location.id",
+                                  project_location_represent,
+                                  sort=True)),
+            represent = project_location_represent,
+            label = LOCATION,
+            comment = S3AddResourceLink(ADD_LOCATION,
+                                        c="project", f="location",
+                                        tooltip=LOCATION_TOOLTIP),
+            ondelete = "CASCADE"
+            )
 
         # Components
         add_component("project_beneficiary",
@@ -1685,12 +1715,15 @@ class S3Project3WModel(S3Model):
         tablename = "project_organisation"
         table = define_table(tablename,
                              project_id(),
-                             organisation_id(comment=S3AddResourceLink(c="org",
-                                                                       f="organisation",
-                                                                       label=T("Add Organization"),
-                                                                       title=T("Organization"),
-                                                                       tooltip=organisation_help)
-                                             ),
+                             organisation_id(
+                                requires = self.org_organisation_requires(updateable=True),
+                                widget = None,
+                                comment=S3AddResourceLink(c="org",
+                                                          f="organisation",
+                                                          label=T("Add Organization"),
+                                                          title=T("Organization"),
+                                                          tooltip=organisation_help)
+                                ),
                              Field("role", "integer",
                                    requires = IS_NULL_OR(IS_IN_SET(project_organisation_roles)),
                                    represent = lambda opt, row=None: \
@@ -1753,7 +1786,7 @@ class S3Project3WModel(S3Model):
                   deduplicate=self.project_organisation_deduplicate,
                   onvalidation=self.project_organisation_onvalidation,
                   onaccept=self.project_organisation_onaccept,
-                  ondelete=self.project_organisation_ondelete)
+                  ondelete=self.project_organisation_ondelete,)
 
         # Reusable Field
 
@@ -1937,8 +1970,8 @@ class S3Project3WModel(S3Model):
             Record creation post-processing
 
             If the added organisation is the lead role, set the
-            project.organisation to point to the same organisation 
-            & update the owned_by_entity.
+            project.organisation to point to the same organisation
+            & update the realm_entity.
 
             In DRRPP, update the donors field
         """
@@ -1947,15 +1980,15 @@ class S3Project3WModel(S3Model):
         ptable = db.project_project
         otable = db.project_organisation
         vars = form.vars
-        
+
         # Get the project ID from the new project organisation record
-        project_id = db(otable.id == vars.id).select( otable.project_id,
-                                                      limitby=(0, 1)
+        project_id = db(otable.id == vars.id).select(otable.project_id,
+                                                     limitby=(0, 1)
                                                      ).first().project_id
 
         if current.deployment_settings.get_template() == "DRRPP":
             dtable = db.project_drrpp
-                                                  
+
             # Get all the Donors for this Project
             query = (otable.deleted == False) & \
                     (otable.role == 3) & \
@@ -1974,8 +2007,8 @@ class S3Project3WModel(S3Model):
             organisation_id = vars.organisation_id
             db(ptable.id == project_id).update(
                                         organisation_id = organisation_id,
-                                        owned_by_entity = s3db.pr_get_pe_id("org_organisation",
-                                                                            organisation_id)
+                                        realm_entity = s3db.pr_get_pe_id("org_organisation",
+                                                                         organisation_id)
                                         )
 
         return
@@ -3040,7 +3073,7 @@ class S3ProjectTaskModel(S3Model):
                   super_entity="doc_entity",
                   copyable=True,
                   orderby="project_task.priority",
-                  owner_entity=self.task_owner_entity,
+                  realm_entity=self.task_realm_entity,
                   onvalidation=self.task_onvalidation,
                   create_next=URL(f="task", args=["[id]"]),
                   create_onaccept=self.task_create_onaccept,
@@ -3390,8 +3423,8 @@ class S3ProjectTaskModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def task_owner_entity(table, record):
-        """ Set the task owner entity to the project's owner entity """
+    def task_realm_entity(table, record):
+        """ Set the task realm entity to the project's realm entity """
 
         task_id = record.id
         db = current.db
@@ -3399,10 +3432,10 @@ class S3ProjectTaskModel(S3Model):
         ltable = db.project_task_project
         query = (ltable.task_id == task_id) & \
                 (ltable.project_id == ptable.id)
-        project = db(query).select(ptable.owned_by_entity,
+        project = db(query).select(ptable.realm_entity,
                                    limitby=(0, 1)).first()
         if project:
-            return project.owned_by_entity
+            return project.realm_entity
         else:
             return None
 
@@ -4034,7 +4067,7 @@ class S3ProjectOrganisationDonorVirtualFields:
 
 # =============================================================================
 class S3ProjectOrganisationFundingVirtualFields:
-    """ Virtual fields for the project_project table when multi_orgs=True """
+    """ Virtual fields for the project_project table """
 
     # -------------------------------------------------------------------------
     def total_organisation_amount(self):
@@ -4883,10 +4916,16 @@ def project_task_controller():
             except:
                 current.session.error = T("Project not Found")
                 redirect(URL(args=None, vars=None))
-            ltable = s3db.project_task_project
-            s3.filter = (ltable.project_id == project) & \
-                        (ltable.task_id == table.id) & \
-                        (table.status.belongs(statuses))
+            if r.method == "search":
+                # @ToDo: get working
+                r.get_vars = {"task_search_project": name,
+                              "task_search_status": ",".join([str(status) for status in statuses])
+                              }
+            else:
+                ltable = s3db.project_task_project
+                s3.filter = (ltable.project_id == project) & \
+                            (ltable.task_id == table.id) & \
+                            (table.status.belongs(statuses))
             crud_strings.title_list = T("Open Tasks for %(project)s") % dict(project=name)
             crud_strings.title_search = T("Search Open Tasks for %(project)s") % dict(project=name)
             crud_strings.msg_list_empty = T("No Open Tasks for %(project)s") % dict(project=name)

@@ -236,6 +236,7 @@ class S3Importer(S3CRUD):
 
         # @todo: clean this up
         source = None
+        open_file = None
         transform = None
         upload_id = None
         items = None
@@ -261,6 +262,13 @@ class S3Importer(S3CRUD):
             self.job_id = self.upload_job.job_id
         else:
             self.job_id = None
+
+
+        # Experimental uploading via ajax - added for vulnerability
+        # Part of the problem with this is that it works directly with the
+        # opened file. This might pose a security risk, is should be alright
+        # if only trusted users are involved but care should be taken with this
+        self.ajax = current.request.ajax and r.post_vars.approach == "ajax"
 
         # Now branch off to the appropriate controller function
         if r.http == "GET":
@@ -328,37 +336,49 @@ class S3Importer(S3CRUD):
 
         db = current.db
         table = self.upload_table
-
-        title=self.uploadTitle
-        form = self._upload_form(r, **attr)
-
-        r = self.request
-        r.read_body()
-        sfilename = form.vars.file
-        try:
-            ofilename = r.post_vars["file"].filename
-        except:
-            form.errors.file = self.messages.no_file
-
-        if form.errors:
-            response.flash = ""
-            output = self._create_upload_dataTable()
-            output.update(form=form, title=title)
-
-        elif not sfilename or \
-             ofilename not in r.files or r.files[ofilename] is None:
-            response.flash = ""
-            response.error = self.messages.file_not_found
-            output = self._create_upload_dataTable()
-            output.update(form=form, title=title)
-
+        output = None
+        if self.ajax:
+            sfilename = ofilename = r.post_vars["file"].filename
+            upload_id = table.insert(controller=self.controller,
+                                     function=self.function,
+                                     filename=ofilename,
+                                     file = sfilename,
+                                     user_id=current.session.auth.user.id
+                                     )
         else:
+            title=self.uploadTitle
+            form = self._upload_form(r, **attr)
+    
+            r = self.request
+            r.read_body()
+            sfilename = form.vars.file
+            try:
+                ofilename = r.post_vars["file"].filename
+            except:
+                form.errors.file = self.messages.no_file
+
+            if form.errors:
+                response.flash = ""
+                output = self._create_upload_dataTable()
+                output.update(form=form, title=title)
+    
+            elif not sfilename or \
+                 ofilename not in r.files or r.files[ofilename] is None:
+                response.flash = ""
+                response.error = self.messages.file_not_found
+                output = self._create_upload_dataTable()
+                output.update(form=form, title=title)
+            else:
+                query = (table.file == sfilename)
+                db(query).update(controller=self.controller,
+                                 function=self.function,
+                                 filename=ofilename,
+                                 user_id=current.session.auth.user.id)
+                row = db(query).select(table.id, limitby=(0, 1)).first()
+                upload_id = row.id
+
+        if not output:
             output = dict()
-            query = (table.file == sfilename)
-            db(query).update(controller=self.controller,
-                             function=self.function,
-                             filename=ofilename,
-                             user_id=current.session.auth.user.id)
             # must commit here to separate this transaction from
             # the trial import phase which will be rolled back.
             db.commit()
@@ -369,7 +389,10 @@ class S3Importer(S3CRUD):
                 response.error = self.messages.invalid_file_format
                 return self.upload(r, **attr)
 
-            upload_file = r.files[ofilename]
+            if self.ajax:
+                upload_file = r.post_vars.file.file
+            else:
+                upload_file = r.files[ofilename]
             if extension == "xls":
                 if "xls_parser" in s3:
                     upload_file.seek(0)
@@ -383,8 +406,6 @@ class S3Importer(S3CRUD):
             else:
                 upload_file.seek(0)
 
-            row = db(query).select(table.id, limitby=(0, 1)).first()
-            upload_id = row.id
             if "single_pass" in r.vars:
                 single_pass = r.vars["single_pass"]
             else:
@@ -578,6 +599,8 @@ class S3Importer(S3CRUD):
         # record the summary details
         # delete the upload file
         result = self._update_upload_job(upload_id)
+        if self.ajax:
+            return result
         # redirect to the start page (removes all vars)
         self._display_completed_job(result)
         redirect(URL(r=self.request, f=self.function, args=["import"]))
@@ -643,7 +666,6 @@ class S3Importer(S3CRUD):
         TEMPLATE = "csv_template"
         REPLACE_OPTION = "replace_option"
 
-        session = current.session
         response = current.response
         s3 = response.s3
         request = self.request
@@ -658,6 +680,10 @@ class S3Importer(S3CRUD):
                 table.replace_option.readable = True
                 table.replace_option.writable = True
                 table.replace_option.label = replace_option
+                table.replace_option.comment = DIV(_class="tooltip",
+                                                   _title="%s|%s" % \
+                    (replace_option,
+                     current.T("Delete all data of this type which the user has permission to before upload. This is designed for workflows where the data is maintained in an offline spreadsheet and uploaded just for Reads.")))
 
         fields = [f for f in table if f.readable or f.writable and not f.compute]
         if EXTRA_FIELDS in attr:
@@ -699,7 +725,7 @@ class S3Importer(S3CRUD):
             except:
                 pass
 
-        if form.accepts(r.post_vars, session,
+        if form.accepts(r.post_vars, current.session,
                         formname="upload_form"):
             upload_id = table.insert(**table._filter_fields(form.vars))
             if self.csv_extra_fields:
@@ -846,6 +872,19 @@ class S3Importer(S3CRUD):
                 error_list.append(str(row.id))
             else:
                 select_list.append("%s" % row.id)
+
+        # Experimental uploading via ajax - added for vulnerability
+        if self.ajax:
+            resource = self.resource
+            resource.add_filter(s3.filter)
+            rows = resource.select(["id", "element", "error"],
+                                   start=0,
+                                   limit=resource.count(),
+                                   )
+            data = resource.extract(rows,
+                                    ["id", "element", "error"],
+                                    )
+            return (upload_id, select_list, data)
 
         s3.actions = [
                         dict(label= str(self.messages.item_show_details),
@@ -1219,7 +1258,7 @@ class S3Importer(S3CRUD):
             sEcho = int(vars.sEcho or 0)
         else: # catch all
             start = 0
-            limit = 1
+            limit = current.manager.ROWSPERPAGE
         if limit is not None:
             try:
                 start = int(start)
@@ -1236,6 +1275,7 @@ class S3Importer(S3CRUD):
         data = resource.extract(rows,
                                 list_fields,
                                 )
+
         # put each value through the represent function
         for row in data:
             for (key, value) in row.items():
@@ -1246,27 +1286,27 @@ class S3Importer(S3CRUD):
         id = "s3import_1"
         if representation == "aadata":
             totalrows = self.resource.count()
-            return dt.json(id,
+            return dt.json(totalrows,
+                           totalrows,
+                           id,
                            sEcho,
-                           totalrows,
-                           totalrows,
                            dt_bulk_actions = [current.T("Import")],
                            )
         else:
             output = dict()
-            url = "/%s/%s/%s/import.aaData?job=%s" % (request.application,
+            url = "/%s/%s/%s/import.aadata?job=%s" % (request.application,
                                                       request.controller,
                                                       request.function,
                                                       ajax_item_id
                                                       )
             totalrows = self.resource.count()
-            items =  dt.html(id,
-                            totalrows,
-                            totalrows,
-                            dt_ajax_url=url,
-                            dt_bulk_actions = [current.T("Import")],
-                            dt_bulk_selected = dt_bulk_select,
-                            )
+            items =  dt.html(totalrows,
+                             totalrows,
+                             id,
+                             dt_ajax_url=url,
+                             dt_bulk_actions = [current.T("Import")],
+                             dt_bulk_selected = dt_bulk_select,
+                             )
             current.response.s3.dataTableID = ["s3import_1"]
             output.update(items=items)
             return output
@@ -1506,12 +1546,11 @@ class S3Importer(S3CRUD):
         """
             Set the resource and the table to being s3_import_item
         """
-
+        self.table = S3ImportJob.define_item_table()
         self.tablename = S3ImportJob.ITEM_TABLE_NAME
         if self.item_resource == None:
             self.item_resource = current.s3db.resource(self.tablename)
         self.resource = self.item_resource
-        self.table = S3ImportJob.define_item_table()
 
     # -------------------------------------------------------------------------
     def __define_table(self):

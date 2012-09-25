@@ -424,8 +424,10 @@ class S3InventoryModel(S3Model):
                                                    #                                T("Enter some characters to bring up a list of possible matches"))),
                                                    represent=self.org_site_represent),
                                   self.supply_item_entity_id,
-                                  self.supply_item_id(ondelete = "RESTRICT"),
-                                  self.supply_item_pack_id(ondelete = "RESTRICT"),
+                                  self.supply_item_id(ondelete = "RESTRICT",
+                                                      required = True),
+                                  self.supply_item_pack_id(ondelete = "RESTRICT",
+                                                           required = True),
                                   Field("quantity", "double", notnull=True,
                                         label = T("Quantity"),
                                         represent=lambda v, row=None: \
@@ -915,8 +917,10 @@ class S3TrackingModel(S3Model):
                              # - can't override field name, ondelete or requires
                              self.super_link("site_id", "org_site",
                                               label = T("From Warehouse/Facility/Office"),
-                                              filterby = "site_id",
-                                              filter_opts = permitted_facilities(redirect_on_error=False),
+                                              #filterby = "site_id",
+                                              #filter_opts = permitted_facilities(redirect_on_error=False),
+                                              instance_types = auth.org_site_types,
+                                              updateable = True,
                                               not_filterby = "obsolete",
                                               not_filter_opts = [True],
                                               default = user.site_id if is_logged_in() else None,
@@ -1080,10 +1084,12 @@ class S3TrackingModel(S3Model):
                              # - can't override field name, ondelete or requires
                              # @ToDo: We really need to be able to filter this by permitted_facilities
                              self.super_link("site_id", "org_site",
-                                              label = T("By Warehouse/Facility/Office"),
+                                              label = T("Warehouse/Facility/Office (Recipient)"),
                                               ondelete = "SET NULL",
-                                              filterby = "site_id",
-                                              filter_opts = permitted_facilities(redirect_on_error=False),
+                                              #filterby = "site_id",
+                                              #filter_opts = permitted_facilities(redirect_on_error=False),
+                                              instance_types = auth.org_site_types,
+                                              updateable = True,
                                               not_filterby = "obsolete",
                                               not_filter_opts = [True],
                                               default = user.site_id if is_logged_in() else None,
@@ -1338,8 +1344,10 @@ class S3TrackingModel(S3Model):
                                     requires = IS_ONE_OF(db, "org_site.site_id",
                                                          lambda id: \
                                                             org_site_represent(id, show_link = False),
-                                                         filterby = "site_id",
-                                                         filter_opts = auth.permitted_facilities(redirect_on_error=False),
+                                                         #filterby = "site_id",
+                                                         #filter_opts = auth.permitted_facilities(redirect_on_error=False),
+                                                         instance_types = auth.org_site_types,
+                                                         updateable = True,
                                                          sort=True,
                                                          ),
                                     default = user.site_id if is_logged_in() else None,
@@ -2379,7 +2387,7 @@ def inv_tabs(r):
             inv_tabs = [(T("Stock"), "inv_item"),
                         #(T("Incoming"), "incoming/"),
                         (recv_tab, "recv"),
-                        (T("Send"), "send", dict(select="sent")),
+                        (T("Send"), "send"),
                         ]
             if settings.has_module("proc"):
                 inv_tabs.append((T("Planned Procurements"), "plan"))
@@ -3031,9 +3039,11 @@ class S3AdjustModel(S3Model):
                                    requires = IS_ONE_OF(db, "org_site.site_id",
                                                         lambda id: \
                                                             org_site_represent(id, show_link = False),
-                                                        filterby = "site_id",
-                                                        filter_opts = auth.permitted_facilities(redirect_on_error=False),
-                                                        sort=True,
+                                                        #filterby = "site_id",
+                                                        #filter_opts = auth.permitted_facilities(redirect_on_error=False),
+                                                        instance_types = auth.org_site_types,
+                                                        updateable = True,
+                                                        sort = True,
                                                         ),
                                    represent=org_site_represent),
                              Field("adjustment_date", "date",
@@ -3446,7 +3456,7 @@ class InvTrackItemVirtualFields:
             # Need real numbers to use for Report calculations
             #return IS_FLOAT_AMOUNT.represent(v, precision=2)
             return v
-        except AttributeError:
+        except:
             # not available
             return current.messages.NONE
 

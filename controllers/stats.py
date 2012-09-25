@@ -26,9 +26,6 @@ def data():
 def aggregate():
     """ REST Controller """
 
-    tablename = "stats_aggregate"
-    table = s3db[tablename]
-
     def prep(r):
         if r.method == "clear":
             if not s3_has_role(ADMIN):
@@ -43,6 +40,12 @@ def aggregate():
 
     output = s3_rest_controller()
     return output
+
+# -----------------------------------------------------------------------------
+def group():
+    """ REST Controller """
+
+    return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
 def demographic():

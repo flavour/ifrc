@@ -10,8 +10,6 @@
     Imported by private/templates/<template>
     where <template> is the "default" template by default.
 
-    @author: Ashwyn Sharma <ashwyn1092[at]gmail.com>
-    
     @copyright: 2012 (c) Sahana Software Foundation
     @license: MIT
 
@@ -40,19 +38,210 @@
 
 __all__ = ["S3Parsing"]
 
+#import re
 import string
 import sys
 
-from gluon import current
+#import pyparsing
+try:
+    import nltk
+    from nltk.corpus import wordnet as wn
+    NLTK = True
+except:
+    NLTK = False
 
-from s3.s3utils import soundex
+from gluon import current
+from gluon.tools import fetch
+
+from s3.s3utils import s3_debug, soundex
                 
 # =============================================================================
 class S3Parsing(object):
     """
-       Message Parsing Framework.
+       Message Parsing Template.
     """
   
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def filter(message="", sender="", service="", coordinates=""):
+        """
+            Filter unstructured data (e.g. Tweets)
+        """
+
+        db = current.db
+        s3db = current.s3db
+        cache = s3db.cache
+        
+        # Start with a base priority
+        priority = 0
+
+        # Default Category
+        category = "Unknown"
+
+        if service == "twitter":
+            priority -= 1
+        elif service == "sms":
+            priority += 1
+
+        # Lookup trusted senders
+        # - these could be trained or just trusted
+        table = s3db.msg_sender
+        ctable = s3db.pr_contact
+        query = (table.deleted == False) & \
+                (ctable.pe_id == table.pe_id) & \
+                (ctable.contact_method == "TWITTER")
+        senders = db(query).select(table.priority,
+                                   ctable.value,
+                                   cache=cache)
+        for s in senders:
+            if sender == s[ctable].value:
+                priority += s[table].priority
+                break
+        
+        # If Anonymous, check their history
+        # - within our database
+        # if service == "twitter":
+        #     # Check Followers
+        #     # Check Retweets
+        #     # Check when account was created
+        # (Note that it is still possible to game this - plausible accounts can be purchased)
+
+        ktable = s3db.msg_keyword
+        keywords = db(ktable.deleted == False).select(ktable.id,
+                                                      ktable.keyword,
+                                                      ktable.incident_type_id,
+                                                      cache=cache)
+        incident_type_represent = s3db.event_incident_type_represent
+        if NLTK:
+            # Lookup synonyms
+            # @ToDo: Cache
+            synonyms = {}
+            for kw in keywords:
+                syns = []
+                try:
+                    synsets = wn.synsets(kw.keyword)
+                    for synset in synsets:
+                        syns += [lemma.name for lemma in synset.lemmas]
+                except LookupError:
+                    nltk.download("wordnet")
+                    synsets = wn.synsets(kw.keyword)
+                    for synset in synsets:
+                        syns += [lemma.name for lemma in synset.lemmas]
+                synonyms[kw.keyword.lower()] = syns
+
+        ltable = s3db.gis_location
+        query = (ltable.deleted != True) & \
+                (ltable.name != None)
+        locs = db(query).select(ltable.id,
+                                ltable.name,
+                                cache=cache)
+        lat = lon = None
+        location_id = None
+        loc_matches = 0
+
+        # Split message into words
+        words = message.split(" ")
+
+        index = 0
+        max_index = len(words) - 1
+        for word in words:
+            word = word.lower()
+            if word.endswith(".") or \
+               word.endswith(":") or \
+               word.endswith(","):
+                word = word[:-1]
+
+            skip = False
+
+            if word in ("safe", "ok"):
+                priority -= 1
+            elif word in ("help"):
+                priority += 1
+            elif service == "twitter" and \
+                 word == "RT":
+                # @ToDo: Increase priority of the original message
+                priority -= 1
+                skip = True
+
+            # Look for URL
+            if word.startswith("http://"):
+                priority += 1
+                skip = True
+                # @ToDo: Follow URL to see if we can find an image
+                #try:
+                #    page = fetch(word)
+                #except urllib2.HTTPError:
+                #    pass
+                # Check returned str for image like IS_IMAGE()
+
+            if (index < max_index):
+                if word == "lat":
+                    skip = True
+                    try:
+                        lat = words[index + 1]
+                        lat = float(lat)
+                    except:
+                        pass
+                elif word == "lon":
+                    skip = True
+                    try:
+                        lon = words[index + 1]
+                        lon = float(lon)
+                    except:
+                        pass
+
+            if not skip:
+                for kw in keywords:
+                    _word = kw.keyword.lower()
+                    if _word == word:
+                        # Check for negation
+                        if index and words[index - 1].lower() == "no":
+                            pass
+                        else:
+                            category = incident_type_represent(kw.incident_type_id)
+                            break
+                    elif NLTK:
+                        # Synonyms
+                        if word in synonyms[_word]:
+                            # Check for negation
+                            if index and words[index - 1].lower() == "no":
+                                pass
+                            else:
+                                category = incident_type_represent(kw.incident_type_id)
+                                break
+                # Check for Location
+                for loc in locs:
+                    name = loc.name.lower()
+                    if word == name:
+                        if not loc_matches:
+                            location_id = loc.id
+                            priority += 1
+                        loc_matches += 1
+                    elif (index < max_index) and \
+                         ("%s %s" % (word, words[index + 1]) == name):
+                        # Try names with 2 words
+                        if not loc_matches:
+                            location_id = loc.id
+                            priority += 1
+                        loc_matches += 1
+
+            index += 1
+
+        # @ToDo: Prioritise reports from people located where they are reporting from
+        # if coordinates:
+        
+        if not loc_matches or loc_matches > 1:
+            if lat and lon:
+                location_id = ltable.insert(lat = lat,
+                                            lon = lon)
+            elif coordinates:
+                # Use Geolocation of Tweet
+                location_id = ltable.insert(lat = coordinates[0],
+                                            lon = coordinates[1])
+            
+        # @ToDo: Image
+        return category, priority, location_id
+
     # -------------------------------------------------------------------------
     @staticmethod
     def keyword_search(message="", sender=""):
@@ -64,10 +253,6 @@ class S3Parsing(object):
         if not message:
             return None
 
-        T = current.T
-        db = current.db
-        s3db = current.s3db
-        
         # Equivalent keywords in one list
         primary_keywords = ["get", "give", "show"] 
         contact_keywords = ["email", "mobile", "facility", "clinical",
@@ -101,7 +286,6 @@ class S3Parsing(object):
             reply = False
         return reply
 
-
     # -------------------------------------------------------------------------
     def parse_person(self, pquery="", name="", sender=""):
         """
@@ -132,9 +316,14 @@ class S3Parsing(object):
                 presult = dict(name = row.first_name, id = row.pe_id)
                 result.append(presult)
 
-        if len(result) > 1:
+        if len(result) == 0:
+            return T("No Match")
+
+        elif len(result) > 1:
             return T("Multiple Matches")
-        if len(result) == 1:
+            
+        else:
+            # Single Match
             reply = result[0]["name"]
             table = s3db.pr_contact
             if "email" in pquery:
@@ -147,7 +336,7 @@ class S3Parsing(object):
                 if recipient:
                     reply = "%s Email->%s" % (reply, recipient.value)
                 else:
-                    reply = "%s 's Email Not available!"%reply
+                    reply = "%s 's Email Not available!" % reply
             if "phone" in pquery:
                 query = (table.pe_id == result[0]["id"]) & \
                         (table.contact_method == "SMS") & \
@@ -157,12 +346,9 @@ class S3Parsing(object):
                                              limitby=(0, 1)).first()
                 if recipient:
                     reply = "%s Mobile->%s" % (reply,
-                                           recipient.value)
+                                               recipient.value)
                 else:
-                    reply = "%s 's Mobile Contact Not available!"%reply
-
-        if len(result) == 0:
-            return T("No Match")
+                    reply = "%s 's Mobile Contact Not available!" % reply
 
         return reply
     
@@ -197,13 +383,20 @@ class S3Parsing(object):
                (_name == soundex(row.aka2)):
                 result.append(row)
 
-        if len(result) > 1:
+        if len(result) == 0:
+            return T("No Match")
+
+        elif len(result) > 1:
             return T("Multiple Matches")
 
-        if len(result) == 1:
+        else:
+            # Single Match
             hospital = result[0]
-            status = db(stable.hospital_id == hospital.id).\
-                                                select(limitby=(0,1)).first()
+            status = db(stable.hospital_id == hospital.id).select(stable.facility_status,
+                                                                  stable.clinical_status,
+                                                                  stable.security_status,
+                                                                  limitby=(0, 1)
+                                                                  ).first()
             reply = "%s %s (%s) " % (reply, hospital.name,
                                      T("Hospital"))
             if "phone" in pquery:
@@ -220,9 +413,6 @@ class S3Parsing(object):
                 reply = reply + "Security status " + \
                     str(stable.security_status.represent\
                                             (status.security_status))
-
-        if len(result) == 0:
-            return T("No Match")
 
         return reply
 
@@ -254,10 +444,14 @@ class S3Parsing(object):
                (_name == soundex(row.acronym)):
                 result.append(row)
 
-        if len(result) > 1:
+        if len(reply) == 0:
+            return T("No Match")
+
+        elif len(result) > 1:
             return T("Multiple Matches")
 
-        if len(result) == 1:
+        else:
+            # Single Match
             org = result[0]
             reply = "%s %s (%s) " % (reply, org.name,
                                      T("Organization"))
@@ -270,8 +464,6 @@ class S3Parsing(object):
                 office = db(query).select(otable.address,
                                           limitby=(0, 1)).first()
                 reply = reply + "Address->" + office.address
-        if len(reply) == 0:
-            return T("No Match")
 
         return reply
 
@@ -285,14 +477,12 @@ class S3Parsing(object):
         if not message:
             return None
 
-        T = current.T
-        db = current.db
-        s3db = current.s3db
-        msg = current.msg
         parser = S3Parsing()
 
-        (lat, lon, code, text) = msg.parse_opengeosms(message)
+        (lat, lon, code, text) = current.msg.parse_opengeosms(message)
+
         if code == "SI":
+            # OpenGeoSMS
             reply = parser.parse_opengeosms(lat, lon, text, message, sender)
         else:
             words = string.split(message)
@@ -324,19 +514,18 @@ class S3Parsing(object):
         return reply				    
 
     # -------------------------------------------------------------------------
-    def parse_opengeosms(self,lat="", lon="", text="", message="", sender=""):
+    def parse_opengeosms(self, lat="", lon="", text="", message="", sender=""):
         """
             Parse OpenGeoSMS formatted messages.
         """
 
-        db = current.db
         s3db = current.s3db
         rtable = s3db.irs_ireport
         gtable = s3db.gis_location
         info = string.split(text)
-        name = info[len(info)-1]
+        name = info[len(info) - 1]
         category = ""
-        for a in range(0, len(info)-1):
+        for a in range(0, len(info) - 1):
             category = category + info[a] + " "
             
         #@ToDo: Check for an existing location in DB
@@ -360,7 +549,7 @@ class S3Parsing(object):
                       category=category,
                       location_id=location_id)			
 
-        db.commit()
+        current.db.commit()
         return "Incident Report Logged!"
 	                    
     # -------------------------------------------------------------------------

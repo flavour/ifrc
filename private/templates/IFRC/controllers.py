@@ -208,7 +208,7 @@ $('.marker').mouseout(function(){
                    _class="map-tip"))
 
         current.menu.breadcrumbs = None
-
+        
         return dict(map=map)
 
 # END =========================================================================

@@ -40,6 +40,7 @@ __all__ = ["S3OrganisationModel",
            "S3OfficeTypeTagModel",
            "org_organisation_logo",
            "org_root_organisation",
+           "org_organisation_requires",
            "org_organisation_represent",
            "org_site_represent",
            "org_rheader",
@@ -423,13 +424,11 @@ class S3OrganisationModel(S3Model):
                                                       title=T("Organization"),
                                                       tooltip=help)
 
+        auth = current.auth
         organisation_id = S3ReusableField("organisation_id", table,
                                           sortby="name",
-                                          requires=IS_NULL_OR(
-                                                        IS_ONE_OF(db, "org_organisation.id",
-                                                                  org_organisation_represent,
-                                                                  orderby="org_organisation.name",
-                                                                  sort=True)),
+                                          default = auth.user.organisation_id if auth.is_logged_in() else None,
+                                          requires=org_organisation_requires(),
                                           represent=org_organisation_represent,
                                           label=T("Organization"),
                                           comment=organisation_comment,
@@ -504,7 +503,6 @@ class S3OrganisationModel(S3Model):
                   referenced_by=[(utablename, "organisation_id")],
                   search_method=organisation_search,
                   deduplicate=self.organisation_duplicate,
-                  requires_approval=True,
                   list_fields=["id",
                                  "name",
                                  "acronym",
@@ -526,6 +524,10 @@ class S3OrganisationModel(S3Model):
 
         # Warehouses
         add_component("inv_warehouse",
+                      org_organisation="organisation_id")
+
+        # Catalogs
+        add_component("supply_catalog",
                       org_organisation="organisation_id")
 
         # Facilities
@@ -1058,7 +1060,6 @@ class S3OrganisationModel(S3Model):
         if record:
             current.s3db.pr_update_affiliations(table, record)
         return
-
 # =============================================================================
 class S3OrganisationVirtualFields:
     """ Virtual fields for the org_organisation table """
@@ -1162,6 +1163,7 @@ class S3SiteModel(S3Model):
     """
 
     names = ["org_site",
+             "org_site_requires",
              "org_site_id",
              ]
 
@@ -1211,7 +1213,7 @@ class S3SiteModel(S3Model):
         site_id = self.super_link("site_id", "org_site",
                                   #writable = True,
                                   #readable = True,
-                                  label=T("Facility"),
+                                  label=T("Office/Warehouse/Facility"),
                                   default=auth.user.site_id if auth.is_logged_in() else None,
                                   represent=lambda id: \
                                     org_site_represent(id, show_link=True),
@@ -1220,7 +1222,7 @@ class S3SiteModel(S3Model):
                                   # Comment these to use a Dropdown & not an Autocomplete
                                   widget=S3SiteAutocompleteWidget(),
                                   comment=DIV(_class="tooltip",
-                                                _title="%s|%s" % (T("Facility"),
+                                                _title="%s|%s" % (T("Office/Warehouse/Facility"),
                                                                   T("Enter some characters to bring up a list of possible matches")))
                                   )
 
@@ -1794,8 +1796,12 @@ class S3OfficeModel(S3Model):
                                    #writable=False,
                                    # @ToDo: Deployment Setting to add validator to make these unique
                                    ),
-                             self.org_organisation_id(widget=S3OrganisationAutocompleteWidget(
-                                default_from_profile=True)),
+                             self.org_organisation_id(
+                                 #widget=S3OrganisationAutocompleteWidget(default_from_profile=True),
+                                 widget = None,
+                                 # @ToDo: Add 'updateable=True' to IS_ONE_OF
+                                 requires = self.org_organisation_requires(updateable=True),
+                                 ),
                              office_type_id(
                                             #readable = False,
                                             #writable = False,
@@ -2194,6 +2200,25 @@ def org_root_organisation(organisation_id=None, pe_id=None):
     return None, None
 
 # =============================================================================
+def org_organisation_requires(updateable=False):
+    """
+        Filter the list of organisations for a form field to just those which
+        the user has update permissions for
+    """
+
+    db = current.db
+    if updateable:
+        # @ToDo: Replace with option to IS_ONE_OF
+        set = db(current.auth.s3_accessible_query("update",
+                                                  current.s3db.org_organisation))
+    else:
+        set = db
+    return IS_NULL_OR(IS_ONE_OF(set, "org_organisation.id",
+                                org_organisation_represent,
+                                orderby="org_organisation.name",
+                                sort=True))
+
+# =============================================================================
 def org_organisation_represent(id, row=None, show_link=False,
                                acronym=True, parent=True):
     """
@@ -2451,7 +2476,9 @@ def org_organisation_controller():
                 sr = auth.get_system_roles()
                 realms = auth.user.realms or Storage()
                 if sr.ADMIN in realms or \
-                   sr.ORG_ADMIN in realms and r.record.pe_id in realms[sr.ORG_ADMIN]:
+                   sr.ORG_ADMIN in realms and \
+                   realms[sr.ORG_ADMIN] is None or \
+                   r.record.pe_id in realms[sr.ORG_ADMIN]:
                     s3db.set_method(r.prefix, r.name,
                                     method="roles",
                                     action=S3OrgRoleManager())
@@ -2695,8 +2722,8 @@ def org_office_controller():
                                    )
 
                 elif cname == "human_resource":
-                    # Filter out people which are already staff for this office
-                    s3_filter_staff(r)
+                    # Filter to just Staff
+                    s3.filter = (s3db.hrm_human_resource.type == 1)
                     # Make it clear that this is for adding new staff, not assigning existing
                     s3.crud_strings.hrm_human_resource.label_create_button = T("Add New Staff Member")
                     # Cascade the organisation_id from the office to the staff
@@ -2704,6 +2731,8 @@ def org_office_controller():
                     htable.organisation_id.default = r.record.organisation_id
                     htable.organisation_id.writable = False
                     htable.organisation_id.comment = None
+                    # Filter out people which are already staff for this office
+                    s3_filter_staff(r)
 
                 elif cname == "req" and r.method not in ("update", "read"):
                     # Hide fields which don't make sense in a Create form
@@ -2784,6 +2813,14 @@ def org_office_controller():
                         except:
                             # A non-standard formstyle with just a single row
                             pass
+            elif r.component_name == "human_resource":
+                # Modify action button to open staff instead of human_resource
+                read_url = URL(c="hrm", f="staff", args=["[id]"])
+                delete_url = URL(c="hrm", f="staff", args=["[id]", "delete"])
+                update_url = URL(c="hrm", f="staff", args=["[id]", "update"])
+                S3CRUD.action_buttons(r, read_url=read_url,
+                                         delete_url=delete_url,
+                                         update_url=update_url)
         return output
     s3.postp = postp
 

@@ -30,7 +30,13 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["GIS", "S3Map", "GoogleGeocoder", "YahooGeocoder", "S3ExportPOI"]
+__all__ = ["GIS",
+           "S3Map",
+           "GoogleGeocoder",
+           "YahooGeocoder",
+           "S3ExportPOI",
+           "S3ImportPOI"
+           ]
 
 import os
 import re
@@ -2271,7 +2277,7 @@ class GIS(object):
         """
             Calculate the shortest distance (in km) over the earth's sphere between 2 points
             Formulae from: http://www.movable-type.co.uk/scripts/latlong.html
-            (NB We should normally use PostGIS functions, where possible, instead of this query)
+            (NB We could also use PostGIS functions, where possible, instead of this query)
         """
 
         import math
@@ -2283,24 +2289,22 @@ class GIS(object):
 
         if quick:
             # Spherical Law of Cosines (accurate down to around 1m & computationally quick)
-            acos = math.acos
             lat1 = radians(lat1)
             lat2 = radians(lat2)
             lon1 = radians(lon1)
             lon2 = radians(lon2)
-            distance = acos(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon2-lon1)) * RADIUS_EARTH
+            distance = math.acos(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon2 - lon1)) * RADIUS_EARTH
             return distance
 
         else:
             # Haversine
             #asin = math.asin
-            atan2 = math.atan2
             sqrt = math.sqrt
             pow = math.pow
-            dLat = radians(lat2-lat1)
-            dLon = radians(lon2-lon1)
+            dLat = radians(lat2 - lat1)
+            dLon = radians(lon2 - lon1)
             a = pow(sin(dLat / 2), 2) + cos(radians(lat1)) * cos(radians(lat2)) * pow(sin(dLon / 2), 2)
-            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            c = 2 * math.atan2(sqrt(a), sqrt(1 - a))
             #c = 2 * asin(sqrt(a))              # Alternate version
             # Convert radians to kilometers
             distance = RADIUS_EARTH * c
@@ -2308,8 +2312,67 @@ class GIS(object):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def create_poly(feature):
+        """
+            Create a .poly file for OpenStreetMap exports
+            http://wiki.openstreetmap.org/wiki/Osmosis/Polygon_Filter_File_Format
+        """
+
+        from shapely.wkt import loads as wkt_loads
+
+        name = feature.name
+
+        if "wkt" in feature:
+            wkt = feature.wkt
+        else:
+            # WKT not included by default in feature, so retrieve this now
+            table = current.s3db.gis_location
+            wkt = current.db(table.id == feature.id).select(table.wkt,
+                                                            limitby=(0, 1)
+                                                            ).first().wkt
+
+        try:
+            shape = wkt_loads(wkt)
+        except:
+            error = "Invalid WKT: %s" % name
+            s3_debug(error)
+            return error
+
+        geom_type = shape.geom_type
+        if geom_type == "MultiPolygon":
+            polygons = shape.geoms
+        elif geom_type == "Polygon":
+            polygons = [shape]
+        else:
+            error = "Unsupported Geometry: %s, %s" % (name, geom_type)
+            s3_debug(error)
+            return error
+        if os.path.exists(os.path.join(os.getcwd(), "temp")): # use web2py/temp
+            TEMP = os.path.join(os.getcwd(), "temp")
+        else:
+            import tempfile
+            TEMP = tempfile.gettempdir()
+        filename = "%s.poly" % name
+        filepath = os.path.join(TEMP, filename)
+        File = open(filepath, "w")
+        File.write("%s\n" % filename)
+        count = 1
+        for polygon in polygons:
+            File.write("%s\n" % count)
+            points = polygon.exterior.coords
+            for point in points:
+                File.write("\t%s\t%s\n" % (point[0], point[1]))
+            File.write("END\n")
+            ++count
+        File.write("END\n")
+        File.close()
+
+        return None
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def export_admin_areas(countries=[],
-                           levels=["L0", "L1", "L2", "L3", "L4"],
+                           levels=["L0", "L1", "L2", "L3"],
                            format="geojson",
                            simplify=0.001,
                            ):
@@ -2375,22 +2438,24 @@ class GIS(object):
                     shape = wkt_loads(row.wkt)
                     # Compact Encoding
                     geojson = dumps(shape, separators=(",", ":"))
-                f = dict(
-                        type = "Feature",
-                        properties = {"id": id},
-                        geometry = json.loads(geojson) if geojson else {}
-                        )
-                append(f)
+                if geojson:
+                    f = dict(
+                            type = "Feature",
+                            properties = {"id": id},
+                            geometry = json.loads(geojson)
+                            )
+                    append(f)
 
-            data = dict(
-                        type = "FeatureCollection",
-                        features = features
-                    )
-            # Output to file
-            filename = os.path.join(folder, "countries.geojson")
-            File = open(filename, "w")
-            File.write(json.dumps(data))
-            File.close()
+            if features:
+                data = dict(
+                            type = "FeatureCollection",
+                            features = features
+                        )
+                # Output to file
+                filename = os.path.join(folder, "countries.geojson")
+                File = open(filename, "w")
+                File.write(json.dumps(data))
+                File.close()
 
         q1 = (table.level == "L1") & \
              (table.deleted != True)
@@ -2412,8 +2477,7 @@ class GIS(object):
                 features = []
                 append = features.append
                 rows = db(query).select(ifield,
-                                        field,
-                                        )
+                                        field)
                 for row in rows:
                     if spatial:
                         id = row["gis_location"].id
@@ -2426,22 +2490,26 @@ class GIS(object):
                         shape = wkt_loads(row.wkt)
                         # Compact Encoding
                         geojson = dumps(shape, separators=(",", ":"))
-                    f = dict(
-                            type = "Feature",
-                            properties = {"id": id},
-                            geometry = json.loads(geojson) if geojson else {}
-                            )
-                    append(f)
+                    if geojson:
+                        f = dict(
+                                type = "Feature",
+                                properties = {"id": id},
+                                geometry = json.loads(geojson)
+                                )
+                        append(f)
 
-                data = dict(
-                            type = "FeatureCollection",
-                            features = features
-                        )
-                # Output to file
-                filename = os.path.join(folder, "1_%s.geojson" % _id)
-                File = open(filename, "w")
-                File.write(json.dumps(data))
-                File.close()
+                if features:
+                    data = dict(
+                                type = "FeatureCollection",
+                                features = features
+                            )
+                    # Output to file
+                    filename = os.path.join(folder, "1_%s.geojson" % _id)
+                    File = open(filename, "w")
+                    File.write(json.dumps(data))
+                    File.close()
+                else:
+                    s3_debug("No L1 features in %s" % _id)
 
         if "L2" in levels:
             if "L0" not in levels and "L1" not in levels:
@@ -2458,8 +2526,7 @@ class GIS(object):
                     features = []
                     append = features.append
                     rows = db(query).select(ifield,
-                                            field,
-                                            )
+                                            field)
                     for row in rows:
                         if spatial:
                             id = row["gis_location"].id
@@ -2472,22 +2539,26 @@ class GIS(object):
                             shape = wkt_loads(row.wkt)
                             # Compact Encoding
                             geojson = dumps(shape, separators=(",", ":"))
-                        f = dict(
-                                type = "Feature",
-                                properties = {"id": id},
-                                geometry = json.loads(geojson) if geojson else {}
-                                )
-                        append(f)
+                        if geojson:
+                            f = dict(
+                                    type = "Feature",
+                                    properties = {"id": id},
+                                    geometry = json.loads(geojson)
+                                    )
+                            append(f)
 
-                    data = dict(
-                                type = "FeatureCollection",
-                                features = features
-                            )
-                    # Output to file
-                    filename = os.path.join(folder, "2_%s.geojson" % l1.id)
-                    File = open(filename, "w")
-                    File.write(json.dumps(data))
-                    File.close()
+                    if features:
+                        data = dict(
+                                    type = "FeatureCollection",
+                                    features = features
+                                )
+                        # Output to file
+                        filename = os.path.join(folder, "2_%s.geojson" % l1.id)
+                        File = open(filename, "w")
+                        File.write(json.dumps(data))
+                        File.close()
+                    else:
+                        s3_debug("No L2 features in %s" % l1.id)
 
         if "L3" in levels:
             if "L0" not in levels and "L1" not in levels and "L2" not in levels:
@@ -2507,8 +2578,7 @@ class GIS(object):
                         features = []
                         append = features.append
                         rows = db(query).select(ifield,
-                                                field,
-                                                )
+                                                field)
                         for row in rows:
                             if spatial:
                                 id = row["gis_location"].id
@@ -2521,22 +2591,26 @@ class GIS(object):
                                 shape = wkt_loads(row.wkt)
                                 # Compact Encoding
                                 geojson = dumps(shape, separators=(",", ":"))
-                            f = dict(
-                                    type = "Feature",
-                                    properties = {"id": id},
-                                    geometry = json.loads(geojson) if geojson else {}
-                                    )
-                            append(f)
+                            if geojson:
+                                f = dict(
+                                        type = "Feature",
+                                        properties = {"id": id},
+                                        geometry = json.loads(geojson)
+                                        )
+                                append(f)
 
-                        data = dict(
-                                    type = "FeatureCollection",
-                                    features = features
-                                )
-                        # Output to file
-                        filename = os.path.join(folder, "3_%s.geojson" % l2.id)
-                        File = open(filename, "w")
-                        File.write(json.dumps(data))
-                        File.close()
+                        if features:
+                            data = dict(
+                                        type = "FeatureCollection",
+                                        features = features
+                                    )
+                            # Output to file
+                            filename = os.path.join(folder, "3_%s.geojson" % l2.id)
+                            File = open(filename, "w")
+                            File.write(json.dumps(data))
+                            File.close()
+                        else:
+                            s3_debug("No L3 features in %s" % l2.id)
 
         if "L4" in levels:
             if "L0" not in levels and "L1" not in levels and "L2" not in levels and "L3" not in levels:
@@ -2559,8 +2633,7 @@ class GIS(object):
                             features = []
                             append = features.append
                             rows = db(query).select(ifield,
-                                                    field,
-                                                    )
+                                                    field)
                             for row in rows:
                                 if spatial:
                                     id = row["gis_location"].id
@@ -2573,22 +2646,26 @@ class GIS(object):
                                     shape = wkt_loads(row.wkt)
                                     # Compact Encoding
                                     geojson = dumps(shape, separators=(",", ":"))
-                                f = dict(
-                                        type = "Feature",
-                                        properties = {"id": id},
-                                        geometry = json.loads(geojson) if geojson else {}
-                                        )
-                                append(f)
+                                if geojson:
+                                    f = dict(
+                                            type = "Feature",
+                                            properties = {"id": id},
+                                            geometry = json.loads(geojson)
+                                            )
+                                    append(f)
 
-                            data = dict(
-                                        type = "FeatureCollection",
-                                        features = features
-                                    )
-                            # Output to file
-                            filename = os.path.join(folder, "4_%s.geojson" % l3.id)
-                            File = open(filename, "w")
-                            File.write(json.dumps(data))
-                            File.close()
+                            if features:
+                                data = dict(
+                                            type = "FeatureCollection",
+                                            features = features
+                                        )
+                                # Output to file
+                                filename = os.path.join(folder, "4_%s.geojson" % l3.id)
+                                File = open(filename, "w")
+                                File.write(json.dumps(data))
+                                File.close()
+                            else:
+                                s3_debug("No L4 features in %s" % l3.id)
 
     # -------------------------------------------------------------------------
     def import_admin_areas(self,
@@ -3729,7 +3806,7 @@ class GIS(object):
                                           L0=L0_name,
                                           L1=name)
             # Ensure that any locations which inherit their latlon from this one get updated
-            query = (table.parent == id) and \
+            query = (table.parent == id) & \
                     (table.inherited == True)
             fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
@@ -3831,7 +3908,7 @@ class GIS(object):
                                           L1=L1_name,
                                           L2=name)
             # Ensure that any locations which inherit their latlon from this one get updated
-            query = (table.parent == id) and \
+            query = (table.parent == id) & \
                     (table.inherited == True)
             fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
@@ -3971,7 +4048,7 @@ class GIS(object):
                                           L2=L2_name,
                                           L3=name)
             # Ensure that any locations which inherit their latlon from this one get updated
-            query = (table.parent == id) and \
+            query = (table.parent == id) & \
                     (table.inherited == True)
             fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
@@ -4145,7 +4222,7 @@ class GIS(object):
                                           L3=L3_name,
                                           L4=name)
             # Ensure that any locations which inherit their latlon from this one get updated
-            query = (table.parent == id) and \
+            query = (table.parent == id) & \
                     (table.inherited == True)
             fields = [table.id, table.name, table.level, table.path, table.parent,
                       table.L0, table.L1, table.L2, table.L3, table.L4,
@@ -7312,5 +7389,158 @@ class S3ExportPOI(S3Method):
                 (FS("location_id$path").like("%s/%%" % self.lx))
         resource.add_filter(query)
         return
+
+# -----------------------------------------------------------------------------
+class S3ImportPOI(S3Method):
+    """ Import point-of-interest resources for a location """
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def apply_method(r, **attr):
+        """
+            Apply method.
+
+            @param r: the S3Request
+            @param attr: controller options for this request
+        """
+
+        T = current.T
+        auth = current.auth
+        request = current.request
+        response = current.response
+
+        if r.representation == "html" and \
+           r.id and not r.component:
+
+            title = T("Import from OpenStreetMap")
+
+            form = FORM(
+                    TABLE(
+                        TR(
+                            TD(T("Can read PoIs either from an OpenStreetMap mirror or from an uploaded .osm file.")),
+                            ),
+                        TR(
+                            TD(B("%s: " % T("Host"))),
+                            TD(INPUT(_type="text", _name="host",
+                                     _id="host", _value="localhost"))
+                            ),
+                        TR(
+                            TD(B("%s: " % T("Database"))),
+                            TD(INPUT(_type="text", _name="database",
+                                     _id="database", _value="osm"))
+                            ),
+                        TR(
+                            TD(B("%s: " % T("User"))),
+                            TD(INPUT(_type="text", _name="user",
+                                     _id="user", _value="osm"))
+                            ),
+                        TR(
+                            TD(B("%s: " % T("Password"))),
+                            TD(INPUT(_type="text", _name="password",
+                                     _id="password", _value="osm"))
+                            ),
+                        TR(
+                            TD(T("or")),
+                            ),
+                        TR(
+                            TH(B("%s: " % T("File"))),
+                            INPUT(_type="file", _name="file", _size="50"),
+                            TH(DIV(SPAN("*", _class="req",
+                                        _style="padding-right: 5px;")))
+                            ),
+                        TR(
+                            TD(B("%s: " % T("Ignore Errors?"))),
+                            TD(INPUT(_type="checkbox", _name="ignore_errors",
+                                     _id="ignore_errors"))
+                            ),
+                        TR("",
+                           INPUT(_type="submit", _value=T("Import"))
+                           )
+                        )
+                    )
+
+            output = dict(title=title,
+                          form=form)
+
+            if form.accepts(request.vars, current.session):
+
+                vars = form.vars
+                if vars.file:
+                    File = vars.file
+                else:
+                    # Create .poly file
+                    error = GIS.create_poly(r.record)
+                    if error:
+                        current.session.error = error
+                        redirect(URL(args=r.id))
+                    # Use Osmosis to extract an .osm file using this .poly
+                    name = r.record.name
+                    if os.path.exists(os.path.join(os.getcwd(), "temp")): # use web2py/temp
+                        TEMP = os.path.join(os.getcwd(), "temp")
+                    else:
+                        import tempfile
+                        TEMP = tempfile.gettempdir()
+                    filename = os.path.join(TEMP, "%s.osm" % name)
+                    try:
+                        from subprocess import check_output as call
+                    except:
+                        # Python < 2.7
+                        from subprocess import call
+                    try:
+                        result = call(["/home/osm/osmosis/bin/osmosis", # @ToDo: deployment_setting
+                                       "--read-pgsql",
+                                       "host=%s" % vars.host,
+                                       "database=%s" % vars.database,
+                                       "user=%s" % vars.user,
+                                       "password=%s" % vars.password,
+                                       "--dataset-dump",
+                                       "--bounding-polygon",
+                                       "file=%s" % os.path.join(TEMP, "%s.poly" % name),
+                                       "--write-xml",
+                                       "file=%s" % filename,
+                                       ], shell=True)
+                    except:
+                        # Py2.7
+                        current.session.error = T("OSM file generation failed: %s") % result
+                        redirect(URL(args=r.id))
+                    try:
+                        File = open(filename, "r")
+                    except:
+                        # Py2.6
+                        current.session.error = T("OSM file generation failed")
+                        redirect(URL(args=r.id))
+
+                stylesheet = os.path.join(request.folder, "static", "formats",
+                                          "osm", "import.xsl")
+                ignore_errors = vars.get("ignore_errors", None)
+                xml = current.xml
+                tree = xml.csv2tree(File)
+                #tree = xml.transform(tree, stylesheet_path=stylesheet)
+                define_resource = current.s3db.resource
+                response.error = ""
+                import_count = 0
+                for tablename in current.deployment_settings.get_gis_poi_resources():
+                    resource = define_resource(tablename)
+                    x3xml = xml.transform(tree, stylesheet_path=stylesheet,
+                                          name=tablename.split("_", 1)[1])
+                    try:
+                        success = resource.import_xml(s3xml,
+                                                      ignore_errors=ignore_errors)
+                        import_count += resource.import_count
+                    except:
+                        import sys
+                        response.error += str(sys.exc_info()[1])
+                if import_count:
+                    response.confirmation = "%s %s" % \
+                        (import_count,
+                         T("PoIs successfully imported."))
+                else:
+                    response.information = T("No PoIs available.")
+
+            response.view = "create.html"
+            return output
+
+        else:
+            raise HTTP(501, BADMETHOD)
 
 # END =========================================================================

@@ -177,9 +177,3 @@ div.question-container {
     font-size: large;
     overflow: auto;
 }
-
-/* Translation Functionality */
-
-table.translation_module_table {
-   width : 55%;
-}

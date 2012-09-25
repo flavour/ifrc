@@ -7,7 +7,7 @@
 module = request.controller
 resourcename = request.function
 
-if not deployment_settings.has_module(module):
+if not settings.has_module(module):
     raise HTTP(404, body="Module disabled: %s" % module)
 
 # -----------------------------------------------------------------------------
@@ -191,15 +191,28 @@ def twitter_search():
 
 # -----------------------------------------------------------------------------
 def twitter_search_results():
-    """ Controller to retrieve tweets for user saved search queries - to be called via cron. Currently in real time also. """
+    """
+        Controller to view tweets from user saved search queries
 
-    # Update results
-    result = msg.receive_subscribed_tweets()
+        @ToDo: Action Button to update async
+    """
 
-    if not result:
-        session.error = T("Need to configure Twitter Authentication")
-        redirect(URL(f="twitter_settings", args=[1, "update"]))
+    def prep(r):
+        if r.interactive:
+            table = r.table
+            if not db(table.id > 0).select(table.id,
+                                           limitby=(0, 1)).first():
+                # Update results
+                result = msg.receive_subscribed_tweets()
+                if not result:
+                    session.error = T("Need to configure Twitter Authentication")
+                    redirect(URL(f="twitter_settings", args=[1, "update"]))
+        return True
+    s3.prep = prep
 
+    s3db.configure("msg_twitter_search_results",
+                   insertable=False,
+                   editable=False)
     return s3_rest_controller()
 
 # =============================================================================
@@ -510,6 +523,18 @@ def twilio_inbound_settings():
     return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
+def keyword():
+    """ REST Controller """
+    
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def sender():
+    """ REST Controller """
+    
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
 def workflow():
     """
         RESTful CRUD controller for workflows
@@ -528,7 +553,7 @@ def workflow():
     table.workflow_task_id.label = T("Parsing Workflow")
     table.workflow_task_id.comment = DIV(DIV(_class="tooltip",
                 _title="%s|%s" % (T("Parsing Workflow"),
-                                  T("This is the name of the parsing functionn used as a workflow."))))
+                                  T("This is the name of the parsing function used as a workflow."))))
 
     # CRUD Strings
     s3.crud_strings["msg_workflow"] = Storage(
@@ -1200,11 +1225,13 @@ def twitter_settings():
     )
 
     def prep(r):
-        if not (settings.twitter.oauth_consumer_key and settings.twitter.oauth_consumer_secret):
+        oauth_consumer_key = settings.msg.twitter_oauth_consumer_key
+        oauth_consumer_secret = settings.msg.twitter_oauth_consumer_secret
+        if not (oauth_consumer_key and oauth_consumer_secret):
             session.error = T("You should edit Twitter settings in models/000_config.py")
             return True
-        oauth = tweepy.OAuthHandler(settings.twitter.oauth_consumer_key,
-                                    settings.twitter.oauth_consumer_secret)
+        oauth = tweepy.OAuthHandler(oauth_consumer_key,
+                                    oauth_consumer_secret)
 
         #tablename = "%s_%s" % (module, resourcename)
         #table = db[tablename]
@@ -1212,17 +1239,16 @@ def twitter_settings():
 
         if r.http == "GET" and r.method in ("create", "update"):
             # We're showing the form
+            _s3 = session.s3
             try:
-                session.s3.twitter_oauth_url = oauth.get_authorization_url()
-                session.s3.twitter_request_key = oauth.request_token.key
-                session.s3.twitter_request_secret = oauth.request_token.secret
+                _s3.twitter_oauth_url = oauth.get_authorization_url()
+                _s3.twitter_request_key = oauth.request_token.key
+                _s3.twitter_request_secret = oauth.request_token.secret
             except tweepy.TweepError:
                 session.error = T("Problem connecting to twitter.com - please refresh")
                 return True
             table.pin.readable = True
-            table.pin.label = SPAN(T("PIN number "),
-                A(T("from Twitter"), _href=T(session.s3.twitter_oauth_url), _target="_blank"),
-                " (%s)" % T("leave empty to detach account"))
+            table.pin.label = T("PIN number from Twitter (leave empty to detach account)")
             table.pin.value = ""
             table.twitter_account.label = T("Current Twitter account")
             return True
@@ -1237,6 +1263,11 @@ def twitter_settings():
     # Post-processor
     def user_postp(r, output):
         output["list_btn"] = ""
+        if r.http == "GET" and r.method in ("create", "update"):
+            rheader = A(T("Collect PIN from Twitter"),
+                        _href=T(session.s3.twitter_oauth_url),
+                        _target="_blank")
+            output["rheader"] = rheader  
         return output
     s3.postp = user_postp
 

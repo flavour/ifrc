@@ -284,10 +284,6 @@ class S3LocationModel(S3Model):
                                        ]
                         )
 
-        from s3.s3gis import S3ExportPOI
-        self.set_method("gis", "location",
-                        method="export_poi", action=S3ExportPOI())
-
         # Tags as component of Locations
         add_component("gis_location_tag",
                       gis_location=dict(joinby="location_id",
@@ -375,13 +371,15 @@ class S3LocationModel(S3Model):
             On Accept for GIS Locations (after DB I/O)
         """
 
-        # Update the Path (async if-possible)
-        vars = form.vars
-        feature = json.dumps(dict(id=vars.id,
-                                  level=vars.get("level", False),
-                                  ))
-        current.s3task.async("gis_update_location_tree",
-                             args=[feature])
+        if not current.auth.override:
+            # Update the Path (async if-possible)
+            # (skip during prepop)
+            vars = form.vars
+            feature = json.dumps(dict(id=vars.id,
+                                      level=vars.get("level", False),
+                                      ))
+            current.s3task.async("gis_update_location_tree",
+                                 args=[feature])
         return
 
     # -------------------------------------------------------------------------
@@ -3860,6 +3858,7 @@ def gis_rheader(r, tabs=[]):
 
     if resourcename == "location":
         tabs = [(T("Location Details"), None),
+                (T("Import from OpenStreetMap"), "import_poi"),
                 (T("Local Names"), "name"),
                 (T("Key Value pairs"), "tag"),
                 ]

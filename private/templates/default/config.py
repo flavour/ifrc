@@ -63,8 +63,8 @@ T = current.T
 #settings.auth.registration_roles = ["STAFF", "PROJECT_EDIT"]
 # Uncomment this to enable record approval
 #settings.auth.record_approval = True
-# Uncomment & populate this to set an alternative record approver role
-#settings.auth.record_approver_role = "APPROVER"
+# Uncomment this and specify a list of tablenames for which record approval is required
+#settings.auth.record_approval_required_for = ["project_project"]
 # Uncomment this to request an image when users register
 #settings.auth.registration_requests_image = True
 # Uncomment this to direct newly-registered users to their volunteer page to be able to add extra details
@@ -170,7 +170,7 @@ settings.L10n.decimal_separator = "."
 # Mouse Position: 'normal', 'mgrs' or 'off'
 #settings.gis.mouse_position = "mgrs"
 # PoIs to export in KML/OSM feeds from Admin locations
-#settings.gis.poi_export_resources = ["cr_shelter", "hms_hospital", "org_office"]
+#settings.gis.poi_resources = ["cr_shelter", "hms_hospital", "org_office"]
 
 # Messaging Settings
 # If you wish to use a parser.py in another folder than "default"
@@ -290,7 +290,7 @@ settings.L10n.decimal_separator = "."
 # Supply
 #settings.supply.use_alt_name = False
 # Do not edit after deployment
-#settings.supply.catalog_default = T("Other Items")
+#settings.supply.catalog_default = T("Default")
 
 # Organisation Management
 # Set the length of the auto-generated org/site code the default is 10

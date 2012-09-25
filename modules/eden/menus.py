@@ -143,9 +143,9 @@ class S3MainMenu(object):
     def menu_help(cls, **attr):
         """ Help Menu """
 
-        menu_help = MM("Help", **attr)(
-            MM("Contact us", c="default", f="contact"),
-            MM("About", c="default", f="about")
+        menu_help = MM("Help", c="default", f="help", **attr)(
+            MM("Contact us", f="contact"),
+            MM("About", f="about")
         )
         return menu_help
 
@@ -1142,13 +1142,13 @@ class S3OptionsMenu(object):
         ADMIN = session.s3.system_roles.ADMIN
 
         return M(c="cap")(
-                    M("Alerts", f="alert", vars={'alert.is_template': 'F'})(
-                        M("List alerts", f="alert", vars={'alert.is_template': 'F'}),
+                    M("Alerts", f="alert", vars={'alert.is_template': 'false'})(
+                        M("List alerts", f="alert", vars={'alert.is_template': 'false'}),
                         M("Create alert", f="alert", m="create"),
                         M("Search & Subscribe", m="search"),
                     ),
-                    M("Templates", f="template", vars={'alert.is_template': 'T'})(
-                        M("List templates", f="template", vars={'alert.is_template': 'T'}),
+                    M("Templates", f="template", vars={'alert.is_template': 'true'})(
+                        M("List templates", f="template", vars={'alert.is_template': 'true'}),
                         M("Create template", f="template", m="create"),
                     ),
                     #M("CAP Profile", f="profile")(
@@ -1330,6 +1330,8 @@ class S3OptionsMenu(object):
                     M("Log", f="log"),
                     M("Outbox", f="outbox"),
                     M("Search Twitter Tags", f="twitter_search")(
+                       M("Keywords", f="keyword"),
+                       M("Senders", f="sender"),
                        M("Queries", f="twitter_search"),
                        M("Results", f="twitter_search_results")
                     ),
@@ -1701,10 +1703,10 @@ class S3OptionsMenu(object):
 
         return [
             M("Email Settings", c="msg", f="inbound_email_settings"),
-            M("Parsing Settings", c="msg", f="workflow"),                       
+            M("Parsing Settings", c="msg", f="workflow"),
             M("SMS Settings", c="msg", f="setting",
                 args=[1], m="update"),
-            M("Twilio SMS Settings", c="msg", f="twilio_inbound_settings"),           
+            M("Twilio SMS Settings", c="msg", f="twilio_inbound_settings"),
             M("Twitter Settings", c="msg", f="twitter_settings",
                 args=[1], m="update")
         ]

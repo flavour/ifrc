@@ -78,8 +78,6 @@ class S3RequestManager(object):
     """
 
     DELETED = "deleted"
-
-    HOOKS = "s3"
     RCVARS = "rcvars"
 
     MAX_DEPTH = 10
@@ -459,7 +457,6 @@ class S3Request(object):
         # Common settings
         self.UNAUTHORISED = current.T("Not Authorized")
         self.ERROR = manager.ERROR
-        self.HOOKS = manager.HOOKS # HOOKS = "s3"
 
         # XSLT Paths
         self.XSLT_PATH = "static/formats"
@@ -553,10 +550,15 @@ class S3Request(object):
                 vars[varname] = component_id
 
         # Define the target resource
-        _filter = current.response[manager.HOOKS].filter # manager.HOOKS="s3"
+        _filter = current.response.s3.filter
         components = component_name
         if components is None:
             components = cnames
+
+        if self.method == "review":
+            approved, unapproved = False, True
+        else:
+            approved, unapproved = True, False
 
         tablename = "%s_%s" % (self.prefix, self.name)
         self.resource = S3Resource(tablename,
@@ -564,6 +566,8 @@ class S3Request(object):
                                    filter=_filter,
                                    vars=vars,
                                    components=components,
+                                   approved=approved,
+                                   unapproved=unapproved,
                                    include_deleted=include_deleted)
 
         self.tablename = self.resource.tablename
@@ -826,7 +830,7 @@ class S3Request(object):
         response = current.response
         session = current.session
 
-        hooks = response.get(self.HOOKS, None)
+        hooks = response.s3
         self.next = None
 
         bypass = False
@@ -840,7 +844,7 @@ class S3Request(object):
                 count = self.resource.count()
                 if self.vars is not None and count == 1:
                     self.resource.load()
-                    self.record = self.resource._rows.first()
+                    self.record = self.resource._rows[0]
                 else:
                     if hasattr(self.resource.search, "search_interactive"):
                         redirect(URL(r=self, f=self.name, args="search",
@@ -1599,7 +1603,7 @@ class S3Request(object):
             representation = self.representation
         if method is None:
             method = self.method
-        elif method=="":
+        elif method == "":
             method = None
             if not read:
                 if self.component:
@@ -1609,6 +1613,8 @@ class S3Request(object):
         else:
             if id is None:
                 id = self.id
+            elif id == 0:
+                id = None
             else:
                 id = str(id)
                 if len(id) == 0:

@@ -33,8 +33,6 @@
 
 """
 
-__all__ = ["S3CRUD", "S3ApproveRecords"]
-
 from gluon import *
 from gluon.dal import Row
 from gluon.serializers import json as jsons
@@ -79,8 +77,7 @@ class S3CRUD(S3Method):
             @returns: output object to send to the view
         """
 
-        self.sqlform = self._config("crud_form",
-                                    S3SQLDefaultForm())
+        self.sqlform = self._config("crud_form", S3SQLDefaultForm())
         self.settings = current.response.s3.crud
 
         # Pre-populate create-form?
@@ -97,18 +94,25 @@ class S3CRUD(S3Method):
             elif isinstance(populate, dict):
                 self.data = populate
 
+        method = self.method
+
         if r.http == "DELETE" or self.method == "delete":
             output = self.delete(r, **attr)
-        elif self.method == "create":
+        elif method == "create":
             output = self.create(r, **attr)
-        elif self.method == "read":
+        elif method == "read":
             output = self.read(r, **attr)
-        elif self.method == "update":
+        elif method == "update":
             output = self.update(r, **attr)
-        elif self.method == "list":
+        elif method == "list":
             output = self.select(r, **attr)
-        elif self.method == "validate":
+        elif method == "validate":
             output = self.validate(r, **attr)
+        elif method == "review":
+            if r.record:
+                output = self.review(r, **attr)
+            else:
+                output = self.unapproved(r, **attr)
         else:
             r.error(405, current.manager.ERROR.BAD_METHOD)
 
@@ -140,7 +144,7 @@ class S3CRUD(S3Method):
         insertable = _config("insertable", True)
         if not insertable:
             if r.method is not None:
-                r.error(405, self.resource.ERROR.BAD_METHOD)
+                r.error(405, resource.ERROR.BAD_METHOD)
             else:
                 return dict(form=None)
 
@@ -209,13 +213,13 @@ class S3CRUD(S3Method):
                     from_table, from_record = from_record.split(".", 1)
                     from_table = current.db.get(from_table, None)
                     if not from_table:
-                        r.error(404, self.resource.ERROR.BAD_RESOURCE)
+                        r.error(404, resource.ERROR.BAD_RESOURCE)
                 else:
                     from_table = table
                 try:
                     from_record = long(from_record)
                 except:
-                    r.error(404, self.resource.ERROR.BAD_RECORD)
+                    r.error(404, resource.ERROR.BAD_RECORD)
                 authorised = current.auth.s3_has_permission("read",
                                                     from_table._tablename,
                                                     from_record)
@@ -250,9 +254,12 @@ class S3CRUD(S3Method):
 
             subheadings = _config("subheadings")
 
+            # Set default approver
+            current.auth.permission.set_default_approver(table)
+
             # Get the form
             form = self.sqlform(request=request,
-                                resource=self.resource,
+                                resource=resource,
                                 data=self.data,
                                 record_id=original,
                                 from_table=from_table,
@@ -386,7 +393,7 @@ class S3CRUD(S3Method):
 
             # Redirect to update if user has permission unless
             # a method has been specified in the URL
-            if not r.method:
+            if not r.method or r.method == "review":
                 authorised = self._permitted("update")
                 if authorised and representation == "html" and editable:
                     return self.update(r, **attr)
@@ -405,7 +412,7 @@ class S3CRUD(S3Method):
             # Item
             if record_id:
                 item = self.sqlform(request=request,
-                                    resource=self.resource,
+                                    resource=resource,
                                     record_id=record_id,
                                     readonly=True,
                                     subheadings=subheadings,
@@ -458,7 +465,7 @@ class S3CRUD(S3Method):
                         if value is None or value == "" or value == []:
                             field.readable = False
                 item = self.sqlform(request=request,
-                                    resource=self.resource,
+                                    resource=resource,
                                     record_id=record_id,
                                     readonly=True,
                                     format=representation)
@@ -606,7 +613,7 @@ class S3CRUD(S3Method):
 
             # Get the form
             form = self.sqlform(request=self.request,
-                                resource=self.resource,
+                                resource=resource,
                                 record_id=record_id,
                                 onvalidation=onvalidation,
                                 onaccept=onaccept,
@@ -1059,6 +1066,296 @@ class S3CRUD(S3Method):
         return output
 
     # -------------------------------------------------------------------------
+    def unapproved(self, r, **attr):
+        """
+            Get a list of unapproved records in this resource
+
+            @param r: the S3Request
+            @param attr: dictionary of parameters for the method handler
+        """
+
+        from s3.s3utils import S3DataTable
+        session = current.session
+        response = current.response
+        s3 = response.s3
+
+        resource = self.resource
+        table = self.table
+        tablename = self.tablename
+
+        representation = r.representation
+
+        output = dict()
+
+        # Get table-specific parameters
+        _config = self._config
+        orderby = _config("orderby", None)
+        sortby = _config("sortby", [[1, 'asc']])
+        linkto = _config("linkto", None)
+        insertable = _config("insertable", True)
+        listadd = _config("listadd", True)
+        addbtn = _config("addbtn", False)
+        list_fields = _config("list_fields")
+
+        report_groupby = _config("report_groupby")
+        report_hide_comments = _config("report_hide_comments")
+        report_filename = _config("report_filename")
+        report_formname = _config("report_formname")
+
+        # Check permission to read in this table
+        authorised = self._permitted()
+        if not authorised:
+            r.unauthorised()
+
+        # Pagination
+        vars = self.request.get_vars
+        if representation == "aadata":
+            start = vars.get("iDisplayStart", None)
+            limit = vars.get("iDisplayLength", None)
+        else:
+            start = vars.get("start", None)
+            limit = vars.get("limit", None)
+        if limit is not None:
+            try:
+                start = int(start)
+                limit = int(limit)
+            except ValueError:
+                start = None
+                limit = None # use default
+        else:
+            start = None # use default
+
+        # Linkto
+        if not linkto:
+            linkto = self._linkto(r)
+
+        # List fields
+        if not list_fields:
+            fields = resource.readable_fields()
+            list_fields = [f.name for f in fields]
+        else:
+            fields = [table[f] for f in list_fields if f in table.fields]
+        if not fields:
+            fields = []
+
+        if not fields or \
+           fields[0].name != table.fields[0]:
+            fields.insert(0, table[table.fields[0]])
+        if list_fields[0] != table.fields[0]:
+            list_fields.insert(0, table.fields[0])
+
+        # Truncate long texts
+        if r.interactive or r.representation == "aadata":
+            for f in self.table:
+                if str(f.type) == "text" and not f.represent:
+                    f.represent = self.truncate
+
+        left = []
+        distinct = False
+
+        if r.interactive:
+
+            resource.build_query(filter=s3.filter)
+
+            # View
+            response.view = self._view(r, "list.html")
+
+            # Page title
+            crud_string = self.crud_string
+            if r.component:
+                title = crud_string(r.tablename, "title_display")
+            else:
+                title = crud_string(self.tablename, "title_list")
+            output["title"] = title
+
+            # Count rows
+            totalrows = resource.count()
+            displayrows = totalrows
+
+            # How many records per page?
+            if s3.dataTable_iDisplayLength:
+                display_length = s3.dataTable_iDisplayLength
+            else:
+                display_length = 25
+
+            # Server-side pagination?
+            if not s3.no_sspag:
+                dt_pagination = "true"
+                if limit is None:
+                    limit = 2 * display_length
+                session.s3.filter = vars
+                if orderby is None:
+                    # Default initial sorting
+                    scol = len(list_fields) > 1 and "1" or "0"
+                    vars.update(iSortingCols="1",
+                                iSortCol_0=scol,
+                                sSortDir_0="asc")
+                    q, orderby, left = resource.datatable_filter(list_fields, vars)
+                    del vars["iSortingCols"]
+                    del vars["iSortCol_0"]
+                    del vars["sSortDir_0"]
+                if r.method == "search" and not orderby:
+                    orderby = fields[0]
+            else:
+                dt_pagination = "false"
+
+            # Get the data table
+            dt = resource.datatable(fields=list_fields,
+                                    start=start,
+                                    limit=limit,
+                                    left=left,
+                                    orderby=orderby,
+                                    distinct=distinct)
+
+            # No records?
+            if dt is None:
+                s3.no_formats = True
+                datatable = current.T("No records to review")
+            else:
+                datatable = dt.html(totalrows, displayrows, "list",
+                                    dt_pagination=dt_pagination,
+                                    dt_displayLength=display_length)
+                s3.actions = [{"label": str(current.T("Review")),
+                               "url": r.url(id="[id]", method="review"),
+                               "_class": "action-btn"}]
+
+            # Add items to output
+            output["items"] = datatable
+
+        elif r.representation == "aadata":
+
+            resource.build_query(filter=s3.filter, vars=session.s3.filter)
+
+            # Count the rows
+            totalrows = displayrows = resource.count()
+
+            # Apply datatable filters
+            searchq, orderby, left = resource.datatable_filter(list_fields, vars)
+            if searchq is not None:
+                resource.add_filter(searchq)
+                displayrows = resource.count(left=left, distinct=True)
+
+            # Orderby fallbacks
+            if r.method == "search" and not orderby:
+                orderby = fields[0]
+            if orderby is None:
+                orderby = _config("orderby", None)
+
+            # Get a data table
+            dt = resource.datatable(fields=list_fields,
+                                    start=start,
+                                    limit=limit,
+                                    left=left,
+                                    orderby=orderby,
+                                    distinct=distinct)
+
+            # Echo
+            sEcho = int(vars.sEcho or 0)
+
+            # Representation
+            if dt is not None:
+                output = dt.json(totalrows,
+                                 displayrows,
+                                 "list",
+                                 sEcho)
+            else:
+                output = '{"iTotalRecords": %s, ' \
+                         '"iTotalDisplayRecords": 0,' \
+                         '"dataTable_id": "list", ' \
+                         '"sEcho": %s, ' \
+                         '"aaData": []}' % (totalrows, sEcho)
+
+        else:
+            r.error(501, current.manager.ERROR.BAD_FORMAT)
+
+        return output
+
+    # -------------------------------------------------------------------------
+    def review(self, r, **attr):
+        """
+            Review/approve/reject an unapproved record.
+
+            @param r: the S3Request
+            @param attr: dictionary of parameters for the method handler
+        """
+
+        if not self._permitted("review"):
+            r.unauthorized()
+
+        T = current.T
+
+        session = current.session
+        response = current.response
+
+        output = Storage()
+        if r.interactive:
+
+            _next = r.url(id="[id]", method="review")
+
+            if self._permitted("approve"):
+
+                approve = FORM(INPUT(_value=T("Approve"),
+                                    _type="submit",
+                                    _name="approve-btn",
+                                    _id="approve-btn"))
+
+                reject = FORM(INPUT(_value=T("Reject"),
+                                    _type="submit",
+                                    _name="reject-btn",
+                                    _id="reject-btn"))
+
+                cancel = A(T("Cancel"),
+                           _href=r.url(id=0),
+                           _class="action-lnk")
+
+                output["approve_form"] = DIV(TABLE(TR(approve, reject, cancel)),
+                                             _id="approve_form")
+
+                if approve.accepts(r.post_vars, session, formname="approve"):
+                    resource = current.s3db.resource(r.tablename, r.id,
+                                                     approved=False,
+                                                     unapproved=True)
+                    try:
+                        success = resource.approve()
+                    except:
+                        success = False
+                    if success:
+                        response.confirmation = T("Record approved")
+                        output["approve_form"] = ""
+                    else:
+                        response.warning = T("Record could not be approved.")
+
+                    r.http = "GET"
+                    _next = r.url(id=0)
+
+                elif reject.accepts(r.post_vars, session, formname="reject"):
+                    resource = current.s3db.resource(r.tablename, r.id,
+                                                     approved=False,
+                                                     unapproved=True)
+                    try:
+                        success = resource.reject()
+                    except:
+                        success = False
+                    if success:
+                        response.confirmation = T("Record deleted")
+                        output["approve_form"] = ""
+                    else:
+                        response.warning = T("Record could not be deleted.")
+
+                    r.http = "GET"
+                    _next = r.url(id=0)
+
+            output.update(self.read(r, **attr))
+            self.next = _next
+            r.http = r.env.request_method
+            current.response.view = "review.html"
+
+        else:
+            r.error(501, current.manager.ERROR.BAD_FORMAT)
+
+        return output
+
+    # -------------------------------------------------------------------------
     def validate(self, r, **attr):
         """
             Validate records (AJAX). This method reads a JSON object from
@@ -1157,22 +1454,54 @@ class S3CRUD(S3Method):
             # Field validation
             fields = Storage()
             for fname in record:
+
+                error = None
+                validated = fields[fname] = Storage()
+
+                # We do not validate primary keys
+                # (because we don't update them)
                 if fname in (pkey, "_id"):
                     continue
-                error = None
+
                 value = record[fname]
-                validated = fields[fname] = Storage(value = value)
+
                 if fname not in table.fields:
-                    validated._error = "invalid field"
+                    validated["value"] = value
+                    validated["_error"] = "invalid field"
                     continue
+                else:
+                    field = table[fname]
+
+                # Convert numeric type (does not always happen in the widget)
                 field = table[fname]
+                if field.type == "integer":
+                    if value not in (None, ""):
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            value = 0
+                    else:
+                        value = None
+                if field.type == "double":
+                    if value not in (None, ""):
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            value = 0
+                    else:
+                        value = None
+
+                # Validate and format the value
                 try:
                     value, error = validate(table, original, fname, value)
                 except AttributeError:
                     error = "invalid field"
+                validated["value"] = value # field.formatter(value)?
+
+                # Handle errors, update the validated item
                 if error:
                     has_errors = True
-                    validated._error = s3_unicode(error)
+                    validated["_error"] = s3_unicode(error)
                 else:
                     try:
                         text = represent(field,
@@ -1181,7 +1510,7 @@ class S3CRUD(S3Method):
                                          xml_escape = True)
                     except:
                         text = s3_unicode(value)
-                    validated.text = text
+                    validated["text"] = text
 
             # Form validation (=onvalidation)
             if not has_errors:
@@ -1818,107 +2147,5 @@ class S3CRUD(S3Method):
                         return str(URL(r=r, c=c, f=f,
                                        args=args))
         return list_linkto
-
-# =============================================================================
-class S3ApproveRecords(S3CRUD):
-    """
-        Method handler for record approval
-
-        @status: work in progress
-    """
-
-    # -------------------------------------------------------------------------
-    def apply_method(self, r, **attr):
-        """
-            Entry point for REST interface
-
-            @param r: the S3Request
-            @param attr: controller parameters for the request
-        """
-
-        self.sqlform = self._config("crud_form", S3SQLDefaultForm())
-        self.settings = current.response.s3.crud
-        self.data = None
-
-        if self.method == "approve":
-            if r.record is None:
-                output = self.unapproved(r, **attr)
-            else:
-                output = self.approve(r, **attr)
-        elif self.method == "reject":
-            if r.record is None:
-                output = self.unapproved(r, **attr)
-            else:
-                output = self.reject(r, **attr)
-        else:
-            r.error(405, current.manager.ERROR.BAD_METHOD)
-        return output
-
-    # -------------------------------------------------------------------------
-    def approve(self, r, **attr):
-        """
-            Approve an unapproved record
-
-            @param r: the S3Request
-            @param attr: controller parameters for the request
-        """
-
-        raise NotImplementedError
-
-    # -------------------------------------------------------------------------
-    def reject(self, r, **attr):
-        """
-            Reject an unapproved record
-
-            @param r: the S3Request
-            @param attr: controller parameters for the request
-        """
-
-        raise NotImplementedError
-
-    # -------------------------------------------------------------------------
-    def unapproved(self, r, **attr):
-        """
-            List unapproved records
-
-            @param r: the S3Request
-            @param attr: controller parameters for the request
-        """
-
-        T = current.T
-        output = dict()
-
-        # Clone this request to remove any controller settings
-        request = r.factory(args=r.args)
-        resource = request.resource
-        resource.configure(insertable=False)
-
-        # Filter for unapproved records
-        from s3resource import S3FieldSelector as FS
-        query = (FS("approved_by") == None)
-        resource.add_filter(query)
-
-        if r.interactive:
-            # We don't need export formats
-            current.response.s3.no_formats = True
-
-            # Get a data table
-            items = self.select(request, **attr)["items"]
-            output["items"] = items
-
-            # Have a "Review" action button for each row
-            self.action_button(T("Review"),
-                               r.url(method="approve", id="[id]"))
-
-            # Page title (@todo: should be resource-specific)
-            output["title"] = T("Review Records")
-
-        elif r.representation == "aadata":
-            output = self.select(request, **attr)
-
-        else:
-            r.error(501, current.manager.ERROR.BAD_FORMAT)
-
-        return output
 
 # END =========================================================================

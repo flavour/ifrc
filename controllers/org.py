@@ -41,7 +41,11 @@ def subsector():
 
 # -----------------------------------------------------------------------------
 def site():
-    """ RESTful CRUD controller """
+    """
+        RESTful CRUD controller
+        - used by S3SiteAutocompleteWidget(), which doesn't yet support filtering
+                                              to just updateable sites
+    """
 
     # Pre-processor
     def prep(r):

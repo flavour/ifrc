@@ -24,7 +24,8 @@ class index():
         appname = request.application
         settings = current.deployment_settings
 
-        if settings.has_module("cr"):
+        has_module = settings.has_module
+        if has_module("cr"):
             table = current.s3db.cr_shelter
             SHELTERS = s3.crud_strings["cr_shelter"].title_list
         else:
@@ -35,40 +36,45 @@ class index():
                     #["col1", T("Staff"), "hrm", "staff"],
                     #["col1", T("Volunteers"), "vol", "volunteer"],
                     ["col1", T("Projects"), "project", "project"],
+                    ["col1", T("Vehicles"), "vehicle", "vehicle"],
                     ["col2", T("Assets"), "asset", "asset"],
-                    ["col2", T("Vehicles"), "vehicle", "vehicle"],
                     ["col2", T("Inventory Items"), "inv", "inv_item"],
-                    ["facility", T("Facilities"), "org", "facility"],
+                    #["facility", T("Facilities"), "org", "facility"],
                     ["facility", T("Hospitals"), "hms", "hospital"],
                     ["facility", T("Offices"), "org", "office"],
                     ["facility", SHELTERS, "cr", "shelter"],
+                    ["facility", T("Transport"), "transport", "index"],
                     ["facility", T("Warehouses"), "inv", "warehouse"],
                     ]
 
-        menu_divs = {"col1": DIV( _id = "menu_div_col1", _class = "menu_div"),
-                     "col2": DIV( _id = "menu_div_col2", _class = "menu_div"),
-                     "facility": DIV( H3(T("Facilities")),
-                                     _id = "facility_box", _class = "menu_box"),
+        menu_divs = {"col1": DIV(_id="menu_div_col1", _class="menu_div"),
+                     "col2": DIV(_id="menu_div_col2", _class="menu_div"),
+                     "facility": DIV(H3(T("Facilities")),
+                                     _id = "facility_box",
+                                     _class = "menu_box"),
                      }
 
         for div, label, app, function in menu_btns:
-            if settings.has_module(app):
+            if has_module(app):
                 # @ToDo: Also check permissions (e.g. for anonymous users)
                 menu_divs[div].append(A(DIV(label,
-                                            _class = "menu-btn-r"),
-                                        _class = "menu-btn-l",
-                                        _href = URL(app,function)
+                                            _class="menu-btn-r"),
+                                        _class="menu-btn-l",
+                                        _href = URL(app, function)
                                         )
                                      )
 
-        cols_box = DIV(menu_divs["col1"],
+        cols_box = DIV(H3(T("Humanitarian Projects")),
+                       DIV(_id="menu_div_col0"),
+                       menu_divs["col1"],
                        menu_divs["col2"],
-                       _id = "cols_box",
-                       _class = "menu_box fleft swidth"
+                       _id="cols_box",
+                       #_class="menu_box fleft swidth"
+                       _class="menu_box"
                        )
         facility_box  = menu_divs["facility"]
-        facility_box.append(A(IMG(_src = "/%s/static/img/map_icon_128.png" % \
-                                           appname),
+        facility_box.append(A(IMG(_src="/%s/static/img/map_icon_128.png" % \
+                                        appname),
                               _href = URL(c="gis", f="index"),
                               _title = T("Map")
                               )
@@ -83,7 +89,7 @@ class index():
         if AUTHENTICATED in roles and \
            auth.s3_has_permission("read", current.s3db.org_organisation):
             org_items = self.organisation()
-            datatable_ajax_source = "/%s/default/organisation.aaData" % \
+            datatable_ajax_source = "/%s/default/organisation.aadata" % \
                                     appname
             s3.actions = None
             auth.permission.controller = "org"
@@ -186,9 +192,9 @@ $('#login-btn').click(function(){
                                     dict(login=B(T("login")))))))
 
         if settings.frontpage.rss:
-            s3.external_stylesheets.append( "http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.css" )
-            s3.scripts.append( "http://www.google.com/jsapi?key=notsupplied-wizard" )
-            s3.scripts.append( "http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.js" )
+            s3.external_stylesheets.append("http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.css")
+            s3.scripts.append("http://www.google.com/jsapi?key=notsupplied-wizard")
+            s3.scripts.append("http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.js")
             counter = 0
             feeds = ""
             for feed in settings.frontpage.rss:
@@ -255,7 +261,7 @@ google.setOnLoadCallback(LoadDynamicFeedControl)'''))
         table = resource.table
 
         list_fields = ["id", "name"]
-        limit = int(request.get_vars["iDisplayLength"]) if request.extension == "aaData" else 1
+        limit = int(request.get_vars["iDisplayLength"]) if request.extension == "aadata" else 1
         rfields = resource.resolve_selectors(list_fields)[0]
         (orderby, filter) = S3DataTable.getControlData(rfields, request.vars)
         resource.add_filter(filter)
@@ -281,7 +287,7 @@ google.setOnLoadCallback(LoadDynamicFeedControl)'''))
                             dt_displayLength=10,
                             dt_ajax_url=URL(c="default",
                                             f="organisation",
-                                            extension="aaData",
+                                            extension="aadata",
                                             vars={"id": "org_list_1"},
                                             ),
                            )
@@ -293,7 +299,7 @@ google.setOnLoadCallback(LoadDynamicFeedControl)'''))
                 echo = None
             items = dt.json(totalrows,
                             filteredrows,
-                            "supply_list_1",
+                            "org_list_1",
                             echo)
         else:
             from gluon.http import HTTP

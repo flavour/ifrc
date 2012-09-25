@@ -72,16 +72,14 @@ def s3_debug(message, value=None):
        @ToDo: Should be using python's built-in logging module?
     """
 
-    try:
-        output = "S3 Debug: %s" % str(message)
-        if value:
-            output = "%s: %s" % (output, str(value))
-    except:
-        output = u"S3 Debug: %s" % unicode(message)
-        if value:
-            output = u"%s: %s" % (output, unicode(value))
+    output = "S3 Debug: %s" % s3_unicode(message)
+    if value:
+        output = "%s: %s" % (output, s3_unicode(value))
 
-    print >> sys.stderr, output
+    try:
+        print >> sys.stderr, output
+    except:
+        print >> sys.stderr, "Debug crashed"
 
 # =============================================================================
 def s3_dev_toolbar():
@@ -793,10 +791,10 @@ def s3_register_validation():
 
     if s3.debug:
         s3.scripts.append("/%s/static/scripts/jquery.validate.js" % appname)
-        s3.scripts.append("/%s/static/scripts/jquery.pstrength.1.3.js" % appname)
+        s3.scripts.append("/%s/static/scripts/jquery.pstrength.2.1.0.js" % appname)
     else:
         s3.scripts.append("/%s/static/scripts/jquery.validate.min.js" % appname)
-        s3.scripts.append("/%s/static/scripts/jquery.pstrength.1.3.min.js" % appname)
+        s3.scripts.append("/%s/static/scripts/jquery.pstrength.2.1.0.min.js" % appname)
 
     if request.cookies.has_key("registered"):
         password_position = '''last'''
@@ -1524,20 +1522,15 @@ class S3BulkImporter(object):
         self.importTasks = []
         self.specialTasks = []
         self.tasks = []
-        # loaders aren't defined currently
-        #s3 = current.response.s3
-        self.alternateTables = {"hrm_person": {"tablename":"hrm_human_resource",
-                                               #"loader":s3.hrm_person_loader,
+        self.alternateTables = {"hrm_person": {"tablename":"pr_person",
                                                "prefix":"pr",
                                                "name":"person"},
                                 "inv_warehouse": {"tablename":"org_office",
                                                   "prefix":"org",
                                                   "name":"office"},
-                                "member_person": {"tablename":"member_membership",
+                                "member_person": {"tablename":"pr_person",
                                                   "prefix":"pr",
                                                   "name":"person"},
-                                #"req_req":     {"loader":s3.req_loader},
-                                #"req_req_item":{"loader":s3.req_item_loader},
                                }
         self.errorList = []
         self.resultList = []
@@ -2785,8 +2778,8 @@ class S3DataTable(object):
         #          hence applying the datatable sorting/filters is
         #          not transparent
         if s3.datatable_ajax_source:
-            end = s3.datatable_ajax_source.find(".aaData")
-            default_url = s3.datatable_ajax_source[:end] # strip '.aaData' extension
+            end = s3.datatable_ajax_source.find(".aadata")
+            default_url = s3.datatable_ajax_source[:end] # strip '.aadata' extension
         else:
             default_url = current.request.url
         iconList = []
@@ -2949,6 +2942,7 @@ class S3DataTable(object):
                                     consisting of two values, the repr from the
                                     db and the label to display. This can be more than
                                     the actual number of groups (giving an empty group).
+                   dt_group_space: Insert a space between the group heading and the next group
                    dt_bulk_selected: A list of selected items
                    dt_actions: dictionary of actions
                    dt_styles: dictionary of styles to be applied to a list of ids
@@ -2987,7 +2981,7 @@ class S3DataTable(object):
         config.bFilter = attr.get("dt_bFilter", "true")
         config.ajaxUrl = attr.get("dt_ajax_url", URL(c=request.controller,
                                                      f=request.function,
-                                                     extension="aaData",
+                                                     extension="aadata",
                                                      args=request.args,
                                                      vars=request.get_vars,
                                                      ))
@@ -3021,6 +3015,7 @@ class S3DataTable(object):
         config.group = dt_group
         config.groupTotals = attr.get("dt_group_totals", [])
         config.groupTitles = attr.get("dt_group_titles", [])
+        config.groupSpacing = attr.get("dt_group_space", "false")
         if bulkActions:
             for order in orderby:
                 if config.bulkCol <= order[0]:
@@ -3177,8 +3172,8 @@ class S3DataTable(object):
         if pagination:
             s3 = current.response.s3
             self.end = real_end
-            aadata = self.json(totalrows, filteredrows, id, sEcho,
-                               stringify=False, **attr)
+            aadata = self.aadata(totalrows, filteredrows, id, sEcho,
+                                 flist, stringify=False, **attr)
             cache = {"iCacheLower": self.start,
                      "iCacheUpper": self.end if filteredrows > self.end else filteredrows,
                      "lastJson": aadata}
@@ -3192,6 +3187,70 @@ class S3DataTable(object):
                                **attr
                                )
         return html
+
+    # ---------------------------------------------------------------------
+    def aadata(self,
+               totalrows,
+               displayrows,
+               id,
+               sEcho,
+               flist,
+               stringify=True,
+               **attr
+               ):
+        """
+            Method to render the data into a json object
+
+            @param totalrows: The total rows in the unfiltered query.
+            @param displayrows: The total rows in the filtered query.
+            @param id: The id of the table for which this ajax call will
+                       respond to.
+            @param sEcho: An unaltered copy of sEcho sent from the client used
+                          by dataTables as a draw count.
+            @param flist: The list of fields
+            @param attr: dictionary of attributes which can be passed in
+                   dt_action_col: The column where the action buttons will be placed
+                   dt_bulk_actions: list of labels for the bulk actions.
+                   dt_bulk_col: The column in which the checkboxes will appear,
+                                by default it will be the column immediately
+                                before the first data item
+                   dt_group_totals: The number of record in each group.
+                                    This will be displayed in parenthesis
+                                    after the group title.
+        """
+
+        from gluon.serializers import json
+
+        data = self.data
+        if not flist:
+            flist = self.lfields
+        start = self.start
+        end = self.end
+        action_col = attr.get("dt_action_col", 0)
+        structure = {}
+        aadata = []
+        for i in xrange(start, end):
+            row = data[i]
+            details = []
+            for field in flist:
+                if field == "BULK":
+                    details.append("<INPUT id='select%s' type='checkbox' class='bulkcheckbox'>" % \
+                        row[flist[action_col]])
+                else:
+                    details.append(s3_unicode(row[field]))
+            aadata.append(details)
+        structure["dataTable_id"] = id
+        structure["dataTable_filter"] = self.filterString
+        structure["dataTable_groupTotals"] = attr.get("dt_group_totals", [])
+        structure["dataTable_sort"] = self.orderby
+        structure["aaData"] = aadata
+        structure["iTotalRecords"] = totalrows
+        structure["iTotalDisplayRecords"] = displayrows
+        structure["sEcho"] = sEcho
+        if stringify:
+            return json(structure)
+        else:
+            return structure
 
     # ---------------------------------------------------------------------
     def json(self,
@@ -3221,14 +3280,7 @@ class S3DataTable(object):
                                     This will be displayed in parenthesis
                                     after the group title.
         """
-
-        from gluon.serializers import json
-
-        data = self.data
         flist = self.lfields
-        start = self.start
-        end = self.end
-
         action_col = attr.get("dt_action_col", 0)
         if action_col != 0:
             if action_col == -1 or action_col >= len(flist):
@@ -3246,29 +3298,7 @@ class S3DataTable(object):
             if bulkCol <= action_col:
                 action_col += 1
 
-        structure = {}
-        aadata = []
-        for i in xrange(start, end):
-            row = data[i]
-            details = []
-            for field in flist:
-                if field == "BULK":
-                    details.append("<INPUT id='select%s' type='checkbox' class='bulkcheckbox'>" % \
-                        row[flist[action_col]])
-                else:
-                    details.append(s3_unicode(row[field]))
-            aadata.append(details)
-        structure["dataTable_id"] = id
-        structure["dataTable_filter"] = self.filterString
-        structure["dataTable_groupTotals"] = attr.get("dt_group_totals", [])
-        structure["dataTable_sort"] = self.orderby
-        structure["aaData"] = aadata
-        structure["iTotalRecords"] = totalrows
-        structure["iTotalDisplayRecords"] = displayrows
-        structure["sEcho"] = sEcho
-        if stringify:
-            return json(structure)
-        else:
-            return structure
+        return self.aadata(totalrows, displayrows, id, sEcho, flist,
+                           stringify, **attr)
 
 # END =========================================================================

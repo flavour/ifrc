@@ -91,7 +91,8 @@ def index():
     response.title = title
 
     item = ""
-    if settings.has_module("cms"):
+    has_module = settings.has_module
+    if has_module("cms"):
         table = s3db.cms_post
         item = db(table.module == module).select(table.body,
                                                  limitby=(0, 1)).first()
@@ -100,7 +101,7 @@ def index():
         else:
             item = ""
 
-    if settings.has_module("cr"):
+    if has_module("cr"):
         table = s3db.cr_shelter
         SHELTERS = s3.crud_strings["cr_shelter"].title_list
     else:
@@ -140,12 +141,12 @@ def index():
                 }
 
     for div, label, app, function in menu_btns:
-        if settings.has_module(app):
+        if has_module(app):
             # @ToDo: Also check permissions (e.g. for anonymous users)
             menu_divs[div].append(A(DIV(label,
                                         _class = "menu-btn-r"),
                                     _class = "menu-btn-l",
-                                    _href = URL(app,function)
+                                    _href = URL(app, function)
                                     )
                                  )
 
@@ -176,7 +177,7 @@ def index():
     if AUTHENTICATED in roles and \
        auth.s3_has_permission("read", db.org_organisation):
         org_items = organisation()
-        datatable_ajax_source = "/%s/default/organisation.aaData" % \
+        datatable_ajax_source = "/%s/default/organisation.aadata" % \
                                 appname
         s3.actions = None
         response.view = "default/index.html"
@@ -280,9 +281,9 @@ $('#login-btn').click(function(){
                                 dict(login=B(T("login")))))))
 
     if settings.frontpage.rss:
-        s3.external_stylesheets.append( "http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.css" )
-        s3.scripts.append( "http://www.google.com/jsapi?key=notsupplied-wizard" )
-        s3.scripts.append( "http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.js" )
+        s3.external_stylesheets.append("http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.css")
+        s3.scripts.append("http://www.google.com/jsapi?key=notsupplied-wizard")
+        s3.scripts.append("http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.js")
         counter = 0
         feeds = ""
         for feed in settings.frontpage.rss:
@@ -341,7 +342,7 @@ def organisation():
     table = resource.table
 
     list_fields = ["id", "name"]
-    limit = int(request.get_vars["iDisplayLength"]) if request.extension == "aaData" else 1
+    limit = int(request.get_vars["iDisplayLength"]) if request.extension == "aadata" else 1
     rfields = resource.resolve_selectors(list_fields)[0]
     (orderby, filter) = S3DataTable.getControlData(rfields, request.vars)
     resource.add_filter(filter)
@@ -367,7 +368,7 @@ def organisation():
                         dt_displayLength=10,
                         dt_ajax_url=URL(c="default",
                                         f="organisation",
-                                        extension="aaData",
+                                        extension="aadata",
                                         vars={"id": "org_list_1"},
                                         ),
                        )
@@ -379,7 +380,7 @@ def organisation():
             echo = None
         items = dt.json(totalrows,
                         filteredrows,
-                        "supply_list_1",
+                        "org_list_1",
                         echo)
     else:
         raise HTTP(501, s3mgr.ERROR.BAD_FORMAT)
@@ -476,75 +477,9 @@ def user():
         form = auth()
     elif arg == "profile":
         # @ToDo: move this code to /modules/s3/s3aaa.py:def profile?
-
-        # If we have an opt_in and some post_vars then update the opt_in value
-        if settings.get_auth_opt_in_to_email() and request.post_vars:
-            opt_list = settings.get_auth_opt_in_team_list()
-            removed = []
-            selected = []
-            for opt_in in opt_list:
-                if opt_in in request.post_vars:
-                    selected.append(opt_in)
-                else:
-                    removed.append(opt_in)
-            ptable = s3db.pr_person
-            putable = s3db.pr_person_user
-            query = (putable.user_id == request.post_vars.id) & \
-                    (putable.pe_id == ptable.pe_id)
-            person_id = db(query).select(ptable.id, limitby=(0, 1)).first().id
-            db(ptable.id == person_id).update(opt_in = selected)
-
-            g_table = s3db["pr_group"]
-            gm_table = s3db["pr_group_membership"]
-            # Remove them from any team they are a member of in the removed list
-            for team in removed:
-                query = (g_table.name == team) & \
-                        (gm_table.group_id == g_table.id) & \
-                        (gm_table.person_id == person_id)
-                gm_rec = db(query).select(g_table.id, limitby=(0, 1)).first()
-                if gm_rec:
-                    db(gm_table.id == gm_rec.id).delete()
-            # Add them to the team (if they are not already a team member)
-            for team in selected:
-                query = (g_table.name == team) & \
-                        (gm_table.group_id == g_table.id) & \
-                        (gm_table.person_id == person_id)
-                gm_rec = db(query).select(g_table.id, limitby=(0, 1)).first()
-                if not gm_rec:
-                    query = (g_table.name == team)
-                    team_rec = db(query).select(g_table.id, limitby=(0, 1)).first()
-                    # if the team doesn't exist then add it
-                    if team_rec == None:
-                        team_id = g_table.insert(name = team, group_type = 5)
-                    else:
-                        team_id = team_rec.id
-                    gm_table.insert(group_id = team_id,
-                                    person_id = person_id)
-        if settings.get_auth_openid():
-            form = DIV(form, openid_login_form.list_user_openids())
-        else:
-            form = auth.profile()
+        form = auth.profile()
         # add an opt in clause to receive emails depending on the deployment settings
-        if settings.get_auth_opt_in_to_email():
-            ptable = s3db.pr_person
-            ltable = s3db.pr_person_user
-            opt_list = settings.get_auth_opt_in_team_list()
-            query = (ltable.user_id == form.record.id) & \
-                    (ltable.pe_id == ptable.pe_id)
-            db_opt_in_list = db(query).select(ptable.opt_in, limitby=(0, 1)).first().opt_in
-            for opt_in in opt_list:
-                field_id = "%s_opt_in_%s" % (_table_user, opt_list)
-                if opt_in in db_opt_in_list:
-                    checked = "selected"
-                else:
-                    checked = None
-                form[0].insert(-1,
-                               TR(TD(LABEL("Receive %s updates:" % opt_in,
-                                           _for="opt_in",
-                                           _id=field_id + SQLFORM.ID_LABEL_SUFFIX),
-                                     _class="w2p_fl"),
-                                     INPUT(_name=opt_in, _id=field_id, _type="checkbox", _checked=checked),
-                               _id=field_id + SQLFORM.ID_ROW_SUFFIX))
+
     else:
         # Retrieve Password / Logout
         form = auth()
@@ -559,6 +494,149 @@ def user():
                 login_form=login_form,
                 register_form=register_form,
                 self_registration=self_registration)
+
+
+# -----------------------------------------------------------------------------
+def person():
+    """
+        Profile to show:
+         - User Details 
+         - Person Details
+         - HRM 
+        
+    """
+
+    # Set to current user
+    user_person_id  = str(s3_logged_in_person())
+    if not request.args or request.args[0] != user_person_id:
+        request.args = [str(user_person_id)]
+
+    # Custom Method for User
+    def auth_profile_method(r, **attr):
+        # Custom View
+        response.view = "update.html"
+        current.menu.breadcrumbs = None
+    
+        # RHeader for consistency
+        rheader = attr.get("rheader", None)
+        if callable(rheader):
+            rheader = rheader(r)
+            
+        table = auth.settings.table_user
+        tablename = table._tablename
+
+        next = URL(c = "default",
+                   f = "person",
+                   args = [str(user_person_id), "user"])
+        onaccept = lambda form: auth.s3_approve_user(form.vars),
+        form = auth.profile(next = next,
+                            onaccept = onaccept)
+
+        return dict(
+                title = T("User Profile"),
+                rheader = rheader,
+                form = form,
+            )
+
+    set_method = s3db.set_method
+
+    set_method("pr", "person",
+               method="user",
+               action=auth_profile_method)
+
+    # Custom Method for Contacts
+    set_method("pr", "person",
+               method="contacts",
+               action=s3db.pr_contacts)
+    
+
+    if settings.has_module("asset"):
+        # Assets as component of people
+        s3db.add_component("asset_asset",
+                           pr_person="assigned_to_id")
+
+    group = request.get_vars.get("group", "staff")
+
+    # Configure person table
+    tablename = "pr_person"
+    table = s3db[tablename]
+    if (group == "staff" and settings.get_hrm_staff_experience() == "programme") or \
+       (group == "volunteer" and settings.get_hrm_vol_experience() == "programme"):
+        table.virtualfields.append(s3db.hrm_programme_person_virtual_fields())
+    #s3db.configure(tablename,
+    #               deletable=False)
+
+    # Configure for personal mode
+    s3.crud_strings[tablename].update(
+        title_display = T("Personal Profile"),
+        title_update = T("Personal Profile"))
+
+    # CRUD pre-process
+    def prep(r):
+        if r.interactive and r.method != "import":
+            if r.component:
+                if r.component_name == "physical_description":
+                    # Hide all but those details that we want
+                    # Lock all the fields
+                    table = r.component.table
+                    for field in table.fields:
+                        table[field].writable = False
+                        table[field].readable = False
+                    # Now enable those that we want
+                    table.ethnicity.writable = True
+                    table.ethnicity.readable = True
+                    table.blood_type.writable = True
+                    table.blood_type.readable = True
+                    table.medical_conditions.writable = True
+                    table.medical_conditions.readable = True
+                    table.other_details.writable = True
+                    table.other_details.readable = True
+            else:
+                table = r.table
+                # No point showing the 'Occupation' field - that's the Job Title in the Staff Record
+                table.occupation.readable = False
+                table.occupation.writable = False
+                table.pe_label.readable = False
+                table.pe_label.writable = False
+                table.missing.readable = False
+                table.missing.writable = False
+                table.age_group.readable = False
+                table.age_group.writable = False
+                # Assume volunteers only between 12-81
+                table.date_of_birth.widget = S3DateWidget(past=972, future=-144)
+            return True
+        else:
+            # Disable non-interactive & import
+            return False
+    s3.prep = prep
+
+    # CRUD post-process
+    def postp(r, output):
+        if r.interactive and r.component:
+            if r.component_name == "human_resource":
+                # Set the minimum end_date to the same as the start_date
+                s3.jquery_ready.append(
+'''S3.start_end_date('hrm_human_resource_start_date','hrm_human_resource_end_date')''')
+            if r.component_name == "experience":
+                # Set the minimum end_date to the same as the start_date
+                s3.jquery_ready.append(
+'''S3.start_end_date('hrm_experience_start_date','hrm_experience_end_date')''')
+            elif r.component_name == "asset":
+                # Provide a link to assign a new Asset
+                # @ToDo: Proper Widget to do this inline
+                output["add_btn"] = A(T("Assign Asset"),
+                                      _href=URL(c="asset", f="asset"),
+                                      _id="add-btn",
+                                      _class="action-btn")
+        return output
+    s3.postp = postp
+
+    output = s3_rest_controller("pr", "person",
+                                native=False,
+                                rheader = lambda r: \
+                                    s3db.hrm_rheader(r, profile=True),
+                                )
+    return output
 
 # -----------------------------------------------------------------------------
 def facebook():
@@ -598,7 +676,7 @@ def apath(path=""):
 
     from gluon.fileutils import up
     opath = up(request.folder)
-    #TODO: This path manipulation is very OS specific.
+    # @ToDo: This path manipulation is very OS specific.
     while path[:3] == "../": opath, path=up(opath), path[3:]
     return os.path.join(opath,path).replace("\\", "/")
 
@@ -610,6 +688,15 @@ def about():
         @ToDo: Avoid relying on Command Line tools which may not be in path
                - pull back info from Python modules instead?
     """
+
+    response.title = T("About")
+    if settings.get_template() != "default":
+        # Try a Custom View
+        path = os.path.join(request.folder, "private", "templates",
+                            settings.get_template(), "views", "help.html")
+        if os.path.exists(path):
+            response.view = "../private/templates/%s/views/help.html" % settings.get_template()
+            return dict()
 
     import sys
     import subprocess
@@ -680,12 +767,28 @@ def about():
 # -----------------------------------------------------------------------------
 def help():
     """ Custom View """
+
+    if settings.get_template() != "default":
+        # Try a Custom View
+        path = os.path.join(request.folder, "private", "templates",
+                            settings.get_template(), "views", "help.html")
+        if os.path.exists(path):
+            response.view = "../private/templates/%s/views/help.html" % settings.get_template()
+
     response.title = T("Help")
     return dict()
 
 # -----------------------------------------------------------------------------
 def privacy():
     """ Custom View """
+
+    if settings.get_template() != "default":
+        # Try a Custom View
+        path = os.path.join(request.folder, "private", "templates",
+                            settings.get_template(), "views", "privacy.html")
+        if os.path.exists(path):
+            response.view = "../private/templates/%s/views/privacy.html" % settings.get_template()
+
     response.title = T("Privacy")
     return dict()
 
@@ -725,10 +828,14 @@ def contact():
 
         output = s3_rest_controller(prefix, resourcename)
         return output
-    else:
-        # Default: Simple Custom View
-        response.title = T("Contact us")
-        return dict()
+    elif settings.get_template() != "default":
+        # Try a Custom View
+        path = os.path.join(request.folder, "private", "templates",
+                            settings.get_template(), "views", "contact.html")
+        if os.path.exists(path):
+            response.view = "../private/templates/%s/views/contact.html" % settings.get_template()
 
+    response.title = T("Contact us")
+    return dict()
 
 # END =========================================================================

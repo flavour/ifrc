@@ -30,6 +30,7 @@
 __all__ = ["S3Model", "S3ModelExtensions"]
 
 from gluon import *
+from gluon.dal import Table
 # Here are dependencies listed for reference:
 #from gluon import current
 #from gluon.dal import Field
@@ -74,7 +75,6 @@ class S3Model(object):
         if "s3" not in response:
             response.s3 = Storage()
         self.prefix = module
-        settings = current.deployment_settings
 
         mandatory_models = ("auth",
                             "sync",
@@ -87,12 +87,12 @@ class S3Model(object):
             if self.__loaded():
                 return
             self.__lock()
-            mandatory = module in mandatory_models
-            if mandatory or settings.has_module(module):
+            if module in mandatory_models or \
+               current.deployment_settings.has_module(module):
                 env = self.model()
             else:
                 env = self.defaults()
-            if isinstance(env, dict):
+            if isinstance(env, (Storage, dict)):
                 response.s3.update(env)
             self.__loaded(True)
             self.__unlock()
@@ -142,24 +142,26 @@ class S3Model(object):
 
     # -------------------------------------------------------------------------
     def __getattr__(self, name):
+        """ Model auto-loader """
 
-        return self[name]
+        if str(name) in self.__dict__:
+            return self.__dict__[str(name)]
+        else:
+            db = current.db
+            if name in db:
+                return db[name]
+            else:
+                s3 = current.response.s3
+                if name in s3:
+                    return s3[name]
+                else:
+                    return self.table(name,
+                                      AttributeError("undefined table: %s" % name))
 
     # -------------------------------------------------------------------------
     def __getitem__(self, key):
-        """ Model auto-loader """
 
-        if str(key) in self.__dict__:
-            return dict.__getitem__(self, str(key))
-        else:
-            db = current.db
-            if key in db:
-                return db[key]
-            elif key in current.response.s3:
-                return current.response.s3[key]
-            else:
-                return self.table(key,
-                                  AttributeError("undefined table: %s" % key))
+        return self.__getattr__(key)
 
     # -------------------------------------------------------------------------
     def model(self):
@@ -179,8 +181,8 @@ class S3Model(object):
         return None
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def table(tablename, default=None, db_only=False):
+    @classmethod
+    def table(cls, tablename, default=None, db_only=False):
         """
             Helper function to load a table definition by its name
         """
@@ -192,6 +194,8 @@ class S3Model(object):
 
         if tablename in db:
             return db[tablename]
+        elif tablename in s3 and not db_only:
+            return s3[tablename]
         else:
             prefix, name = tablename.split("_", 1)
             models = current.models
@@ -226,8 +230,8 @@ class S3Model(object):
             return default
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def get(name, default=None):
+    @classmethod
+    def get(cls, name, default=None):
         """
             Helper function to load a response.s3 variable from models
         """
@@ -270,8 +274,8 @@ class S3Model(object):
             return default
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def load(name):
+    @classmethod
+    def load(cls, name):
         """
             Helper function to load a model by its name (=prefix)
         """
@@ -318,8 +322,8 @@ class S3Model(object):
         return
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def define_table(tablename, *fields, **args):
+    @classmethod
+    def define_table(cls, tablename, *fields, **args):
         """
             Same as db.define_table except that it does not repeat
             a table definition if the table is already defined.
@@ -335,14 +339,14 @@ class S3Model(object):
     # -------------------------------------------------------------------------
     # Resource configuration
     # -------------------------------------------------------------------------
-    @staticmethod
-    def resource(prefix, name=None, **attr):
+    @classmethod
+    def resource(cls, prefix, name=None, **attr):
 
         return S3Resource(prefix, name=name, **attr)
 
    # -------------------------------------------------------------------------
-    @staticmethod
-    def configure(tablename, **attr):
+    @classmethod
+    def configure(cls, tablename, **attr):
         """
             Update the extra configuration of a table
 
@@ -352,15 +356,15 @@ class S3Model(object):
 
         config = current.model.config
 
-        tn = str(tablename)
+        tn = tablename._tablename if type(tablename) is Table else tablename
         if tn not in config:
             config[tn] = Storage()
         config[tn].update(attr)
         return
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def get_config(tablename, key, default=None):
+    @classmethod
+    def get_config(cls, tablename, key, default=None):
         """
             Reads a configuration attribute of a resource
 
@@ -370,15 +374,15 @@ class S3Model(object):
 
         config = current.model.config
 
-        tn = str(tablename)
+        tn = tablename._tablename if type(tablename) is Table else tablename
         if tn in config:
             return config[tn].get(key, default)
         else:
             return default
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def clear_config(tablename, *keys):
+    @classmethod
+    def clear_config(cls, tablename, *keys):
         """
             Removes configuration attributes of a resource
 
@@ -388,7 +392,7 @@ class S3Model(object):
 
         config = current.model.config
 
-        tn = str(tablename)
+        tn = tablename._tablename if type(tablename) is Table else tablename
         if tn in config:
             if not keys:
                 del config[tn]
@@ -399,8 +403,8 @@ class S3Model(object):
     # -------------------------------------------------------------------------
     # Resource components
     #--------------------------------------------------------------------------
-    @staticmethod
-    def add_component(table, **links):
+    @classmethod
+    def add_component(cls, table, **links):
         """
             Defines a component.
 
@@ -412,10 +416,7 @@ class S3Model(object):
 
         if not links:
             return
-        if hasattr(table, "_tablename"):
-            tablename = table._tablename
-        else:
-            tablename = table
+        tablename = table._tablename if type(table) is Table else table
         prefix, name = tablename.split("_", 1)
         for primary in links:
             hooks = components.get(primary, Storage())
@@ -441,8 +442,8 @@ class S3Model(object):
                     if joinby is None:
                         continue
                     linktable = link.get("link", None)
-                    if hasattr(linktable, "_tablename"):
-                        linktable = linktable._tablename
+                    linktable = linktable._tablename \
+                                if type(linktable) is Table else linktable
                     pkey = link.get("pkey", None)
                     if linktable is None:
                         lkey = None
@@ -509,7 +510,7 @@ class S3Model(object):
 
         hooks = Storage()
         single = False
-        if hasattr(table, "_tablename"):
+        if type(table) is Table:
             tablename = table._tablename
         else:
             tablename = table
@@ -621,7 +622,7 @@ class S3Model(object):
         get_hooks = cls.__get_hooks
 
         hooks = Storage()
-        if hasattr(table, "_tablename"):
+        if type(table) is Table:
             tablename = table._tablename
         else:
             tablename = table
@@ -650,8 +651,8 @@ class S3Model(object):
         return False
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def __get_hooks(components, hooks, names=None, supertable=None):
+    @classmethod
+    def __get_hooks(cls, components, hooks, names=None, supertable=None):
         """
             DRY Helper method to filter component hooks
         """
@@ -668,8 +669,8 @@ class S3Model(object):
     # -------------------------------------------------------------------------
     # Resource Methods
     # -------------------------------------------------------------------------
-    @staticmethod
-    def set_method(prefix, name,
+    @classmethod
+    def set_method(cls, prefix, name,
                    component_name=None,
                    method=None,
                    action=None):
@@ -704,8 +705,8 @@ class S3Model(object):
         return
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def get_method(prefix, name,
+    @classmethod
+    def get_method(cls, prefix, name,
                    component_name=None,
                    method=None):
         """
@@ -741,8 +742,8 @@ class S3Model(object):
     # -------------------------------------------------------------------------
     # Super-Entity API
     # -------------------------------------------------------------------------
-    @staticmethod
-    def super_entity(tablename, key, types, *fields, **args):
+    @classmethod
+    def super_entity(cls, tablename, key, types, *fields, **args):
         """
             Define a super-entity table
 
@@ -781,8 +782,8 @@ class S3Model(object):
         return table
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def super_key(supertable, default=None):
+    @classmethod
+    def super_key(cls, supertable, default=None):
         """
             Get the name of the key for a super-entity
 
@@ -809,6 +810,8 @@ class S3Model(object):
                    filter_opts=None,
                    not_filterby=None,
                    not_filter_opts=None,
+                   instance_types=None,
+                   updateable=False,
                    groupby=None,
                    widget=None,
                    empty=True,
@@ -848,6 +851,8 @@ class S3Model(object):
                                  groupby=groupby,
                                  filterby=filterby,
                                  filter_opts=filter_opts,
+                                 instance_types=instance_types,
+                                 updateable=updateable,
                                  not_filterby=not_filterby,
                                  not_filter_opts=not_filter_opts,)
             if empty:

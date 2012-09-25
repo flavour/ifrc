@@ -113,6 +113,7 @@ class S3HRModel(S3Model):
                 group = "volunteer"
 
         settings = current.deployment_settings
+        auth = current.auth
         job_roles = settings.get_hrm_job_roles()
         organisation_label = settings.get_hrm_organisation_label()
 
@@ -121,11 +122,27 @@ class S3HRModel(S3Model):
                                   self.super_link("track_id", "sit_trackable"),
                                   self.org_organisation_id(
                                     label = organisation_label,
-                                    widget=S3OrganisationAutocompleteWidget(
-                                        default_from_profile=True),
+                                    requires = self.org_organisation_requires(updateable=True),
+                                    widget = None,
+                                    #widget=S3OrganisationAutocompleteWidget(
+                                    #    default_from_profile=True),
                                     empty=False
                                     ),
-                                  self.org_site_id,
+                                  self.super_link("site_id", "org_site",
+                                                  label=T("Office/Warehouse/Facility"),
+                                                  # @ToDo: Add 'updateable=True' to IS_ONE_OF
+                                                  #filterby = "site_id",
+                                                  #filter_opts = auth.permitted_facilities(redirect_on_error=False),
+                                                  instance_types = auth.org_site_types,
+                                                  updateable = True,
+                                                  not_filterby = "obsolete",
+                                                  not_filter_opts = [True],
+                                                  default = auth.user.site_id if auth.is_logged_in() else None,
+                                                  readable = True,
+                                                  writable = True,
+                                                  empty = False,
+                                                  represent = self.org_site_represent,
+                                                  ),
                                   self.pr_person_id(
                                     widget=S3AddPersonWidget(controller="hrm"),
                                     requires=IS_ADD_PERSON_WIDGET(),
@@ -197,8 +214,6 @@ class S3HRModel(S3Model):
                                              T("Yes"))[opt == True],
                                         ),
                                   *s3_meta_fields())
-
-        table.site_id.label = T("Office/Warehouse/Facility")
 
         crud_strings["hrm_staff"] = Storage(
             title_create = T("Add Staff Member"),
@@ -752,7 +767,8 @@ class S3HRJobModel(S3Model):
                              Field("name", notnull=True,
                                    length=64,    # Mayon compatibility
                                    label=T("Name")),
-                             # Only included in order to be able to set owned_by_entity to filter appropriately
+                             # Only included in order to be able to set
+                             # realm_entity to filter appropriately
                              organisation_id(
                                              default = root_org,
                                              readable = False,
@@ -833,7 +849,8 @@ class S3HRJobModel(S3Model):
                              Field("name", notnull=True,
                                    length=64,    # Mayon compatibility
                                    label=T("Name")),
-                             # Only included in order to be able to set owned_by_entity to filter appropriately
+                             # Only included in order to be able to set
+                             # realm_entity to filter appropriately
                              organisation_id(
                                              default = root_org,
                                              readable = False,
@@ -1516,7 +1533,8 @@ class S3HRSkillModel(S3Model):
                              Field("code"),
                              Field("name", length=128, notnull=True,
                                    label=T("Name")),
-                             # Only included in order to be able to set owned_by_entity to filter appropriately
+                             # Only included in order to be able to set
+                             # realm_entity to filter appropriately
                              organisation_id(
                                              default = root_org,
                                              readable = False,
@@ -1582,7 +1600,21 @@ class S3HRSkillModel(S3Model):
         tablename = "hrm_training_event"
         table = define_table(tablename,
                              course_id(empty=False),
-                             site_id,
+                             self.super_link("site_id", "org_site",
+                                             label=T("Office/Warehouse/Facility"),
+                                             # @ToDo: Add 'updateable=True' to IS_ONE_OF
+                                             #filterby = "site_id",
+                                             #filter_opts = auth.permitted_facilities(redirect_on_error=False),
+                                             instance_types = auth.org_site_types,
+                                             updateable = True,
+                                             not_filterby = "obsolete",
+                                             not_filter_opts = [True],
+                                             default = auth.user.site_id if auth.is_logged_in() else None,
+                                             readable = True,
+                                             writable = True,
+                                             empty = False,
+                                             represent = self.org_site_represent,
+                                             ),
                              Field("start_date", "datetime",
                                    widget = S3DateWidget(),
                                    requires = IS_DATE(format=s3_date_format),
@@ -2749,7 +2781,8 @@ class S3HRProgrammeModel(S3Model):
         table = define_table(tablename,
                              Field("name", notnull=True, length=64,
                                    label=T("Name")),
-                             # Only included in order to be able to set owned_by_entity to filter appropriately
+                             # Only included in order to be able to set
+                             # realm_entity to filter appropriately
                              self.org_organisation_id(
                                              default = root_org,
                                              readable = False,
@@ -3220,10 +3253,22 @@ def hrm_human_resource_onaccept(form):
     auth = current.auth
     auth.s3_set_record_owner(htable, record, force_update=True)
 
+    ptable = s3db.pr_person
     person_id = record.person_id
+
+    setting = current.deployment_settings
+    if setting.get_auth_person_realm_human_resource_org():
+        # Set realm_entity = organisation pe_id for pr_person now that it is affliated
+        otable = s3db.org_organisation
+        organisation_id = record.organisation_id
+        person = ptable[person_id]
+        organisation = otable[organisation_id]
+        if organisation and not person.realm_entity:
+            db(s3db.pr_person.id == person_id
+               ).update(realm_entity = organisation.pe_id)
+
     site_id = record.site_id
     site_contact = record.site_contact
-    ptable = db.pr_person
     if record.type == 1:
         # Staff
         # Add/update the record in the link table
@@ -4126,7 +4171,8 @@ class HRMTrainingVirtualFields:
         return current.messages.NONE
 
 # =============================================================================
-def hrm_rheader(r, tabs=[]):
+def hrm_rheader(r, tabs=[],
+                profile = False):
     """ Resource headers for component views """
 
     if r.representation != "html":
@@ -4275,7 +4321,25 @@ def hrm_rheader(r, tabs=[]):
         else:
             trainings_tab = None
 
-        if current.session.s3.hrm.mode is not None:
+        if profile:
+            # Configure for personal mode
+            tabs = [(T("Person Details"), None),
+                    (T("User Account"), "user"),
+                    (T("Staff/Volunteer Record"), "human_resource"),
+                    id_tab,
+                    description_tab,
+                    (T("Address"), "address"),
+                    (T("Contacts"), "contacts"),
+                    education_tab,
+                    trainings_tab,
+                    certificates_tab,
+                    skills_tab,
+                    credentials_tab,
+                    experience_tab,
+                    teams_tab,
+                    #(T("Assets"), "asset"),
+                   ]
+        elif current.session.s3.hrm.mode is not None:
             # Configure for personal mode
             tabs = [(T("Person Details"), None),
                     id_tab,
@@ -4300,10 +4364,10 @@ def hrm_rheader(r, tabs=[]):
             tabs = [(T("Person Details"), None),
                     (hr_record, "human_resource"),
                     id_tab,
-                    education_tab,
                     description_tab,
                     (T("Address"), "address"),
                     (T("Contacts"), "contacts"),
+                    education_tab,
                     trainings_tab,
                     certificates_tab,
                     skills_tab,

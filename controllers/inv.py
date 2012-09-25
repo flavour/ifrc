@@ -63,11 +63,9 @@ def index():
                                      dt_group=2,
                                      dt_ajax_url=URL(c="inv",
                                                   f="index",
-                                                  extension="aaData",
+                                                  extension="aadata",
                                                   vars={"id":"warehouse_list_1"},
                                                   ),
-                                     dt_text_maximum_len = 16,
-                                     dt_text_condense_len = 12,
                                      )
             else:
                 warehouse = dt.json(totalrows,
@@ -160,7 +158,7 @@ def index():
                                         dt_action_col=-1,
                                         dt_ajax_url=URL(c="inv",
                                                      f="index",
-                                                     extension="aaData",
+                                                     extension="aadata",
                                                      vars={"id":"inventory_list_1"},
                                                      ),
                                         dt_bulk_actions = "Adjust",
@@ -168,14 +166,15 @@ def index():
                                                      "dtwarning": warningList,
                                                      "dtalert": alertList,
                                                      },
-                                        dt_text_maximum_len = 10,
-                                        dt_text_condense_len = 8,
+                                        #dt_text_maximum_len = 10,
+                                        #dt_text_condense_len = 8,
+                                        #dt_group_space = "true",
                                         dt_shrink_groups = "accordion",
                                         #dt_shrink_groups = "individual",
                                         )
 
                     s3.actions = None
-                elif request.extension == "aaData":
+                elif request.extension == "aadata":
                     inventory = dt.json(totalrows,
                                         filteredrows,
                                         "inventory_list_1",
@@ -210,10 +209,10 @@ def index():
                            "um",
                            "model",
                            ]
-            limit = 11 if request.extension == "aaData" else 1
+            limit = int(vars.iDisplayLength) if vars.iDisplayLength else s3mgr.ROWSPERPAGE
             rows = resource.select(list_fields,
                                    start=0,
-                                   limit=limit,
+                                   limit=resource.count(),
                                    )
             data = resource.extract(rows,
                                     list_fields,
@@ -230,11 +229,9 @@ def index():
                                        dt_action_col=1,
                                        dt_ajax_url=URL(c="inv",
                                                        f="index",
-                                                       extension="aaData",
+                                                       extension="aadata",
                                                        vars={"id": "supply_list_1"},
                                                        ),
-                                       dt_text_maximum_len = 16,
-                                       dt_text_condense_len = 12,
                                        )
             else:
                 supply_items = dt.json(totalrows,

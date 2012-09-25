@@ -13,11 +13,11 @@ T = current.T
 # Pre-Populate
 settings.base.prepopulate = ["EUROSHA"]
 
-settings.base.system_name = T("Eurosha Humanitarian Data Registry")
+settings.base.system_name = T("EUROSHA Humanitarian Data Registry")
 settings.base.system_name_short = T("EUROSHA")
 
 # Theme (folder to use for views/layout.html)
-#settings.base.theme = "EUROSHA"
+settings.base.theme = "EUROSHA"
 
 # Auth settings
 # Do new users need to verify their email address?
@@ -63,27 +63,32 @@ settings.fin.currencies = {
 settings.security.policy = 7 # Realm w Hierarchy
 settings.security.map = True
 
-# Owner Entity
-# If the fallback options for the realm a record belong to will be 
-# the user's organisation, the the user's pe_id instead of None 
-# Is this now still needed?
-def eurosha_owner_entity(table, row):
+# Realm Entity
+def eurosha_realm_entity(table, row):
     user = current.auth.user
     if user is not None:
         return current.s3db.pr_get_pe_id("org_organisation",
                                          user.organisation_id)
     else:
         return None
-settings.auth.owner_entity = eurosha_owner_entity
+settings.auth.realm_entity = eurosha_realm_entity
 
 # Set this if there will be multiple areas in which work is being done,
 # and a menu to select among them is wanted.
 settings.gis.menu = "Country"
 # PoIs to export in KML/OSM feeds from Admin locations
-settings.gis.poi_export_resources = ["cr_shelter", "hms_hospital", "org_office", "transport_airport", "transport_seaport"]
+settings.gis.poi_resources = ["cr_shelter", "hms_hospital", "org_office",
+                              "transport_airport", "transport_seaport"
+                              ]
 
 # Enable this for a UN-style deployment
 settings.ui.cluster = True
+
+settings.frontpage.rss = [
+    {"title": "Blog",
+     "url": "http://eurosha-volunteers-blog.org/feed/"
+    }
+]
 
 # Organisation Management
 # Uncomment to add summary fields for Organisations/Offices for # National/International staff

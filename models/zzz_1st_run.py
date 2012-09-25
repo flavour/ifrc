@@ -28,9 +28,7 @@ if len(pop_list) > 0:
     acl = auth.permission
     sysroles = auth.S3_SYSTEM_ROLES
     create_role = auth.s3_create_role
-    update_acls = auth.s3_update_acls
-
-    default_oacl = acl.READ|acl.UPDATE
+    #update_acls = auth.s3_update_acls
 
     # Do not remove or change order of these 5 definitions (System Roles):
     create_role("Administrator",
@@ -165,7 +163,7 @@ if len(pop_list) > 0:
                                              username = "example-username",
                                              password = "password",
                                              delete_from_server = False
-                                            )
+                                             )
         # Need entries for the Settings/1/Update URLs to work
         db.msg_setting.insert( outgoing_sms_handler = "WEB_API" )
         db.msg_modem_settings.insert( modem_baud = 115200 )
@@ -361,6 +359,13 @@ if len(pop_list) > 0:
 
     # Restore Auth
     auth.override = False
+
+    # Update Location Tree
+    # (disabled during prepop)
+    start = datetime.datetime.now()
+    gis.update_location_tree()
+    end = datetime.datetime.now()
+    print >> sys.stdout, "Location Tree update completed in %s" % (end - start)
 
     # Restore view
     response.view = "default/index.html"
