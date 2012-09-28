@@ -62,7 +62,7 @@ from gluon.languages import lazyT
 from gluon.storage import Storage
 from gluon.tools import callback
 
-from s3utils import SQLTABLES3, s3_has_foreign_key, s3_get_foreign_key, s3_unicode, S3DataTable
+from s3utils import s3_has_foreign_key, s3_get_foreign_key, s3_unicode, S3DataTable
 from s3validators import IS_ONE_OF
 
 DEBUG = False
@@ -598,29 +598,43 @@ class S3Resource(object):
 
         # Add orderby fields which are not in qfields
         # @todo: this could need some cleanup/optimization
-        if distinct and orderby is not None:
-            qf = [str(f) for f in qfields]
-            if isinstance(orderby, str):
-                of = orderby.split(",")
-            elif not isinstance(orderby, (list, tuple)):
-                of = [orderby]
-            else:
-                of = orderby
-            for e in of:
-                if isinstance(e, Field) and str(e) not in qf:
-                    qfields.append(e)
-                    qf.append(str(e))
-                elif isinstance(e, str):
-                    fn = e.strip().split()[0].split(".", 1)
-                    tn, fn = ([table._tablename] + fn)[-2:]
-                    try:
-                        t = db[tn]
-                        f = t[fn]
-                    except:
-                        continue
-                    if str(f) not in qf:
-                        qfields.append(f)
+        if distinct:
+            if orderby is not None:
+                qf = [str(f) for f in qfields]
+                if isinstance(orderby, str):
+                    of = orderby.split(",")
+                elif not isinstance(orderby, (list, tuple)):
+                    of = [orderby]
+                else:
+                    of = orderby
+                for e in of:
+                    if isinstance(e, Field) and str(e) not in qf:
+                        qfields.append(e)
                         qf.append(str(e))
+                    elif isinstance(e, str):
+                        fn = e.strip().split()[0].split(".", 1)
+                        tn, fn = ([table._tablename] + fn)[-2:]
+                        try:
+                            t = db[tn]
+                            f = t[fn]
+                        except:
+                            continue
+                        if str(f) not in qf:
+                            qfields.append(f)
+                            qf.append(str(e))
+            else:
+                attributes["orderby"] = self._id
+
+        #if db._dbname == "postgres":
+        #    # Look for extra fields in query
+        #    qf = [str(f) for f in qfields]
+        #    for join in left_joins:
+        #        extra_field = join.second.second
+        #        e = str(extra_field)
+        #        # Works for Country filter but not Branch filter
+        #        if e == "gis_location.id" and e not in qf:
+        #            qfields.append(extra_field)
+        #            qf.append(str(extra_field))
 
         # Retrieve the rows
         rows = db(query).select(*qfields, **attributes)

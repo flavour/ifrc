@@ -215,9 +215,6 @@ class S3RequestModel(S3Model):
                                                   readable = True,
                                                   writable = True,
                                                   empty = False,
-                                                  # @ToDo: Add 'updateable=True' to IS_ONE_OF
-                                                  #filterby = "site_id",
-                                                  #filter_opts = auth.permitted_facilities(redirect_on_error=False),
                                                   instance_types = auth.org_site_types,
                                                   updateable = True,
                                                   # Comment these to use a Dropdown & not an Autocomplete
@@ -610,7 +607,7 @@ $(function() {
         s3_has_permission = current.auth.s3_has_permission
         settings = current.deployment_settings
         if settings.has_module("req") and \
-            s3_has_permission("read", "req_req"):
+           s3_has_permission("read", "req_req", c="req"):
             tabs= [(T("Requests"), "req")]
             if s3_has_permission("read", "req_req",
                                  c=current.request.controller,

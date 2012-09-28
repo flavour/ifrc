@@ -1799,7 +1799,6 @@ class S3OfficeModel(S3Model):
                              self.org_organisation_id(
                                  #widget=S3OrganisationAutocompleteWidget(default_from_profile=True),
                                  widget = None,
-                                 # @ToDo: Add 'updateable=True' to IS_ONE_OF
                                  requires = self.org_organisation_requires(updateable=True),
                                  ),
                              office_type_id(
@@ -2200,23 +2199,21 @@ def org_root_organisation(organisation_id=None, pe_id=None):
     return None, None
 
 # =============================================================================
-def org_organisation_requires(updateable=False):
+def org_organisation_requires(updateable=False,
+                              required=False):
     """
-        Filter the list of organisations for a form field to just those which
-        the user has update permissions for
+        Optionally: Filter the list of organisations for a form field to
+        just those which the user has update permissions for
     """
 
-    db = current.db
-    if updateable:
-        # @ToDo: Replace with option to IS_ONE_OF
-        set = db(current.auth.s3_accessible_query("update",
-                                                  current.s3db.org_organisation))
-    else:
-        set = db
-    return IS_NULL_OR(IS_ONE_OF(set, "org_organisation.id",
-                                org_organisation_represent,
-                                orderby="org_organisation.name",
-                                sort=True))
+    requires = IS_ONE_OF(current.db, "org_organisation.id",
+                         org_organisation_represent,
+                         updateable = updateable,
+                         orderby = "org_organisation.name",
+                         sort = True)
+    if not required:
+        requires = IS_NULL_OR(requires) 
+    return requires
 
 # =============================================================================
 def org_organisation_represent(id, row=None, show_link=False,
@@ -2402,8 +2399,10 @@ def org_rheader(r, tabs=[]):
         tabs = [(T("Basic Details"), None),
                 #(T("Contact Data"), "contact"),
                 (T("Staff"), "human_resource"),
-                (T("Assign Staff"), "human_resource_site"),
+                
                ]
+        if current.auth.s3_has_permission("create", "hrm_human_resource"):
+            tabs.append((T("Assign Staff"), "human_resource_site"))
         if settings.has_module("inv"):
             tabs = tabs + s3db.inv_tabs(r)
         if settings.has_module("req"):
@@ -2477,8 +2476,8 @@ def org_organisation_controller():
                 realms = auth.user.realms or Storage()
                 if sr.ADMIN in realms or \
                    sr.ORG_ADMIN in realms and \
-                   realms[sr.ORG_ADMIN] is None or \
-                   r.record.pe_id in realms[sr.ORG_ADMIN]:
+                   (realms[sr.ORG_ADMIN] is None or \
+                    r.record.pe_id in realms[sr.ORG_ADMIN]):
                     s3db.set_method(r.prefix, r.name,
                                     method="roles",
                                     action=S3OrgRoleManager())

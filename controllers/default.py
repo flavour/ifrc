@@ -175,7 +175,7 @@ def index():
     # Check logged in AND permissions
     roles = session.s3.roles
     if AUTHENTICATED in roles and \
-       auth.s3_has_permission("read", db.org_organisation):
+       auth.s3_has_permission("read", s3db.org_organisation):
         org_items = organisation()
         datatable_ajax_source = "/%s/default/organisation.aadata" % \
                                 appname
@@ -500,10 +500,10 @@ def user():
 def person():
     """
         Profile to show:
-         - User Details 
+         - User Details
          - Person Details
-         - HRM 
-        
+         - HRM
+
     """
 
     # Set to current user
@@ -516,12 +516,12 @@ def person():
         # Custom View
         response.view = "update.html"
         current.menu.breadcrumbs = None
-    
+
         # RHeader for consistency
         rheader = attr.get("rheader", None)
         if callable(rheader):
             rheader = rheader(r)
-            
+
         table = auth.settings.table_user
         tablename = table._tablename
 
@@ -548,7 +548,7 @@ def person():
     set_method("pr", "person",
                method="contacts",
                action=s3db.pr_contacts)
-    
+
 
     if settings.has_module("asset"):
         # Assets as component of people
@@ -665,11 +665,6 @@ def google():
     return dict(form=form)
 
 # -----------------------------------------------------------------------------
-def source():
-    """ RESTful CRUD controller """
-    return s3_rest_controller("s3", "source")
-
-# -----------------------------------------------------------------------------
 # About Sahana
 def apath(path=""):
     """ Application path """
@@ -684,19 +679,20 @@ def about():
     """
         The About page provides details on the software dependencies and
         versions available to this instance of Sahana Eden.
-
-        @ToDo: Avoid relying on Command Line tools which may not be in path
-               - pull back info from Python modules instead?
     """
 
     response.title = T("About")
     if settings.get_template() != "default":
         # Try a Custom View
-        path = os.path.join(request.folder, "private", "templates",
-                            settings.get_template(), "views", "help.html")
-        if os.path.exists(path):
-            response.view = "../private/templates/%s/views/help.html" % settings.get_template()
-            return dict()
+        view = os.path.join(request.folder, "private", "templates",
+                            settings.get_template(), "views", "about.html")
+        if os.path.exists(view):
+            try:
+                # Pass view as file not str to work in compiled mode
+                response.view = open(view, "rb")
+            except IOError:
+                from gluon.http import HTTP
+                raise HTTP("404", "Unable to open Custom View: %s" % view)
 
     import sys
     import subprocess
@@ -714,32 +710,48 @@ def about():
     if db_string[0].find("sqlite") != -1:
         try:
             import sqlite3
-            #sqlite_version = (subprocess.Popen(["sqlite3", "-version"], stdout=subprocess.PIPE).communicate()[0]).rstrip()
             sqlite_version = sqlite3.version
         except:
             sqlite_version = T("Unknown")
     elif db_string[0].find("mysql") != -1:
         try:
-            mysql_version = (subprocess.Popen(["mysql", "--version"], stdout=subprocess.PIPE).communicate()[0]).rstrip()[10:]
-        except:
-            mysql_version = T("Unknown")
-        try:
             import MySQLdb
             mysqldb_version = MySQLdb.__revision__
         except:
             mysqldb_version = T("Not installed or incorrectly configured.")
+            mysql_version = T("Unknown")
+        else:
+            #mysql_version = (subprocess.Popen(["mysql", "--version"], stdout=subprocess.PIPE).communicate()[0]).rstrip()[10:]
+            con = MySQLdb.connect(host=settings.database.get("host", "localhost"),
+                                  port=settings.database.get("port", None) or 3306,
+                                  db=settings.database.get("database", "sahana"),
+                                  user=settings.database.get("username", "sahana"),
+                                  passwd=settings.database.get("password", "password")
+                                  )
+            cur = con.cursor()
+            cur.execute("SELECT VERSION()")
+            mysql_version = cur.fetchone()
     else:
         # Postgres
-        try:
-            pgsql_reply = (subprocess.Popen(["psql", "--version"], stdout=subprocess.PIPE).communicate()[0])
-            pgsql_version = string.split(pgsql_reply)[2]
-        except:
-            pgsql_version = T("Unknown")
         try:
             import psycopg2
             psycopg_version = psycopg2.__version__
         except:
             psycopg_version = T("Not installed or incorrectly configured.")
+            pgsql_version = T("Unknown")
+        else:
+            #pgsql_reply = (subprocess.Popen(["psql", "--version"], stdout=subprocess.PIPE).communicate()[0])
+            #pgsql_version = string.split(pgsql_reply)[2]
+            con = psycopg2.connect(host=settings.database.get("host", "localhost"),
+                                   port=settings.database.get("port", None) or 5432,
+                                   database=settings.database.get("database", "sahana"),
+                                   user=settings.database.get("username", "sahana"),
+                                   password=settings.database.get("password", "password")
+                                   ) 
+            cur = con.cursor()
+            cur.execute("SELECT version()")
+            pgsql_version = cur.fetchone()
+
     # Libraries
     try:
         import reportlab
@@ -770,10 +782,15 @@ def help():
 
     if settings.get_template() != "default":
         # Try a Custom View
-        path = os.path.join(request.folder, "private", "templates",
+        view = os.path.join(request.folder, "private", "templates",
                             settings.get_template(), "views", "help.html")
-        if os.path.exists(path):
-            response.view = "../private/templates/%s/views/help.html" % settings.get_template()
+        if os.path.exists(view):
+            try:
+                # Pass view as file not str to work in compiled mode
+                response.view = open(view, "rb")
+            except IOError:
+                from gluon.http import HTTP
+                raise HTTP("404", "Unable to open Custom View: %s" % view)
 
     response.title = T("Help")
     return dict()
@@ -784,10 +801,15 @@ def privacy():
 
     if settings.get_template() != "default":
         # Try a Custom View
-        path = os.path.join(request.folder, "private", "templates",
+        view = os.path.join(request.folder, "private", "templates",
                             settings.get_template(), "views", "privacy.html")
-        if os.path.exists(path):
-            response.view = "../private/templates/%s/views/privacy.html" % settings.get_template()
+        if os.path.exists(view):
+            try:
+                # Pass view as file not str to work in compiled mode
+                response.view = open(view, "rb")
+            except IOError:
+                from gluon.http import HTTP
+                raise HTTP("404", "Unable to open Custom View: %s" % view)
 
     response.title = T("Privacy")
     return dict()
@@ -830,10 +852,15 @@ def contact():
         return output
     elif settings.get_template() != "default":
         # Try a Custom View
-        path = os.path.join(request.folder, "private", "templates",
+        view = os.path.join(request.folder, "private", "templates",
                             settings.get_template(), "views", "contact.html")
-        if os.path.exists(path):
-            response.view = "../private/templates/%s/views/contact.html" % settings.get_template()
+        if os.path.exists(view):
+            try:
+                # Pass view as file not str to work in compiled mode
+                response.view = open(view, "rb")
+            except IOError:
+                from gluon.http import HTTP
+                raise HTTP("404", "Unable to open Custom View: %s" % view)
 
     response.title = T("Contact us")
     return dict()

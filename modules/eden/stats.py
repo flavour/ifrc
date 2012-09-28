@@ -158,8 +158,11 @@ class S3StatsModel(S3Model):
                                             aggregate_type.get(opt, UNKNOWN_OPT),
                                    default = 1,
                                    ),
-                             Field("count", "integer",
+                             Field("reported_count", "integer",
                                    label = T("The number of aggregated records")
+                                   ),
+                             Field("ward_count", "integer",
+                                   label = T("The number geographical units that may be part of the aggregation")
                                    ),
                              Field("date", "date",
                                    label = T("Start Date"),
@@ -225,9 +228,10 @@ class S3StatsModel(S3Model):
            Where appropriate add test cases to modules/unit_tests/eden/stats.py
         """
 
-        current.s3task.async("stats_update_time_aggregate",
-                             args = [row.data_id],
-                             )
+        if not current.auth.override:
+            current.s3task.async("stats_update_time_aggregate",
+                                 args = [row.data_id],
+                                 )
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -241,18 +245,15 @@ class S3StatsModel(S3Model):
                    - should be reworked to delete old data after new data has been added?
         """
 
-        s3db = current.s3db
-        resource = s3db.resource("stats_aggregate")
-        resource.delete()
-        table = s3db.stats_data
-        rows = current.db().select(table.data_id)
-        for row in rows:
-            current.s3task.async("stats_update_time_aggregate",
-                                 args = [row.data_id],
-                                 )
+        auth = current.auth
+        if auth.override or auth.s3_has_role(current.session.s3.system_roles.ADMIN):
+            resource = current.s3db.resource("stats_aggregate")
+            resource.delete()
+            current.s3task.async("stats_update_time_aggregate")
+
     # ---------------------------------------------------------------------
-    @staticmethod
-    def stats_update_time_aggregate(data_id):
+    @classmethod
+    def stats_update_time_aggregate(cls, data_id=None):
         """
             This will calculate the stats_aggregate for a specific parameter
             at the specified location.
@@ -282,24 +283,39 @@ class S3StatsModel(S3Model):
         atable = s3db.stats_aggregate
         s3db.vulnerability_data
 
-        # First get the record that has just been added
-        record = db(dtable.data_id == data_id).select(limitby=(0, 1)).first()
+        stats_aggregated_period = cls.stats_aggregated_period
+
+        if not data_id:
+            records = db(dtable.deleted != True).select()
+            for record in records:
+                cls.stats_update_time_aggregate(record)
+            return
+        elif not isinstance(data_id, Row):
+            record = db(dtable.data_id == data_id).select(limitby=(0, 1)).first()
+        else:
+            record = data_id
+            data_id = record.data_id
+
         location_id = record.location_id
         parameter_id = record.parameter_id
-        (start_date, end_date) = s3db.stats_aggregated_period(record.date)
+        # Exit if either the location or the parameter is not valid
+        if not location_id or not parameter_id:
+            return
+        (start_date, end_date) = stats_aggregated_period(record.date)
 
-        # Get all the stats_data record for this location and parameter
+        # Get all the stats_data records for this location and parameter
         query = (dtable.location_id == location_id) & \
                 (dtable.parameter_id == parameter_id) & \
                 (dtable.deleted != True) & \
-                (dtable.approved_by > 0)
+                (dtable.approved_by != None)
         data_rows = db(query).select()
+
         # Get each record and store them in a dict keyed on the start date of
         # the aggregated period. The value stored is a list containing the date
         # the data_id and the value. If a record already exists for the
         # reporting period then the most recent value will be stored.
         earliest_period = start_date
-        (last_period, end_date) = s3db.stats_aggregated_period(None)
+        (last_period, end_date) = stats_aggregated_period(None)
         data = dict()
         data[start_date]=Storage(date = record.date,
                                  id = data_id,
@@ -307,7 +323,7 @@ class S3StatsModel(S3Model):
         for row in data_rows:
             if row.data_id == record.data_id:
                 continue
-            (start_date, end_date) = s3db.stats_aggregated_period(row.date)
+            (start_date, end_date) = stats_aggregated_period(row.date)
             if start_date in data:
                 if row.date <= data[start_date]["date"]:
                     # The indicator on the row is of the same time period as
@@ -325,18 +341,21 @@ class S3StatsModel(S3Model):
             data[start_date] = Storage(date = row.date,
                                        id = row.data_id,
                                        value = row.value)
+
         # Get all the aggregate record for this parameter and location
         query = (atable.location_id == location_id) & \
                 (atable.parameter_id == parameter_id) & \
                 (atable.deleted != True)
         aggr_rows = db(query).select()
+
         aggr = dict()
         for row in aggr_rows:
-            (start_date, end_date) = s3db.stats_aggregated_period(row.date)
+            (start_date, end_date) = stats_aggregated_period(row.date)
             aggr[start_date] = Storage(mean = row.mean,
                                        id = row.id,
                                        type = row.agg_type,
                                        end_date = row.end_date)
+
         # Step through each period and check that aggr is correct
         last_data_period = earliest_period
         last_type_agg = False # The type of previous non-copy record was aggr
@@ -349,7 +368,7 @@ class S3StatsModel(S3Model):
             # (it will be None if this is the last period)
             dt = dt.date()
             if dt != last_period:
-                (start_date, end_date) = s3db.stats_aggregated_period(dt)
+                (start_date, end_date) = stats_aggregated_period(dt)
             else:
                 start_date = dt
                 end_date = None
@@ -376,7 +395,8 @@ class S3StatsModel(S3Model):
                         value = data[dt]["value"]
                         last_data_value = value
                         db(query).update(agg_type = 1, # time
-                                         count = 1, # one record
+                                         reported_count = 1, # one record
+                                         ward_count = 1, # one ward
                                          min = value,
                                          max = value,
                                          mean = value,
@@ -388,7 +408,8 @@ class S3StatsModel(S3Model):
                     elif aggr[dt]["mean"] != last_data_value:
                         value = last_data_value
                         db(query).update(agg_type = 3, # copy
-                                         count = 1, # one record
+                                         reported_count = 1, # one record
+                                         ward_count = 1, # one ward
                                          min = value,
                                          max = value,
                                          mean = value,
@@ -403,7 +424,8 @@ class S3StatsModel(S3Model):
                         last_data_value = value
                         if aggr[dt]["mean"] != value:
                             db(query).update(agg_type = 1, # time
-                                             count = 1, # one record
+                                             reported_count = 1, # one record
+                                             ward_count = 1, # one ward
                                              min = value,
                                              max = value,
                                              mean = value,
@@ -416,7 +438,8 @@ class S3StatsModel(S3Model):
                     else:
                         value = last_data_value
                         db(query).update(agg_type = 3, # copy
-                                         count = 1, # one record
+                                         reported_count = 1, # one record
+                                         ward_count = 1, # one ward
                                          min = value,
                                          max = value,
                                          mean = value,
@@ -437,7 +460,8 @@ class S3StatsModel(S3Model):
                 atable.insert(parameter_id = parameter_id,
                               location_id = location_id,
                               agg_type = type,
-                              count = 1, # one record
+                              reported_count = 1, # one record
+                              ward_count = 1, # one ward
                               min = value,
                               max = value,
                               mean = value,
@@ -446,30 +470,33 @@ class S3StatsModel(S3Model):
                               end_date = end_date,
                               )
                 changed_periods.append((start_date, end_date))
+
         # Now that the time aggregate types have been set up correctly,
         # fire off requests for the location aggregates to be calculated
         parents = current.gis.get_parents(location_id)
         async = current.s3task.async
+        loc_level = s3db.gis_location[location_id].level
         for (start_date, end_date) in changed_periods:
+
+            s, e = str(start_date), str(end_date)
+
+            # Calculate the aggregates for each parent location
             if parents:
                 for location in parents:
-                    # Calculate the aggregates for each parent
                     async("stats_update_aggregate_location",
-                          args = [location.id,
-                                  parameter_id,
-                                  str(start_date),
-                                  str(end_date),
-                                  ]
-                          )
+                          args = [loc_level, location.id, parameter_id, s, e])
+
             if parameter_id in s3db.vulnerability_ids() or \
                parameter_id == s3db.vulnerability_resilience_id():
-                s3db.vulnerability_update_resilience(location_id,
+                s3db.vulnerability_update_resilience(loc_level,
+                                                     location_id,
                                                      start_date,
                                                      end_date)
 
     # ---------------------------------------------------------------------
     @staticmethod
-    def stats_update_aggregate_location(location_id,
+    def stats_update_aggregate_location(location_level,
+                                        location_id,
                                         parameter_id,
                                         start_date,
                                         end_date
@@ -478,7 +505,120 @@ class S3StatsModel(S3Model):
            Calculates the stats_aggregate for a specific parameter at a
            specific location.
 
+            @param location_id: the location record ID
+            @param parameter_id: the parameter record ID
+            @param start_date: the start date of the time period (as string)
+            @param end_date: the end date of the time period (as string)
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        dtable = s3db.stats_data
+        atable = s3db.stats_aggregate
+
+        # Get all the child locations
+        child_locations = current.gis.get_children(location_id, location_level)
+        child_ids = [row.id for row in child_locations]
+
+        # Get the (most recent) stats_data record for all child locations
+        if end_date == "None": # converted to string as async parameter
+            query = (dtable.parameter_id == parameter_id) & \
+                    (dtable.deleted != True) & \
+                    (dtable.approved_by != None) & \
+                    (dtable.location_id.belongs(child_ids))
+            end_date = None
+        else:
+            query = (dtable.parameter_id == parameter_id) & \
+                    (dtable.location_id.belongs(child_ids)) & \
+                    (dtable.deleted != True) & \
+                    (dtable.approved_by != None) & \
+                    (dtable.date <= end_date)
+        rows = db(query).select(dtable.value,
+                                dtable.date,
+                                dtable.location_id,
+                                orderby=(dtable.location_id, ~dtable.date),
+                                # groupby avoids duplicate records for the same
+                                # location, but is slightly slower than just
+                                # skipping the duplicates in the loop below
+                                #groupby=(dtable.location_id)
+                                )
+
+        # Collect the values, skip duplicate records for the
+        # same location => use the most recent one, which is
+        # the first row for each location as per the orderby
+        # in the query above
+        last_location = None
+        values = []
+        append = values.append
+        for row in rows:
+            new_location_id = row.location_id
+            if new_location_id != last_location:
+                last_location = new_location_id
+                append(row.value)
+
+        # Aggregate the values
+        values_len = len(values)
+        if not values_len:
+            return
+
+        import numpy
+
+        values_sum = sum(values)
+        values_min = min(values)
+        values_max = max(values)
+        values_avg = float(values_sum) / values_len
+        values_med = numpy.median(values)
+
+        # Add or update the aggregated values in the database
+
+        # Do we already have a record?
+        query = (atable.location_id == location_id) & \
+                (atable.parameter_id == parameter_id) & \
+                (atable.date == start_date) & \
+                (atable.end_date == end_date) & \
+                (atable.deleted != True)
+        exists = db(query).select(atable.id, limitby=(0, 1)).first()
+
+        if exists:
+            # Update
+            db(query).update(agg_type = 2, # Location
+                             reported_count = values_len,
+                             ward_count = len(child_ids),
+                             min = values_min,
+                             max = values_max,
+                             mean = values_avg,
+                             median = values_med)
+        else:
+            # Insert new
+            atable.insert(parameter_id = parameter_id,
+                          location_id = location_id,
+                          date = start_date,
+                          end_date = end_date,
+                          agg_type = 2, # Location
+                          reported_count = values_len,
+                          ward_count = len(child_ids),
+                          min = values_min,
+                          max = values_max,
+                          mean = values_avg,
+                          median = values_med)
+
+        return
+
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def stats_update_aggregate_location_old(location_id,
+                                            parameter_id,
+                                            start_date,
+                                            end_date
+                                           ):
+        """
+           Calculates the stats_aggregate for a specific parameter at a
+           specific location.
+
            Where appropriate add test cases to modules/unit_tests/eden/stats.py
+
+           * unused in this version, but retained for debug/reference
         """
 
         db = current.db
@@ -496,18 +636,18 @@ class S3StatsModel(S3Model):
             query = (table.location_id.belongs(child_ids)) & \
                     (table.parameter_id == parameter_id) & \
                     (table.deleted != True) & \
-                    (table.approved_by > 0)
+                    (table.approved_by != None)
             end_date = None
         else:
             query = (table.location_id.belongs(child_ids)) & \
                     (table.parameter_id == parameter_id) & \
                     (table.date <= end_date) & \
                     (table.deleted != True) & \
-                    (table.approved_by > 0)
+                    (table.approved_by != None)
         rows = db(query).select(table.value,
                                 table.date,
                                 table.location_id,
-                                orderby=(table.location_id, ~table.date)
+                                orderby=(table.location_id, ~table.date),
                                 )
         # The query may return duplicate records for the same location
         # Use the most recent, which because of the ordering will be the first
@@ -526,6 +666,7 @@ class S3StatsModel(S3Model):
                 rec_cnt += 1
         if rec_cnt == 0:
             return
+
         num_list.sort()
         mean = float(sum) / rec_cnt
         min = num_list[0]
@@ -534,18 +675,18 @@ class S3StatsModel(S3Model):
             median = float(num_list[rec_cnt / 2] + num_list[rec_cnt / 2 - 1]) / 2.0
         else:
             median = num_list[rec_cnt / 2]
-
         # Add the value to the database
         query = (agg_table.location_id == location_id) & \
                 (agg_table.parameter_id == parameter_id) & \
                 (agg_table.date == start_date) & \
                 (agg_table.end_date == end_date) & \
-                (agg_table.deleted == False)
+                (agg_table.deleted != True)
         exists = db(query).select(agg_table.id,
                                   limitby=(0, 1)).first()
         if exists:
             db(query).update(agg_type = 2, # Location
-                             count = rec_cnt,
+                             reported_count = rec_cnt,
+                             ward_count = len(child_ids),
                              min = min,
                              max = max,
                              mean = mean,
@@ -557,7 +698,8 @@ class S3StatsModel(S3Model):
                              date = start_date,
                              end_date = end_date,
                              agg_type = 2, # Location
-                             count = rec_cnt,
+                             reported_count = rec_cnt,
+                             ward_count = len(child_ids),
                              min = min,
                              max = max,
                              mean = mean,
