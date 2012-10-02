@@ -889,7 +889,6 @@ Thank you
             if len(users) == 1:
                 # 1st user to register doesn't need verification/approval
                 self.s3_approve_user(form.vars)
-                self.s3_send_welcome_email(form.vars)
                 current.session.confirmation = self.messages.registration_successful
 
                 # 1st user gets Admin rights
@@ -902,6 +901,8 @@ Thank you
                                        expiration=self.settings.expiration)
                 self.user = user
                 session.confirmation = self.messages.logged_in
+
+                self.s3_send_welcome_email(form.vars)
 
             elif settings.registration_requires_verification:
                 # Send the Verification email
@@ -947,6 +948,33 @@ Thank you
             redirect(next)
 
         return form
+
+    # -------------------------------------------------------------------------
+    def add_membership(self, group_id=None, user_id=None, role=None,
+                       entity=None):
+        """
+            gives user_id membership of group_id or role
+            if user is None than user_id is that of current logged in user
+            S3: extended to support Entities
+        """
+
+        group_id = group_id or self.id_group(role)
+        try:
+            group_id = int(group_id)
+        except:
+            group_id = self.id_group(group_id) # interpret group_id as a role
+        if not user_id and self.user:
+            user_id = self.user.id
+        membership = self.table_membership()
+        record = membership(user_id=user_id, group_id=group_id, pe_id=entity)
+        if record:
+            return record.id
+        else:
+            id = membership.insert(group_id=group_id, user_id=user_id, pe_id=entity)
+        self.update_groups()
+        self.log_event(self.messages.add_membership_log,
+                       dict(user_id=user_id, group_id=group_id))
+        return id
 
     # -------------------------------------------------------------------------
     def verify_email(self,
@@ -1435,15 +1463,24 @@ Thank you
         self.add_membership(authenticated, user_id)
 
         # Add User to required registration roles
-        roles = deployment_settings.get_auth_registration_roles()
-        if roles:
+        entity_roles = deployment_settings.get_auth_registration_roles()
+        if entity_roles:
             gtable = self.settings.table_group
             mtable = self.settings.table_membership
+        for entity in entity_roles.keys():
+            roles = entity_roles[entity]
+
+            # Get User's Organisation or Site pe_id
+            if entity in ["organisation_id", "site_id"]:
+                tablename = "org_%s" % entity.split("_")[0]
+                entity = s3db.pr_get_pe_id(tablename, user[entity])
+                if not entity:
+                    continue
+
             query = (gtable.uuid.belongs(roles))
             rows = db(query).select(gtable.id)
             for role in rows:
-                mtable.insert(user_id=user_id,
-                              group_id=role.id)
+                self.add_membership(role.id, user_id, entity=entity)
 
         if deployment_settings.has_module("delphi"):
             # Add user as a participant of the default problem group
@@ -1500,6 +1537,7 @@ Thank you
         return
 
     # -----------------------------------------------------------------------------
+    @staticmethod
     def s3_user_profile_onaccept(form):
         """ Update the UI locale from user profile """
 
@@ -1898,8 +1936,13 @@ Thank you
                                owned_by_user=user_id)
 
         # Create an HR record, if one doesn't already exist
-        query = (htable.person_id == person_id) & \
-                (htable.organisation_id == organisation_id)
+        if isinstance(person_id, list):
+            person_ids = person_id
+        else:
+            person_ids = [person_id]
+        query = (htable.person_id.belongs(person_ids)) & \
+                (htable.organisation_id == organisation_id) & \
+                (htable.site_id == site_id)
         row = db(query).select(htable.id, limitby=(0, 1)).first()
 
         if row:
@@ -1910,8 +1953,9 @@ Thank you
                 type = 1 # Staff
             else:
                 type = 2 # Volunteer
-            record = Storage(person_id=person_id,
+            record = Storage(person_id=person_ids[0],
                              organisation_id=organisation_id,
+                             site_id = site_id,
                              type=type,
                              owned_by_user=user_id,
                              )
@@ -1993,7 +2037,6 @@ Thank you
 
         results = self.settings.mailer.send(user["email"], subject=subject, message=message)
         if not results:
-            db.rollback()
             current.response.error = self.messages.unable_send_email
         return
 
@@ -3356,7 +3399,8 @@ Thank you
             if key in ownership_fields:
                 data[key] = fields[key]
         if data:
-            return current.db(table._id == record_id).update(**data)
+            success = current.db(table._id == record_id).update(**data)
+            self.update_super_realm(table, record, **data)
         else:
             return None
 
@@ -3446,6 +3490,7 @@ Thank you
                   "pr_contact_emergency",
                   "pr_physical_description",
                   "pr_group_membership",
+                  "pr_image",
                   "hrm_training")
             if OUSR in fields:
                 data[OUSR] = fields[OUSR]
@@ -3549,7 +3594,9 @@ Thank you
 
         # Bulk update?
         if realm_entity != 0 and force_update and query is not None:
-            db(query).update(**{REALM:realm_entity})
+            data = {REALM:realm_entity}
+            db(query).update(**data)
+            self.update_super_realm(table, query, **data)
             return
 
         # Find the records
@@ -3565,7 +3612,7 @@ Thank you
         # Update record by record
         for record in records:
 
-            if not isinstance(record, Row):
+            if not isinstance(record, (Row, Storage)):
                 record_id = record
                 row = Storage()
             else:
@@ -3588,8 +3635,9 @@ Thank you
 
             realm_entity = self.get_realm_entity(table, row,
                                                  entity=realm_entity)
-
-            db(q).update(**{REALM:realm_entity})
+            data = {REALM:realm_entity}
+            db(q).update(**data)
+            self.update_super_realm(table, record_id, **data)
 
         return
 
@@ -3654,6 +3702,114 @@ Thank you
                 realm_entity = None
 
         return realm_entity
+
+    # -------------------------------------------------------------------------
+    def set_component_realm_entity(self, table, record, entity=0, 
+                                   force_update=True,
+                                   update_components=[]):
+        """
+            Update the realm entity for a record and it's components
+
+            @param table: the table
+            @param record: the record (as Row or dict)
+            @param entity: the entity (pe_id)
+        """
+
+        s3db = current.s3db
+
+        if not entity:
+            entity = self.get_realm_entity(table, record)
+
+        # Find Record Components
+        components = s3db.get_components(table)
+
+        # Update Components
+        for component in update_components:
+            c = components[component]
+            if not c:
+                continue
+
+
+            # @ToDo: Replace with: 
+            #join = c.get_join()
+            #query = join & (table._id == record.id)
+            # But this requires a resource
+            if c.linktable:
+                query = (c.linktable[c.lkey] == record.id) & \
+                        (c.linktable[c.rkey] == c.table[c.fkey])
+                rows =  current.db(query).select(c.table.id)
+            else:
+                rows = (c.table[c.fkey] == record.id)
+
+            self.set_realm_entity(c.table, rows, entity,
+                                  force_update=force_update)
+
+            # @ToDo: Check if we need to update component Super Links
+
+        # Update Super Links
+        s3db.update_super(table, record)
+
+    # -------------------------------------------------------------------------
+    def update_super_realm(self, table, record, **data):
+        """
+            Update the shared fields in data in all super-entity rows linked
+            with this record.
+
+            @param table: the table
+            @param record: a record, record ID or a query
+            @param data: the field/value pairs to update
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        super_entities = s3db.get_config(table, "super_entity")
+        if not super_entities:
+            return
+        if not isinstance(super_entities, (list, tuple)):
+            super_entities = [super_entities]
+
+        tables = dict()
+        load = s3db.table
+        super_key = s3db.super_key
+        for se in super_entities:
+            supertable = load(se)
+            if not supertable or \
+               not any([f in supertable.fields for f in data]):
+                continue
+            tables[super_key(supertable)] = supertable
+
+        if not isinstance(record, (Row, dict)) or \
+           any([f not in record for f in tables]):
+            if isinstance(record, Query):
+                query = record
+                limitby = None
+            elif isinstance(record, (Row, dict)):
+                query = table._id == record[table._id.name]
+                limitby = (0, 1)
+            else:
+                query = table._id == record
+                limitby = (0, 1)
+            fields = [table[f] for f in tables]
+            records = db(query).select(limitby=limitby, *fields)
+        else:
+            records = [record]
+        if not records:
+            return
+
+        for record in records:
+            for skey in tables:
+                supertable = tables[skey]
+                if skey in record:
+                    query = (supertable[skey] == record[skey])
+                else:
+                    continue
+                updates = dict([(f, data[f])
+                                for f in data if f in supertable.fields])
+                if not updates:
+                    continue
+                db(query).update(**updates)
+        return
 
     # -------------------------------------------------------------------------
     def permitted_facilities(self,
@@ -4359,8 +4515,6 @@ class S3Permission(object):
                              False = check if unapproved
         """
 
-        db = current.db
-
         if "approved_by" not in table.fields or \
            not self.requires_approval(table):
             return approved
@@ -4374,8 +4528,9 @@ class S3Permission(object):
             record = None
 
         if record is None and record_id:
-            query = table._id == record_id
-            record = db(query).select(table.approved_by, limitby=(0, 1)).first()
+            record = current.db(table._id == record_id).select(table.approved_by,
+                                                               limitby=(0, 1)
+                                                               ).first()
             if not record:
                 return False
 
@@ -4437,8 +4592,10 @@ class S3Permission(object):
 
         if APPROVER in table:
             approver = table[APPROVER]
-            if auth.s3_logged_in() and \
-               auth.s3_has_permission("approve", table):
+            if auth.override:
+                approver.default = 0
+            elif auth.s3_logged_in() and \
+                 auth.s3_has_permission("approve", table):
                 approver.default = auth.user.id
             else:
                 approver.default = None
@@ -6797,8 +6954,16 @@ class S3GroupedOptionsWidget(OptionsWidget):
 
 # =============================================================================
 class S3EntityRoleManager(S3Method):
+    """ Entity/User role manager """
+
+    ENTITY_TYPES = ["org_organisation",
+                    "org_office",
+                    "inv_warehouse",
+                    "hms_hospital",
+                    "pr_group"]
 
     def __init__(self, *args, **kwargs):
+        """ Constructor """
 
         super(S3EntityRoleManager, self).__init__(*args, **kwargs)
 
@@ -6838,7 +7003,7 @@ class S3EntityRoleManager(S3Method):
         """
 
         if self.method == "roles" and \
-           r.name in ("organisation", "office", "person"):
+           (r.tablename in self.ENTITY_TYPES + ["pr_person"]):
             context = self.get_context_data(r, **attr)
         else:
             r.error(405, current.manager.ERROR.BAD_METHOD)
@@ -7185,9 +7350,10 @@ class S3OrgRoleManager(S3EntityRoleManager):
 
             @return: dictionary containing the ID and name of the entity
         """
+
         entity = dict(id=int(self.request.record.pe_id))
         entity["name"] = current.s3db.pr_get_entities(pe_ids=[entity["id"]],
-                                                      types=["org_organisation", "org_office"])[entity["id"]]
+                                                      types=self.ENTITY_TYPES)[entity["id"]]
         return entity
 
     # -------------------------------------------------------------------------
@@ -7261,13 +7427,15 @@ class S3OrgRoleManager(S3EntityRoleManager):
 
 # =============================================================================
 class S3PersonRoleManager(S3EntityRoleManager):
+    """ Role Manager for Person Records """
 
     def __init__(self, *args, **kwargs):
+        """ Constructor """
+
         super(S3PersonRoleManager, self).__init__(*args, **kwargs)
 
         # dictionary {id: name, ...} of pentities
-        self.objects = current.s3db.pr_get_entities(types=["org_organisation",
-                                                           "org_office"])
+        self.objects = current.s3db.pr_get_entities(types=self.ENTITY_TYPES)
 
     # -------------------------------------------------------------------------
     def get_context_data(self, r, **attr):
@@ -7277,7 +7445,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
             @return: dictionary for view
         """
         context = super(S3PersonRoleManager, self).get_context_data(r, **attr)
-        context["foreign_object_label"] = current.T("Organisations and Offices")
+        context["foreign_object_label"] = current.T("Organizations / Teams / Facilities")
         return context
 
     # -------------------------------------------------------------------------
@@ -7290,7 +7458,8 @@ class S3PersonRoleManager(S3EntityRoleManager):
         """
         entity = self.request.get_vars.get("edit", None)
         if entity:
-            entity = dict(id=int(entity), name=self.objects.get(int(entity), None))
+            entity = dict(id=int(entity),
+                          name=self.objects.get(int(entity), None))
         return entity
 
     # -------------------------------------------------------------------------
@@ -7311,12 +7480,14 @@ class S3PersonRoleManager(S3EntityRoleManager):
         else:
             username = utable.email
 
-        query = (ptable.pe_id == pe_id) & (ptable.user_id == utable.id)
+        query = (ptable.pe_id == pe_id) & \
+                (ptable.user_id == utable.id)
         record = current.db(query).select(utable.id,
                                           username,
                                           limitby=(0, 1)).first()
 
-        return dict(id=record.id, name=record[username]) if record else None
+        return dict(id=record.id,
+                    name=record[username]) if record else None
 
     # -------------------------------------------------------------------------
     def get_foreign_object(self):
@@ -7332,7 +7503,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
 
             @return: dictionary of assigned roles with entity pe_id as the keys
         """
-        user_id = current.auth.user.id
+        user_id = self.user["id"]
         return super(S3PersonRoleManager, self).get_assigned_roles(user_id=user_id)
 
     # -------------------------------------------------------------------------
@@ -7348,8 +7519,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
 
         if not self.entity:
             options = s3db.pr_get_entities(pe_ids=self.realm,
-                                           types=["org_organisation",
-                                                  "org_office"],
+                                           types=self.ENTITY_TYPES,
                                            group=True)
 
             nice_name = s3db.table("pr_pentity").instance_type.represent

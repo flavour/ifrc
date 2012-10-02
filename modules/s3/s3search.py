@@ -593,7 +593,8 @@ class S3SearchOptionsWidget(S3SearchWidget):
                 opt_values = []
                 rows = resource.select(fields=[field_name],
                                        start=None,
-                                       limit=None)
+                                       limit=None,
+                                       orderby=field)
                 if rows:
                     if field_type.startswith("list"):
                         for row in rows:
@@ -1447,7 +1448,8 @@ class S3Search(S3CRUD):
                 s3.dataTableMap = map_popup
 
             if settings.has_module("msg") and \
-               ("pe_id" in table or "person_id" in table):
+               ("pe_id" in table or "person_id" in table) and \
+               current.auth.permission.has_permission("update", c="msg"):
                 # Provide the ability to Message person entities in search results
                 tabs.append((T("Message"), "compose"))
 
