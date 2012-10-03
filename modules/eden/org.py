@@ -667,6 +667,7 @@ class S3OrganisationModel(S3Model):
         configure(tablename,
                   deduplicate=self.org_branch_duplicate,
                   onaccept=self.org_branch_onaccept,
+                  onvalidation=self.org_branch_onvalidation,
                   ondelete=self.org_branch_ondelete,
                   )
 
@@ -1017,6 +1018,21 @@ class S3OrganisationModel(S3Model):
                 if duplicate:
                     item.id = duplicate.id
                     item.method = item.METHOD.UPDATE
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def org_branch_onvalidation(form):
+        """
+            Prevent an Organisation from being a Branch of itself
+        """
+
+        # @ToDo: This ctaches manual creation but need to catch Imports somehow
+        vars = form.request_vars
+        if vars and \
+           int(vars.branch_id) == int(vars.organisation_id):
+            error = current.T("Cannot make an Organisation a branch of itself!")
+            form.errors["branch_id"] = error
+            current.response.error = error
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1968,9 +1984,9 @@ class S3OfficeModel(S3Model):
     # ---------------------------------------------------------------------
     @staticmethod
     def org_office_onaccept(form):
-        """ 
+        """
             * Update Affiliation and Realms
-            * Process injected fields 
+            * Process injected fields
         """
 
         auth = current.auth
@@ -1980,10 +1996,9 @@ class S3OfficeModel(S3Model):
 
         # Affiliation, record ownership and component ownership
         s3db.pr_update_affiliations(otable, vars)
-        auth.s3_set_record_owner(otable, vars, force_update=True)
+        auth.set_realm_entity(otable, vars, force_update=True)
         auth.set_component_realm_entity(otable, vars,
                                         update_components = ["contact_emergency",
-                                                             "physical_description",
                                                              "config",
                                                              "image",
                                                              "req",
@@ -2017,7 +2032,7 @@ class S3OfficeModel(S3Model):
                 international_staff = vars.international_staff
             else:
                 international_staff = None
-    
+
             if existing:
                 db(query).update(national_staff=national_staff,
                                  international_staff=international_staff

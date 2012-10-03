@@ -126,7 +126,16 @@ class S3HRModel(S3Model):
                                     widget = None,
                                     #widget=S3OrganisationAutocompleteWidget(
                                     #    default_from_profile=True),
-                                    empty=False
+                                    empty=False,
+                                    script = SCRIPT('''
+$(document).ready(function(){
+ S3FilterFieldChange({
+  'FilterField':'organisation_id',
+  'Field':'site_id',
+  'FieldResource':'site',
+  'FieldPrefix':'org',
+ })
+})'''),
                                     ),
                                   self.super_link("site_id", "org_site",
                                                   label=T("Office/Warehouse/Facility"),
@@ -456,9 +465,9 @@ class S3HRModel(S3Model):
                             cols=report_fields,
                             facts=report_fields,
                             methods=["count", "list"],
-                            defaults=Storage(rows="organisation_id",
-                                             cols="course",
-                                             fact="person_id",
+                            defaults=Storage(rows="human_resource.organisation_id",
+                                             cols="human_resource.course",
+                                             fact="human_resource.person_id",
                                              aggregate="count")
                        ),
                        create_next = hrm_url,
@@ -1151,7 +1160,7 @@ class S3HRSkillModel(S3Model):
         super_link = self.super_link
 
         root_org = auth.root_org()
-        
+
         group = current.request.get_vars.get("group", None)
 
         # ---------------------------------------------------------------------
@@ -1892,9 +1901,9 @@ class S3HRSkillModel(S3Model):
                       cols=report_fields,
                       facts=report_fields,
                       methods=["count", "list"],
-                      defaults=Storage(rows="course_id",
-                                      cols="month",
-                                      fact="person_id",
+                      defaults=Storage(rows="hrm_training.course_id",
+                                      cols="hrm_training.month",
+                                      fact="hrm_training.person_id",
                                       aggregate="count"),
                   ),
                   list_fields = [
@@ -3236,7 +3245,7 @@ def hrm_human_resource_onaccept(form):
     s3db = current.s3db
     auth = current.auth
     setting = current.deployment_settings
-    
+
     htable = db.hrm_human_resource
     record = db(htable.id == id).select(htable.id,
                                         htable.type,
@@ -3253,11 +3262,11 @@ def hrm_human_resource_onaccept(form):
 
     # Affiliation, record ownership and component ownership
     s3db.pr_update_affiliations(htable, record)
-    auth.s3_set_record_owner(htable, record, force_update=True)
+    auth.set_realm_entity(htable, record, force_update=True)
     auth.set_component_realm_entity(htable, vars,
                                     update_components = ["presence"])
 
-    # realm_entity for the pr_person record
+    # Realm_entity for the pr_person record
     ptable = s3db.pr_person
     person_id = record.person_id
     person = Storage(id = person_id)
@@ -3266,10 +3275,10 @@ def hrm_human_resource_onaccept(form):
         organisation_id = record.organisation_id
         entity = s3db.pr_get_pe_id("org_organisation", organisation_id)
         if entity:
-            auth.set_realm_entity(ptable, person, 
+            auth.set_realm_entity(ptable, person,
                                   entity = entity,
                                   force_update = True)
-            auth.set_component_realm_entity(ptable, person, 
+            auth.set_component_realm_entity(ptable, person,
                                             entity = entity,
                                             update_components = ["presence"])
 

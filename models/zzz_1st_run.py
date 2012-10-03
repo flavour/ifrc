@@ -100,6 +100,31 @@ if len(pop_list) > 0:
                              timeout=300, # seconds
                              repeats=0    # unlimited
                              )
+        # saved search notifications
+        s3task.schedule_task("msg_search_subscription_notifications",
+                             vars={"frequency":"hourly"},
+                             period=3600,
+                             timeout=300,
+                             repeats=0
+                             )
+        s3task.schedule_task("msg_search_subscription_notifications",
+                             vars={"frequency":"daily"},
+                             period=86400,
+                             timeout=300,
+                             repeats=0
+                             )
+        s3task.schedule_task("msg_search_subscription_notifications",
+                             vars={"frequency":"weekly"},
+                             period=604800,
+                             timeout=300,
+                             repeats=0
+                             )
+        s3task.schedule_task("msg_search_subscription_notifications",
+                             vars={"frequency":"monthly"},
+                             period=2419200,
+                             timeout=300,
+                             repeats=0
+                             )
 
     # Daily maintenance
     s3task.schedule_task("maintenance",
@@ -353,17 +378,17 @@ if len(pop_list) > 0:
         try:
             print >> sys.stderr, errorLine
         except:
-            print >> sys.stderr, s3base.s3_unicode(errorLine)
+            s3_unicode = s3base.s3_unicode
+            _errorLine = ""
+            for i in range(0, len(errorLine)):
+                try:
+                    _errorLine += s3_unicode(errorline[i])
+                except:
+                    pass
+            print >> sys.stderr, _errorLine
 
     # Restore table protection
     s3mgr.PROTECTED = protected
-
-    # Update stats_aggregate (disabled during prepop)
-    if has_module("stats"):
-        start = datetime.datetime.now()
-        s3db.stats_rebuild_aggregates()
-        end = datetime.datetime.now()
-        print >> sys.stdout, "Statistics data aggregation completed in %s" % (end - start)
 
     # Restore Auth
     auth.override = False
@@ -373,6 +398,14 @@ if len(pop_list) > 0:
     gis.update_location_tree()
     end = datetime.datetime.now()
     print >> sys.stdout, "Location Tree update completed in %s" % (end - start)
+
+    # Update stats_aggregate (disabled during prepop)
+    # - needs to be done after locations
+    if has_module("stats"):
+        start = datetime.datetime.now()
+        s3db.stats_rebuild_aggregates()
+        end = datetime.datetime.now()
+        print >> sys.stdout, "Statistics data aggregation completed in %s" % (end - start)
 
     grandTotalEnd = datetime.datetime.now()
     duration = grandTotalEnd - grandTotalStart
