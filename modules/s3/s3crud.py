@@ -2000,6 +2000,7 @@ class S3CRUD(S3Method):
 
         db = current.db
         s3db = current.s3db
+        auth = current.auth
         request = current.request
         T = current.T
 
@@ -2029,8 +2030,13 @@ class S3CRUD(S3Method):
                     else:
                         form.errors.update(_form.errors)
                         return
-                    # Super-entity update
+                    # Update super-entity links
                     s3db.update_super(table, dict(id=selected))
+                    # Update realm
+                    update_realm = s3db.get_config(table, "update_realm")
+                    if update_realm:
+                        auth.set_realm_entity(table, selected,
+                                              force_update=True)
                     # Onaccept
                     onaccept = get_config("update_onaccept") or \
                                get_config("onaccept")
@@ -2048,10 +2054,14 @@ class S3CRUD(S3Method):
                         return
                     if selected:
                         # Update post_vars and form.vars
-                        request.post_vars.update({key:str(selected)})
-                        form.vars.update({key:selected})
-                        # Super-entity update
+                        request.post_vars[key] = str(selected)
+                        form.request_vars[key] = str(selected)
+                        form.vars[key] = selected
+                        # Update super-entity links
                         s3db.update_super(table, dict(id=selected))
+                        # Set record owner
+                        auth.s3_set_record_owner(table, selected)
+                        auth.s3_make_session_owner(table, selected)
                         # Onaccept
                         onaccept = get_config("create_onaccept") or \
                                    get_config("onaccept")

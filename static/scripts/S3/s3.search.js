@@ -231,33 +231,30 @@ $(document).ready(function() {
         Hide all the expanding/collapsing letter widgets that don't have
         any options selected
     */
-    $('.search_select_letter_label,.s3-grouped-checkboxes-widget-label').each(function() {
-        widget = $(this).next();
-        if ($(':checked', widget).length < 1) {
-            widget.toggleClass('hide');
-        }
-        else {
-            $(this).toggleClass('expanded');
-        }
-    })
-    .click( function(event) {
+    $('.search_select_letter_label,.s3-grouped-checkboxes-widget-label').live('click', function(event) {
         /*
             Listen for click events on the expanding/collapsing letter widgets
         */
         var div = $(this)
         div.next('table').toggleClass('hide');
         div.toggleClass('expanded');
+    })
+    .each(function() {
+        widget = $(this).next();
+        if ($(':checked', widget).length < 1) {
+        	$(this).click();
+        }
     });
 
     /* Search AutoComplete */
 
     // Events to capture autocomplete input
-    $('div.simple-form').keyup( S3.search.AutocompleteTimer )
-    					.click( S3.search.AutocompleteTimer )
+    $('div.simple-form').keyup(S3.search.AutocompleteTimer)
+    					.click(S3.search.AutocompleteTimer)
     					.keypress(S3.search.CancelEnterPress);
 
-    $('div.advanced-form').keyup( S3.search.AutocompleteTimer )
-    					  .click( S3.search.AutocompleteTimer )
+    $('div.advanced-form').keyup(S3.search.AutocompleteTimer)
+    					  .click(S3.search.AutocompleteTimer)
     					  .keypress(S3.search.ancelEnterPress);
 
     // Select Item for Autocomplete

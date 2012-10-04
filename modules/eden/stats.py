@@ -31,6 +31,7 @@ __all__ = ["S3StatsModel",
            "S3StatsDemographicModel",
            "S3StatsGroupModel",
            "stats_parameter_represent",
+           "stats_demographic_data_controller",
            ]
 
 from gluon import *
@@ -70,8 +71,9 @@ class S3StatsModel(S3Model):
                            vulnerability_indicator = T("Vulnerability Indicator"),
                            vulnerability_aggregated_indicator = T("Vulnerability Aggregated Indicator"),
                            stats_demographic = T("Demographic"),
+                           project_beneficiary_type = T("Project Beneficiary Type"),
                            #survey_question_type = T("Survey Question Type"),
-                           #project_beneficary_type = T("Project Beneficiary Type"),
+                           
                            #climate_parameter = T("Climate Parameter"),
                           )
 
@@ -83,6 +85,7 @@ class S3StatsModel(S3Model):
                              Field("description",
                                    label = T("Description")),
                              )
+        table.instance_type.readable = True
 
         # Reusable Field
         param_id = S3ReusableField("parameter_id", table,
@@ -103,7 +106,7 @@ class S3StatsModel(S3Model):
                            vulnerability_data = T("Vulnerability Data"),
                            stats_demographic_data = T("Demographic Data"),
                            #survey_answer = T("Survey Answer"),
-                           #project_beneficary = T("Project Beneficiary"),
+                           project_beneficiary = T("Project Beneficiary"),
                            #climate_data = T("Climate Data"),
                            )
 
@@ -118,14 +121,15 @@ class S3StatsModel(S3Model):
                                 ),
                              Field("value", "double",
                                    label = T("Value")),
-                             Field("date", "date",
-                                   label = T("Date")),
+                             s3_date(),
+                             s3_date("date_end",
+                                     label = T("End Date")),
                              self.stats_group_id(),
                              Field("approved_by", "integer",
                                    default = None)
                              )
 
-        self.configure("stats_data",
+        self.configure(tablename,
                        onapprove = self.stats_data_onapprove,
                        requires_approval = True,
                        )
@@ -861,11 +865,11 @@ class S3StatsDemographicModel(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
-
+                
 # =============================================================================
 class S3StatsGroupModel(S3Model):
     """
-        Table to hold the group details of the different stats records
+        Tables to hold the group details of the different stats records
     """
 
     names = ["stats_group_type",
@@ -1109,6 +1113,60 @@ def stats_parameter_represent(id, row=None):
     except:
         return current.messages.UNKNOWN_OPT
 
+# =============================================================================
+def stats_demographic_data_controller():
+    """
+        Function to be called from controller functions to display all
+        requests as a tab for a site.
+    """
+
+    vars = current.request.vars
+
+    output = dict()
+
+    if "viewing" not in vars:
+        return output
+    else:
+        viewing = vars.viewing
+    if "." in viewing:
+        tablename, id = viewing.split(".", 1)
+    else:
+        return output
+
+    s3db = current.s3db
+    table = s3db[tablename]
+    location_id = current.db(table.id == id).select(table.location_id,
+                                                    limitby=(0, 1)
+                                                    ).first().location_id
+
+    s3 = current.response.s3
+    dtable = s3db.stats_demographic_data
+
+    field = dtable.location_id
+    s3.filter = (field == location_id)
+    field.default = location_id
+    field.readable = False
+    field.writable = False
+
+    dtable.group_id.readable = False
+    dtable.group_id.writable = False
+
+    # Post-process
+    def postp(r, output):
+        if r.representation == "html":
+            output["title"] = s3.crud_strings[tablename].title_display
+        return output
+    s3.postp = postp
+
+    if tablename == "project_location":
+        rheader = s3db.project_rheader
+    else:
+        rheader = None
+
+    output = current.rest_controller("stats", "demographic_data",
+                                     rheader=rheader)
+
+    return output
 
 # =============================================================================
 def stats_group_type_represent(id, row=None):

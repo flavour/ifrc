@@ -687,6 +687,7 @@ class S3OrganisationModel(S3Model):
         return Storage(
                     org_sector_id=sector_id,
                     org_sector_opts=self.org_sector_opts,
+                    org_sector_represent = self.org_sector_represent,
                     org_organisation_type_id=organisation_type_id,
                     org_organisation_id=organisation_id,
                 )
@@ -1024,9 +1025,9 @@ class S3OrganisationModel(S3Model):
     def org_branch_onvalidation(form):
         """
             Prevent an Organisation from being a Branch of itself
+            - this is for interactive forms, imports are caught in .xsl
         """
 
-        # @ToDo: This ctaches manual creation but need to catch Imports somehow
         vars = form.request_vars
         if vars and \
            vars.branch_id and \
@@ -1915,7 +1916,25 @@ class S3OfficeModel(S3Model):
                                #"location_id$L4",
                                "phone1",
                                "email"
-                               ])
+                               ],
+                  realm_components=["contact_emergency",
+                                    "config",
+                                    "image",
+                                    "req",
+                                    "send",
+                                    "human_resource_site",
+                                    "note",
+                                    "contact",
+                                    "role",
+                                    "asset",
+                                    "commit",
+                                    "inv_item",
+                                    "document",
+                                    "recv",
+                                    "address",
+                                    ],
+                  update_realm=True,
+                 )
 
         if current.deployment_settings.get_org_summary():
             add_component("org_office_summary",
@@ -1997,24 +2016,6 @@ class S3OfficeModel(S3Model):
 
         # Affiliation, record ownership and component ownership
         s3db.pr_update_affiliations(otable, vars)
-        auth.set_realm_entity(otable, vars, force_update=True)
-        auth.set_component_realm_entity(otable, vars,
-                                        update_components = ["contact_emergency",
-                                                             "config",
-                                                             "image",
-                                                             "req",
-                                                             "send",
-                                                             "human_resource_site",
-                                                             "note",
-                                                             "contact",
-                                                             "role",
-                                                             "asset",
-                                                             "commit",
-                                                             "inv_item",
-                                                             "document",
-                                                             "recv",
-                                                             "address",
-                                                             ])
 
         if current.deployment_settings.get_org_summary():
 

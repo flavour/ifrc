@@ -536,7 +536,7 @@ class S3PersonModel(S3Model):
         pr_gender = S3ReusableField("gender", "integer",
                                     requires = IS_IN_SET(pr_gender_opts, zero=None),
                                     default = 1,
-                                    label = T("Gender"),
+                                    label = T("Sex"),
                                     represent = lambda opt: \
                                                 pr_gender_opts.get(opt, UNKNOWN_OPT))
 
@@ -747,7 +747,8 @@ class S3PersonModel(S3Model):
                         search_method=pr_person_search,
                         deduplicate=self.person_deduplicate,
                         main="first_name",
-                        extra="last_name"
+                        extra="last_name",
+                        realm_components = ["presence"],
                         )
 
         person_id_comment = pr_person_comment(
@@ -2511,7 +2512,7 @@ class S3PersonPresence(S3Model):
                        super_entity = "sit_situation",
                        onvalidation = self.presence_onvalidation,
                        onaccept = self.presence_onaccept,
-                       delete_onaccept = self.presence_onaccept,
+                       ondelete = self.presence_onaccept,
                        list_fields = ["id",
                                       "datetime",
                                       "location_id",
@@ -2612,9 +2613,11 @@ class S3PersonPresence(S3Model):
         elif hasattr(form, "vars"):
             id = form.vars.id
         else:
+            # e.g. Row like for delete
             id = form.id
 
-        presence = db(table.id == id).select(table.ALL, limitby=(0,1)).first()
+        presence = db(table.id == id).select(table.ALL,
+                                             limitby=(0, 1)).first()
         if not presence:
             return
         else:
@@ -2660,7 +2663,7 @@ class S3PersonPresence(S3Model):
 
         if not presence.closed:
 
-            # Re-open the last persistant presence if no closing event
+            # Re-open the last persistent presence if no closing event
             query = this_entity & is_present
             presence = db(query).select(table.ALL, orderby=~table.datetime, limitby=(0,1)).first()
             if presence and presence.closed:
@@ -2669,7 +2672,7 @@ class S3PersonPresence(S3Model):
                 if not db(query).count():
                     db(table.id == presence.id).update(closed=False)
 
-            # Re-open the last missing if no later persistant presence
+            # Re-open the last missing if no later persistent presence
             query = this_entity & is_missing
             presence = db(query).select(table.ALL, orderby=~table.datetime, limitby=(0,1)).first()
             if presence and presence.closed:
