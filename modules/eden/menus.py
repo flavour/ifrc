@@ -856,6 +856,11 @@ class S3OptionsMenu(object):
                         M("New", m="create"),
                         M("List All"),
                     ),
+                    M("Department Catalog", f="department",
+                      check=manager_mode)(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
                     M("Job Role Catalog", f="job_role",
                       check=[manager_mode, job_roles])(
                         M("New", m="create"),
@@ -947,6 +952,11 @@ class S3OptionsMenu(object):
                     ),
                     M("Teams", f="group",
                       check=[manager_mode, use_teams])(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Department Catalog", f="department",
+                      check=manager_mode)(
                         M("New", m="create"),
                         M("List All"),
                     ),
@@ -1485,10 +1495,13 @@ class S3OptionsMenu(object):
                         M("Search", m="search"),
                      )
                     )
+            stats = lambda i: settings.has_module("stats")
             menu(
                  M("Reports", f="location", m="report")(
                     M("3W", f="location", m="report"),
-                    M("Beneficiaries", f="beneficiary", m="report"),
+                    M("Beneficiaries", f="beneficiary", m="report",
+                      check = stats,
+                      ),
                     M("Funding", f="organisation", args="report"),
                  ),
                  M("Import", f="index", p="create")(
@@ -1514,7 +1527,8 @@ class S3OptionsMenu(object):
                     M("List All"),
                     #M("Search", m="search")
                  ),
-                 M("Beneficiary Types", f="beneficiary_type")(
+                 M("Beneficiary Types", f="beneficiary_type",
+                   check = stats,)(
                     M("New", m="create"),
                     M("List All"),
                  ),

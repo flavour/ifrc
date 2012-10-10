@@ -56,6 +56,8 @@ messages["NOT_APPLICABLE"] = "N/A"
 messages["ADD_PERSON"] = "Add Person"
 messages["ADD_LOCATION"] = "Add Location"
 messages["SELECT_LOCATION"] = "Select a location"
+messages["COUNTRY"] = "Country"
+messages["ORGANISATION"] = "Organization"
 
 for u in messages:
     if isinstance(messages[u], str):
@@ -213,9 +215,16 @@ No action is required.""" \
 """%(first_name)s %(last_name)s
 %(email)s""")
 
-_messages["confirmation_email_subject"] = T("Resource Mapping System account has been activated")
+#_messages["confirmation_email_subject"] = "%s %s" % (settings.get_system_name(),
+#                                                     T("access granted"))
+_messages["confirmation_email_subject"] = T("Resource Management System account has been activated")
+#_messages["confirmation_email"] = "%s %s %s %s. %s." % (T("Welcome to the"),
+#                                                        settings.get_system_name(),
+#                                                        T("Portal at"),
+#                                                        s3.base_url,
+#                                                        T("Thanks for your assistance"))
 _messages["confirmation_email"] = "%s %s. %s %s/%s/default/help\n\n%s,\n\n%s" % \
-    (T("Your request for Red Cross and Red Crescent Resource Mapping System (RMS) has been approved and you can now access the system at"),
+    (T("Your request for Red Cross and Red Crescent Resource Management System (RMS) has been approved and you can now access the system at"),
      deployment_settings.get_base_public_url(),
      T("If you have any questions or need support, please see"),
      deployment_settings.get_base_public_url(),
@@ -223,7 +232,6 @@ _messages["confirmation_email"] = "%s %s. %s %s/%s/default/help\n\n%s,\n\n%s" % 
      T("With best regards"),
      T("RMS Team")
      )
-
 # We don't wish to clutter the groups list with 1 per user.
 _settings.create_user_groups = False
 # We need to allow basic logins for Webservices
@@ -232,19 +240,16 @@ _settings.allow_basic_login = True
 _settings.logout_onlogout = s3_auth_on_logout
 _settings.login_onaccept = s3_auth_on_login
 _settings.login_next = settings.get_auth_login_next()
-if settings.get_auth_registration_volunteer() and \
-   settings.has_module("vol"):
+if settings.has_module("vol") and \
+   settings.get_auth_registration_volunteer():
     _settings.register_next = URL(c="vol", f="person")
 
-# Default Language for authenticated users
-_settings.table_user.language.default = settings.get_L10n_default_language()
-
 # Languages available in User Profiles
-field = _settings.table_user.language
 if len(s3.l10n_languages) > 1:
-    field.requires = IS_IN_SET(s3.l10n_languages,
-                               zero=None)
+    _settings.table_user.language.requires = IS_IN_SET(s3.l10n_languages,
+                                                       zero=None)
 else:
+    field = _settings.table_user.language
     field.default = s3.l10n_languages.keys()[0]
     field.readable = False
     field.writable = False

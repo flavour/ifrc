@@ -44,7 +44,8 @@ def inline():
                         label=T("Participating Organisations"),
                         fields=["organisation_id",
                                 "role",
-                                "amount"],
+                                "amount"
+                                ],
                     ),
                 )
 
@@ -108,7 +109,7 @@ def project():
         
         # Filter Themes based on Sector
         if r.record:
-            sector_ids = r.record.sector_id
+            sector_ids = r.record.multi_sector_id
         else:
             sector_ids = []
         set_project_multi_theme_id_requires(sector_ids)
@@ -152,12 +153,13 @@ def project():
                     set_project_multi_activity_type_id_requires(sector_ids)
                     #@ToDo: Do this for project_activity too.
                 elif r.component_name == "task":
-                    r.component.table.milestone_id.requires = IS_NULL_OR(IS_ONE_OF(db,
-                                                                "project_milestone.id",
-                                                                "%(name)s",
-                                                                filterby="project_id",
-                                                                filter_opts=(r.id,),
-                                                                ))
+                    r.component.table.milestone_id.requires = IS_NULL_OR(
+                                                                IS_ONE_OF(db,
+                                                                          "project_milestone.id",
+                                                                          s3db.project_milestone_represent,
+                                                                          filterby="project_id",
+                                                                          filter_opts=(r.id,),
+                                                                          ))
                     if "open" in request.get_vars:
                         # Show only the Open Tasks for this Project
                         statuses = s3.project_task_active_statuses
@@ -165,13 +167,12 @@ def project():
                         r.resource.add_component_filter("task", filter)
                 elif r.component_name == "beneficiary":
                     db.project_beneficiary.project_location_id.requires = IS_NULL_OR(
-                        IS_ONE_OF(db,
-                                  "project_location.id",
+                        IS_ONE_OF(db, "project_location.id",
                                   s3db.project_location_represent,
                                   sort=True,
                                   filterby="project_id",
                                   filter_opts=[r.id])
-                                )
+                                  )
                 elif r.component_name == "human_resource":
                     # We can pass the human resource type filter in the URL
                     group = r.vars.get("group", None)
@@ -255,9 +256,10 @@ def set_project_multi_theme_id_requires(sector_ids):
     rows = db().select(ttable.id,
                        tstable.sector_id,
                        left=tstable.on(ttable.id == tstable.theme_id))
+    sector_ids = sector_ids or []
     theme_ids = [row.project_theme.id for row in rows 
                  if not row.project_theme_sector.sector_id or 
-                    row.project_theme_sector.sector_id[0] in sector_ids]
+                    row.project_theme_sector.sector_id in sector_ids]
     table.multi_theme_id.requires = IS_NULL_OR(
                                         IS_ONE_OF(db, 
                                                   "project_theme.id",
@@ -286,7 +288,7 @@ def set_project_multi_activity_type_id_requires(sector_ids):
                        left=atstable.on(attable.id == atstable.activity_type_id))
     activity_type_ids = [row.project_activity_type.id for row in rows 
                  if not row.project_activity_type_sector.sector_id or 
-                    row.project_activity_type_sector.sector_id[0] in sector_ids]
+                    row.project_activity_type_sector.sector_id in sector_ids]
     table.multi_activity_type_id.requires = IS_NULL_OR(
                                         IS_ONE_OF(db, 
                                                   "project_activity_type.id",
@@ -458,7 +460,10 @@ def location():
     def prep(r):
         if r.interactive:
             if r.record and r.record.project_id:
-                sector_ids = s3db.project_project[r.record.project_id].sector_id
+                table = s3db.project_project
+                sector_ids = db(table.id == r.record.project_id).select(table.multi_sector_id,
+                                                                        limitby=(0, 1)
+                                                                        ).first().multi_sector_id
             else:
                 sector_ids = []
             set_project_multi_activity_type_id_requires(sector_ids)
@@ -542,6 +547,7 @@ def location():
     return s3_rest_controller(interactive_report=True,
                               rheader=s3db.project_rheader,
                               csv_template="location")
+
 # -----------------------------------------------------------------------------
 def demographic_data():
     """ RESTful CRUD controller """

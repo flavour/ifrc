@@ -30,16 +30,6 @@ settings.auth.registration_roles = {"site_id": ["asset_reader",
                                                 "survey_reader",
                                                 "vulnerability_reader",
                                                 ],
-                                    "organisation_id": ["asset_reader",
-                                                        "inv_reader",
-                                                        "irs_reader",
-                                                        "member_reader",
-                                                        "project_reader",
-                                                        "staff_reader",
-                                                        "vol_reader",
-                                                        "survey_reader",
-                                                        "vulnerability_reader",
-                                                        ]
                                     }
 
 # -----------------------------------------------------------------------------
@@ -229,6 +219,8 @@ settings.save_search.widget = False
 # Organisation Management
 # Set the length of the auto-generated org/site code the default is 10
 settings.org.site_code_len = 3
+# Set the label for Sites
+settings.org.site_label = "Office/Warehouse/Facility"
 
 # -----------------------------------------------------------------------------
 # Human Resource Management
@@ -247,7 +239,7 @@ settings.hrm.use_skills = False
 # Uncomment to disable the use of HR Teams
 #settings.hrm.use_teams = False
 # Custom label for Organisations in HR module
-settings.hrm.organisation_label = T("National Society / Branch")
+settings.hrm.organisation_label = "National Society / Branch"
 
 # -----------------------------------------------------------------------------
 # Projects

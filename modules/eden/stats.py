@@ -73,7 +73,7 @@ class S3StatsModel(S3Model):
                            stats_demographic = T("Demographic"),
                            project_beneficiary_type = T("Project Beneficiary Type"),
                            #survey_question_type = T("Survey Question Type"),
-                           
+
                            #climate_parameter = T("Climate Parameter"),
                           )
 
@@ -186,6 +186,10 @@ class S3StatsModel(S3Model):
                              Field("median", "double",
                                    label = T("Median"),
                                    ),
+                             Field("mad", "double",
+                                   label = T("Median Absolute Deviation"),
+                                   default = 0.0,
+                                   ),
                              #Field("mean_ad", "double",
                              #      label = T("Mean Absolute Deviation"),
                              #      ),
@@ -282,7 +286,6 @@ class S3StatsModel(S3Model):
             query = (dtable.deleted != True) & \
                     (dtable.approved_by != None)
             records = db(query).select()
-            return
         elif isinstance(data_id, Rows):
             records = data_id
         elif not isinstance(data_id, Row):
@@ -295,7 +298,7 @@ class S3StatsModel(S3Model):
         param_location_dict = {} # a list of locations for each parameter
         location_dict = {} # a list of locations
         loc_level_list = {} # a list of levels for each location
-        
+
         if current.deployment_settings.has_module("vulnerability"):
             vulnerability = True
             vulnerability_id_list = s3db.vulnerability_ids()
@@ -307,16 +310,16 @@ class S3StatsModel(S3Model):
             parameter_id = record.parameter_id
             # Exit if either the location or the parameter is not valid
             if not location_id or not parameter_id:
-                return
+                continue
             (start_date, end_date) = stats_aggregated_period(record.date)
-    
+
             # Get all the stats_data records for this location and parameter
             query = (dtable.location_id == location_id) & \
                     (dtable.parameter_id == parameter_id) & \
                     (dtable.deleted != True) & \
                     (dtable.approved_by != None)
             data_rows = db(query).select()
-    
+
             # Get each record and store them in a dict keyed on the start date of
             # the aggregated period. The value stored is a list containing the date
             # the data_id and the value. If a record already exists for the
@@ -342,14 +345,14 @@ class S3StatsModel(S3Model):
                         # The newly added indicator is the one currently stored
                         # in data but a more recent value is held on the database
                         # This will not change any of the aggregated data
-                        return
+                        break
                 if start_date < earliest_period:
                     earliest_period = start_date
                 # Store the record from the db in the data storage
                 data[start_date] = Storage(date = row_date,
                                            id = row.data_id,
                                            value = row.value)
-    
+
             # Get all the aggregate records for this parameter and location
             query = (atable.location_id == location_id) & \
                     (atable.parameter_id == parameter_id) & \
@@ -359,7 +362,7 @@ class S3StatsModel(S3Model):
                                          atable.date,
                                          atable.end_date,
                                          atable.mean)
-    
+
             aggr = dict()
             for row in aggr_rows:
                 (start_date, end_date) = stats_aggregated_period(row.date)
@@ -367,7 +370,7 @@ class S3StatsModel(S3Model):
                                            id = row.id,
                                            type = row.agg_type,
                                            end_date = row.end_date)
-    
+
             # Step through each period and check that aggr is correct
             last_data_period = earliest_period
             last_type_agg = False # The type of previous non-copy record was aggr
@@ -505,7 +508,7 @@ class S3StatsModel(S3Model):
                     # Only need to check the start date of the first period
                     if changed_periods[0][0] < location_dict[location_id][0][0]:
                         location_dict[location_id] = changed_periods
-                
+
         # End of loop through each stats_data record
 
         # OPTIMISATION step 1
@@ -526,23 +529,24 @@ class S3StatsModel(S3Model):
         parents_data = {}
         for (param_id, loc_dict) in param_location_dict.items():
             for (loc_id, periods) in loc_dict.items():
-                for p_loc_row in parents[loc_id]:
-                    p_loc_id = p_loc_row.id
-                    if param_id in parents_data:
-                        if p_loc_id in parents_data[param_id]:
-                            # store the older of the changed periods (the end will always be None)
-                            # Only need to check the start date of the first period
-                            if periods[0][0] < parents_data[param_id][p_loc_id][0][0][0]:
-                                parents_data[param_id][p_loc_id][0] = periods
+                if loc_id in parents: # There won't be a parent if this is a L0
+                    for p_loc_row in parents[loc_id]:
+                        p_loc_id = p_loc_row.id
+                        if param_id in parents_data:
+                            if p_loc_id in parents_data[param_id]:
+                                # store the older of the changed periods (the end will always be None)
+                                # Only need to check the start date of the first period
+                                if periods[0][0] < parents_data[param_id][p_loc_id][0][0][0]:
+                                    parents_data[param_id][p_loc_id][0] = periods
+                            else:
+                                parents_data[param_id][p_loc_id] = [periods,
+                                                                    loc_level_list[loc_id]
+                                                                    ]
                         else:
-                            parents_data[param_id][p_loc_id] = [periods,
-                                                                loc_level_list[loc_id]
-                                                                ]
-                    else:
-                        parents_data[param_id] = {p_loc_id : [periods,
-                                                              loc_level_list[loc_id]
-                                                              ]
-                                                  }
+                            parents_data[param_id] = {p_loc_id : [periods,
+                                                                  loc_level_list[loc_id]
+                                                                  ]
+                                                      }
 
 
         # OPTIMISATION step 2
@@ -566,7 +570,6 @@ class S3StatsModel(S3Model):
                 else:
                     resilence_parents[p_loc_id] = [periods, loc_level_list[loc_id], False]
 
-        #print "%s %s %s %s" % (len(location_dict), len(parents), len(parents_data), len(resilence_parents))
         # Now that the time aggregate types have been set up correctly,
         # fire off requests for the location aggregates to be calculated
         async = current.s3task.async
@@ -667,6 +670,7 @@ class S3StatsModel(S3Model):
         values_max = max(values)
         values_avg = float(values_sum) / values_len
         values_med = numpy.median(values)
+        values_mad = numpy.median([abs(v - values_med) for v in values])
 
         # Add or update the aggregated values in the database
 
@@ -686,123 +690,26 @@ class S3StatsModel(S3Model):
                              min = values_min,
                              max = values_max,
                              mean = values_avg,
-                             median = values_med)
+                             median = values_med,
+                             mad = values_mad
+                             )
         else:
             # Insert new
-            atable.insert(parameter_id = parameter_id,
+            atable.insert(agg_type = 2, # Location
+                          parameter_id = parameter_id,
                           location_id = location_id,
                           date = start_date,
                           end_date = end_date,
-                          agg_type = 2, # Location
                           reported_count = values_len,
                           ward_count = len(child_ids),
                           min = values_min,
                           max = values_max,
                           mean = values_avg,
-                          median = values_med)
+                          median = values_med,
+                          mad = values_mad
+                          )
 
         return
-
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def stats_update_aggregate_location_old(location_id,
-                                            parameter_id,
-                                            start_date,
-                                            end_date
-                                           ):
-        """
-           Calculates the stats_aggregate for a specific parameter at a
-           specific location.
-
-           Where appropriate add test cases to modules/unit_tests/eden/stats.py
-
-           * unused in this version, but retained for debug/reference
-        """
-
-        db = current.db
-        s3db = current.s3db
-        table = s3db.stats_data
-        agg_table = s3db.stats_aggregate
-
-        # Get all the child locations
-        child_locations = current.gis.get_children(location_id)
-        child_ids = [row.id for row in child_locations]
-
-        # The dates have been converted to a string so the following is needed
-        if end_date == "None":
-            # Get the most recent stats_data record for each location
-            query = (table.location_id.belongs(child_ids)) & \
-                    (table.parameter_id == parameter_id) & \
-                    (table.deleted != True) & \
-                    (table.approved_by != None)
-            end_date = None
-        else:
-            query = (table.location_id.belongs(child_ids)) & \
-                    (table.parameter_id == parameter_id) & \
-                    (table.date <= end_date) & \
-                    (table.deleted != True) & \
-                    (table.approved_by != None)
-        rows = db(query).select(table.value,
-                                table.date,
-                                table.location_id,
-                                orderby=(table.location_id, ~table.date),
-                                )
-        # The query may return duplicate records for the same location
-        # Use the most recent, which because of the ordering will be the first
-        rec_cnt = 0
-        sum = 0
-        last_location = 0
-        num_list = []
-        append = num_list.append
-        for row in rows:
-            loc_id = row.location_id
-            if loc_id != last_location:
-                last_location = loc_id
-                value = row.value
-                append(value)
-                sum += value
-                rec_cnt += 1
-        if rec_cnt == 0:
-            return
-
-        num_list.sort()
-        mean = float(sum) / rec_cnt
-        min = num_list[0]
-        max = num_list[rec_cnt - 1]
-        if rec_cnt % 2 == 0:
-            median = float(num_list[rec_cnt / 2] + num_list[rec_cnt / 2 - 1]) / 2.0
-        else:
-            median = num_list[rec_cnt / 2]
-        # Add the value to the database
-        query = (agg_table.location_id == location_id) & \
-                (agg_table.parameter_id == parameter_id) & \
-                (agg_table.date == start_date) & \
-                (agg_table.end_date == end_date) & \
-                (agg_table.deleted != True)
-        exists = db(query).select(agg_table.id,
-                                  limitby=(0, 1)).first()
-        if exists:
-            db(query).update(agg_type = 2, # Location
-                             reported_count = rec_cnt,
-                             ward_count = len(child_ids),
-                             min = min,
-                             max = max,
-                             mean = mean,
-                             median = median,
-                             )
-        else:
-            agg_table.insert(parameter_id = parameter_id,
-                             location_id = location_id,
-                             date = start_date,
-                             end_date = end_date,
-                             agg_type = 2, # Location
-                             reported_count = rec_cnt,
-                             ward_count = len(child_ids),
-                             min = min,
-                             max = max,
-                             mean = mean,
-                             median = median,
-                             )
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -951,7 +858,7 @@ class S3StatsDemographicModel(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
-                
+
 # =============================================================================
 class S3StatsGroupModel(S3Model):
     """
@@ -1196,7 +1103,7 @@ class S3StatsGroupModel(S3Model):
                                      dtable.location_id,
                                      dtable.value)
         S3StatsModel.stats_update_time_aggregate(data_list)
-        
+
         query = (gtable.deleted != True) & \
                 (gtable.dirty == True) & \
                 (gtable.approved_by != None)

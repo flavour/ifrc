@@ -886,7 +886,7 @@ class GIS(object):
             # Update the specific table which has just been defined
             table = db[tablename]
             if tablename == "gis_location":
-                labels["L0"] = current.T("Country")
+                labels["L0"] = current.messages.COUNTRY
                 table.level.requires = \
                     IS_NULL_OR(IS_IN_SET(labels))
             else:
@@ -1154,7 +1154,7 @@ class GIS(object):
                 return _levels
 
         T = current.T
-        COUNTRY = str(T("Country"))
+        COUNTRY = current.messages.COUNTRY
 
         if level == "L0":
             return COUNTRY
@@ -2028,7 +2028,7 @@ class GIS(object):
             # Use S3Track
             ids = resource._ids
             try:
-                tracker = S3Trackable(table, record_id=ids)
+                tracker = S3Trackable(table, record_ids=ids)
             except SyntaxError:
                 # This table isn't trackable
                 pass

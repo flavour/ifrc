@@ -251,7 +251,7 @@ class S3WarehouseModel(S3Model):
                       ),
                       S3SearchOptionsWidget(
                         name="warehouse_search_org",
-                        label=T("Organization"),
+                        label=messages.ORGANISATION,
                         comment=T("Search for warehouse by organization."),
                         field="organisation_id",
                         represent ="%(name)s",
@@ -279,7 +279,7 @@ class S3WarehouseModel(S3Model):
                                "organisation_id",   # Filtered in Component views
                                #"type",
                                #(T("Address"), "location_id$addr_street"),
-                               (T("Country"), "location_id$L0"),
+                               (messages.COUNTRY, "location_id$L0"),
                                "location_id$L1",
                                "location_id$L2",
                                "location_id$L3",
@@ -350,16 +350,11 @@ class S3WarehouseModel(S3Model):
     @staticmethod
     def inv_warehouse_onaccept(form):
         """
-            * Update Affiliation and Realms
+            Update Affiliation, record ownership and component ownership
         """
 
-        auth = current.auth
         s3db = current.s3db
-        wtable = s3db.inv_warehouse
-        vars = form.vars
-
-        # Affiliation, record ownership and component ownership
-        s3db.pr_update_affiliations(wtable, vars)
+        s3db.pr_update_affiliations(s3db.inv_warehouse, form.vars)
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -494,7 +489,7 @@ class S3InventoryModel(S3Model):
                                         ),
                                   # Organisation that owns this item
                                   organisation_id(name = "owner_org_id",
-                                                  label = T("Organization/Department"),
+                                                  label = T("Owned By (Organization/Branch)"),
                                                   ondelete = "SET NULL"),
                                   # Original donating Organisation
                                   organisation_id(name = "supply_org_id",
