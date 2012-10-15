@@ -2641,7 +2641,7 @@ class S3AddPersonWidget(FormWidget):
         if controller == "hrm":
             emailRequired = current.deployment_settings.get_hrm_email_required()
         elif controller == "vol":
-            fields.append(ptable.occupation)
+            fields.append(s3db.pr_person_details.occupation)
             emailRequired = current.deployment_settings.get_hrm_email_required()
         else:
             emailRequired = False

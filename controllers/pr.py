@@ -140,6 +140,9 @@ def person():
                 r.table.missing.readable = False
                 r.table.missing.writable = False
 
+                # S3SQLCustomForm breaks popup return, so disable
+                s3db.clear_config("pr_person", "crud_form")
+
             if r.component_name == "config":
                 _config = s3db.gis_config
                 s3db.gis_config_form_setup()
