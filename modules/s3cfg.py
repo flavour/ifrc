@@ -83,12 +83,9 @@ class S3Config(Storage):
         """
             Execute the template
         """
-        #from gluon.compileapp import build_environment
         from gluon.fileutils import read_file
         from gluon.restricted import restricted
-        #environment = build_environment(request, response, session)
         code = read_file(path)
-        #restricted(code, environment, layer=path)
         restricted(code, layer=path)
         return
 
@@ -111,7 +108,7 @@ class S3Config(Storage):
     # Auth settings
     def get_auth_hmac_key(self):
         """
-            salt to encrypt passwords - normally randmosied during 1st run
+            salt to encrypt passwords - normally randomised during 1st run
         """
         return self.auth.get("hmac_key", "akeytochange")
 
@@ -954,47 +951,51 @@ class S3Config(Storage):
         """
         return self.org.get("summary", False)
 
-    def set_org_dependent_field(self, 
+    def set_org_dependent_field(self,
                                 field, # None for Virtual Fields
                                 tablename=None,
                                 fieldname=None):
         """
             Enables/Disables optional fields according to a user's Organisation
+            - must specify either field or tablename/fieldname
+                                           (e.g. for virtual fields)
         """
 
-        # Default to disabled
-        enabled = False
+        auth = current.auth
+        if auth.s3_has_role(auth.get_system_roles().ADMIN):
+            # Admins see all fields
+            enabled = True
+        else:
+            # Default to disabled
+            enabled = False
 
         if field:
             tablename = field.tablename
             fieldname = field.name
+        #elif not tablename or not fieldname:
+        #    raise SyntaxError
 
-        dependent_fields = self.org.get(dependent_fields, None)
-        if not dependent_fields:
-            if field:
-                field.readable = enabled
-                field.writable = enabled
-            return enabled
+        dependent_fields = self.org.get("dependent_fields", None)
+        if dependent_fields and not enabled:
+            org_name_list = dependent_fields.get("%s.%s" % (tablename,
+                                                            fieldname),
+                                                 None)
 
-        org_name_list = dependent_fields["%s.%s" % (tablename, fieldname)]
-
-        s3db = current.s3db
-        otable = s3db.org_organisation
-        root_org_id = current.auth.root_org()
-        root_org = current.db(otable.id == root_org_id).select(otable.name,
-                                                               limitby=(0, 1),
-                                                               cache=s3db.cache
-                                                               ).first()
-        if root_org:
-            root_org_name = root_org.name
-            for org_name in org_name_list:
-                if org_name == root_org_name:
-                    enabled = True
-                    break
+            if org_name_list:
+                s3db = current.s3db
+                otable = s3db.org_organisation
+                root_org_id = auth.root_org()
+                root_org = current.db(otable.id == root_org_id).select(otable.name,
+                                                                       limitby=(0, 1),
+                                                                       cache=s3db.cache
+                                                                       ).first()
+                if root_org:
+                    enabled = root_org.name in org_name_list
 
         if field:
             field.readable = enabled
             field.writable = enabled
+
         return enabled
 
     # -------------------------------------------------------------------------

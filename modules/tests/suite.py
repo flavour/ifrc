@@ -158,6 +158,15 @@ parser.add_argument("--force-debug",
                     const=True,
                     help = desc
                    )
+desc = """Set a threshold in second.
+
+If takes longer than this to get the link then it will be reported.
+"""
+parser.add_argument("--threshold",
+                    type = int,
+                    default = 10,
+                    help = desc
+                   )
 argsObj = parser.parse_args()
 args = argsObj.__dict__
 
@@ -222,6 +231,7 @@ elif args["suite"] == "smoke":
         from tests.smoke import *
         broken_links = BrokenLinkTest()
         broken_links.setDepth(args["link_depth"])
+        broken_links.threshold = args["threshold"]
         broken_links.setUser(args["user_password"])
         suite = unittest.TestSuite()
         suite.addTest(broken_links)
@@ -233,7 +243,7 @@ elif args["suite"] == "roles":
     from tests.roles import *
     #suite = unittest.TestSuite()
     suite = test_roles()
-    
+
     #test_role = TestRole()
     #test_role.set(org = "Org-A",
     #              user = "asset_reader@Org-A.com",
@@ -256,6 +266,7 @@ elif args["suite"] == "complete":
         from tests.smoke import *
         broken_links = BrokenLinkTest()
         broken_links.setDepth(args["link_depth"])
+        broken_links.threshold = args["threshold"]
         broken_links.setUser(args["user_password"])
         suite.addTest(broken_links)
     except NameError as msg:
@@ -282,7 +293,7 @@ else:
         # Windows compatibility
         filename = filename.replace(":", "-")
         fullname = os.path.join(path,filename)
-        fp = file(fullname, "wb")
+        fp = open(fullname, "wb")
 
         config.html = True
         from tests.runner import EdenHTMLTestRunner
