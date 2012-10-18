@@ -368,6 +368,10 @@ class S3OptionsMenu(default.S3OptionsMenu):
                                settings.get_project_mode_task()
         use_teams = lambda i: settings.get_hrm_use_teams()
 
+        s3db = current.s3db
+        check_org_dependent_field = lambda tablename, fieldname: \
+            settings.set_org_dependent_field(s3db[tablename][fieldname])
+
         #if job_roles(""):
         #    jt_catalog_label = "Job Title Catalog"
         #else:
@@ -434,6 +438,24 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("New", m="create"),
                         M("List All"),
                         M("Import Hours", f="programme_hours", m="import"),
+                    ),
+                    M("Volunteer Cluster Type", f="cluster_type",
+                      check = check_org_dependent_field("vol_volunteer_cluster",
+                                                        "vol_cluster_type_id"))(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Volunteer Cluster", f="cluster",
+                      check = check_org_dependent_field("vol_volunteer_cluster",
+                                                        "vol_cluster_id"))(
+                        M("New", m="create"),
+                        M("List All"),
+                    ),
+                    M("Volunteer Cluster Position", f="cluster_position",
+                      check = check_org_dependent_field("vol_volunteer_cluster",
+                                                        "vol_cluster_position_id"))(
+                        M("New", m="create"),
+                        M("List All"),
                     ),
                     M("Reports", f="volunteer", m="report",
                       check=manager_mode)(
