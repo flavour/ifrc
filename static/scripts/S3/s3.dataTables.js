@@ -1062,8 +1062,10 @@ Ext.onReady(function(){
         s3_search_mapButton.on('click', function(evt) {
             // prevent button submitting the form
             evt.preventDefault();
-            // Enable the polygon control
-            S3.gis.polygonButton.enable();
+            if (S3.gis.polygonButton) {
+                // Enable the polygon control
+                S3.gis.polygonButton.enable();
+            }
             // @ToDo: Set appropriate Bounds
             // Default to current gis_config
             // If there is an Options widget for Lx, then see if that is set & use this
