@@ -602,7 +602,8 @@ $(document).ready(function(){
                             IS_ONE_OF(db(current.auth.s3_accessible_query("update",
                                                                           table)),
                                       "project_project.id",
-                                      project_project_represent_no_link
+                                      lambda id, row:
+                                        project_project_represent(id, row, show_link=False)
                                       )),
             represent = project_project_represent,
             comment = S3AddResourceLink(c="project", f="project",
@@ -2368,26 +2369,31 @@ class S3ProjectActivityModel(S3Model):
             Show activities with a prefix of the project code
         """
 
-        db = current.db
-        s3db = current.s3db
-        atable = s3db.project_activity
-
-        if row is None and id is not None:
-            if isinstance(id, Row):
-                activity = id
-            else:
-                activity = db(atable.id == id).select(atable.name,
-                                                      atable.project_id,
-                                                      limitby=(0, 1)).first()
-
-        if activity is None:
+        if row:
+            activity = row
+            db = current.db
+            # Fetch the project record
+            ptable = db.project_project
+            project = db(ptable.id == row.project_id).select(ptable.code,
+                                                             limitby=(0, 1)).first()
+        elif not id:
             return current.messages.NONE
-
-        # Fetch the project record
-        ptable = s3db.project_project
-        project = db(ptable.id == activity.project_id).select(ptable.code,
-                                                              limitby=(0, 1)).first()
-
+        else:
+            db = current.db
+            table = db.project_activity
+            ptable = db.project_project
+            left = ptable.on(ptable.id == table.project_id)
+            row = db(table.id == id).select(table.name,
+                                            table.project_id,
+                                            ptable.code,
+                                            left=left,
+                                            limitby=(0, 1)).first()
+            try:
+                project = row[ptable]
+                activity = row[table]
+            except:
+                return current.messages.UNKNOWN_OPT
+            
         if project and project.code:
             return "%s > %s" % (project.code, activity.name)
         else:
@@ -2433,9 +2439,14 @@ class S3ProjectAnnualBudgetModel(S3Model):
         #
         tablename = "project_annual_budget"
         self.define_table(tablename,
-                          self.project_project_id(requires=IS_ONE_OF(current.db,
-                                                   "project_project.id",
-                                                   project_project_represent_no_link)),
+                          self.project_project_id(
+                            requires=IS_ONE_OF(current.db,
+                                               "project_project.id",
+                                               lambda id, row:
+                                                project_project_represent(id, row,
+                                                                          show_link=False)
+                                               )
+                            ),
                           Field("year", "integer", notnull=True,
                                 default=None, # make it current year
                                 requires=IS_INT_IN_RANGE(1950, 3000),
@@ -2638,7 +2649,10 @@ class S3ProjectThemeModel(S3Model):
         self.define_table(tablename,
                           self.project_project_id(
                             requires=IS_ONE_OF(db, "project_project.id",
-                                               project_project_represent_no_link)
+                                               lambda id, row:
+                                                project_project_represent(id, row,
+                                                                          show_link=False)
+                                               )
                             ),
                           self.project_theme_id(
                             requires=IS_ONE_OF(db, "project_theme.id",
@@ -2678,10 +2692,11 @@ class S3ProjectThemeModel(S3Model):
         multi_theme_percentage_id = S3ReusableField("multi_theme_percentage_id",
                             "list:reference project_theme_percentage",
                             label = T("Themes"),
-                            requires = IS_NULL_OR(IS_ONE_OF(db,
-                                                "project_theme_percentage.id",
-                                                "%(id)s",
-                                                multiple=True)),
+                            requires = IS_NULL_OR(
+                                        IS_ONE_OF(db,
+                                                  "project_theme_percentage.id",
+                                                  "%(id)s",
+                                                  multiple=True)),
                             represent = multi_theme_percentage_represent,
                             ondelete = "SET NULL",
                             )
@@ -2753,7 +2768,10 @@ class S3ProjectDRRPPModel(S3Model):
         define_table(tablename,
                      project_id(
                         requires=IS_ONE_OF(db, "project_project.id",
-                                           project_project_represent_no_link)
+                                           lambda id, row:
+                                            project_project_represent(id, row,
+                                                                      show_link=False)
+                                           )
                         ),
                      Field("parent_project",
                            label = T("Parent Project"),
@@ -2797,7 +2815,10 @@ class S3ProjectDRRPPModel(S3Model):
         define_table(tablename,
                      project_id(
                         requires=IS_ONE_OF(db, "project_project.id",
-                                           project_project_represent_no_link)
+                                           lambda id, row:
+                                            project_project_represent(id, row,
+                                                                      show_link=False)
+                                           )
                         ),
                      Field("name",
                            label = T("Output"),
@@ -3178,6 +3199,7 @@ class S3ProjectTaskModel(S3Model):
                      "pe_id",
                      "date_due",
                      "time_estimated",
+                     "time_actual",
                      "created_on",
                      "status",
                      #"site_id"
@@ -3193,6 +3215,18 @@ class S3ProjectTaskModel(S3Model):
                                             ))
 
         task_search = S3Search(advanced = advanced_task_search)
+
+        task_report = Storage(rows = list_fields,
+                              cols = list_fields,
+                              facts = list_fields,
+                              defaults = Storage(rows = "task.project",
+                                                 cols = "task.pe_id",
+                                                 fact = "task.time_estimated",
+                                                 aggregate = "sum",
+                                                 totals = True
+                                                 ),
+                              search = advanced_task_search,
+                              )
 
         # Custom Form
         crud_form = s3forms.S3SQLCustomForm(
@@ -3228,6 +3262,7 @@ class S3ProjectTaskModel(S3Model):
                   create_onaccept=self.task_create_onaccept,
                   update_onaccept=self.task_update_onaccept,
                   search_method=task_search,
+                  report_options = task_report,
                   list_fields=list_fields,
                   crud_form = crud_form,
                   extra="description")
@@ -3317,7 +3352,10 @@ class S3ProjectTaskModel(S3Model):
                              project_id(
                                 # Override requires so that update access to the projects isn't required
                                 requires = IS_ONE_OF(db, "project_project.id",
-                                                     project_project_represent_no_link
+                                                     lambda id, row:
+                                                        project_project_represent(id, row,
+                                                                                  show_link=False)
+                                               
                                                      )
                                 ),
                              *s3_meta_fields())
@@ -3371,8 +3409,17 @@ class S3ProjectTaskModel(S3Model):
         #
         tablename = "project_time"
         table = define_table(tablename,
-                             task_id(),
-                             self.pr_person_id(default=auth.s3_logged_in_person()),
+                             task_id(
+                                requires = IS_ONE_OF(db, "project_task.id",
+                                                     lambda id, row: \
+                                                        self.project_task_represent(id,
+                                                                                    row,
+                                                                                    show_link=False,
+                                                                                    show_project=True)
+                                                     ),
+                                ),
+                             self.pr_person_id(default=auth.s3_logged_in_person(),
+                                               widget = SQLFORM.widgets.options.widget),
                              s3_datetime(default="now",
                                          past=8760, # Hours, so 1 year
                                          future=0
@@ -3587,16 +3634,28 @@ class S3ProjectTaskModel(S3Model):
 
     # ---------------------------------------------------------------------
     @staticmethod
-    def project_task_represent(id, row=None, show_link=True):
+    def project_task_represent(id, row=None, show_link=True,
+                               show_project=False):
         """ FK representation """
 
         if row:
+            represent = row.name
+            if show_project:
+                db = current.db
+                ltable = db.project_task_project
+                ptable = db.project_project
+                query = (ltable.task_id == row.id) & \
+                        (ltable.project_id == ptable.id)
+                project = db(query).select(ptable.name,
+                                           limitby=(0, 1)).first()
+                if project:
+                    represent = "%s (%s)" % (represent, project.name)
+                    
             if show_link:
-                return A(row.name,
+                return A(represent,
                          _href=URL(c="project", f="task", extension="html",
                                    args=[row.id]))
-            else:
-                return row.name
+            return represent
         elif not id:
             return current.messages.NONE
 
@@ -3605,14 +3664,25 @@ class S3ProjectTaskModel(S3Model):
         r = db(table.id == id).select(table.name,
                                       limitby=(0, 1)).first()
         try:
-            if show_link:
-                return A(r.name,
-                         _href=URL(c="project", f="task", extension="html",
-                                   args=[id]))
-            else:
-                return r.name
+            represent = r.name
         except:
             return current.messages.UNKNOWN_OPT
+        else:
+            if show_project:
+                ltable = db.project_task_project
+                ptable = db.project_project
+                query = (ltable.task_id == id) & \
+                        (ltable.project_id == ptable.id)
+                project = db(query).select(ptable.name,
+                                           limitby=(0, 1)).first()
+                if project:
+                    represent = "%s (%s)" % (represent, project.name)
+                    
+            if show_link:
+                return A(represent,
+                         _href=URL(c="project", f="task", extension="html",
+                                   args=[id]))
+            return represent
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4060,9 +4130,6 @@ class S3ProjectTaskIReportModel(S3Model):
         return
 
 # =============================================================================
-def project_project_represent_no_link(id, row=None):
-    return project_project_represent(id, row, False)
-
 def project_project_represent(id, row=None, show_link=True):
     """ FK representation """
 
@@ -4991,17 +5058,6 @@ def project_task_controller():
                                           "list_fields")
             list_fields.insert(3, (T("Project"), "project"))
             list_fields.insert(4, (T("Activity"), "activity"))
-            s3db.configure(tablename,
-                           report_options=Storage(
-                                search=[
-                                    S3SearchOptionsWidget(
-                                        field="project",
-                                        name="project",
-                                        label=T("Project")
-                                    )
-                                ]),
-                           list_fields=list_fields
-                           )
 
         if r.component:
             if r.component_name == "req":
@@ -5041,7 +5097,7 @@ def project_task_controller():
                 update_url = URL(args=["[id]"], vars=vars)
                 current.manager.crud.action_buttons(r,
                                                     update_url=update_url)
-                if r.method != "search" and \
+                if not r.method in ("search", "report") and \
                    "form" in output:
                     # Insert fields to control the Project & Activity
                     sep = ": "

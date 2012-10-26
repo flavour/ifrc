@@ -555,7 +555,7 @@ class IS_ONE_OF_EMPTY(Validator):
             label = self.label
             try:
                 # Is a function
-                labels = map(label, records)
+                labels = map(label, [], records)
             except TypeError:
                 if isinstance(label, str):
                     labels = map(lambda r: label % dict(r), records)
@@ -1670,7 +1670,7 @@ class IS_ADD_PERSON_WIDGET(Validator):
                                       value=_vars.mobile_phone)
                     if _vars.occupation:
                         s3db.pr_person_details.insert(person_id = person_id,
-                                                      occupation = occupation)
+                                                      occupation = _vars.occupation)
                 else:
                     # Something went wrong
                     return (person_id, self.error_message or \
