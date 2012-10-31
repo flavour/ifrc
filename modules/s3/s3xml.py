@@ -59,6 +59,8 @@ except ImportError:
     print >> sys.stderr, "ERROR: lxml module needed for XML handling"
     raise
 
+ogetattr = object.__getattribute__
+
 # =============================================================================
 class S3XML(S3Codec):
     """
@@ -491,8 +493,13 @@ class S3XML(S3Codec):
             @param fields: list of reference field names in this table
         """
 
-        db = current.db
         reference_map = []
+
+        fields = [f for f in fields if f in record and record[f]]
+        if not fields:
+            return reference_map
+
+        db = current.db
 
         UID = self.UID
         MCI = self.MCI
@@ -506,52 +513,70 @@ class S3XML(S3Codec):
         gtablename = current.auth.settings.table_group_name
 
         for f in fields:
-            if f not in record:
+            try:
+                dbfield = ogetattr(table, f)
+            except:
                 continue
-            val = ids = record[f]
-            if type(ids) is not list:
-                ids = [ids]
-            ktablename, pkey, multiple = s3_get_foreign_key(table[f])
+            #if f not in record or not record[f]:
+                #continue
+            #if type(ids) is not list:
+                #ids = [ids]
+            ktablename, pkey, multiple = s3_get_foreign_key(dbfield)
             if not ktablename:
                 continue
-            ktable = db[ktablename]
+            val = ids = ogetattr(record, f)
+
+            try:
+                ktable = db.get(ktablename) #db[ktablename]
+            except:
+                continue
+
             ktable_fields = ktable.fields
             k_id = ktable._id
+
             if pkey is None:
                 pkey = k_id.name
-
             if multiple:
                 query = k_id.belongs(ids)
                 limitby = None
             else:
-                query = k_id == ids[0]
+                query = k_id == ids #[0]
                 limitby = (0, 1)
 
             uid = None
             uids = None
             supertable = None
+
             if pkey != "id" and "instance_type" in ktable_fields:
+
                 if multiple:
                     continue
-                krecord = db(query).select(ktable[UID],
+
+                krecord = db(query).select(ogetattr(ktable, UID),
                                            ktable.instance_type,
                                            limitby=(0, 1)).first()
                 if not krecord:
                     continue
                 ktablename = krecord.instance_type
-                uid = krecord[UID]
+                uid = ogetattr(krecord, UID)
+
                 if ktablename == tablename and \
-                   UID in record and record[UID] == uid and \
+                   UID in record and ogetattr(record, UID) == uid and \
                    not current.manager.show_ids:
                     continue
+
                 uids = [uid]
+
             else:
                 if DELETED in ktable_fields:
                     query = (ktable.deleted != True) & query
+
                 if filter_mci and MCI in ktable_fields:
                     query = (ktable.mci >= 0) & query
+
                 if UID in ktable_fields:
-                    krecords = db(query).select(ktable[UID], limitby=limitby)
+                    krecords = db(query).select(ogetattr(ktable, UID),
+                                                limitby=limitby)
                     if krecords:
                         uids = [r[UID] for r in krecords if r[UID]]
                         if ktablename != gtablename:
@@ -562,19 +587,22 @@ class S3XML(S3Codec):
                     krecord = db(query).select(k_id, limitby=(0, 1)).first()
                     if not krecord:
                         continue
-            value = s3_unicode(table[f].formatter(val))
-            if table[f].represent:
+
+            value = s3_unicode(dbfield.formatter(val))
+            if dbfield.represent:
                 text = represent(table, f, val)
             else:
                 text = xml_encode(value)
+
             entry = {"field":f,
                      "table":ktablename,
                      "multiple":multiple,
-                     "id":ids,
+                     "id":ids if type(ids) is list else [ids],
                      "uid":uids,
                      "text":text,
                      "value":value}
             reference_map.append(Storage(entry))
+
         return reference_map
 
     # -------------------------------------------------------------------------
@@ -870,15 +898,15 @@ class S3XML(S3Codec):
         DELETED = self.DELETED
 
         TAG = self.TAG
-        RESOURCE = TAG.resource
-        DATA = TAG.data
+        RESOURCE = TAG["resource"]
+        DATA = TAG["data"]
 
         ATTRIBUTE = self.ATTRIBUTE
-        NAME = ATTRIBUTE.name
-        ALIAS = ATTRIBUTE.alias
-        FIELD = ATTRIBUTE.field
-        VALUE = ATTRIBUTE.value
-        URL = ATTRIBUTE.url
+        NAME = ATTRIBUTE["name"]
+        ALIAS = ATTRIBUTE["alias"]
+        FIELD = ATTRIBUTE["field"]
+        VALUE = ATTRIBUTE["value"]
+        URL = ATTRIBUTE["url"]
 
         tablename = table._tablename
         deleted = False
@@ -934,22 +962,20 @@ class S3XML(S3Codec):
         table_fields = table.fields
 
         _repr = self.represent
+        to_json = json.dumps
         for f in fields:
             if f == DELETED:
                 continue
-            if f in record:
-                v = record[f]
-            else:
-                v = None
+            v = record.get(f, None)
             if f == MCI:
                 if v is None:
                     v = 0
                 attrib[MCI] = str(int(v) + 1)
                 continue
-            if v is None or f not in table_fields:
+            if v is None or not hasattr(table, f):
                 continue
-            dbfield = table[f]
-            fieldtype = str(table[f].type)
+            dbfield = ogetattr(table, f)
+            fieldtype = str(dbfield.type)
             formatter = dbfield.formatter
             represent = dbfield.represent
             is_attr = f in FIELDS_TO_ATTRIBUTES
@@ -989,22 +1015,23 @@ class S3XML(S3Codec):
                 attr[FIELD] = f
                 if represent or fieldtype not in ("string", "text"):
                     if value is None:
-                        value = json.dumps(v).decode("utf-8")
+                        value = to_json(v).decode("utf-8")
                     attr[VALUE] = value
                 data.text = text
         if url and not deleted:
             attrib[URL] = url
 
-        postp = None
-        if postprocess is not None:
-            if isinstance(postprocess, dict):
-                postp = postprocess.get(str(table), None)
-            else:
-                postp = postprocess
-        if postp and callable(postp):
-            result = postp(table, record, elem)
-            if isinstance(result, etree._Element):
-                elem = result
+        # @todo: currently unused => remove?
+        #postp = None
+        #if postprocess is not None:
+            #if isinstance(postprocess, dict):
+                #postp = postprocess.get(str(table), None)
+            #else:
+                #postp = postprocess
+        #if postp and callable(postp):
+            #result = postp(table, record, elem)
+            #if isinstance(result, etree._Element):
+                #elem = result
 
         return elem
 
@@ -1076,7 +1103,8 @@ class S3XML(S3Codec):
         return (value, error)
 
     # -------------------------------------------------------------------------
-    def record(self, table, element,
+    @classmethod
+    def record(cls, table, element,
                original=None,
                files=[],
                preprocess=None,
@@ -1115,22 +1143,34 @@ class S3XML(S3Codec):
             element = prepare(table, element)
 
         # Extract the UUID
-        if self.UID in table.fields and self.UID not in skip:
-            uid = self.import_uid(element.get(self.UID, None))
+        UID = cls.UID
+        if UID in table.fields and UID not in skip:
+            uid = current.xml.import_uid(element.get(UID, None))
             if uid:
-                record[self.UID] = uid
+                record[UID] = uid
+
+        # Attribute names
+        FIELD = cls.ATTRIBUTE["field"]
+        VALUE = cls.ATTRIBUTE["value"]
+        ERROR = cls.ATTRIBUTE["error"]
+
+        DELETED = cls.DELETED
+        APPROVED = cls.APPROVED
+        IGNORE_FIELDS = cls.IGNORE_FIELDS
+        OGROUP = cls.OGROUP
+        USER_FIELDS = (cls.CUSER, cls.MUSER, cls.OUSER)
 
         # Attributes
         deleted = False
-        for f in self.ATTRIBUTES_TO_FIELDS:
-            if f == self.DELETED:
+        for f in cls.ATTRIBUTES_TO_FIELDS:
+            if f == DELETED:
                 if f in table and \
                    element.get(f, "false").lower() == "true":
                     record[f] = deleted = True
                     break
                 else:
                     continue
-            if f == self.APPROVED:
+            if f == APPROVED:
                 # Override default-approver:
                 if "approved_by" in table:
                     if element.get(f, "true").lower() == "false":
@@ -1139,9 +1179,9 @@ class S3XML(S3Codec):
                         if table["approved_by"].default == None:
                             auth.permission.set_default_approver(table)
                 continue
-            if f in self.IGNORE_FIELDS or f in skip:
+            if f in IGNORE_FIELDS or f in skip:
                 continue
-            elif f in (self.CUSER, self.MUSER, self.OUSER):
+            elif f in USER_FIELDS:
                 v = element.get(f, None)
                 if v and utable and "email" in utable:
                     query = utable.email == v
@@ -1149,7 +1189,7 @@ class S3XML(S3Codec):
                     if user:
                         record[f] = user.id
                 continue
-            elif f == self.OGROUP:
+            elif f == OGROUP:
                 v = element.get(f, None)
                 if v and gtable and "role" in gtable:
                     query = gtable.role == v
@@ -1157,13 +1197,13 @@ class S3XML(S3Codec):
                     if role:
                         record[f] = role.id
                 continue
-            if f in table.fields:
+            if hasattr(table, f): #f in table.fields:
                 v = value = element.get(f, None)
                 if value is not None:
                     field_type = str(table[f].type)
                     if field_type in ("datetime", "date", "time"):
-                        (value, error) = self._dtparse(v,
-                                                       field_type=field_type)
+                        (value, error) = cls._dtparse(v,
+                                                      field_type=field_type)
                     elif validate is not None:
                         try:
                             (value, error) = validate(table, original, f, v)
@@ -1171,8 +1211,7 @@ class S3XML(S3Codec):
                             # No such field
                             continue
                     if error:
-                        element.set(self.ATTRIBUTE.error,
-                                    "%s: %s" % (f, error))
+                        element.set(ERROR, "%s: %s" % (f, error))
                         valid = False
                         continue
                     record[f] = value
@@ -1181,18 +1220,19 @@ class S3XML(S3Codec):
             return record
 
         # Fields
+        xml_decode = cls.xml_decode
         for child in element.findall("data"):
-            f = child.get(self.ATTRIBUTE.field, None)
-            if not f or f not in table.fields:
+            f = child.get(FIELD, None)
+            if not f or not hasattr(table, f): #f not in table.fields:
                 continue
-            if f in self.IGNORE_FIELDS or f in skip:
+            if f in IGNORE_FIELDS or f in skip:
                 continue
             field_type = str(table[f].type)
             if field_type in ("id", "blob"):
                 continue
             elif field_type == "upload":
-                download_url = child.get(self.ATTRIBUTE.url, None)
-                filename = child.get(self.ATTRIBUTE.filename, None)
+                download_url = child.get(cls.ATTRIBUTE["url"], None)
+                filename = child.get(cls.ATTRIBUTE["filename"], None)
                 upload = None
                 if filename and filename in files:
                     # We already have the file cached
@@ -1228,7 +1268,7 @@ class S3XML(S3Codec):
                 elif download_url != "local":
                     continue
             else:
-                value = child.get(self.ATTRIBUTE.value, None)
+                value = child.get(VALUE, None)
 
             error = None
             skip_validation = False
@@ -1240,7 +1280,7 @@ class S3XML(S3Codec):
                     # comes encrypted:
                     skip_validation = True
                 else:
-                    value = self.xml_decode(child.text)
+                    value = xml_decode(child.text)
 
             if value is None and field_type in ("string", "text"):
                 value = ""
@@ -1249,8 +1289,8 @@ class S3XML(S3Codec):
 
             if value is not None:
                 if field_type in ("datetime", "date", "time"):
-                    (value, error) = self._dtparse(value,
-                                                   field_type=field_type)
+                    (value, error) = cls._dtparse(value,
+                                                  field_type=field_type)
                     skip_validation = True
                     v = value
                 elif isinstance(value, basestring) and len(value):
@@ -1285,9 +1325,9 @@ class S3XML(S3Codec):
                     except:
                         error = sys.exc_info()[1]
 
-                child.set(self.ATTRIBUTE.value, s3_unicode(v))
+                child.set(VALUE, s3_unicode(v))
                 if error:
-                    child.set(self.ATTRIBUTE.error, "%s: %s" % (f, error))
+                    child.set(ERROR, "%s: %s" % (f, error))
                     valid = False
                     continue
 
