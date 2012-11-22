@@ -14,7 +14,7 @@ if not settings.has_module(module):
 def index():
     """ Module's Home Page """
 
-    module_name = deployment_settings.modules[module].name_nice
+    module_name = settings.modules[module].name_nice
     response.title = module_name
     return dict(module_name=module_name)
 
@@ -23,29 +23,6 @@ def compose():
     """ Compose a Message which can be sent to a pentity via a number of different communications channels """
 
     return msg.compose()
-
-# -----------------------------------------------------------------------------
-# Send Outbound Messages - to be called via cron
-# -----------------------------------------------------------------------------
-def process_email():
-    """ Controller for Email processing - to be called via cron """
-
-    msg.process_outbox(contact_method = "EMAIL")
-    return
-
-# -----------------------------------------------------------------------------
-def process_sms():
-    """ Controller for SMS processing - to be called via cron """
-
-    msg.process_outbox(contact_method = "SMS")
-    return
-
-# -----------------------------------------------------------------------------
-def process_twitter():
-    """ Controller for Twitter message processing - to be called via cron """
-
-    msg.process_outbox(contact_method = "TWITTER")
-    return
 
 # =============================================================================
 def outbox():
@@ -286,12 +263,12 @@ def inbound_email_settings():
     table.username.label = T("Username")
     table.password.label = T("Password")
     table.delete_from_server.label = T("Delete from Server?")
-    table.port.comment = DIV(DIV(_class="tooltip",
-        _title="%s|%s" % (T("Port"),
-                          T("For POP-3 this is usually 110 (995 for SSL), for IMAP this is usually 143 (993 for IMAP)."))))
-    table.delete_from_server.comment = DIV(DIV(_class="tooltip",
-            _title="%s|%s" % (T("Delete"),
-                              T("If this is set to True then mails will be deleted from the server after downloading."))))
+    table.port.comment = DIV(_class="tooltip",
+                             _title="%s|%s" % (T("Port"),
+                                               T("For POP-3 this is usually 110 (995 for SSL), for IMAP this is usually 143 (993 for IMAP).")))
+    table.delete_from_server.comment = DIV(_class="tooltip",
+                                           _title="%s|%s" % (T("Delete"),
+                                                             T("If this is set to True then mails will be deleted from the server after downloading.")))
 
     # CRUD Strings
     s3.crud_strings[tablename] = Storage(
@@ -395,6 +372,136 @@ def inbound_email_settings():
     return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
+def mcommons_inbound_settings():
+    """
+        RESTful CRUD controller for Mobile Commons SMS settings
+            - appears in the administration menu
+    """
+
+    if not auth.s3_has_role(ADMIN):
+        session.error = UNAUTHORISED
+        redirect(URL(f="index"))
+
+    tablename = "msg_mcommons_inbound_settings"
+    table = s3db[tablename]
+
+    table.name.label = T("Account Name")
+    table.name.comment = DIV(_class="tooltip",
+                             _title="%s|%s" % (T("Account Name"),
+                                               T("Name for your Twilio Account.")))
+
+    table.campaign_id.label = T("Campaign ID")
+
+    table.url.label = T("URL")
+    table.url.comment = DIV(_class="tooltip",
+                            _title="%s|%s" % (T("URL"),
+                                              T("URL for the Mobile Commons API")))
+
+    table.username.label = T("Username")
+    table.password.label = T("Password")
+    table.timestmp.label = T("Last Downloaded")
+    table.timestmp.writable = False
+
+    # CRUD Strings
+    s3.crud_strings[tablename] = Storage(
+        title_display = T("Mobile Commons Setting Details"),
+        title_list = T("Mobile Commons Settings"),
+        title_create = T("Add Mobile Commons Settings"),
+        title_update = T("Edit Mobile Commons Settings"),
+        title_search = T("Search Mobile Commons Settings"),
+        label_list_button = T("View Mobile Commons Settings"),
+        label_create_button = T("Add Mobile Commons Settings"),
+        msg_record_created = T("Mobile Commons Setting added"),
+        msg_record_deleted = T("Mobile Commons Setting deleted"),
+        msg_list_empty = T("No Mobile Commons Settings currently defined"),
+        msg_record_modified = T("Mobile Commons settings updated")
+        )
+
+    def postp(r, output):
+        if r.interactive:
+            stable = s3db.scheduler_task
+            table = r.table
+
+            s3_action_buttons(r)
+            query = (stable.enabled == False)
+            records = db(query).select(stable.vars)
+            rows = []
+            for record in records:
+                if "account" in record.vars:
+                    r = record.vars.split("\"account\":")[1]
+                    s = r.split("}")[0]
+                    s = s.split("\"")[1].split("\"")[0]
+
+                    record1 = db(table.campaign_id == s).select(table.id)
+                    if record1:
+                        for rec in record1:
+                            rows += [rec]
+
+            restrict_e = [str(row.id) for row in rows]
+
+            query = (stable.enabled == True)
+            records = db(query).select(stable.vars)
+            rows = []
+            for record in records:
+                if "account" in record.vars:
+                    r = record.vars.split("\"account\":")[1]
+                    s = r.split("}")[0]
+                    s = s.split("\"")[1].split("\"")[0]
+
+                    record1 = db(table.account_name == s).select(table.id)
+                    if record1:
+                        for rec in record1:
+                            rows += [rec]
+
+            restrict_d = [str(row.id) for row in rows]
+
+            records = db(stable.id > 0).select(stable.vars)
+            tasks = [record.vars for record in records]
+            sources = []
+            for task in tasks:
+                if "account" in task:
+                    u = task.split("\"account\":")[1]
+                    v = u.split(",")[0]
+                    v = v.split("\"")[1]
+                    sources += [v]
+
+            settings = db(table.deleted == False).select(table.id,
+                                                         table.name)
+            rows = []
+            for setting in settings :
+                if setting.name:
+                    if (setting.name not in sources):
+                        if setting:
+                            rows += [setting]
+
+            restrict_a = [str(row.id) for row in rows]
+
+            s3.actions = \
+            s3.actions + [
+                           dict(label=str(T("Enable")),
+                                _class="action-btn",
+                                url=URL(f="enable_mcommons_sms",
+                                        args="[id]"),
+                                restrict = restrict_e)
+                           ]
+            s3.actions.append(dict(label=str(T("Disable")),
+                                   _class="action-btn",
+                                   url = URL(f = "disable_mcommons_sms",
+                                             args = "[id]"),
+                                   restrict = restrict_d)
+                              )
+            s3.actions.append(dict(label=str(T("Activate")),
+                                   _class="action-btn",
+                                   url = URL(f = "schedule_mcommons_sms",
+                                             args = "[id]"),
+                                   restrict = restrict_a)
+                              )
+        return output
+    s3.postp = postp
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
 def twilio_inbound_settings():
     """
         RESTful CRUD controller for twilio sms settings
@@ -409,35 +516,32 @@ def twilio_inbound_settings():
     table = s3db[tablename]
 
     table.account_name.label = T("Account Name")
-    table.account_name.comment = DIV(DIV(_class="tooltip",
-            _title="%s|%s" % (T("Account Name"),
-                              T("Identifier Name for your Twilio Account."))))
+    table.account_name.comment = DIV(_class="tooltip",
+                                     _title="%s|%s" % (T("Account Name"),
+                                                       T("Identifier Name for your Twilio Account.")))
 
     table.url.label = T("URL")
-    table.url.comment = DIV(DIV(_class="tooltip",
-            _title="%s|%s" % (T("URL"),
-                              T("URL for the twilio API."))))
+    table.url.comment = DIV(_class="tooltip",
+                            _title="%s|%s" % (T("URL"),
+                                              T("URL for the twilio API.")))
 
     table.account_sid.label = "Account SID"
     table.auth_token.label = T("AUTH TOKEN")
 
     # CRUD Strings
     s3.crud_strings[tablename] = Storage(
-    title_display = T("Twilio Setting Details"),
-    title_list = T("Twilio Settings"),
-    title_create = T("Add Twilio Settings"),
-    title_update = T("Edit Twilio Settings"),
-    title_search = T("Search Twilio Settings"),
-    label_list_button = T("View Twilio Settings"),
-    label_create_button = T("Add Twilio Settings"),
-    msg_record_created = T("Twilio Setting added"),
-    msg_record_deleted = T("Twilio Setting deleted"),
-    msg_list_empty = T("No Twilio Settings currently defined"),
-    msg_record_modified = T("Twilio settings updated")
+        title_display = T("Twilio Setting Details"),
+        title_list = T("Twilio Settings"),
+        title_create = T("Add Twilio Settings"),
+        title_update = T("Edit Twilio Settings"),
+        title_search = T("Search Twilio Settings"),
+        label_list_button = T("View Twilio Settings"),
+        label_create_button = T("Add Twilio Settings"),
+        msg_record_created = T("Twilio Setting added"),
+        msg_record_deleted = T("Twilio Setting deleted"),
+        msg_list_empty = T("No Twilio Settings currently defined"),
+        msg_record_modified = T("Twilio settings updated")
         )
-
-    #response.menu_options = admin_menu_options
-    s3db.configure(tablename, listadd=True, deletable=True)
 
     def postp(r, output):
 
@@ -547,13 +651,13 @@ def workflow():
 
     table = s3db.msg_workflow
     table.source_task_id.label = T("Message Source")
-    table.source_task_id.comment = DIV(DIV(_class="tooltip",
-            _title="%s|%s" % (T("Message Source"),
-                              T("This is the name of the username for the Inbound Message Source."))))
+    table.source_task_id.comment = DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Message Source"),
+                                                         T("This is the name of the username for the Inbound Message Source.")))
     table.workflow_task_id.label = T("Parsing Workflow")
-    table.workflow_task_id.comment = DIV(DIV(_class="tooltip",
-                _title="%s|%s" % (T("Parsing Workflow"),
-                                  T("This is the name of the parsing function used as a workflow."))))
+    table.workflow_task_id.comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Parsing Workflow"),
+                                                           T("This is the name of the parsing function used as a workflow.")))
 
     # CRUD Strings
     s3.crud_strings["msg_workflow"] = Storage(
@@ -570,7 +674,7 @@ def workflow():
         msg_record_modified = T("Message Parser settings updated")
     )
 
-    s3db.configure("msg_workflow", listadd=True, deletable=True)
+    #s3db.configure("msg_workflow", listadd=True, deletable=True)
 
     def prep(r):
         if r.interactive:
@@ -721,7 +825,7 @@ def workflow():
 # -----------------------------------------------------------------------------
 def schedule_parser():
     """
-        Schedules different parsing workflows.
+        Schedule a Parsing Workflow
     """
 
     try:
@@ -730,15 +834,13 @@ def schedule_parser():
         session.error = T("Workflow not specified!")
         redirect(URL(f="workflow"))
 
-    wtable = s3db.msg_workflow
-    record = db(wtable.id == id).select(wtable.workflow_task_id,
-                                        wtable.source_task_id,
-                                        limitby=(0, 1)).first()
-    workflow = record.workflow_task_id
-    source = record.source_task_id
-
+    table = s3db.msg_workflow
+    record = db(table.id == id).select(table.workflow_task_id,
+                                       table.source_task_id,
+                                       limitby=(0, 1)).first()
     s3task.schedule_task("msg_parse_workflow",
-                         vars={"workflow": workflow, "source": source},
+                         vars={"workflow": record.workflow,
+                               "source": record.source},
                          period=300,  # seconds
                          timeout=300, # seconds
                          repeats=0    # unlimited
@@ -749,7 +851,7 @@ def schedule_parser():
 # -----------------------------------------------------------------------------
 def schedule_email():
     """
-        Schedules different Email Sources.
+        Schedule Inbound Email
     """
 
     try:
@@ -758,13 +860,11 @@ def schedule_email():
         session.error = T("Source not specified!")
         redirect(URL(f="inbound_email_settings"))
 
-    mtable = s3db.msg_inbound_email_settings
-    record = db(mtable.id == id).select(mtable.username,
-                                        limitby=(0, 1)).first()
-    username = record.username
-
+    table = s3db.msg_inbound_email_settings
+    record = db(table.id == id).select(table.username,
+                                       limitby=(0, 1)).first()
     s3task.schedule_task("msg_process_inbound_email",
-                         vars={"username": username},
+                         vars={"username": record.username},
                          period=300,  # seconds
                          timeout=300, # seconds
                          repeats=0    # unlimited
@@ -773,9 +873,33 @@ def schedule_email():
     redirect(URL(f="inbound_email_settings"))
 
 # -----------------------------------------------------------------------------
+def schedule_mcommons_sms():
+    """
+        Schedules Mobile Commons Inbound SMS
+    """
+
+    try:
+        id = request.args[0]
+    except:
+        session.error = T("Source not specified!")
+        redirect(URL(f="mcommons_inbound_settings"))
+
+    table = s3db.msg_mcommons_inbound_settings
+    record = db(table.id == id).select(table.campaign_id,
+                                       limitby=(0, 1)).first()
+    s3task.schedule_task("msg_twilio_inbound_sms",
+                         vars={"campaign_id": record.campaign_id},
+                         period=300,  # seconds
+                         timeout=300, # seconds
+                         repeats=0    # unlimited
+                         )
+
+    redirect(URL(f="mcommons_inbound_settings"))
+
+# -----------------------------------------------------------------------------
 def schedule_twilio_sms():
     """
-        Schedules different Twilio SMS Sources.
+        Schedules Twilio Inbound SMS
     """
 
     try:
@@ -785,12 +909,10 @@ def schedule_twilio_sms():
         redirect(URL(f="twilio_inbound_settings"))
 
     ttable = s3db.msg_twilio_inbound_settings
-    record = db(ttable.id == id).select(ttable.account_name,
-                                        limitby=(0, 1)).first()
-    account_name = record.account_name
-
+    record = db(table.id == id).select(table.account_name,
+                                       limitby=(0, 1)).first()
     s3task.schedule_task("msg_twilio_inbound_sms",
-                         vars={"account": account_name},
+                         vars={"account": record.account_name},
                          period=300,  # seconds
                          timeout=300, # seconds
                          repeats=0    # unlimited
@@ -845,25 +967,57 @@ def disable_email():
         redirect(URL(f="inbound_email_settings"))
 
     stable = s3db.scheduler_task
-    mtable = s3db.msg_inbound_email_settings
+    table = s3db.msg_inbound_email_settings
 
-    records = db(stable.id > 0).select()
-    msettings = db(mtable.id == id).select(limitby=(0, 1)).first()
+    settings = db(table.id == id).select(table.username,
+                                         limitby=(0, 1)).first()
+    records = db(stable.id > 0).select(stable.id,
+                                       stable.vars)
     for record in records:
         if "username" in record.vars:
             r = record.vars.split("\"username\":")[1]
             s = r.split("}")[0]
             s = s.split("\"")[1].split("\"")[0]
 
-            if (s == msettings.username) :
+            if (s == settings.username) :
                 db(stable.id == record.id).update(enabled = False)
 
     redirect(URL(f="inbound_email_settings"))
 
 # -----------------------------------------------------------------------------
+def disable_mcommons_sms():
+    """
+        Disables Mobile Commons Inbound SMS
+    """
+
+    try:
+        id = request.args[0]
+    except:
+        session.error = T("Source not specified!")
+        redirect(URL(f="mcommons_inbound_settings"))
+
+    stable = s3db.scheduler_task
+    table = s3db.msg_mcommons_inbound_settings
+
+    settings = db(table.id == id).select(table.campaign_id,
+                                         limitby=(0, 1)).first()
+    records = db(stable.id > 0).select(stable.id,
+                                       stable.vars)
+    for record in records:
+        if "account" in record.vars:
+            r = record.vars.split("\"account\":")[1]
+            s = r.split("}")[0]
+            s = s.split("\"")[1].split("\"")[0]
+
+            if (s == settings.campaign_id) :
+                db(stable.id == record.id).update(enabled = False)
+
+    redirect(URL(f="mcommons_inbound_settings"))
+
+# -----------------------------------------------------------------------------
 def disable_twilio_sms():
     """
-        Disables different Twilio SMS Sources.
+        Disables Twilio Inbound SMS
     """
 
     try:
@@ -873,17 +1027,19 @@ def disable_twilio_sms():
         redirect(URL(f="twilio_inbound_settings"))
 
     stable = s3db.scheduler_task
-    ttable = s3db.msg_twilio_inbound_settings
+    table = s3db.msg_twilio_inbound_settings
 
-    records = db(stable.id > 0).select()
-    tsettings = db(ttable.id == id).select(limitby=(0, 1)).first()
+    settings = db(table.id == id).select(table.account_name,
+                                         limitby=(0, 1)).first()
+    records = db(stable.id > 0).select(stable.id,
+                                       stable.vars)
     for record in records:
         if "account" in record.vars:
             r = record.vars.split("\"account\":")[1]
             s = r.split("}")[0]
             s = s.split("\"")[1].split("\"")[0]
 
-            if (s == tsettings.account_name) :
+            if (s == settings.account_name) :
                 db(stable.id == record.id).update(enabled = False)
 
     redirect(URL(f="twilio_inbound_settings"))
@@ -901,25 +1057,57 @@ def enable_email():
         redirect(URL(f="inbound_email_settings"))
 
     stable = s3db.scheduler_task
-    mtable = s3db.msg_inbound_email_settings
+    table = s3db.msg_inbound_email_settings
 
-    records = db(stable.id > 0).select()
-    msettings = db(mtable.id == id).select(mtable.ALL).first()
+    settings = db(table.id == id).select(table.username,
+                                         limitby=(0, 1)).first()
+    records = db(stable.id > 0).select(stable.id,
+                                       stable.vars)
     for record in records:
         if "username" in record.vars:
             r = record.vars.split("\"username\":")[1]
             s = r.split("}")[0]
             s = s.split("\"")[1].split("\"")[0]
 
-            if (s == msettings.username) :
+            if (s == settings.username) :
                 db(stable.id == record.id).update(enabled = True)
 
     redirect(URL(f="inbound_email_settings"))
 
 # -----------------------------------------------------------------------------
+def enable_mcommons_sms():
+    """
+        Enable Mobile Commons Inbound SMS
+    """
+
+    try:
+        id = request.args[0]
+    except:
+        session.error = T("Source not specified!")
+        redirect(URL(f="mcommons_inbound_settings"))
+
+    stable = s3db.scheduler_task
+    table = s3db.msg_mcommons_inbound_settings
+
+    settings = db(table.id == id).select(table.campaign_id,
+                                         limitby=(0, 1)).first()
+    records = db(stable.id > 0).select(stable.id,
+                                       stable.vars)
+    for record in records:
+        if "account" in record.vars:
+            r = record.vars.split("\"account\":")[1]
+            s = r.split("}")[0]
+            s = s.split("\"")[1].split("\"")[0]
+
+            if (s == settings.campaign_id) :
+                db(stable.id == record.id).update(enabled = True)
+
+    redirect(URL(f="mcommons_inbound_settings"))
+
+# -----------------------------------------------------------------------------
 def enable_twilio_sms():
     """
-        Enables different Twilio SMS Sources.
+        Enable Twilio Inbound SMS
     """
 
     try:
@@ -929,17 +1117,19 @@ def enable_twilio_sms():
         redirect(URL(f="twilio_inbound_settings"))
 
     stable = s3db.scheduler_task
-    ttable = s3db.msg_twilio_inbound_settings
+    table = s3db.msg_twilio_inbound_settings
 
-    records = db(stable.id > 0).select()
-    tsettings = db(ttable.id == id).select(ttable.ALL).first()
+    settings = db(table.id == id).select(table.account_name,
+                                         limitby=(0, 1)).first()
+    records = db(stable.id > 0).select(stable.id,
+                                       stable.vars)
     for record in records:
         if "account" in record.vars:
             r = record.vars.split("\"account\":")[1]
             s = r.split("}")[0]
             s = s.split("\"")[1].split("\"")[0]
 
-            if (s == tsettings.account_name) :
+            if (s == settings.account_name) :
                 db(stable.id == record.id).update(enabled = True)
 
     redirect(URL(f="twilio_inbound_settings"))
@@ -981,10 +1171,41 @@ def enable_parser():
     redirect(URL(f="workflow"))
 
 # -----------------------------------------------------------------------------
+def inbox():
+    """
+        RESTful CRUD controller for the Inbox
+        - all Inbound Messages will go here
+        @ToDo: Complete (currently just MobileCommons) 
+    """
+
+    if not auth.s3_logged_in():
+        session.error = T("Requires Login!")
+        redirect(URL(c="default", f="user", args="login"))
+
+    tablename = "msg_inbox"
+    table = s3db[tablename]
+
+    # CRUD Strings
+    s3.crud_strings[tablename] = Storage(
+        title_display = T("Inbox"),
+        title_list = T("Inbox"),
+        title_update = T("Edit Message"),
+        title_search = T("Search Inbox"),
+        label_list_button = T("View Messages"),
+        msg_record_deleted = T("Message deleted"),
+        msg_list_empty = T("Inbox empty"),
+        msg_record_modified = T("Message updated")
+        )
+
+    s3db.configure(tablename, listadd=False)
+    return s3_rest_controller(module, "")
+
+# -----------------------------------------------------------------------------
 def email_inbox():
     """
         RESTful CRUD controller for the Email Inbox
         - all Inbound Email Messages go here
+        @ToDo: Deprecate
     """
 
     if not auth.s3_logged_in():
@@ -992,8 +1213,6 @@ def email_inbox():
         redirect(URL(c="default", f="user", args="login"))
 
     tablename = "msg_email_inbox"
-    table = s3db[tablename]
-
     s3db.configure(tablename, listadd=False)
     return s3_rest_controller()
 
@@ -1013,18 +1232,17 @@ def twilio_inbox():
 
     # CRUD Strings
     s3.crud_strings[tablename] = Storage(
-    title_display = T("Twilio SMS Inbox"),
-    title_list = T("Twilio SMS Inbox"),
-    title_update = T("Edit SMS Message"),
-    title_search = T("Search Twilio SMS Inbox"),
-    label_list_button = T("View Twilio SMS"),
-    msg_record_deleted = T("Twilio SMS deleted"),
-    msg_list_empty = T("Twilio SMS Inbox empty. "),
-    msg_record_modified = T("Twilio SMS updated")
+        title_display = T("Twilio SMS Inbox"),
+        title_list = T("Twilio SMS Inbox"),
+        title_update = T("Edit SMS Message"),
+        title_search = T("Search Twilio SMS Inbox"),
+        label_list_button = T("View Twilio SMS"),
+        msg_record_deleted = T("Twilio SMS deleted"),
+        msg_list_empty = T("Twilio SMS Inbox empty. "),
+        msg_record_modified = T("Twilio SMS updated")
         )
 
     s3db.configure(tablename, listadd=False)
-
     return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
@@ -1048,15 +1266,15 @@ def modem_settings():
     table.modem_port.label = T("Port")
     table.modem_baud.label = T("Baud")
     table.enabled.label = T("Enabled")
-    table.modem_port.comment = DIV(DIV(_class="tooltip",
-        _title="%s|%s" % (T("Port"),
-                          T("The serial port at which the modem is connected - /dev/ttyUSB0, etc on linux and com1, com2, etc on Windows"))))
-    table.modem_baud.comment = DIV(DIV(_class="tooltip",
-        _title="%s|%s" % (T("Baud"),
-                          T("Baud rate to use for your modem - The default is safe for most cases"))))
-    table.enabled.comment = DIV(DIV(_class="tooltip",
-        _title="%s|%s" % (T("Enabled"),
-                          T("Unselect to disable the modem"))))
+    table.modem_port.comment = DIV(_class="tooltip",
+                                   _title="%s|%s" % (T("Port"),
+                                                     T("The serial port at which the modem is connected - /dev/ttyUSB0, etc on linux and com1, com2, etc on Windows")))
+    table.modem_baud.comment = DIV(_class="tooltip",
+                                   _title="%s|%s" % (T("Baud"),
+                                                     T("Baud rate to use for your modem - The default is safe for most cases")))
+    table.enabled.comment = DIV(_class="tooltip",
+                                _title="%s|%s" % (T("Enabled"),
+                                                  T("Unselect to disable the modem")))
 
     # CRUD Strings
     ADD_SETTING = T("Add Setting")
@@ -1098,15 +1316,15 @@ def smtp_to_sms_settings():
     table.address.label = T("Address")
     table.subject.label = T("Subject")
     table.enabled.label = T("Enabled")
-    table.address.comment = DIV(DIV(_class="tooltip",
-        _title="%s|%s" % (T("Address"),
-                          T("Email Address to which to send SMS messages. Assumes sending to phonenumber@address"))))
-    table.subject.comment = DIV(DIV(_class="tooltip",
-        _title="%s|%s" % (T("Subject"),
-                          T("Optional Subject to put into Email - can be used as a Security Password by the service provider"))))
-    table.enabled.comment = DIV(DIV(_class="tooltip",
-        _title="%s|%s" % (T("Enabled"),
-                          T("Unselect to disable this SMTP service"))))
+    table.address.comment = DIV(_class="tooltip",
+                                _title="%s|%s" % (T("Address"),
+                                                  T("Email Address to which to send SMS messages. Assumes sending to phonenumber@address")))
+    table.subject.comment = DIV(_class="tooltip",
+                                _title="%s|%s" % (T("Subject"),
+                                                  T("Optional Subject to put into Email - can be used as a Security Password by the service provider")))
+    table.enabled.comment = DIV(_class="tooltip",
+                                _title="%s|%s" % (T("Enabled"),
+                                                  T("Unselect to disable this SMTP service")))
 
     # CRUD Strings
     s3.crud_strings[tablename] = Storage(
@@ -1118,9 +1336,8 @@ def smtp_to_sms_settings():
                     deletable=False,
                     listadd=False,
                     update_next = URL(args=[1, "update"]))
-    #response.menu_options = admin_menu_options
-    return s3_rest_controller()
 
+    return s3_rest_controller()
 
 #------------------------------------------------------------------------------
 @auth.s3_requires_membership(1)
@@ -1135,24 +1352,32 @@ def api_settings():
     table = s3db[tablename]
 
     table.url.label = T("URL")
-    table.to_variable.label = T("To variable")
     table.message_variable.label = T("Message variable")
+    table.to_variable.label = T("To variable")
+    table.username.label = T("Username")
+    table.password.label = T("Password")
     table.enabled.label = T("Enabled")
-    table.url.comment = DIV(DIV(_class="tooltip",
+    table.url.comment = DIV(_class="tooltip",
         _title="%s|%s" % (T("URL"),
-                          T("The URL of your web gateway without the post parameters"))))
-    table.parameters.comment = DIV(DIV(_class="tooltip",
+                          T("The URL of your web gateway without the POST parameters")))
+    table.parameters.comment = DIV(_class="tooltip",
         _title="%s|%s" % (T("Parameters"),
-                          T("The post variables other than the ones containing the message and the phone number"))))
-    table.message_variable.comment = DIV(DIV(_class="tooltip",
+                          T("The POST variables other than the ones containing the message and the phone number")))
+    table.message_variable.comment = DIV(_class="tooltip",
         _title="%s|%s" % (T("Message Variable"),
-                          T("The post variable on the URL used for sending messages"))))
-    table.to_variable.comment = DIV(DIV(_class="tooltip",
+                          T("The POST variable on the URL used for sending messages")))
+    table.to_variable.comment = DIV(_class="tooltip",
         _title="%s|%s" % (T("To variable"),
-                          T("The post variable containing the phone number"))))
-    table.enabled.comment = DIV(DIV(_class="tooltip",
+                          T("The POST variable containing the phone number")))
+    table.username.comment = DIV(_class="tooltip",
+        _title="%s|%s" % (T("Username"),
+                          T("If the service requries HTTP BASIC Auth (e.g. Mobile Commons)")))
+    table.password.comment = DIV(_class="tooltip",
+        _title="%s|%s" % (T("Password"),
+                          T("If the service requries HTTP BASIC Auth (e.g. Mobile Commons)")))
+    table.enabled.comment = DIV(_class="tooltip",
         _title="%s|%s" % (T("Enabled"),
-                          T("Unselect to disable this API service"))))
+                          T("Unselect to disable this API service")))
 
     # CRUD Strings
     s3.crud_strings[tablename] = Storage(
@@ -1161,12 +1386,11 @@ def api_settings():
     )
 
     s3db.configure(tablename,
-                    deletable=False,
-                    listadd=False,
-                    update_next = URL(args=[1, "update"]))
-    #response.menu_options = admin_menu_options
-    return s3_rest_controller()
+                   deletable=False,
+                   listadd=False,
+                   update_next = URL(args=[1, "update"]))
 
+    return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
 @auth.s3_requires_membership(1)
@@ -1196,9 +1420,8 @@ def tropo_settings():
                     deletable=False,
                     listadd=False,
                     update_next = URL(args=[1, "update"]))
-    #response.menu_options = admin_menu_options
-    return s3_rest_controller()
 
+    return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
 @auth.s3_requires_membership(1)
@@ -1271,8 +1494,10 @@ def twitter_settings():
         return output
     s3.postp = user_postp
 
-    #response.menu_options = admin_menu_options
-    s3db.configure(tablename, listadd=False, deletable=False)
+    s3db.configure(tablename,
+                   listadd=False,
+                   deletable=False)
+
     return s3_rest_controller()
 
 # =============================================================================
@@ -1298,7 +1523,6 @@ def group():
     s3.filter = (table.system == False)
 
     return s3_rest_controller(module, resourcename, rheader=s3db.pr_rheader)
-
 
 # -----------------------------------------------------------------------------
 def group_membership():
@@ -1490,5 +1714,56 @@ def tag():
 
     s3db.configure(tablename, listadd=False)
     return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+# Send Outbound Messages (was for being called via cron, now useful for debugging)
+# -----------------------------------------------------------------------------
+def process_email_outbox():
+    """ Send Pending Email Messages """
+
+    msg.process_outbox(contact_method = "EMAIL")
+    return
+
+# -----------------------------------------------------------------------------
+def process_sms_outbox():
+    """ Send Pending SMS Messages """
+
+    msg.process_outbox(contact_method = "SMS")
+    return
+
+# -----------------------------------------------------------------------------
+def process_twitter_outbox():
+    """ Send Pending Twitter Messages """
+
+    msg.process_outbox(contact_method = "TWITTER")
+    return
+
+# -----------------------------------------------------------------------------
+def poll_mcommons_inbox():
+    """ Collect Inbound Mobile Commons Messages """
+
+    try:
+        campaign_id = request.args[0]
+    except:
+        session.error = T("Need to specify campaign_id")
+        redirect(URL(f="mcommons_inbound_settings"))
+
+    msg.mcommons_inbound_sms(campaign_id = campaign_id)
+
+    redirect(URL(f="inbox"))
+
+# -----------------------------------------------------------------------------
+def poll_twilio_inbox():
+    """ Collect Inbound Twilio Messages """
+
+    try:
+        account_name = request.args[0]
+    except:
+        session.error = T("Need to specify account name")
+        redirect(f="")
+
+    msg.twilio_inbound_sms(account_name = account_name)
+
+    redirect(URL(f="twilio_inbox"))
 
 # END ================================================================================

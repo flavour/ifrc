@@ -140,10 +140,10 @@ class S3PersonEntity(S3Model):
         # ---------------------------------------------------------------------
         # Person Super-Entity
         #
-        #if current.deployment_settings.get_ui_camp():
-        #    shelter = T("Camp")
-        #else:
-        #    shelter = T("Shelter")
+        if current.deployment_settings.get_ui_camp():
+            shelter = T("Camp")
+        else:
+            shelter = T("Shelter")
         pe_types = Storage(pr_person = T("Person"),
                            pr_group = T("Group"),
                            org_organisation = messages.ORGANISATION,
@@ -151,11 +151,12 @@ class S3PersonEntity(S3Model):
                            inv_warehouse = T("Warehouse"),
                            # If we want these, then pe_id needs adding to their
                            # tables & configuring as a super-entity
-                           #cr_shelter = shelter,
                            #fire_station = T("Fire Station"),
+                           cr_shelter = shelter,
                            dvi_morgue = T("Morgue"),
                            hms_hospital = T("Hospital"),
-                           dvi_body = T("Body"))
+                           dvi_body = T("Body")
+                           )
 
         tablename = "pr_pentity"
         table = super_entity(tablename, "pe_id", pe_types,
@@ -597,8 +598,8 @@ class S3PersonModel(S3Model):
                                    writable=False,
                                    default=False),
                              Field("first_name", notnull=True,
-                                   default = "?" if current.auth.permission.format != "html" else "",
                                    length=64, # Mayon Compatibility
+                                   #default = "?" if current.auth.permission.format != "html" else "",
                                    # NB Not possible to have an IS_NAME() validator here
                                    # http://eden.sahanafoundation.org/ticket/834
                                    requires = IS_NOT_EMPTY(error_message = T("Please enter a first name")),
@@ -1069,7 +1070,7 @@ class S3GroupModel(S3Model):
                                                           filterby="system",
                                                           filter_opts=(False,))),
                                    represent = self.group_represent,
-                                   comment=S3AddResourceLink(c="pr",
+                                   comment=S3AddResourceLink(#c="pr",
                                                              f="group",
                                                              label=crud_strings.pr_group.label_create_button,
                                                              title=T("Create Group Entry"),
@@ -3770,7 +3771,7 @@ def pr_update_affiliations(table, record):
             return
         pr_organisation_update_affiliations(record)
 
-    elif rtype == "org_site":
+    elif rtype == "org_site" or rtype in current.auth.org_site_types:
 
         pr_site_update_affiliations(record)
 

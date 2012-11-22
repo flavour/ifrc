@@ -40,6 +40,12 @@ T = current.T
 #settings.auth.registration_requires_verification = True
 # Do new users need to be approved by an administrator prior to being able to login?
 #settings.auth.registration_requires_approval = True
+
+# Allow a new user to be linked to a record (and a new record will be created if it doesn't already exist)
+#settings.auth.registration_link_user_to = {"staff":T("Staff"),
+#                                           "volunteer":T("Volunteer"),
+#                                           "member":T("Member")}
+
 # Always notify the approver of a new (verified) user, even if the user is automatically approved
 #settings.auth.always_notify_approver = False
 
@@ -59,6 +65,8 @@ T = current.T
 #settings.auth.registration_organisation_hidden = True
 # Uncomment this to default the Organisation during registration
 #settings.auth.registration_organisation_default = "My Organisation"
+# Uncomment this to request the Site when a user registers
+#settings.auth.registration_requests_site = True
 # Uncomment to set the default role UUIDs assigned to newly-registered users
 # This is a dictionary of lists, where the key is the realm that the list of roles applies to
 # The key 0 implies not realm restricted
@@ -120,6 +128,17 @@ settings.L10n.decimal_separator = "."
 #settings.L10n.default_country_code = 1
 # Make last name in person/user records mandatory
 #settings.L10n.mandatory_lastname = True
+# Configure the list of Religions
+#settings.L10n.get("religions", {
+#                "none": T("none"),
+#                "christian": T("Christian"),
+#                "muslim": T("Muslim"),
+#                "jewish": T("Jewish"),
+#                "buddhist": T("Buddhist"),
+#                "hindu": T("Hindu"),
+#                "bahai": T("Bahai"),
+#                "other": T("other")
+#            })
 
 # Finance settings
 #settings.fin.currencies = {
@@ -206,6 +225,8 @@ settings.L10n.decimal_separator = "."
 #settings.gis.edit_GR = True
 # Note that editing of locations used as regions for the Regions menu is always
 # restricted to MapAdmins.
+# Uncomment to disable that LatLons are within boundaries of their parent
+#settings.gis.check_within_parent_boundaries = False
 
 # Enable this for a UN-style deployment
 #settings.ui.cluster = True
@@ -218,23 +239,47 @@ settings.L10n.decimal_separator = "."
 # Enable Social Media share buttons
 #settings.ui.social_buttons = True
 
+# -----------------------------------------------------------------------------
+# Persons
+# Uncomment to hide fields in S3AddPersonWidget
+#settings.pr.request_dob = False
+#settings.pr.request_gender = False
+
 # Organisation Management
 # Set the length of the auto-generated org/site code the default is 10
 #settings.org.site_code_len = 3
 # Set the label for Sites
 #settings.org.site_label = "Facility"
+# Uncomment to use an Autocomplete for Site lookup fields
+#settings.org.site_autocomplete = True
+# Uncomment to have Site Autocompletes search within Address fields
+#settings.org.site_address_autocomplete = True
+# Uncomment to hide inv & req tabs from Sites
+#settings.org.site_inv_req_tabs = False
 # Uncomment to add summary fields for Organisations/Offices for # National/International staff
 #settings.org.summary = True
 # Enable certain fields just for specific Organisations
 # Requires a call to settings.set_org_dependent_field(field)
+# empty list => disabled for all (including Admin)
 #settings.org.dependent_fields = \
-#    {"<table name>.<field name>"  : ["<Organisation Name>"],
-#    ...
+#    {#"<table name>.<field name>"  : ["<Organisation Name>"],
+#     "pr_person_details.mother_name"             : [],
+#     "pr_person_details.father_name"             : [],
+#     "pr_person_details.company"                 : [],
+#     "pr_person_details.affiliations"            : [],
+#     "vol_volunteer.active"                      : [],
+#     "vol_volunteer_cluster.vol_cluster_type_id"      : [],
+#     "vol_volunteer_cluster.vol_cluster_id"          : [],
+#     "vol_volunteer_cluster.vol_cluster_position_id" : [],
 #     }
 
 # Human Resource Management
+# Uncomment to chage the label for 'Staff'
+#settings.hrm.staff_label = "Contacts"
 # Uncomment to allow Staff & Volunteers to be registered without an email address
 #settings.hrm.email_required = False
+# Uncomment to allow Staff & Volunteers to be registered without an Organisation
+#settings.hrm.org_required = False
 # Uncomment to allow HR records to be deletable rather than just marking them as obsolete
 #settings.hrm.deletable = True
 # Uncomment to allow HRs to have multiple Job Roles in addition to their Job Title
@@ -268,8 +313,16 @@ settings.L10n.decimal_separator = "."
 
 # Inventory Management
 #settings.inv.collapse_tabs = False
+# Uncomment to customise the label for Facilities in Inventory Management
+#settings.inv.facility_label = "Facility"
+# Uncomment if you need a simpler (but less accountable) process for managing stock levels
+#settings.inv.direct_stock_edits = True
+# Uncomment to call Stock Adjustments, 'Stock Counts'
+#settings.inv.stock_count = True
 # Use the term 'Order' instead of 'Shipment'
 #settings.inv.shipment_name = "order"
+# Uncomment to not track pack values
+#settings.inv.track_pack_values = False
 #settings.inv.send_form_name = "Tally Out Sheet"
 #settings.inv.send_short_name = "TO"
 #settings.inv.send_ref_field_name = "Tally Out Number"
@@ -287,19 +340,26 @@ settings.L10n.decimal_separator = "."
 # Requests Management
 #settings.req.type_inv_label = T("Donations")
 #settings.req.type_hrm_label = T("Volunteers")
+#settings.req.date_writable = False
 # Allow the status for requests to be set manually,
 # rather than just automatically from commitments and shipments
 #settings.req.status_writable = False
 #settings.req.quantities_writable = True
 #settings.req.show_quantity_transit = False
 #settings.req.multiple_req_items = False
+#settings.req.prompt_match = False
 #settings.req.use_commit = False
+#settings.req.requester_optional = True
+# Should Requests ask whether Security is required?
+#settings.req.ask_security = True
+# Should Requests ask whether Transportation is required?
+#settings.req.ask_transport = True
 #settings.req.use_req_number = False
 #settings.req.generate_req_number = False
 #settings.req.req_form_name = "Request Issue Form"
 #settings.req.req_shortname = "RIS"
 # Restrict the type of requests that can be made, valid values in the
-# list are ["Stock", "People", "Other"]. If this is commented out then
+# list are ["Stock", "People", "Summary", "Other"]. If this is commented out then
 # all types will be valid.
 #settings.req.req_type = ["Stock"]
 

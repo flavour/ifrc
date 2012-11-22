@@ -42,6 +42,7 @@ __all__ = ["S3HiddenWidget",
            "S3PersonAutocompleteWidget",
            "S3HumanResourceAutocompleteWidget",
            "S3SiteAutocompleteWidget",
+           "S3SiteAddressAutocompleteWidget",
            "S3LocationSelectorWidget",
            "S3LocationDropdownWidget",
            #"S3CheckboxesWidget",
@@ -157,7 +158,10 @@ class S3DateWidget(FormWidget):
 
         attr["_class"] = "date"
 
-        selector = str(field).replace(".", "_")
+        if "_id" in attr:
+            selector = attr["_id"]
+        else:
+            selector = str(field).replace(".", "_")
 
         current.response.s3.jquery_ready.append(
 '''$('#%(selector)s').datepicker('option',{
@@ -415,7 +419,10 @@ class S3AutocompleteWidget(FormWidget):
         # Hide the real field
         attr["_class"] = attr["_class"] + " hide"
 
-        real_input = str(field).replace(".", "_")
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
         dummy_input = "dummy_%s" % real_input
 
         # Script defined in static/scripts/S3/S3.js
@@ -694,7 +701,10 @@ class S3PersonAutocompleteWidget(FormWidget):
         # Hide the real field
         attr["_class"] = "%s hide" % attr["_class"]
 
-        real_input = str(field).replace(".", "_")
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
         dummy_input = "dummy_%s" % real_input
         url = URL(c=self.c,
                   f=self.f,
@@ -838,7 +848,10 @@ class S3HumanResourceAutocompleteWidget(FormWidget):
         # Hide the real field
         attr["_class"] = "%s hide" % attr["_class"]
 
-        real_input = str(field).replace(".", "_")
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
         dummy_input = "dummy_%s" % real_input
         group = self.group
         if group == "staff":
@@ -1026,7 +1039,10 @@ class S3SiteAutocompleteWidget(FormWidget):
         # Hide the real field
         attr["_class"] = "%s hide" % attr["_class"]
 
-        real_input = str(field).replace(".", "_")
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
         dummy_input = "dummy_%s" % real_input
         url = URL(c="org", f="site",
                   args="search.json",
@@ -1147,6 +1163,125 @@ $('#%(dummy_input)s').blur(function(){
                         requires = field.requires
                       )
 
+# =============================================================================
+class S3SiteAddressAutocompleteWidget(FormWidget):
+    """
+        Renders an org_site SELECT as an INPUT field with AJAX Autocomplete.
+        Differs from the S3AutocompleteWidget in that it searches both name & address fields
+        & uses these in the represent, along with the type
+    """
+
+    def __init__(self,
+                 post_process = "",
+                 delay = 450, # milliseconds
+                 min_length = 2):
+
+        self.auth = current.auth
+        self.post_process = post_process
+        self.delay = delay
+        self.min_length = min_length
+
+    def __call__(self, field, value, **attributes):
+
+        default = dict(
+            _type = "text",
+            value = (value != None and str(value)) or "",
+            )
+        attr = StringWidget._attributes(field, default, **attributes)
+
+        # Hide the real field
+        attr["_class"] = "%s hide" % attr["_class"]
+
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
+        dummy_input = "dummy_%s" % real_input
+        url = URL(c="org", f="site",
+                  args=["search.json", "address"],
+                  vars={"filter":"~"})
+
+        js_autocomplete = "".join(('''
+var %(real_input)s={val:$('#%(dummy_input)s').val(),accept:false}
+$('#%(dummy_input)s').autocomplete({
+ source:'%(url)s',
+ delay:%(delay)d,
+ minLength:%(min_length)d,
+ search:function(event,ui){
+  $('#%(dummy_input)s_throbber').removeClass('hide').show()
+  return true
+ },
+ response:function(event,ui,content){
+  $('#%(dummy_input)s_throbber').hide()
+  return content
+ },
+ focus:function(event,ui){
+  var name=ui.item.name
+  $('#%(dummy_input)s').val(name)
+  return false
+ },
+ select:function(event,ui){
+  var name=ui.item.name
+  $('#%(dummy_input)s').val(name)
+  $('#%(real_input)s').val(ui.item.site_id).change()
+''' % dict(dummy_input=dummy_input,
+           real_input=real_input,
+           url=url,
+           delay=self.delay,
+           min_length=self.min_length),
+        self.post_process, '''
+  %(real_input)s.accept=true
+  return false
+ }
+}).data('autocomplete')._renderItem=function(ul,item){
+ return $('<li></li>').data('item.autocomplete',item).append('<a>'+item.name+'</a>').appendTo(ul)
+}
+$('#%(dummy_input)s').blur(function(){
+ if(!$('#%(dummy_input)s').val()){
+  $('#%(real_input)s').val('').change()
+  %(real_input)s.accept=true
+ }
+ if(!%(real_input)s.accept){
+  $('#%(dummy_input)s').val(%(real_input)s.val)
+ }else{
+  %(real_input)s.val=$('#%(dummy_input)s').val()
+ }
+ %(real_input)s.accept=false
+})''' % dict(dummy_input=dummy_input,
+             real_input=real_input)))
+
+        if value:
+            # Provide the representation for the current/default Value
+            text = str(field.represent(default["value"]))
+            if "<" in text:
+                # Strip Markup
+                try:
+                    markup = etree.XML(text)
+                    text = markup.xpath(".//text()")
+                    if text:
+                        text = " ".join(text)
+                    else:
+                        text = ""
+                except etree.XMLSyntaxError:
+                    pass
+            represent = text
+        else:
+            represent = ""
+
+        current.response.s3.jquery_ready.append(js_autocomplete)
+        return TAG[""](
+                        INPUT(_id=dummy_input,
+                              _class="string",
+                              _value=represent),
+                        IMG(_src="/%s/static/img/ajax-loader.gif" % \
+                                 current.request.application,
+                            _height=32, _width=32,
+                            _id="%s_throbber" % dummy_input,
+                            _class="throbber hide"),
+                        INPUT(**attr),
+                        requires = field.requires
+                      )
+
 # -----------------------------------------------------------------------------
 def S3GenericAutocompleteTemplate(post_process,
                                   delay,
@@ -1176,7 +1311,10 @@ def S3GenericAutocompleteTemplate(post_process,
     # Hide the real field
     attr["_class"] = attr["_class"] + " hide"
 
-    real_input = str(field).replace(".", "_")
+    if "_id" in attr:
+        real_input = attr["_id"]
+    else:
+        real_input = str(field).replace(".", "_")
     dummy_input = "dummy_%s" % real_input
     js_autocomplete = "".join(('''
 var %(real_input)s={val:$('#%(dummy_input)s').val(),accept:false}
@@ -2562,15 +2700,20 @@ class S3AddPersonWidget(FormWidget):
         request = current.request
         appname = request.application
         s3 = current.response.s3
+        settings = current.deployment_settings
 
         formstyle = s3.crud.formstyle
 
-        # Main Input
-        real_input = str(field).replace(".", "_")
         default = dict(_type = "text",
                        value = (value != None and str(value)) or "")
         attr = StringWidget._attributes(field, default, **attributes)
         attr["_class"] = "hide"
+
+        # Main Input
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
 
         if self.select_existing:
             _class ="box_top"
@@ -2633,14 +2776,17 @@ class S3AddPersonWidget(FormWidget):
         fields = [ptable.first_name,
                   ptable.middle_name,
                   ptable.last_name,
-                  ptable.date_of_birth,
-                  ptable.gender]
+                  ]
+        if settings.get_pr_request_dob():
+            fields.append(ptable.date_of_birth)
+        if settings.get_pr_request_gender():
+            fields.append(ptable.gender)
 
         if controller == "hrm":
-            emailRequired = current.deployment_settings.get_hrm_email_required()
+            emailRequired = settings.get_hrm_email_required()
         elif controller == "vol":
             fields.append(s3db.pr_person_details.occupation)
-            emailRequired = current.deployment_settings.get_hrm_email_required()
+            emailRequired = settings.get_hrm_email_required()
         else:
             emailRequired = False
         if emailRequired:
@@ -2653,7 +2799,8 @@ class S3AddPersonWidget(FormWidget):
                              requires=validator,
                              label=T("Email Address")),
                        Field("mobile_phone",
-                             label=T("Mobile Phone Number"))])
+                             label=T("Mobile Phone Number"))
+                       ])
 
         labels, required = s3_mark_required(fields)
         if required:
@@ -2667,7 +2814,7 @@ class S3AddPersonWidget(FormWidget):
                                *fields)
         trs = []
         for tr in form[0]:
-            if not tr.attributes["_id"].startswith("submit_record"):
+            if not "_id" in tr.attributes or not tr.attributes["_id"].startswith("submit_record"):
                 if "_class" in tr.attributes:
                     tr.attributes["_class"] = "%s box_middle" % \
                                                 tr.attributes["_class"]
@@ -2971,6 +3118,7 @@ class S3TimeIntervalWidget(FormWidget):
                    ("minutes", 60),
                    ("seconds", 1))
 
+    # -------------------------------------------------------------------------
     @staticmethod
     def widget(field, value, **attributes):
 
@@ -3005,6 +3153,7 @@ class S3TimeIntervalWidget(FormWidget):
                          _name=("%s_multiplier" % field).replace(".", "_")))
         return inp
 
+    # -------------------------------------------------------------------------
     @staticmethod
     def represent(value):
 
@@ -3144,12 +3293,16 @@ class S3EmbedComponentWidget(FormWidget):
             selected = None
 
         # Main Input
-        real_input = str(field).replace(".", "_")
-        dummy = "dummy_%s" % real_input
         default = dict(_type = "text",
                        value = (value != None and str(value)) or "")
         attr = StringWidget._attributes(field, default, **attributes)
         attr["_class"] = "hide"
+
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
+        dummy = "dummy_%s" % real_input
 
         if self.select_existing:
             _class ="box_top"
@@ -3289,14 +3442,23 @@ class S3EmbedComponentWidget(FormWidget):
                        divider)
 
 # =============================================================================
-def s3_comments_widget(field, value):
+def s3_comments_widget(field, value, **attr):
     """
         A smaller-than-normal textarea
         to be used by the s3.comments() Reusable field
     """
 
-    return TEXTAREA(_name=field.name,
-                    _id="%s_%s" % (field._tablename, field.name),
+    if "_id" not in attr:
+        _id = "%s_%s" % (field._tablename, field.name)
+    else:
+        _id = attr["_id"]
+    if "_name" not in attr:
+        _name = field.name
+    else:
+        _name = attr["_name"]
+
+    return TEXTAREA(_name=_name,
+                    _id=_id,
                     _class="comments %s" % (field.type),
                     value=value,
                     requires=field.requires)

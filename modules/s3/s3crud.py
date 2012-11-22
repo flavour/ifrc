@@ -77,7 +77,12 @@ class S3CRUD(S3Method):
             @returns: output object to send to the view
         """
 
-        self.sqlform = self._config("crud_form", S3SQLDefaultForm())
+        settings = current.deployment_settings
+        
+        self.sqlform = settings.get_ui_crud_form(self.tablename)
+        if not self.sqlform:
+            self.sqlform = self._config("crud_form", S3SQLDefaultForm())
+
         self.settings = current.response.s3.crud
 
         # Pre-populate create-form?
@@ -240,15 +245,26 @@ class S3CRUD(S3Method):
 
             # Copy formkey if un-deleting a duplicate
             if "id" in request.post_vars:
-                original = str(request.post_vars.id)
+                post_vars = request.post_vars
+                original = str(post_vars.id)
                 formkey = session.get("_formkey[%s/None]" % tablename)
                 formname = "%s/%s" % (tablename, original)
                 session["_formkey[%s]" % formname] = formkey
                 if "deleted" in table:
                     table.deleted.writable = True
-                    request.post_vars.update(deleted=False)
-                request.post_vars.update(_formname=formname, id=original)
-                request.vars.update(**request.post_vars)
+                    post_vars["deleted"] = False
+                if "created_on" in table:
+                    table.created_on.writable = True
+                    post_vars["created_on"] = request.utcnow
+                if "created_by" in table:
+                    table.created_by.writable = True
+                    if current.auth.user:
+                        post_vars["created_by"] = current.auth.user.id
+                    else:
+                        post_vars["created_by"] = None
+                post_vars["_formname"] = formname
+                post_vars["id"] = original
+                request.vars.update(**post_vars)
             else:
                 original = None
 
@@ -450,6 +466,10 @@ class S3CRUD(S3Method):
                     # Field not in table, such as auth_user
                     pass
 
+            # De-duplication
+            from s3merge import S3Merge
+            output["deduplicate"] = S3Merge.bookmark(r, tablename, record_id)
+
         elif representation == "plain":
             T = current.T
             if r.component:
@@ -650,6 +670,10 @@ class S3CRUD(S3Method):
                 except:
                     # Field not in table, such as auth_user
                     pass
+
+            # De-duplication
+            from s3merge import S3Merge
+            output["deduplicate"] = S3Merge.bookmark(r, tablename, record_id)
 
             # Redirection
             update_next = _config("update_next")
@@ -1586,23 +1610,6 @@ class S3CRUD(S3Method):
         else:
             button = A(labelstr, _href=_href, _id=_id, _class=_class)
         return button
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def crud_string(tablename, name):
-        """
-            Get a CRUD info string for interactive pages
-
-            @param tablename: the table name
-            @param name: the name of the CRUD string
-        """
-
-        crud_strings = current.response.s3.crud_strings
-        # CRUD strings for this table
-        _crud_strings = crud_strings.get(tablename, crud_strings)
-        return _crud_strings.get(name,
-                                 # Default fallback
-                                 crud_strings.get(name, None))
 
     # -------------------------------------------------------------------------
     def last_update(self):

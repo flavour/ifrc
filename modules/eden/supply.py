@@ -94,6 +94,8 @@ class S3SupplyModel(S3Model):
         define_table = self.define_table
         super_link = self.super_link
 
+        NONE = current.messages.NONE
+
         # =====================================================================
         # Brand
         #
@@ -122,11 +124,12 @@ class S3SupplyModel(S3Model):
             msg_list_empty = T("No Brands currently registered"))
 
         # Reusable Field
+        represent = s3_represent_id(table)
         brand_id = S3ReusableField("brand_id", table, sortby="name",
                     requires = IS_NULL_OR(IS_ONE_OF(db, "supply_brand.id",
-                                                    self.supply_brand_represent,
+                                                    represent,
                                                     sort=True)),
-                    represent = self.supply_brand_represent,
+                    represent = represent,
                     label = T("Brand"),
                     comment=S3AddResourceLink(c="supply",
                                               f="brand",
@@ -164,17 +167,18 @@ class S3SupplyModel(S3Model):
             msg_list_empty = T("No Catalogs currently registered"))
 
         # Reusable Field
+        represent = s3_represent_id(table)
         catalog_id = S3ReusableField("catalog_id", table,
                     sortby="name",
                     requires = IS_NULL_OR(
                                    IS_ONE_OF( # Restrict to catalogs the user can update
                                               db(current.auth.s3_accessible_query("update", table)),
                                               "supply_catalog.id",
-                                              self.supply_catalog_represent,
+                                              represent,
                                               sort=True,
                                               )
                                           ),
-                    represent = self.supply_catalog_represent,
+                    represent = represent,
                     default = 1,
                     label = T("Catalog"),
                     comment=S3AddResourceLink(c="supply",
@@ -267,13 +271,12 @@ class S3SupplyModel(S3Model):
                                            ondelete = "RESTRICT")
         item_category_id_script = SCRIPT(
 '''$(document).ready(function(){
- S3FilterFieldChange({
-  'FilterField':'catalog_id',
-  'Field':'item_category_id',
-  'FieldPrefix':'supply',
-  'FieldResource':'item_category',
- })
-})''')
+S3FilterFieldChange({
+ 'FilterField':'catalog_id',
+ 'Field':'item_category_id',
+ 'FieldPrefix':'supply',
+ 'FieldResource':'item_category',
+})})''')
 
 
         # Categories as component of Categories
@@ -316,35 +319,41 @@ class S3SupplyModel(S3Model):
                              brand_id(),
                              Field("kit", "boolean",
                                    default=False,
-                                   label=T("Kit?")),
+                                   represent=lambda bool: \
+                                    (bool and [T("Yes")] or
+                                    [NONE])[0],
+                                   label=T("Kit?")
+                                   ),
                              Field("model", length=128,
                                    label = T("Model/Type"),
                                    ),
                              Field("year", "integer",
-                                   label = T("Year of Manufacture")),
+                                   represent = lambda v: v or NONE,
+                                   label = T("Year of Manufacture")
+                                   ),
                              Field("weight", "double",
                                    label = T("Weight (kg)"),
-                                   represent = lambda v, row=None: \
+                                   represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2)
                                    ),
                              Field("length", "double",
                                    label = T("Length (m)"),
-                                   represent = lambda v, row=None: \
+                                   represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2)
                                    ),
                              Field("width", "double",
                                    label = T("Width (m)"),
-                                   represent = lambda v, row=None: \
+                                   represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2)
                                    ),
                              Field("height", "double",
                                    label = T("Height (m)"),
-                                   represent = lambda v, row=None: \
+                                   represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2)
                                    ),
                              Field("volume", "double",
                                    label = T("Volume (m3)"),
-                                   represent = lambda v, row=None: \
+                                   represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2)
                                    ),
                              # These comments do *not* pull through to an Inventory's Items or a Request's Items
@@ -505,6 +514,7 @@ class S3SupplyModel(S3Model):
             title_display = T("Item Catalog Details"),
             title_list = T("Catalog Items"),
             title_update = T("Edit Catalog Item"),
+            title_upload = T("Import Catalog Items"),
             title_search = T("Search Catalog Items"),
             subtitle_create = T("Add Item to Catalog"),
             label_list_button = T("List Catalog Items"),
@@ -603,7 +613,8 @@ class S3SupplyModel(S3Model):
                              Field("quantity", "double",
                                    notnull=True,
                                    label = T("Quantity"),
-                                   represent = lambda v, row=None: IS_FLOAT_AMOUNT.represent(v, precision=2)
+                                   represent = lambda v: \
+                                    IS_FLOAT_AMOUNT.represent(v, precision=2)
                                    ),
                              s3_comments(),
                              *s3_meta_fields())
@@ -650,11 +661,11 @@ class S3SupplyModel(S3Model):
                     #                          title=T("Item Packs"),
                     #                          tooltip=T("The way in which an item is normally distributed")),
                     script = SCRIPT('''
-S3FilterFieldChange({
- 'FilterField':'item_id',
- 'Field':'item_pack_id',
- 'FieldResource':'item_pack',
- 'FieldPrefix':'supply',
+S3OptionsFilter({
+ 'triggerName':'item_id',
+ 'targetName':'item_pack_id',
+ 'lookupPrefix':'supply',
+ 'lookupResource':'item_pack',
  'msgNoRecords':i18n.no_packs,
  'fncPrep':fncPrepItem,
  'fncRepresent':fncRepresentItem
@@ -690,7 +701,7 @@ S3FilterFieldChange({
                                             label = T("Kit Item")),
                              Field("quantity", "double",
                                    label = T("Quantity"),
-                                   represent = lambda v, row=None: \
+                                   represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2)
                                    ),
                              item_pack_id(),
@@ -706,8 +717,7 @@ S3FilterFieldChange({
         tablename = "supply_item_alt"
         table = define_table(tablename,
                              supply_item_id(notnull=True),
-                             Field("quantity",
-                                   "double",
+                             Field("quantity", "double",
                                    label = T("Quantity"),
                                    comment = DIV(_class = "tooltip",
                                                  _title = "%s|%s" %
@@ -717,9 +727,10 @@ S3FilterFieldChange({
                                                ),
                                    default = 1,
                                    notnull=True,
-                                   represent = lambda v, row=None: IS_FLOAT_AMOUNT.represent(v, precision=2)),
-                             supply_item_id("alt_item_id",
-                                            notnull=True),
+                                   represent = lambda v: \
+                                    IS_FLOAT_AMOUNT.represent(v, precision=2)
+                                   ),
+                             supply_item_id("alt_item_id", notnull=True),
                              s3_comments(),
                              *s3_meta_fields())
 
@@ -796,10 +807,10 @@ S3FilterFieldChange({
                                                                    show_link=True)
                                     ),
                                   item_pack_id(),
-                                  Field("quantity", "double",
+                                  Field("quantity", "double", notnull=True,
                                         label = T("Quantity"),
                                         default = 1.0,
-                                        notnull = True),
+                                        ),
                                   *s3_ownerstamp()
                                   )
 
@@ -909,47 +920,6 @@ S3FilterFieldChange({
                         (quantity_2 * pack_quantity_2)) / pack_quantity_1
         return quantity
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def supply_brand_represent(id, row=None):
-        """
-            Represent a Brand by it's Name
-        """
-
-        if row:
-            return row.name
-        elif not id:
-            return current.messages.NONE
-
-        db = current.db
-        table = db.supply_brand
-        record = db(table.id == id).select(table.name,
-                                           limitby=(0, 1)).first()
-        try:
-            return record.name
-        except:
-            return current.messages.UNKNOWN_OPT
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def supply_catalog_represent(id, row=None):
-        """
-            Represent a Catalog by it's Name
-        """
-
-        if row:
-            return row.name
-        elif not id:
-            return current.messages.NONE
-
-        db = current.db
-        table = db.supply_catalog
-        record = db(table.id == id).select(table.name,
-                                           limitby=(0, 1)).first()
-        try:
-            return record.name
-        except:
-            return current.messages.UNKNOWN_OPT
 
     # -------------------------------------------------------------------------
     @staticmethod

@@ -122,7 +122,8 @@ class FieldSelectorResolutionTests(unittest.TestCase):
                      "name",
                      "organisation_id$name",
                      "task.description"]
-        fields, joins, left, distinct = resource.resolve_selectors(selectors)
+        fields, joins, left, distinct = resource.resolve_selectors(selectors,
+                                                                   skip_components=True)
         self.assertEqual(len(fields), 3)
         self.assertEqual(fields[0].colname, "project_project.id")
         self.assertEqual(fields[1].colname, "project_project.name")
@@ -147,8 +148,7 @@ class FieldSelectorResolutionTests(unittest.TestCase):
                      "name",
                      "organisation_id$name",
                      "task.description"]
-        fields, joins, left, distinct = resource.resolve_selectors(selectors,
-                                                                   skip_components=False)
+        fields, joins, left, distinct = resource.resolve_selectors(selectors)
 
         self.assertEqual(len(fields), 4)
         self.assertEqual(fields[0].colname, "project_project.id")
@@ -1066,8 +1066,7 @@ class ResourceDataAccessTests(unittest.TestCase):
 
         resource = s3db.resource("org_organisation")
         list_fields = ["name", "office.name"]
-        lfields = resource.resolve_selectors(list_fields,
-                                             skip_components=False)[0]
+        lfields = resource.resolve_selectors(list_fields)[0]
         collapsed = resource.extract(rows, lfields)
         self.assertEqual(len(collapsed), 1)
 
@@ -1260,7 +1259,7 @@ class ResourceExportTests(unittest.TestCase):
             resource = current.s3db.resource(resource,
                                             uid=["ORDERTESTHOSPITAL1",
                                                 "ORDERTESTHOSPITAL2"])
-            resource.load()
+            resource.load(limit=2)
             self.assertEqual(len(resource), 2)
             first = resource._rows[0]["uuid"]
             last = resource._rows[1]["uuid"]
@@ -1511,7 +1510,7 @@ class MergeOrganisationsTests(unittest.TestCase):
 
     # -------------------------------------------------------------------------
     def testMergeReplace(self):
-        """ Test merge with replace"""
+        """ Test merge with replace """
 
         success = self.resource.merge(self.id1, self.id2,
                                       replace = ["acronym", "website"])
@@ -1534,6 +1533,25 @@ class MergeOrganisationsTests(unittest.TestCase):
         self.assertEqual(org2.acronym, "MTOrg")
         self.assertEqual(org2.country, "US")
         self.assertEqual(org2.website, "http://www.example.com")
+
+    # -------------------------------------------------------------------------
+    def testMergeReplaceUnique(self):
+        """ Test merge with replace of a unique-field """
+
+        success = self.resource.merge(self.id1, self.id2,
+                                      replace = ["name"])
+        self.assertTrue(success)
+        org1, org2 = self.get_records()
+
+        self.assertNotEqual(org1, None)
+        self.assertNotEqual(org2, None)
+
+        self.assertFalse(org1.deleted)
+        self.assertTrue(org2.deleted)
+        self.assertEqual(str(self.id1), str(org2.deleted_rb))
+
+        self.assertEqual(org1.name, "Merger Test Organisation")
+        self.assertEqual(org2.name, "Merge Test Organisation")
 
     # -------------------------------------------------------------------------
     def testMergeReplaceAndUpdate(self):
@@ -2142,6 +2160,109 @@ class ResourceGetTests(unittest.TestCase):
         current.auth.override = False
 
 # =============================================================================
+class ResourceLazyVirtualFieldsSupportTests(unittest.TestCase):
+    """ Test support for lazy virtual fields """
+
+    def setUp(self):
+
+        current.auth.override = True
+        table = current.s3db.pr_person
+        if not hasattr(table, "name"):
+            table.name = Field.Lazy(self.lazy_name)
+        self.record_id = None
+
+    def lazy_name(self, row):
+        """ Dummy lazy field """
+
+        self.record_id = row.pr_person.id
+        return "%s %s" % (row.pr_person.first_name,
+                          row.pr_person.last_name)
+
+    def testLazyVirtualFieldsResolve(self):
+        """
+            Test whether field selectors for lazy virtual fields
+            can be properly resolved
+        """
+
+        resource = current.s3db.resource("pr_person")
+
+        from s3.s3resource import S3ResourceField
+        rfield = S3ResourceField(resource, "name")
+        self.assertEqual(rfield.field, None)
+        self.assertEqual(rfield.ftype, "virtual")
+
+    def testLazyVirtualFieldsExtract(self):
+        """
+            Test whether values for lazy virtual fields can be extracted
+        """
+
+        self.record_id = None
+
+        resource = current.s3db.resource("pr_person")
+        rows = resource.select(limit=1)
+        row = rows[0]
+        self.assertTrue("name" in row)
+        self.assertTrue(callable(row["name"]))
+
+        # lazy field not called in select
+        self.assertEqual(self.record_id, None)
+
+        from s3.s3resource import S3ResourceField
+        rfield = S3ResourceField(resource, "name")
+        name = rfield.extract(row)
+        self.assertEqual(name, "%s %s" % (row.first_name, row.last_name))
+
+        # now lazy field has been called in extract
+        self.assertEqual(self.record_id, row.id)
+
+        data = resource.extract(rows, ["name"])
+        item = data[0]
+        self.assertTrue(isinstance(item, Storage))
+        self.assertTrue("pr_person.name" in item)
+        self.assertEqual(item["pr_person.name"], "%s %s" % (row.first_name, row.last_name))
+
+    def testLazyVirtualFieldsFilter(self):
+        """
+            Test whether S3ResourceQueries work with lazy virtual fields
+        """
+
+        resource = current.s3db.resource("pr_person")
+
+        from s3.s3resource import S3FieldSelector as FS
+        query = FS("name").like("Admin%")
+        resource.add_filter(query)
+
+        rows = resource.select()
+        data = resource.extract(rows, ["name", "first_name", "last_name"])
+        for item in data:
+            self.assertTrue("pr_person.name" in item)
+            self.assertEqual(item["pr_person.name"][:5], "Admin")
+            self.assertEqual(item["pr_person.name"], "%s %s" % (
+                             item["pr_person.first_name"],
+                             item["pr_person.last_name"]))
+
+    def testLazyVirtualFieldsURLFilter(self):
+        """
+            Test whether URL filters work with lazy virtual fields
+        """
+
+        vars = Storage({"person.name__like": "Admin*"})
+        resource = current.s3db.resource("pr_person", vars=vars)
+
+        rows = resource.select()
+        data = resource.extract(rows, ["name", "first_name", "last_name"])
+        for item in data:
+            self.assertTrue("pr_person.name" in item)
+            self.assertEqual(item["pr_person.name"][:5], "Admin")
+            self.assertEqual(item["pr_person.name"], "%s %s" % (
+                             item["pr_person.first_name"],
+                             item["pr_person.last_name"]))
+
+    def tearDown(self):
+
+        current.auth.override = False
+
+# =============================================================================
 def run_suite(*test_classes):
     """ Run the test suite """
 
@@ -2171,7 +2292,7 @@ if __name__ == "__main__":
         URLFilterSerializerTests,
 
         ResourceFieldTests,
-
+        ResourceLazyVirtualFieldsSupportTests,
         ResourceDataObjectAPITests,
 
         ResourceDataAccessTests,

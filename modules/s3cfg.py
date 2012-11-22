@@ -64,6 +64,7 @@ class S3Config(Storage):
         self.inv = Storage()
         self.irs = Storage()
         self.org = Storage()
+        self.pr = Storage()
         self.proc = Storage()
         self.project = Storage()
         self.req = Storage()
@@ -157,6 +158,14 @@ class S3Config(Storage):
         return self.auth.get("registration_requires_verification", False)
     def get_auth_registration_requires_approval(self):
         return self.auth.get("registration_requires_approval", False)
+    def get_auth_registration_link_user_to(self):
+        """
+            Link User accounts to none or more of:
+            * Staff
+            * Volunteer
+            * Member
+        """
+        return self.auth.get("registration_link_user_to", None)
     def get_auth_opt_in_team_list(self):
         return self.auth.get("opt_in_team_list", [])
     def get_auth_opt_in_to_email(self):
@@ -379,6 +388,11 @@ class S3Config(Storage):
     def get_gis_building_name(self):
         " Display Building Name when selecting Locations "
         return self.gis.get("building_name", True)
+    def get_gis_check_within_parent_boundaries(self):
+        """
+            Whether location Lat/Lons should be within the boundaries of the parent
+        """
+        return self.gis.get("check_within_parent_boundaries", True)
     def get_gis_latlon_selector(self):
         " Display a Lat/Lon boxes when selecting Locations "
         return self.gis.get("latlon_selector", True)
@@ -641,6 +655,16 @@ class S3Config(Storage):
     def get_ui_social_buttons(self):
         """ Display social media Buttons in the footer? """
         return self.ui.get("social_buttons", False)
+    
+    def get_ui_crud_form(self, tablename):
+        """ Get custom crud_forms for diffent tables """
+        return self.ui.get("crud_form_%s" % tablename, None)
+    
+    def ui_customize(self, tablename):
+        """ Customizes field settings on a table"""
+        customize = self.ui.get("customize_%s" % tablename)
+        if customize:
+            customize()
 
     # =========================================================================
     # Messaging
@@ -802,11 +826,23 @@ class S3Config(Storage):
 
     # -------------------------------------------------------------------------
     # Human Resource Management
+    def get_hrm_staff_label(self):
+        """
+            Label for 'Staff'
+        """
+        return current.T(self.hrm.get("staff_label", "Staff"))
+
     def get_hrm_email_required(self):
         """
             If set to True then Staff & Volunteers require an email address
         """
         return self.hrm.get("email_required", True)
+
+    def get_hrm_org_required(self):
+        """
+            If set to True then Staff & Volunteers require an Organisation
+        """
+        return self.hrm.get("org_required", True)
 
     def get_hrm_deletable(self):
         """
@@ -916,6 +952,28 @@ class S3Config(Storage):
     def get_inv_collapse_tabs(self):
         return self.inv.get("collapse_tabs", True)
 
+    def get_inv_facility_label(self):
+        return self.inv.get("facility_label", current.T("Warehouse"))
+
+    def get_inv_direct_stock_edits(self):
+        """
+            Can Stock levels be adjusted directly?
+            - defaults to False
+        """
+        return self.inv.get("direct_stock_edits", False)
+
+    def get_inv_stock_count(self):
+        """
+            Call Stock Adjustments 'Stock Counts'
+        """
+        return self.inv.get("stock_count", True)
+
+    def get_inv_track_pack_values(self):
+        """
+            Whether or not Pack values are tracked
+        """
+        return self.inv.get("track_pack_values", True)
+
     def get_inv_item_status(self):
         """
             Item Statuses which can also be Sent Shipment Types
@@ -1000,6 +1058,24 @@ class S3Config(Storage):
         """
         return current.T(self.org.get("site_label", "Facility"))
 
+    def get_org_site_inv_req_tabs(self):
+        """
+            Whether Sites should have Tabs for Inv/Req
+        """
+        return self.org.get("site_inv_req_tabs", True)
+
+    def get_org_site_autocomplete(self):
+        """
+            Whether site_id fields should use an Autocomplete instead of a dropdown
+        """
+        return self.org.get("site_autocomplete", False)
+
+    def get_org_site_address_autocomplete(self):
+        """
+            Whether site_id Autocomplete fields should search Address fields as well as name
+        """
+        return self.org.get("site_address_autocomplete", False)
+
     def get_org_summary(self):
         """
             Whether to use Summary fields for Organisation/Office:
@@ -1010,40 +1086,35 @@ class S3Config(Storage):
     def set_org_dependent_field(self,
                                 tablename=None,
                                 fieldname=None,
-                                enable_field =True):
+                                enable_field=True):
         """
             Enables/Disables optional fields according to a user's Organisation
             - must specify either field or tablename/fieldname
                                            (e.g. for virtual fields)
         """
 
-        auth = current.auth
-        if auth.s3_has_role(auth.get_system_roles().ADMIN):
-            # Admins see all fields
-            enabled = True
-        else:
-            # Default to disabled
-            enabled = False
-
-        #elif not tablename or not fieldname:
-        #    raise SyntaxError
-
+        enabled = False
         dependent_fields = self.org.get("dependent_fields", None)
-        if dependent_fields and not enabled:
+        if dependent_fields:
             org_name_list = dependent_fields.get("%s.%s" % (tablename,
                                                             fieldname),
                                                  None)
 
             if org_name_list:
-                s3db = current.s3db
-                otable = s3db.org_organisation
-                root_org_id = auth.root_org()
-                root_org = current.db(otable.id == root_org_id).select(otable.name,
-                                                                       limitby=(0, 1),
-                                                                       cache=s3db.cache
-                                                                       ).first()
-                if root_org:
-                    enabled = root_org.name in org_name_list
+                auth = current.auth
+                if auth.s3_has_role(auth.get_system_roles().ADMIN):
+                    # Admins see all fields unless disabled for all orgs in this deployment
+                    enabled = True
+                else:
+                    s3db = current.s3db
+                    otable = s3db.org_organisation
+                    root_org_id = auth.root_org()
+                    root_org = current.db(otable.id == root_org_id).select(otable.name,
+                                                                           limitby=(0, 1),
+                                                                           cache=s3db.cache
+                                                                           ).first()
+                    if root_org:
+                        enabled = root_org.name in org_name_list
 
         if enable_field:
             field = current.s3db[tablename][fieldname]
@@ -1051,6 +1122,15 @@ class S3Config(Storage):
             field.writable = enabled
 
         return enabled
+
+    # -------------------------------------------------------------------------
+    # Persons
+    def get_pr_request_dob(self):
+        """ Include Date of Birth in the AddPersonWidget """
+        return self.pr.get("request_dob", True)
+    def get_pr_request_gender(self):
+        """ Include Gender in the AddPersonWidget """
+        return self.pr.get("request_gender", True)
 
     # -------------------------------------------------------------------------
     # Proc
@@ -1146,7 +1226,9 @@ class S3Config(Storage):
         return self.req.get("type_inv_label", current.T("Warehouse Stock"))
     def get_req_type_hrm_label(self):
         return self.req.get("type_hrm_label", current.T("People"))
-
+    def get_req_date_writable(self):
+        """ Whether Request Date should be manually editable """
+        return self.req.get("date_writable", True)
     def get_req_status_writable(self):
         """ Whether Request Status should be manually editable """
         return self.req.get("status_writable", True)
@@ -1157,21 +1239,52 @@ class S3Config(Storage):
         """ Whether People Quantities should be manually editable """
         return self.req.get("skill_quantities_writable", False)
     def get_req_multiple_req_items(self):
+        """
+            Can a Request have multiple line items?
+            - e.g. ICS says that each request should be just for items of a single Type
+        """
         return self.req.get("multiple_req_items", True)
     def get_req_show_quantity_transit(self):
         return self.req.get("show_quantity_transit", True)
+    def get_req_prompt_match(self):
+        """
+            Whether a Requester is prompted to match each line item in an Item request
+        """
+        return self.req.get("prompt_match", True)
     def get_req_use_commit(self):
+        """
+            Whether there is a Commit step in Requests Management
+        """
         return self.req.get("use_commit", True)
+    def get_req_requester_optional(self):
+        return self.req.get("requester_optional", False)
+    def get_req_ask_security(self):
+        """
+            Should Requests ask whether Security is required?
+        """
+        return self.req.get("ask_security", False)
+    def get_req_ask_transport(self):
+        """
+            Should Requests ask whether Transportation is required?
+        """
+        return self.req.get("ask_transport", False)
     def get_req_req_crud_strings(self, type = None):
         return self.req.get("req_crud_strings") and \
                self.req.req_crud_strings.get(type, None)
-    def get_supply_use_alt_name(self):
-        return self.supply.get("use_alt_name", True)
     def get_req_use_req_number(self):
         return self.req.get("use_req_number", True)
     def get_req_generate_req_number(self):
         return self.req.get("generate_req_number", True)
     def get_req_req_type(self):
+        """
+            The Types of Request which can be made.
+            Select one or more from:
+            * People
+            * Stock
+            * Summary
+            * Other
+            tbc: Assets, Shelter, Food
+        """
         return self.req.get("req_type", ["Stock", "People", "Other"])
     def get_req_form_name(self):
         return self.req.get("req_form_name", "Requisition Form")
@@ -1182,6 +1295,8 @@ class S3Config(Storage):
     # Supply
     def get_supply_catalog_default(self):
         return self.inv.get("catalog_default", "Default")
+    def get_supply_use_alt_name(self):
+        return self.supply.get("use_alt_name", True)
 
     # -------------------------------------------------------------------------
     # Hospital Registry

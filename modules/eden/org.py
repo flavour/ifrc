@@ -1254,7 +1254,16 @@ class S3SiteModel(S3Model):
                                   *s3_ownerstamp())
 
         # ---------------------------------------------------------------------
-        org_site_label = current.deployment_settings.get_org_site_label()
+        settings = current.deployment_settings
+        org_site_label = settings.get_org_site_label()
+        if settings.get_org_site_autocomplete():
+            widget=S3SiteAutocompleteWidget(),
+            comment=DIV(_class="tooltip",
+                        _title="%s|%s" % (org_site_label,
+                                          T("Enter some characters to bring up a list of possible matches")))
+        else:
+            widget = None
+            comment = None
         site_id = self.super_link("site_id", "org_site",
                                   #writable = True,
                                   #readable = True,
@@ -1263,11 +1272,8 @@ class S3SiteModel(S3Model):
                                   represent=org_site_represent,
                                   orderby="org_site.name",
                                   sort=True,
-                                  # Comment these to use a Dropdown & not an Autocomplete
-                                  widget=S3SiteAutocompleteWidget(),
-                                  comment=DIV(_class="tooltip",
-                                                _title="%s|%s" % (org_site_label,
-                                                                  T("Enter some characters to bring up a list of possible matches")))
+                                  widget=widget,
+                                  comment=comment
                                   )
 
         # Components
@@ -1436,6 +1442,9 @@ class S3FacilityModel(S3Model):
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
+        super_link = self.super_link
+
+        NONE = current.messages.NONE
 
         # ---------------------------------------------------------------------
         # Facility Types (generic)
@@ -1475,7 +1484,9 @@ class S3FacilityModel(S3Model):
         #
         tablename = "org_facility"
         table = define_table(tablename,
-                             self.super_link("site_id", "org_site"),
+                             super_link("doc_id", "doc_entity"),
+                             super_link("pe_id", "pr_pentity"),
+                             super_link("site_id", "org_site"),
                              Field("name", notnull=True,
                                    length=64, # Mayon Compatibility
                                    label=T("Name")),
@@ -1488,6 +1499,7 @@ class S3FacilityModel(S3Model):
                                    # @ToDo: Deployment Setting to add validator to make these unique
                                    #notnull=True,
                                    #unique=True,
+                                   represent = lambda v: v or NONE,
                                    label=T("Code")),
                              Field("facility_type_id", "list:reference org_facility_type",
                                    requires=IS_NULL_OR(
@@ -1508,6 +1520,27 @@ class S3FacilityModel(S3Model):
                                             #default_from_profile=True)
                                 ),
                              self.gis_location_id(),
+                             Field("opening_times",
+                                   represent = lambda v: v or NONE,
+                                   label=T("Opening Times")),
+                             Field("contact",
+                                   represent = lambda v: v or NONE,
+                                   label=T("Contact")),
+                             Field("phone1",
+                                   label=T("Phone 1"),
+                                   represent = lambda v: v or NONE,
+                                   requires=IS_NULL_OR(s3_phone_requires)),
+                             Field("phone2",
+                                   label=T("Phone 2"),
+                                   represent = lambda v: v or NONE,
+                                   requires=IS_NULL_OR(s3_phone_requires)),
+                             Field("email",
+                                   label=T("Email"),
+                                   represent = lambda v: v or NONE,
+                                   requires=IS_NULL_OR(IS_EMAIL())),
+                             Field("website",
+                                   represent = lambda v: v or NONE,
+                                   label=T("Website")),
                              Field("obsolete", "boolean",
                                    label=T("Obsolete"),
                                    represent=lambda bool: \
@@ -1525,6 +1558,7 @@ class S3FacilityModel(S3Model):
             title_display=T("Facility Details"),
             title_list=T("Facilities"),
             title_update=T("Edit Facility"),
+            title_map=T("Map of Facilities"),
             title_search=T("Search Facilities"),
             title_upload=T("Import Facilities"),
             subtitle_create=T("Add New Facility"),
@@ -1536,8 +1570,101 @@ class S3FacilityModel(S3Model):
             msg_record_deleted=T("Facility deleted"),
             msg_list_empty=T("No Facilities currently registered"))
 
+        # Search method
+        def get_facility_opts():
+            table = self.org_facility_type
+            rows = db(table.deleted == False).select(table.name)
+            opts = {}
+            for row in rows:
+                name = row.name
+                opts[name] = name
+            return opts
+
+        org_facility_search = [
+            S3SearchSimpleWidget(
+                name="facility_search_advanced",
+                label=T("Name, Address, Organization and/or Code"),
+                comment=T("To search for a facility, enter the name, address or code of the facility, or the organisation name or acronym, separated by spaces. You may use % as wildcard. Press 'Search' without input to list all facilities."),
+                field=["name",
+                       "code",
+                       "location_id$address",
+                       "organisation_id$name",
+                       "organisation_id$acronym"
+                       ]
+            ),
+            S3SearchOptionsWidget(
+                name="facility_search_type",
+                label=T("Type"),
+                field="facility_type_id",
+                options = get_facility_opts,
+                cols=2,
+            ),
+            #S3SearchOptionsWidget(
+            #  name="facility_search_L1",
+            #  field="location_id$L1",
+            #  location_level="L1",
+            #  cols = 3,
+            #),
+            #S3SearchOptionsWidget(
+            #  name="facility_search_L2",
+            #  field="location_id$L2",
+            #  location_level="L2",
+            #  cols = 3,
+            #),
+            S3SearchOptionsWidget(
+                name="facility_search_L3",
+                field="location_id$L3",
+                location_level="L3",
+                cols = 3,
+            ),
+            S3SearchOptionsWidget(
+                name="facility_search_L4",
+                field="location_id$L4",
+                location_level="L4",
+                cols = 3,
+            ),
+            ]
+
+        report_fields = ["name",
+                         "facility_type_id",
+                         "organisation_id",
+                         #"location_id$L1",
+                         #"location_id$L2",
+                         "location_id$L3",
+                         "location_id$L4",
+                         ]
+        settings = current.deployment_settings
+        if settings.has_module("req"):
+            # Add Req virtual fields
+            table.virtualfields.append(self.req_site_virtualfields(tablename))
+            widget = S3SearchOptionsWidget(
+                        name="facility_search_reqs",
+                        field="reqs",
+                        label = T("Highest Priority Open Requests"),
+                        options = self.req_priority_opts,
+                        cols = 3,
+                      )
+            org_facility_search.append(widget)
+            # @ToDo: Report should show Closed Requests?
+            #report_fields.append((T("High Priority Open Requests"), "reqs"))
+
         configure(tablename,
-                  super_entity="org_site"
+                  super_entity=("org_site", "doc_entity", "pr_pentity"),
+                  deduplicate=self.org_facility_duplicate,
+                  search_method=S3Search(advanced=org_facility_search),
+                  report_options = Storage(
+                    search=org_facility_search,
+                    rows=report_fields,
+                    cols=report_fields,
+                    #facts=report_fields,
+                    #methods=["count", "list", "sum"],
+                    fact = [("id", "count", T("Number of facilities")),
+                            ("name", "list", T("List of facilities"))],
+                    defaults=Storage(rows="location_id$L4",
+                                     cols="facility_type_id",
+                                     fact="name",
+                                     aggregate="count")
+                    ),
                   )
 
         # ---------------------------------------------------------------------
@@ -1545,6 +1672,29 @@ class S3FacilityModel(S3Model):
         #
         return Storage(
                 )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def org_facility_duplicate(item):
+        """ Import item de-duplication """
+
+        if item.tablename == "org_facility":
+            table = item.table
+            data = item.data
+            name = data.get("name", None)
+            org = data.get("organisation_id", None)
+            address = data.get("address", None)
+
+            query = (table.name.lower() == name.lower())
+            if org:
+                query = query & (table.organisation_id == org)
+            if address:
+                query = query & (table.address == address)
+            duplicate = current.db(query).select(table.id,
+                                                 limitby=(0, 1)).first()
+            if duplicate:
+                item.id = duplicate.id
+                item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1584,6 +1734,9 @@ class S3FacilityModel(S3Model):
     @staticmethod
     def org_facility_type_multirepresent(opt):
         """ Represent a facility type in list views """
+
+        if not opt:
+            return current.messages.NONE
 
         db = current.db
         table = db.org_facility_type
@@ -2352,28 +2505,45 @@ def org_site_represent(id, row=None, show_link=True):
     if row:
         db = current.db
         s3db = current.s3db
-        table = s3db.org_site
+        stable = s3db.org_site
         id = row.site_id
     elif id:
         db = current.db
         s3db = current.s3db
-        table = s3db.org_site
-        row = db(table._id == id).select(table.instance_type,
-                                         limitby=(0, 1)).first()
+        stable = s3db.org_site
+        row = db(stable._id == id).select(stable.instance_type,
+                                          limitby=(0, 1)).first()
     else:
         return current.messages.NONE
 
     instance_type = row.instance_type
-    instance_type_nice = table.instance_type.represent(instance_type)
+    instance_type_nice = stable.instance_type.represent(instance_type)
 
     try:
         table = s3db[instance_type]
     except:
         return current.messages.UNKNOWN_OPT
 
-    r = db(table.site_id == id).select(table.id,
-                                       table.name,
-                                       limitby=(0, 1)).first()
+    if instance_type == "org_facility":
+        # Lookup Facility Type
+        r = db(table.site_id == id).select(table.id,
+                                           table.name,
+                                           table.facility_type_id,
+                                           limitby=(0, 1)).first()
+        try:
+            if r.facility_type_id:
+                facility_type = r.facility_type_id[0]
+                table = s3db.org_facility_type
+                type = db(table.id == facility_type).select(table.name,
+                                                            limitby=(0, 1),
+                                                            ).first().name
+                instance_type_nice = current.T(type)
+        except:
+            return current.messages.UNKNOWN_OPT
+    else:
+        r = db(table.site_id == id).select(table.id,
+                                           table.name,
+                                           limitby=(0, 1)).first()
 
     try:
         if r.name:
@@ -2393,7 +2563,7 @@ def org_site_represent(id, row=None, show_link=True):
 
 # =============================================================================
 def org_rheader(r, tabs=[]):
-    """ Organisation/Office page headers """
+    """ Organisation/Office/Facility page headers """
 
     if r.representation != "html":
         # RHeaders only used in interactive views
@@ -2430,6 +2600,8 @@ def org_rheader(r, tabs=[]):
                     (T("User Roles"), "roles"),
                     #(T("Tasks"), "task"),
                    ]
+            if settings.has_module("asset"):
+                tabs.insert(6,(T("Assets"), "asset"))
         rheader_tabs = s3_rheader_tabs(r, tabs)
 
         if table.multi_sector_id.readable and record.multi_sector_id:
@@ -2464,14 +2636,16 @@ def org_rheader(r, tabs=[]):
             rheader.append(rData)
         rheader.append(rheader_tabs)
 
-    elif tablename == "org_office":
+    elif tablename in ("org_office", "org_facility"):
+        STAFF = settings.get_hrm_staff_label()
         tabs = [(T("Basic Details"), None),
                 #(T("Contact Data"), "contact"),
-                (T("Staff"), "human_resource"),
-
+                (STAFF, "human_resource"),
                ]
         if current.auth.s3_has_permission("create", "hrm_human_resource"):
-            tabs.append((T("Assign Staff"), "human_resource_site"))
+            tabs.append((T("Assign %(staff)s") % dict(staff=STAFF), "human_resource_site"))
+        if settings.has_module("asset"):
+            tabs.append((T("Assets"), "asset"))
         if settings.has_module("inv"):
             tabs = tabs + s3db.inv_tabs(r)
         if settings.has_module("req"):
@@ -2479,9 +2653,14 @@ def org_rheader(r, tabs=[]):
         tabs.append((T("Attachments"), "document"))
         tabs.append((T("User Roles"), "roles"))
 
-        rheader_fields = [["name", "organisation_id", "email"],
-                          ["office_type_id", "location_id", "phone1"],
-                          ]
+        if tablename == "org_office":
+            rheader_fields = [["name", "organisation_id", "email"],
+                              ["office_type_id", "location_id", "phone1"],
+                              ]
+        else:
+            rheader_fields = [["name", "organisation_id", "email"],
+                              ["facility_type_id", "location_id", "phone1"],
+                              ]
 
         rheader_fields, rheader_tabs = S3ResourceHeader(rheader_fields,
                                                         tabs)(r, as_div=True)
@@ -2495,10 +2674,6 @@ def org_rheader(r, tabs=[]):
             rheader = DIV(rheader_fields)
 
         rheader.append(rheader_tabs)
-
-        #if r.component and r.component.name == "req":
-            # Inject the helptext script
-            #rheader.append(s3.req_helptext_script)
 
     elif tablename in ("org_organisation_type", "org_office_type"):
         tabs = [(T("Basic Details"), None),

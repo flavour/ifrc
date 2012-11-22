@@ -37,14 +37,30 @@
 
 __all__ = ["S3Msg", "S3Compose"]
 
+import base64
 import datetime
 import string
 import urllib
-from urllib2 import urlopen
+import urllib2
+
+try:
+    import json # try stdlib (Python 2.6)
+except ImportError:
+    try:
+        import simplejson as json # try external module
+    except:
+        import gluon.contrib.simplejson as json # fallback to pure-Python module
+
+try:
+    from lxml import etree
+except ImportError:
+    print >> sys.stderr, "ERROR: lxml module needed for XML handling"
+    raise
 
 from gluon import current, redirect
 from gluon.html import *
 
+from s3codec import S3Codec
 from s3crud import S3CRUD
 from s3utils import s3_debug
 from s3validators import IS_ONE_OF, IS_ONE_OF_EMPTY
@@ -902,15 +918,26 @@ class S3Msg(object):
 
         mobile = self.sanitise_phone(mobile)
 
+        sms_api_post_config[sms_api.message_variable] = text
+        sms_api_post_config[sms_api.to_variable] = str(mobile)
+
+        request = urllib2.Request(sms_api.url)
+        query = urllib.urlencode(sms_api_post_config)
+        if sms_api.username and sms_api.password:
+            base64string = base64.encodestring("%s:%s" % (sms_api.username, sms_api.password)).replace("\n", "")
+            request.add_header("Authorization", "Basic %s" % base64string)
         try:
-            sms_api_post_config[sms_api.message_variable] = text
-            sms_api_post_config[sms_api.to_variable] = str(mobile)
-            query = urllib.urlencode(sms_api_post_config)
-            request = urllib.urlopen(sms_api.url, query)
-            output = request.read()
-            return True
-        except:
+            result = urllib2.urlopen(request, query)
+            output = result.read()
+        except urllib2.HTTPError, e:
             return False
+        else:
+            # @ToDo: parse result
+            # if service == MobileCommons:
+            # Good = <response success="true"></response>
+            # Bad = <response success="false"><errror id="id" message="message"></response>
+            # http://www.mobilecommons.com/mobile-commons-api/rest/#errors
+            return True
 
     # -------------------------------------------------------------------------
     def send_sms_via_smtp(self, mobile, text=""):
@@ -984,7 +1011,7 @@ class S3Msg(object):
                                        ("outgoing", "1"),
                                        ("row_id", row_id)
                                       ])
-            xml = urlopen("%s?%s" % (base_url, params)).read()
+            xml = urllib2.urlopen("%s?%s" % (base_url, params)).read()
             # Parse Response (actual message is sent as a response to the POST which will happen in parallel)
             #root = etree.fromstring(xml)
             #elements = root.getchildren()
@@ -1237,7 +1264,7 @@ class S3Msg(object):
 
         return True
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def fetch_inbound_email(self, username):
         """
             This is a simple mailbox polling script for the Messaging Module.
@@ -1432,7 +1459,8 @@ class S3Msg(object):
                 typ, response = M.store(number, "+FLAGS", r"(\Deleted)")
             M.close()
             M.logout()
-    # =============================================================================
+
+    # -------------------------------------------------------------------------
     @staticmethod
     def source_id(username):
         """ Extracts the source_task_id from a given message. """
@@ -1443,35 +1471,97 @@ class S3Msg(object):
         for record in records:
             if record.vars.split(":") == ["{\"username\""," \"%s\"}" %username] :
                 return record.id
-    # =============================================================================
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def mcommons_inbound_sms(campaign_id):
+        """
+            Fetches the inbound SMS from Mobile Commons API
+            http://www.mobilecommons.com/mobile-commons-api/rest/#ListIncomingMessages
+        """
+
+        db = current.db
+        s3db = current.s3db
+        table = s3db.msg_mcommons_inbound_settings
+        query = (table.campaign_id == campaign_id)
+        account = db(query).select(limitby=(0, 1)).first()
+        if account:
+            url = account.url
+            username = account.username
+            password = account.password
+            _query = account.query
+            timestamp = account.timestmp
+
+            url = "%s?campaign_id=%s" % (url, campaign_id)
+            if timestamp:
+                url = "%s&start_time=%s" % (url, timestamp)
+            if _query:
+                url = "%s&query=%s" % (url, _query)
+
+            # Create a password manager
+            passman = urllib2.HTTPPasswordMgrWithDefaultRealm()
+            passman.add_password(None, url, username, password)
+
+            # Create the AuthHandler
+            authhandler = urllib2.HTTPBasicAuthHandler(passman)
+            opener = urllib2.build_opener(authhandler)
+            urllib2.install_opener(opener)
+
+            # Update the timestamp
+            # NB Ensure MCommons account is in UTC
+            db(query).update(timestmp = current.request.utcnow)
+
+            table = s3db.msg_inbox
+            try:
+                _response = urllib2.urlopen(url)
+                sms_xml = _response.read()
+                tree = etree.XML(sms_xml)
+                messages = tree.findall(".//message")
+                iinsert = table.insert
+                decode = S3Codec.decode_iso_datetime
+                for message in messages:
+                    sender_phone = message.find("phone_number").text
+                    body = message.find("body").text
+                    received_on = decode(message.find("received_at").text)
+                    iinsert(channel = "MCommons: %s" % campaign_id,
+                            sender_phone = sender_phone,
+                            body = body,
+                            received_on = received_on,
+                            )
+
+            except urllib2.HTTPError, e:
+                return "Error:" + str(e.code)
+            return
+
+    # -------------------------------------------------------------------------
     @staticmethod
     def twilio_inbound_sms(account_name):
         """ Fetches the inbound sms from twilio API."""
 
-        s3db = current.s3db
         db = current.db
+        s3db = current.s3db
         ttable = s3db.msg_twilio_inbound_settings
         query = (ttable.account_name == account_name) & \
-            (ttable.deleted == False)
-        account = db(query).select(limitby=(0,1)).first()
+                (ttable.deleted == False)
+        account = db(query).select(limitby=(0, 1)).first()
         if account:
             url = account.url
             account_sid = account.account_sid
             auth_token = account.auth_token
 
-            url += "/%s/SMS/Messages.json"%str(account_sid)
+            # @ToDo: Do we really have to download *all* messages every time
+            # & then only import the ones we don't yet have?
+            url += "/%s/SMS/Messages.json" % str(account_sid)
 
-            import urllib, urllib2
-            # this creates a password manager
+            # Create a password manager
             passman = urllib2.HTTPPasswordMgrWithDefaultRealm()
             passman.add_password(None, url, account_sid, auth_token)
 
-            # create the AuthHandler
+            # Create the AuthHandler
             authhandler = urllib2.HTTPBasicAuthHandler(passman)
             opener = urllib2.build_opener(authhandler)
             urllib2.install_opener(opener)
 
-            downloaded_sms = []
             itable = s3db.msg_twilio_inbox
             ltable = s3db.msg_log
             query = itable.deleted == False
@@ -1479,7 +1569,6 @@ class S3Msg(object):
             downloaded_sms = [message.sid for message in messages]
             try:
                 smspage = urllib2.urlopen(url)
-                import json
                 minsert = itable.insert
                 linsert = ltable.insert
                 sms_list = json.loads(smspage.read())
@@ -1495,7 +1584,6 @@ class S3Msg(object):
 
             except urllib2.HTTPError, e:
                 return "Error:" + str(e.code)
-            db.commit()
             return
 
 # =============================================================================

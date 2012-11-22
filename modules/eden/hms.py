@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-""" Sahana Eden Person Registry Model
+""" Sahana Eden Hospital Management System Model
 
     @copyright: 2009-2012 (c) Sahana Software Foundation
     @license: MIT
@@ -63,6 +63,7 @@ class HospitalDataModel(S3Model):
         human_resource_id = self.hrm_human_resource_id
 
         messages = current.messages
+        NONE = messages["NONE"]
         UNKNOWN_OPT = messages.UNKNOWN_OPT
 
         add_component = self.add_component
@@ -86,60 +87,81 @@ class HospitalDataModel(S3Model):
             12: T("Health center with beds"),
             13: T("Health center without beds"),
             21: T("Dispensary"),
+            31: T("Long-term care"),
             98: T("Other"),
-            99: T("Unknown type of facility"),
+            99: T("Unknown"),
         } #: Facility Type Options
+
+        # Status opts defined here for use in Search widgets
+        hms_facility_status_opts = {
+            1: T("Normal"),
+            2: T("Compromised"),
+            3: T("Evacuating"),
+            4: T("Closed"),
+            99: T("No Response")
+        } #: Facility Status Options
+
+        hms_power_supply_type_opts = {
+            1: T("Grid"),
+            2: T("Generator"),
+            98: T("Other"),
+            99: T("None"),
+        } #: Power Supply Type Options
 
         tablename = "hms_hospital"
         table = define_table(tablename,
                              super_link("doc_id", "doc_entity"),
                              super_link("pe_id", "pr_pentity"),
                              super_link("site_id", "org_site"),
-                             Field("paho_uuid",
-                                   unique=True,
-                                   length=128,
+                             Field("paho_uuid", unique=True, length=128,
+                                   readable=False,
+                                   writable=False,
                                    requires = IS_NULL_OR(IS_NOT_ONE_OF(db,
                                                 "%s.paho_uuid" % tablename)),
                                    label = T("PAHO UID")),
 
                              # UID assigned by Local Government
-                             Field("gov_uuid",
-                                   unique=True,
-                                   length=128,
-                                   requires = IS_NULL_OR(IS_NOT_ONE_OF(db,
-                                                "%s.gov_uuid" % tablename)),
+                             Field("gov_uuid", unique=True, length=128,
+                                   readable=False,
+                                   writable=False,
+                                   requires = IS_NULL_OR(
+                                                IS_NOT_ONE_OF(db,
+                                                    "%s.gov_uuid" % tablename)
+                                                ),
                                    label = T("Government UID")),
 
                              # Alternate ids found in data feeds
-                             Field("other_ids",
-                                   length=128),
-
-                             # Mayon compatibility
-                             #Field("code",
-                             #      length=10,
-                             #      notnull=True,
-                             #      unique=True, label=T("Code")),
+                             #Field("other_ids",
+                             #      length=128),
 
                              # Name of the facility
-                             Field("name",
-                                   notnull=True,
+                             Field("name", notnull=True,
                                    length=64, # Mayon compatibility
                                    label = T("Name")),
 
                              # Alternate name, or name in local language
-                             Field("aka1", label = T("Other Name")),
+                             Field("aka1",
+                                   label = T("Other Name")),
 
                              # Alternate name, or name in local language
-                             Field("aka2",label = T("Other Name")),
+                             Field("aka2",
+                                   readable=False,
+                                   writable=False,
+                                   label = T("Other Name")),
+
+                             # Mayon compatibility
+                             Field("code", length=10,
+                                   #notnull=True, unique=True,
+                                   label=T("Code")),
 
                              Field("facility_type", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                hms_facility_type_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_facility_type_opts)
+                                                ),
                                    default = 1,
                                    label = T("Facility Type"),
                                    represent = lambda opt: \
-                                               hms_facility_type_opts.get(opt,
-                                                        T("not specified"))),
+                                    hms_facility_type_opts.get(opt, NONE)),
                              organisation_id(),
                              location_id(),
 
@@ -172,34 +194,36 @@ class HospitalDataModel(S3Model):
                                    label = T("Fax"),
                                    requires = IS_NULL_OR(s3_phone_requires)),
                              Field("total_beds", "integer",
-                                   readable = False,
+                                   #readable = False,
                                    writable = False,
+                                   represent = lambda v: NONE if v is None else v,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 9999)),
                                    label = T("Total Beds")),
                              Field("available_beds", "integer",
-                                   readable = False,
+                                   #readable = False,
                                    writable = False,
+                                   represent = lambda v: NONE if v is None else v,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 9999)),
                                    label = T("Available Beds")),
                              Field("doctors", "integer",
                                    label = T("Number of doctors"),
                                    requires = IS_NULL_OR(
                                                 IS_INT_IN_RANGE(0, 9999)),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              Field("nurses", "integer",
                                    label = T("Number of nurses"),
                                    requires = IS_NULL_OR(
                                                 IS_INT_IN_RANGE(0, 9999)),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              Field("non_medical_staff", "integer",
                                    requires = IS_NULL_OR(
                                                 IS_INT_IN_RANGE(0, 9999)),
                                    label = T("Number of non-medical staff"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              Field("obsolete", "boolean",
                                    label = T("Obsolete"),
                                    represent = lambda bool: \
-                                     (bool and [T("Obsolete")] or [messages.NONE])[0],
+                                     (bool and [T("Obsolete")] or [NONE])[0],
                                    default = False,
                                    readable = False,
                                    writable = False),
@@ -224,6 +248,8 @@ class HospitalDataModel(S3Model):
             msg_record_deleted = T("Hospital information deleted"),
             msg_list_empty = T("No Hospitals currently registered"))
 
+        #table.virtualfields.append(HMSHospitalVirtualFields())
+
         # Search method
         hms_hospital_search = S3Search(
             #name="hospital_search_simple",
@@ -234,16 +260,50 @@ class HospitalDataModel(S3Model):
                         name="hospital_search_advanced",
                         label=T("Name, Org and/or ID"),
                         comment=T("To search for a hospital, enter any of the names or IDs of the hospital, or the organisation name or acronym, separated by spaces. You may use % as wildcard. Press 'Search' without input to list all hospitals."),
-                        field=["gov_uuid", "name", "aka1", "aka2",
-                            "organisation_id$name", "organisation_id$acronym"]
+                        field=["name",
+                               "code",
+                               #"aka1",
+                               #"aka2",
+                               #"gov_uuid",
+                               "organisation_id$name",
+                               "organisation_id$acronym"
+                               ]
                       ),
-                      # for testing:
                       S3SearchOptionsWidget(
-                        name="hospital_facility_type",
+                        name="hospital_search_facility_type",
                         label=T("Facility Type"),
                         field="facility_type"
                       ),
-                      # for testing:
+                      S3SearchOptionsWidget(
+                        name="hospital_search_L1",
+                        field="location_id$L1",
+                        location_level="L1",
+                        cols = 3,
+                      ),
+                      S3SearchOptionsWidget(
+                        name="hospital_search_L2",
+                        field="location_id$L2",
+                        location_level="L2",
+                        cols = 3,
+                      ),
+                      S3SearchOptionsWidget(
+                        name="hospital_search_L3",
+                        field="location_id$L3",
+                        location_level="L3",
+                        cols = 3,
+                      ),
+                      S3SearchOptionsWidget(
+                        name="hospital_search_facility_status",
+                        label=T("Facility Status"),
+                        field="status.facility_status",
+                        options = hms_facility_status_opts,
+                      ),
+                      S3SearchOptionsWidget(
+                        name="hospital_search_power_supply",
+                        label=T("Power"),
+                        field="status.power_supply_type",
+                        options = hms_power_supply_type_opts,
+                      ),
                       S3SearchMinMaxWidget(
                         name="hospital_search_bedcount",
                         method="range",
@@ -253,19 +313,93 @@ class HospitalDataModel(S3Model):
                       ),
                     ))
 
+        report_fields = ["name",
+                         "facility_type",
+                         #"organisation_id",
+                         "location_id$L1",
+                         "location_id$L2",
+                         "location_id$L3",
+                         "status.facility_status",
+                         "status.power_supply_type",
+                         "total_beds",
+                         "available_beds",
+                         ]
+
         # Resource configuration
         configure(tablename,
                   super_entity=("org_site", "doc_entity", "pr_pentity"),
                   search_method=hms_hospital_search,
+                  deduplicate = self.hms_hospital_duplicate,
+                  onaccept = self.hms_hospital_onaccept,
+                  report_options = Storage(
+                        search=[
+                          S3SearchOptionsWidget(
+                            name="hospital_search_facility_type",
+                            label=T("Facility Type"),
+                            field="facility_type"
+                          ),
+                          S3SearchOptionsWidget(
+                            name="hospital_search_L1",
+                            field="location_id$L1",
+                            location_level="L1",
+                            cols = 3,
+                          ),
+                          S3SearchOptionsWidget(
+                            name="hospital_search_L2",
+                            field="location_id$L2",
+                            location_level="L2",
+                            cols = 3,
+                          ),
+                          S3SearchOptionsWidget(
+                            name="hospital_search_L3",
+                            field="location_id$L3",
+                            location_level="L3",
+                            cols = 3,
+                          ),
+                          S3SearchOptionsWidget(
+                            name="hospital_search_facility_status",
+                            label=T("Facility Status"),
+                            field="status.facility_status",
+                            options = hms_facility_status_opts,
+                          ),
+                          S3SearchOptionsWidget(
+                            name="hospital_search_power_supply",
+                            label=T("Power"),
+                            field="status.power_supply_type",
+                            options = hms_power_supply_type_opts,
+                          ),
+                          S3SearchMinMaxWidget(
+                            name="hospital_search_bedcount",
+                            method="range",
+                            label=T("Total Beds"),
+                            comment=T("Select a range for the number of total beds"),
+                            field="total_beds"
+                          ),
+                        ],
+                        rows=report_fields,
+                        cols=report_fields,
+                        fact=report_fields,
+                        methods=["count", "list", "sum"],
+                        defaults=Storage(rows="location_id$L2",
+                                         cols="status.facility_status",
+                                         fact="name",
+                                         aggregate="count")
+                  ),
                   list_fields=["id",
-                               "gov_uuid",
+                               #"gov_uuid",
                                "name",
                                "facility_type",
-                               "organisation_id",
-                               "location_id",
-                               "phone_exchange",
+                               "status.facility_status",
+                               "status.power_supply_type",
+                               #"organisation_id",
+                               "location_id$L1",
+                               "location_id$L2",
+                               "location_id$L3",
+                               #"phone_exchange",
                                "total_beds",
-                               "available_beds"])
+                               "available_beds",
+                               ]
+                  )
 
         # Reusable field
         hms_hospital_id_comment = S3AddResourceLink(c="hms",
@@ -310,18 +444,21 @@ class HospitalDataModel(S3Model):
             2: T("Insufficient")
         } #: Resource Status Options
 
-        hms_facility_status_opts = {
-            1: T("Normal"),
-            2: T("Compromised"),
-            3: T("Evacuating"),
-            4: T("Closed")
-        } #: Facility Status Options
-
         hms_clinical_status_opts = {
             1: T("Normal"),
             2: T("Full"),
             3: T("Closed")
         } #: Clinical Status Options
+
+        hms_facility_damage_opts = {
+            1: T("Flooding"),
+            2: T("Power Outage"),
+        } #: Facility Damage Options
+
+        hms_gas_supply_type_opts = {
+            98: T("Other"),
+            99: T("None"),
+        } #: Gas Supply Type Options
 
         hms_security_status_opts = {
             1: T("Normal"),
@@ -353,95 +490,158 @@ class HospitalDataModel(S3Model):
             4: T("Closed")
         } #: Morgue Status Options
 
+        def hms_facility_damage_multirepresent(opt):
+            """ Multi Represent """
+            set = hms_facility_damage_opts
+            if isinstance(opt, (list, tuple)):
+                opts = opt
+                try:
+                    vals = [str(set.get(o)) for o in opts]
+                except:
+                    return None
+            elif isinstance(opt, int):
+                opts = [opt]
+                vals = str(set.get(opt))
+            else:
+                return NONE
+
+            if len(opts) > 1:
+                vals = ", ".join(vals)
+            else:
+                vals = len(vals) and vals[0] or ""
+            return vals
+
         tablename = "hms_status"
         table = define_table(tablename,
                              hospital_id(ondelete="CASCADE"),
 
                              # Status of the facility and facility operations
                              Field("facility_status", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_facility_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_facility_status_opts)),
                                    label = T("Facility Status"),
                                    represent = lambda opt: \
-                                               hms_facility_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_facility_status_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
+                             s3_date("date_reopening",
+                                     label=T("Estimated Reopening Date"),
+                                     ),
                              Field("facility_operations", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_resource_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_resource_status_opts)),
                                    label = T("Facility Operations"),
                                    represent = lambda opt: \
-                                               hms_resource_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_resource_status_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
+
+                             # Facility Status Details
+                             Field("damage", "list:integer",
+                                   label=T("Damage sustained"),
+                                   requires=IS_NULL_OR(
+                                                IS_IN_SET(hms_facility_damage_opts,
+                                                          multiple=True)),
+                                   widget=CheckboxesWidgetS3.widget,
+                                   represent = hms_facility_damage_multirepresent,
+                                   ),
+                             Field("power_supply_type", "integer",
+                                   label=T("Power Supply Type"),
+                                   requires=IS_NULL_OR(
+                                                IS_IN_SET(hms_power_supply_type_opts,
+                                                          zero=None)),
+                                   represent = lambda opt: \
+                                    NONE if opt is None else \
+                                        hms_power_supply_type_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
+                             Field("gas_supply_type", "integer",
+                                   label=T("Gas Supply Type"),
+                                   requires=IS_NULL_OR(
+                                                IS_IN_SET(hms_gas_supply_type_opts,
+                                                          zero=None)),
+                                   represent = lambda opt: \
+                                    NONE if opt is None else \
+                                        hms_gas_supply_type_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
+                             Field("gas_supply_capacity", "integer",
+                                   label=T("Gas Supply Left (in hours)"),
+                                   requires=IS_NULL_OR(IS_INT_IN_RANGE(0, 999999))),
 
                              # Clinical status and clinical operations
                              Field("clinical_status", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_clinical_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_clinical_status_opts)),
                                    label = T("Clinical Status"),
                                    represent = lambda opt: \
-                                               hms_clinical_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_clinical_status_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
                              Field("clinical_operations", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_resource_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_resource_status_opts)),
                                    label = T("Clinical Operations"),
                                    represent = lambda opt: \
-                                               hms_resource_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_resource_status_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
                              Field("security_status", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_security_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_security_status_opts)),
                                    label = T("Security Status"),
                                    represent = lambda opt: \
-                                               hms_security_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_security_status_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
 
                              # Staffing status
                              Field("staffing", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_resource_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_resource_status_opts)),
                                    label = T("Staffing Level"),
                                    represent = lambda opt: \
-                                               hms_resource_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_resource_status_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
 
                              # Emergency Room Status
                              Field("ems_status", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_ems_traffic_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_ems_traffic_opts)),
                                    label = T("ER Status"),
                                    represent = lambda opt: \
-                                               hms_ems_traffic_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_ems_traffic_opts.get(opt,
+                                                                 UNKNOWN_OPT)),
                              Field("ems_reason",
                                    length=128,
                                    label = T("ER Status Reason")),
 
                              # Operating Room Status
                              Field("or_status", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                        hms_or_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_or_status_opts)),
                                    label = T("OR Status"),
                                    represent = lambda opt: \
-                                               hms_or_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_or_status_opts.get(opt,
+                                                               UNKNOWN_OPT)),
                              Field("or_reason",
                                    length=128,
                                    label = T("OR Status Reason")),
 
                              # Morgue status and capacity
                              Field("morgue_status", "integer",
-                                   requires = IS_NULL_OR(IS_IN_SET(
-                                                    hms_morgue_status_opts)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_morgue_status_opts)),
                                    label = T("Morgue Status"),
                                    represent = lambda opt: \
-                                               hms_clinical_status_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                    NONE if opt is None else \
+                                        hms_morgue_status_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
                              Field("morgue_units", "integer",
-                                   requires = IS_NULL_OR(
-                                                IS_INT_IN_RANGE(0, 9999)),
+                                   requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 9999)),
                                    label = T("Morgue Units Available"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
 
                              Field("access_status", "text",
                                    label = T("Road Conditions")),
@@ -474,14 +674,19 @@ class HospitalDataModel(S3Model):
                                                             self.pr_person_represent,
                                                             orderby="pr_person.first_name",
                                                             sort=True)),
-                              Field("title", label = T("Job Title")),
-                              Field("phone", label = T("Phone"),
+                              Field("title",
+                                    label = T("Job Title")),
+                              Field("phone",
+                                    label = T("Phone"),
                                     requires = IS_NULL_OR(s3_phone_requires)),
-                              Field("mobile", label = T("Mobile"),
+                              Field("mobile",
+                                    label = settings.get_ui_label_mobile_phone(),
                                     requires = IS_NULL_OR(s3_phone_requires)),
-                              Field("email", label = T("Email"),
+                              Field("email",
+                                    label = T("Email"),
                                     requires = IS_NULL_OR(IS_EMAIL())),
-                              Field("fax", label = T("Fax"),
+                              Field("fax",
+                                    label = T("Fax"),
                                     requires = IS_NULL_OR(s3_phone_requires)),
                               Field("skype", label = T("Skype ID")),
                               Field("website", label=T("Website")),
@@ -512,7 +717,8 @@ class HospitalDataModel(S3Model):
                                "mobile",
                                "email",
                                "fax",
-                               "skype"],
+                               "skype"
+                               ],
                   main="person_id",
                   extra="title")
 
@@ -550,8 +756,8 @@ class HospitalDataModel(S3Model):
                                    default = 6,
                                    label = T("Bed Type"),
                                    represent = lambda opt: \
-                                               hms_bed_type_opts.get(opt,
-                                                                UNKNOWN_OPT)),
+                                        hms_bed_type_opts.get(opt,
+                                                              UNKNOWN_OPT)),
                              s3_datetime(label = T("Date of Report"),
                                          empty=False,
                                          future=0,
@@ -560,17 +766,17 @@ class HospitalDataModel(S3Model):
                                    default = 0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 9999)),
                                    label = T("Baseline Number of Beds"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              Field("beds_available", "integer",
                                    default = 0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 9999)),
                                    label = T("Available Beds"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              Field("beds_add24", "integer",
                                    default = 0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 9999)),
                                    label = T("Additional Beds / 24hrs"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              s3_comments(),
                              *s3_meta_fields())
 
@@ -602,7 +808,8 @@ class HospitalDataModel(S3Model):
                                "date",
                                "beds_baseline",
                                "beds_available",
-                               "beds_add24"],
+                               "beds_add24"
+                               ],
                   main="hospital_id",
                   extra="id")
 
@@ -737,6 +944,42 @@ class HospitalDataModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def hms_hospital_duplicate(item):
+        """
+            Hospital record duplicate detection, used for the deduplicate hook
+
+            @param item: the S3ImportItem to check
+        """
+
+        if item.tablename == "hms_hospital":
+            data = item.data
+            #org = "organisation_id" in data and data.organisation_id
+            address = "address" in data and data.address
+
+            table = item.table
+            query = (table.name == data.name)
+            #if org:
+            #    query = query & (table.organisation_id == org)
+            if address:
+                query = query & (table.address == address)
+            row = current.db(query).select(table.id,
+                                           limitby=(0, 1)).first()
+            if row:
+                item.id = row.id
+                item.method = item.METHOD.UPDATE
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def hms_hospital_onaccept(form):
+        """
+            Update Affiliation, record ownership and component ownership
+        """
+
+        s3db = current.s3db
+        s3db.pr_update_affiliations(s3db.hms_hospital, form.vars)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def hms_bed_capacity_onvalidation(form):
         """ Bed Capacity Validation """
 
@@ -826,49 +1069,59 @@ class CholeraTreatmentCapabilityModel(S3Model):
                                    represent = lambda opt: \
                                                opt and T("yes") or T("no"),
                                    label = T("Cholera-Treatment-Center")),
-                             Field("number_of_patients", "integer", default=0,
+                             Field("number_of_patients", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 999999)),
                                    label = T("Current number of patients"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
-                             Field("cases_24", "integer", default=0,
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
+                             Field("cases_24", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 999999)),
                                    label = T("New cases in the past 24h"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
-                             Field("deaths_24", "integer", default=0,
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
+                             Field("deaths_24", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 999999)),
                                    label = T("Deaths in the past 24h"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              #Field("staff_total", "integer", default=0),
-                             Field("icaths_available", "integer", default=0,
+                             Field("icaths_available", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 99999999)),
                                    label = T("Infusion catheters available"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
-                             Field("icaths_needed_24", "integer", default=0,
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
+                             Field("icaths_needed_24", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 99999999)),
                                    label = T("Infusion catheters needed per 24h"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
-                             Field("infusions_available", "integer", default=0,
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
+                             Field("infusions_available", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 99999999)),
                                    label = T("Infusions available"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
-                             Field("infusions_needed_24", "integer", default=0,
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
+                             Field("infusions_needed_24", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 99999999)),
                                    label = T("Infusions needed per 24h"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              #Field("infset_available", "integer", default=0),
                              #Field("infset_needed_24", "integer", default=0),
-                             Field("antibiotics_available", "integer", default=0,
+                             Field("antibiotics_available", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 99999999)),
                                    label = T("Antibiotics available"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
-                             Field("antibiotics_needed_24", "integer", default=0,
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
+                             Field("antibiotics_needed_24", "integer",
+                                   default=0,
                                    requires = IS_NULL_OR(IS_INT_IN_RANGE(0, 99999999)),
                                    label = T("Antibiotics needed per 24h"),
-                                   represent = lambda v, row=None: IS_INT_AMOUNT.represent(v)),
+                                   represent = lambda v: IS_INT_AMOUNT.represent(v)),
                              Field("problem_types", "list:integer",
-                                   requires = IS_EMPTY_OR(IS_IN_SET(hms_problem_types,
-                                                                    zero=None,
-                                                                    multiple=True)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hms_problem_types,
+                                                          zero=None,
+                                                          multiple=True)),
                                    represent = lambda optlist: \
                                                optlist and ", ".join(map(str,optlist)) or T("N/A"),
                                    label = T("Current problems, categories")),
@@ -1027,6 +1280,29 @@ class HospitalActivityReportModel(S3Model):
             hospital.update_record(modified_on=timestmp)
 
 # =============================================================================
+class HMSHospitalVirtualFields:
+    """
+        Virtual fields as dimension classes for reports
+        - currently unused
+    """
+
+    extra_fields = []
+
+    # -------------------------------------------------------------------------
+    def facility_status(self):
+        """ Facility Status for the Hospital """
+        id = self.hms_hospital.id
+        table = current.s3db.hms_status
+        field = table.facility_status
+        r = current.db(table.hospital_id == id).select(field,
+                                                       limitby=(0, 1)
+                                                       ).first()
+        if r:
+            return s3_unicode(field.represent(r.facility_status))
+        else:
+            return current.messages.NONE
+
+# =============================================================================
 def hms_hospital_rheader(r, tabs=[]):
     """ Page header for component resources """
 
@@ -1082,34 +1358,38 @@ def hms_hospital_rheader(r, tabs=[]):
             status = lambda k: (s is not None and
                                 [stable[k].represent(s[k])] or
                                 [T("n/a")])[0]
-
+            NONE = current.messages.NONE
+            total_beds = hospital.total_beds
+            if total_beds is None:
+                total_beds = NONE
+            available_beds = hospital.available_beds
+            if available_beds is None:
+                available_beds = NONE
             rheader = DIV(TABLE(
-
                 TR(TH("%s: " % T("Name")),
-                    hospital.name,
-                    TH("%s: " % T("EMS Status")),
-                    status("ems_status")),
-
+                      hospital.name,
+                   TH("%s: " % T("Facility Status")),
+                      status("facility_status")
+                   ),
                 TR(TH("%s: " % T("Location")),
-                    ltable[hospital.location_id] and \
-                        ltable[hospital.location_id].name or "unknown",
-                    TH("%s: " % T("Facility Status")),
-                    status("facility_status")),
-
+                      ltable[hospital.location_id] and \
+                      ltable[hospital.location_id].name or "unknown",
+                   TH("%s: " % T("Estimated Reopening Date")),
+                      status("date_reopening")
+                   #TH("%s: " % T("EMS Status")),
+                   #   status("ems_status")
+                   ),
                 TR(TH("%s: " % T("Total Beds")),
-                    hospital.total_beds,
-                    TH("%s: " % T("Clinical Status")),
-                    status("clinical_status")),
-
+                      total_beds,
+                   #TH("%s: " % T("Clinical Status")),
+                   #   status("clinical_status")
+                   ),
                 TR(TH("%s: " % T("Available Beds")),
-                    hospital.available_beds,
-                    TH("%s: " % T("Security Status")),
-                    status("security_status"))
-
-                    ), rheader_tabs)
-
-        if rheader and r.component and r.component.name == "req":
-            rheader.append(s3db.req_helptext_script)
+                      available_beds,
+                   #TH("%s: " % T("Security Status")),
+                   #   status("security_status")
+                   )
+                ), rheader_tabs)
 
     return rheader
 

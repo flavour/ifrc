@@ -11,7 +11,8 @@
          Organisation...................required.....organisation name
          Branch.........................optional.....branch organisation name
          Type...........................optional.....HR type (staff|volunteer|member)
-         Office.........................optional.....office name (required for staff)
+         Office.........................optional.....Facility name
+         Facility Type..................optional.....Office, Facility, Hospital, Shelter, Warehouse
          Office Lat.....................optional.....office latitude
          Office Lon.....................optional.....office longitude
          Office Street address..........optional.....office street address
@@ -42,6 +43,7 @@
          Home Phone.....................optional.....home phone number
          Office Phone...................optional.....office phone number
          Skype..........................optional.....person skype ID
+         Twitter........................optional.....person Twitter handle
          Callsign.......................optional.....person Radio Callsign
          Emergency Contact Name.........optional.....pr_contact_emergency name
          Emergency Contact Relationship.optional.....pr_contact_emergency relationship
@@ -142,22 +144,26 @@
 
     <xsl:key name="jobtitles"
              match="row"
-             use="col[contains($JobTitle, concat('|', @field, '|'))]"/>
+             use="col[contains(
+                    document(../labels.xml)/labels/column[@name='JobTitle']/match/text(),
+                    concat('|', @field, '|'))]"/>
 
     <xsl:key name="jobroles"
              match="row"
-             use="col[contains($JobRole, concat('|', @field, '|'))]"/>
-             
-    <xsl:key name="volunteerclusters" 
+             use="col[contains(
+                    document(../labels.xml)/labels/column[@name='JobRole']/match/text(),
+                    concat('|', @field, '|'))]"/>
+
+    <xsl:key name="volunteerclusters"
              match="row"
              use="concat(col[@field='Volunteer Cluster Type'],
                          col[@field='Volunteer Cluster'])"/>
 
-    <xsl:key name="volunteerclustertypes" 
+    <xsl:key name="volunteerclustertypes"
              match="row"
              use="col[@field='Volunteer Cluster Type']"/>
 
-    <xsl:key name="volunteerclustertpositions" 
+    <xsl:key name="volunteerclustertpositions"
              match="row"
              use="col[@field='Volunteer Cluster Position']"/>
 
@@ -196,15 +202,23 @@
 
             <!-- Job Titles -->
             <xsl:for-each select="//row[generate-id(.)=
-                                        generate-id(key('jobtitles', col[contains($JobTitle, concat('|', @field, '|'))])[1])]">
-                <xsl:call-template name="JobTitle">
+                                        generate-id(key('jobtitles',
+                                            col[contains(
+                                                document(../labels.xml)/labels/column[@name='JobTitle']/match/text(),
+                                                concat('|', @field, '|'))]
+                                        )[1])]">
+                    <xsl:call-template name="JobTitle">
                     <xsl:with-param name="type">resource</xsl:with-param>
                 </xsl:call-template>
             </xsl:for-each>
 
             <!-- Job Roles -->
             <xsl:for-each select="//row[generate-id(.)=
-                                        generate-id(key('jobroles', col[contains($JobRole, concat('|', @field, '|'))])[1])]">
+                                        generate-id(key('jobroles',
+                                            col[contains(
+                                                document(../labels.xml)/labels/column[@name='JobRoles']/match/text(),
+                                                concat('|', @field, '|'))]
+                                        )[1])]">
                 <xsl:call-template name="JobRole">
                     <xsl:with-param name="type">resource</xsl:with-param>
                 </xsl:call-template>
@@ -369,10 +383,23 @@
         <xsl:variable name="OrgName" select="col[@field='Organisation']/text()"/>
         <xsl:variable name="BranchName" select="col[@field='Branch']/text()"/>
         <xsl:variable name="OfficeName" select="col[@field='Office']/text()"/>
+        <xsl:variable name="FacilityType" select="col[@field='Facility Type']/text()"/>
 
+        <xsl:variable name="resourcename">
+            <xsl:choose>
+                <xsl:when test="$FacilityType='Office'">org_office</xsl:when>
+                <xsl:when test="$FacilityType='Facility'">org_facility</xsl:when>
+                <xsl:when test="$FacilityType='Hospital'">hms_hospital</xsl:when>
+                <xsl:when test="$FacilityType='Shelter'">cr_shelter</xsl:when>
+                <xsl:when test="$FacilityType='Warehouse'">inv_warehouse</xsl:when>
+                <xsl:otherwise>org_office</xsl:otherwise>
+            </xsl:choose>
+        </xsl:variable>
         <xsl:if test="$OfficeName!=''">
-            <resource name="org_office">
-
+            <resource>
+                <xsl:attribute name="name">
+                    <xsl:value-of select="$resourcename"/>
+                </xsl:attribute>
                 <xsl:attribute name="tuid">
                     <xsl:value-of select="$OfficeName"/>
                 </xsl:attribute>
@@ -454,11 +481,11 @@
             </xsl:call-template>
         </xsl:variable>
 
-        <xsl:if test="position()=1">
+<!--        <xsl:if test="position()=1">
             <xsl:for-each select="col[starts-with(@name, 'Course')]">
                 <xsl:call-template name="Course"/>
             </xsl:for-each>
-        </xsl:if>
+        </xsl:if>-->
 
         <resource name="pr_person">
 
@@ -646,6 +673,7 @@
         <xsl:param name="OrgName"/>
         <xsl:param name="BranchName"/>
         <xsl:param name="OfficeName"/>
+        <xsl:param name="FacilityType"/>
         <xsl:param name="type"/>
 
         <resource name="hrm_human_resource">
@@ -681,14 +709,27 @@
             </reference>
 
             <!-- Link to Office (staff only) -->
+            <xsl:variable name="resourcename">
+                <xsl:choose>
+                    <xsl:when test="$FacilityType='Office'">org_office</xsl:when>
+                    <xsl:when test="$FacilityType='Facility'">org_facility</xsl:when>
+                    <xsl:when test="$FacilityType='Hospital'">hms_hospital</xsl:when>
+                    <xsl:when test="$FacilityType='Shelter'">cr_shelter</xsl:when>
+                    <xsl:when test="$FacilityType='Warehouse'">inv_warehouse</xsl:when>
+                    <xsl:otherwise>org_office</xsl:otherwise>
+                </xsl:choose>
+            </xsl:variable>
             <xsl:if test="$type=1">
-                <reference field="site_id" resource="org_office">
+                <reference field="site_id">
+                    <xsl:attribute name="resource">
+                        <xsl:value-of select="$resourcename"/>
+                    </xsl:attribute>
                     <xsl:attribute name="tuid">
                         <xsl:value-of select="$OfficeName"/>
                     </xsl:attribute>
                 </reference>
             </xsl:if>
-            
+
             <!-- Volunteer Cluster (voluteers only) -->
             <xsl:if test="col[@field='Volunteer Cluster Type'] != '' or col[@field='Volunteer Cluster'] != '' or col[@field='Volunteer Cluster Position'] != ''">
               <resource name="vol_volunteer_cluster">

@@ -147,7 +147,22 @@ if settings.has_module("msg"):
     tasks["msg_process_inbound_email"] = msg_process_inbound_email
 
     # -------------------------------------------------------------------------
-    def msg_twilio_inbound_sms(account, user_id):
+    def msg_mcommons_inbound_sms(campaign_id, user_id=None):
+        """
+            Poll an inbound SMS(Mobile Commons) source.
+
+            @param campaign_id: account name for the SMS source to read from.
+            This uniquely identifies one inbound SMS task.
+        """
+        # Run the Task & return the result
+        result = msg.mcommons_inbound_sms(campaign_id)
+        db.commit()
+        return result
+
+    tasks["msg_mcommons_inbound_sms"] = msg_mcommons_inbound_sms
+
+    # -------------------------------------------------------------------------
+    def msg_twilio_inbound_sms(account, user_id=None):
         """
             Poll an inbound SMS(Twilio) source.
 
@@ -184,6 +199,23 @@ if settings.has_module("msg"):
         return result
 
     tasks["msg_search_subscription_notifications"] = msg_search_subscription_notifications
+
+# -----------------------------------------------------------------------------
+if settings.has_module("req"):
+
+    def req_add_from_template(req_id, user_id=None):
+        """
+            Add a Request from template
+        """
+        if user_id:
+            # Authenticate
+            auth.s3_impersonate(user_id)
+        # Run the Task & return the result
+        result = s3db.req_add_from_template(req_id)
+        db.commit()
+        return result
+
+    tasks["req_add_from_template"] = req_add_from_template
 
 # -----------------------------------------------------------------------------
 if settings.has_module("stats"):

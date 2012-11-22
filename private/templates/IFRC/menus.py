@@ -46,7 +46,7 @@ class S3MainMenu(default.S3MainMenu):
                 MM("Staff", c="hrm", f="staff"),
                 MM("Teams", c="hrm", f="group"),
                 MM("National Societies", c="org", f="organisation",
-                    vars = red_cross_filter),
+                   vars = red_cross_filter),
                 MM("Offices", c="org", f="office"),
                 MM("Job Titles", c="hrm", f="job_title"),
                 #MM("Skill List", c="hrm", f="skill"),
@@ -137,7 +137,9 @@ class S3MainMenu(default.S3MainMenu):
                     image = "graphic_office.png",
                     title = "Offices")(
                     DB("Manage Offices Data", f="office"),
-                    DB("Manage National Society Data", f="organisation"),
+                    DB("Manage National Society Data", f="organisation",
+                       vars=red_cross_filter
+                       ),
                 ),
                 DB("CATALOGS",
                     c="hrm",
@@ -276,11 +278,17 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     ),
                     M("National Societies", c="org", 
                                             f="organisation",
-                                            vars = red_cross_filter,
+                                            vars=red_cross_filter,
                       check=manager_mode)(
-                        M("New", m="create",vars = red_cross_filter,),
-                        M("List All", vars = red_cross_filter,),
-                        M("Search", m="search", vars = red_cross_filter,),
+                        M("New", m="create",
+                          vars=red_cross_filter
+                          ),
+                        M("List All",
+                          vars=red_cross_filter
+                          ),
+                        M("Search", m="search",
+                          vars=red_cross_filter
+                          ),
                         M("Import", m="import", p="create", check=is_org_admin)
                     ),
                     M("Offices", c="org", f="office",
@@ -515,6 +523,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
 
         # Same as Inventory
         return self.inv()
+
     # -------------------------------------------------------------------------
     def event(self):
         """ Event Management """

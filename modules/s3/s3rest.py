@@ -348,9 +348,12 @@ class S3RequestManager(object):
 
         # Strip away markup from text
         if strip_markup and "<" in text:
-            stripper = S3MarkupStripper()
-            stripper.feed(text)
-            text = stripper.stripped()
+            try:
+                stripper = S3MarkupStripper()
+                stripper.feed(text)
+                text = stripper.stripped()
+            except:
+                pass
 
         # Link ID field
         if fname == "id" and linkto:
@@ -375,6 +378,13 @@ class S3RequestManager(object):
 
     # -------------------------------------------------------------------------
     def onaccept(self, table, record, method="create"):
+        """
+            Helper to run the onvalidation routine for a record
+
+            @param table: the Table
+            @param record: the FORM or the Row to validate
+            @param method: the method
+        """
 
         s3db = current.s3db
         if hasattr(table, "_tablename"):
@@ -384,12 +394,21 @@ class S3RequestManager(object):
 
         onaccept = s3db.get_config(tablename, "%s_onaccept" % method,
                    s3db.get_config(tablename, "onaccept"))
+        if "vars" not in record:
+            record = Storage(vars=record, errors=Storage())
         if onaccept:
             callback(onaccept, record, tablename=tablename)
         return
 
     # -------------------------------------------------------------------------
     def onvalidation(self, table, record, method="create"):
+        """
+            Helper to run the onvalidation routine for a record
+
+            @param table: the Table
+            @param record: the FORM or the Row to validate
+            @param method: the method
+        """
 
         s3db = current.s3db
         if hasattr(table, "_tablename"):
@@ -399,9 +418,11 @@ class S3RequestManager(object):
 
         onvalidation = s3db.get_config(tablename, "%s_onvalidation" % method,
                        s3db.get_config(tablename, "onvalidation"))
-        if onaccept:
+        if "vars" not in record:
+            record = Storage(vars=record, errors=Storage())
+        if onvalidation:
             callback(onvalidation, record, tablename=tablename)
-        return
+        return record.errors
 
 # =============================================================================
 class S3Request(object):
@@ -1047,7 +1068,10 @@ class S3Request(object):
             Get the DELETE method handler
         """
 
-        return self.get_handler("delete")
+        if self.method:
+            return self.get_handler(self.method)
+        else:
+            return self.get_handler("delete")
 
     # -------------------------------------------------------------------------
     # Built-in method handlers
@@ -1837,6 +1861,10 @@ class S3Method(object):
         if self.method == "_init":
             return None
 
+        if r.interactive and r.representation == "html":
+            settings = current.deployment_settings
+            settings.ui_customize(self.tablename)
+
         # Apply method
         output = self.apply_method(r, **attr)
 
@@ -2029,6 +2057,23 @@ class S3Method(object):
                     output.update(**{key: display})
                 elif key in output and callable(handler):
                     del output[key]
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def crud_string(tablename, name):
+        """
+            Get a CRUD info string for interactive pages
+
+            @param tablename: the table name
+            @param name: the name of the CRUD string
+        """
+
+        crud_strings = current.response.s3.crud_strings
+        # CRUD strings for this table
+        _crud_strings = crud_strings.get(tablename, crud_strings)
+        return _crud_strings.get(name,
+                                 # Default fallback
+                                 crud_strings.get(name, None))
 
 # =============================================================================
 # Global functions

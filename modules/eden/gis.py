@@ -72,6 +72,7 @@ class S3LocationModel(S3Model):
              "gis_location_id",
              "gis_country_id",
              "gis_countries_id",
+             "gis_country_requires",
              "gis_location_onvalidation",
              ]
 
@@ -106,7 +107,7 @@ class S3LocationModel(S3Model):
         if current.deployment_settings.get_gis_spatialdb():
             # Add a spatial field
             # Should we do a test to confirm this? Ideally that would be done only in eden_update_check
-            meta_spatial_fields = (s3_lx_fields() + s3_meta_fields() + (Field("the_geom", "geometry()"),))
+            meta_spatial_fields = (s3_lx_fields() + s3_meta_fields() + (Field("the_geom", "geometry()", readable=False, writable=False),))
         else:
             meta_spatial_fields = (s3_lx_fields() + s3_meta_fields())
 
@@ -241,15 +242,15 @@ class S3LocationModel(S3Model):
                                       #widget = S3LocationAutocompleteWidget(),
                                       ondelete = "RESTRICT")
 
+        country_requires = IS_NULL_OR(IS_ONE_OF(db, "gis_location.id",
+                                                self.gis_country_represent,
+                                                filterby = "level",
+                                                filter_opts = ["L0"],
+                                                sort=True))
         country_id = S3ReusableField("country_id", table,
                                      sortby = "name",
                                      label = messages.COUNTRY,
-                                     requires = IS_NULL_OR(
-                                                    IS_ONE_OF(db, "gis_location.id",
-                                                              self.gis_country_represent,
-                                                              filterby = "level",
-                                                              filter_opts = ["L0"],
-                                                              sort=True)),
+                                     requires = country_requires,
                                      represent = self.gis_country_represent,
                                      ondelete = "RESTRICT")
 
@@ -268,7 +269,7 @@ class S3LocationModel(S3Model):
         self.configure(tablename,
                        onvalidation=self.gis_location_onvalidation,
                        onaccept=self.gis_location_onaccept,
-                       deduplicate=self.gis_location_deduplicate,
+                       deduplicate=self.gis_location_duplicate,
                        list_fields = ["id",
                                       "name",
                                       "level",
@@ -322,6 +323,7 @@ class S3LocationModel(S3Model):
                     gis_location_id = location_id,
                     gis_country_id = country_id,
                     gis_countries_id = countries_id,
+                    gis_country_requires = country_requires,
                     gis_location_onvalidation = self.gis_location_onvalidation,
                 )
 
@@ -346,27 +348,14 @@ class S3LocationModel(S3Model):
 
     # ---------------------------------------------------------------------
     @staticmethod
-    def gis_country_represent(id, row=None):
-        """ FK representation """
-
-        if row:
-            return row.name
-        elif not id:
-            return current.messages.NONE
-
-        db = current.db
-        table = db.gis_location
-        r = db(table.id == id).select(table.name,
-                                      limitby = (0, 1)).first()
-        try:
-            return r.name
-        except:
-            return current.messages.UNKNOWN_OPT
-
-    # ---------------------------------------------------------------------
-    @staticmethod
     def gis_countries_represent(ids):
         """ FK representation """
+
+        if not ids:
+            return current.messages.NONE
+
+        if not isinstance(ids, (list, tuple)):
+            ids = [ids]
 
         db = current.db
         table = db.gis_location
@@ -395,7 +384,6 @@ class S3LocationModel(S3Model):
     # -------------------------------------------------------------------------
     @staticmethod
     def gis_location_onvalidation(form):
-
         """
             On Validation for GIS Locations (before DB I/O)
         """
@@ -485,7 +473,7 @@ class S3LocationModel(S3Model):
             #if lat not in (None, "") and lon not in (None, ""):
             if lat and lon:
                 name = vars.name
-                if parent:
+                if parent and current.deployment_settings.get_gis_check_within_parent_boundaries():
                     # Check within Bounds of the Parent
                     # Rough (Bounding Box)
                     min_lat, min_lon, max_lat, max_lon, parent_name = gis.get_bounds(parent=parent)
@@ -562,7 +550,7 @@ class S3LocationModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def gis_location_deduplicate(job):
+    def gis_location_duplicate(job):
         """
           This callback will be called when importing location records it will look
           to see if the record being imported is a duplicate.
@@ -2192,6 +2180,7 @@ class S3FeatureLayerModel(S3Model):
                                                                         "%s: <a href='http://eden.sahanafoundation.org/wiki/S3XRC/RESTfulAPI/URLFormat#BasicQueryFormat' target='_blank'>Trac</a>" % \
                                                                           T("Uses the REST Query Format defined in")))),
                                   # SQL Query to determine icon for feed export (e.g. type=1)
+                                  # - currently unused
                                   # @ToDo: Have both be REST-style with this being used for both & optional additional params available for main map (e.g. obsolete=False&time_between...)
                                   Field("filter_field",
                                         label = T("Filter Field")),
@@ -2200,7 +2189,8 @@ class S3FeatureLayerModel(S3Model):
                                         comment = DIV(_class="tooltip",
                                                       _title="%s|%s /" % (T("Filter Value"),
                                                                           T("If you want several values, then separate with")))),
-                                  Field("popup_label",        # @ToDo: Replace with s3.crud_strings[tablename]?
+                                  # @ToDo: Replace with s3.crud_strings[tablename]?
+                                  Field("popup_label",
                                         label = T("Popup Label"),
                                         comment=DIV(_class="tooltip",
                                                     _title="%s|%s" % (T("Popup Label"),
@@ -2211,6 +2201,12 @@ class S3FeatureLayerModel(S3Model):
                                         comment = DIV(_class="tooltip",
                                                       _title="%s|%s" % (T("Popup Fields"),
                                                                         T("Used to build onHover Tooltip & 1st field also used in Cluster Popups to differentiate between records.")))),
+                                  Field("use_site",
+                                        default = False,
+                                        label = T("Use Site?"),
+                                        comment = DIV(_class="tooltip",
+                                                      _title="%s|%s" % (T("Use Site?"),
+                                                                        T("Select this if you need this resource to be mapped from site_id instead of location_id.")))),
                                   gis_layer_folder()(),
                                   Field("polygons", "boolean", default=False,
                                         label=T("Display Polygons?")),
@@ -3056,7 +3052,7 @@ class S3MapModel(S3Model):
                                    requires = IS_NOT_EMPTY(),
                                    comment=DIV(_class="tooltip",
                                                _title="%s|%s" % (LOCATION,
-                                                                 T("Mandatory. The URL to access the service.")))),
+                                                                 T("Mandatory. The base URL to access the service. e.g. http://host.domain/geoserver/wfs?")))),
                              Field("featureType",
                                    label=T("Feature Type"),
                                    requires = IS_NOT_EMPTY(),
@@ -3067,7 +3063,7 @@ class S3MapModel(S3Model):
                                    requires=IS_NULL_OR(IS_URL()),
                                    comment=DIV(_class="tooltip",
                                                _title="%s|%s" % (T("Feature Namespace"),
-                                                                 T("Optional. In GeoServer, this is the Workspace Namespace URI (not the name!). Within the WFS getCapabilities, this is the FeatureType Name part before the colon(:).")))),
+                                                                 T("Optional. In GeoServer, this is the Workspace Namespace URI (not the name!). Within the WFS getCapabilities, the workspace is the FeatureType Name part before the colon(:).")))),
                              Field("title",
                                    label=T("Title"),
                                    default="name",
@@ -3158,7 +3154,7 @@ class S3MapModel(S3Model):
                                    requires = IS_NOT_EMPTY(),
                                    comment=DIV(_class="tooltip",
                                                _title="%s|%s" % (LOCATION,
-                                                                 T("The URL to access the service.")))),
+                                                                 T("Mandatory. The base URL to access the service. e.g. http://host.domain/geoserver/wms?")))),
                              Field("version", length=32,
                                    label=T("Version"),
                                    default="1.1.1",
@@ -3435,8 +3431,6 @@ class S3GISThemeModel(S3Model):
         T = current.T
         db = current.db
 
-        #UNKNOWN_OPT = current.messages.UNKNOWN_OPT
-
         # Shortcuts
         add_component = self.add_component
         configure = self.configure
@@ -3447,22 +3441,14 @@ class S3GISThemeModel(S3Model):
         # Theme Layer
         #
 
-        gis_theme_type_opts = {
-            # This should be stored
-            #"population":T("Population"),
-            }
-
         tablename = "gis_layer_theme"
         table = define_table(tablename,
                              layer_id,
                              name_field()(unique = True),
                              Field("description",
                                    label=T("Description")),
-                             #Field("type", label = T("Type"),
-                             #      requires=IS_NULL_OR(IS_IN_SET(gis_theme_type_opts))
-                             #      represent = lambda opt: gis_theme_type_opts.get(opt,
-                             #                                                      UNKNOWN_OPT),
-                             #      ),
+                             # @ToDo:
+                             #self.stats_parameter_id(),
                              Field("date", "datetime",
                                    label = T("Date")),
                              gis_layer_folder()(),
@@ -3878,32 +3864,26 @@ def gis_location_represent(id, row=None, show_link=True, simpletext=False):
 
 
 # =============================================================================
-def gis_location_lx_represent(record):
+def gis_location_lx_represent(id):
     """
-        Represent a location, given either its id or full Row, as a simple string
+        Represent a location as a hierarchical string
 
-        @param record: database record
+        @param id: location_id
         @return: string
     """
 
-    if not record:
+    if not id:
         return current.messages.NONE
 
-    if isinstance(record, Row):
-        location = record
-    else:
-        db = current.db
-        s3db = current.s3db
-        cache = s3db.cache
-        table = s3db.gis_location
-        location = db(table.id == record).select(table.id,
-                                                 table.name,
-                                                 cache=cache,
+    s3db = current.s3db
+    table = s3db.gis_location
+    location = current.db(table.id == id).select(table.name,
+                                                 cache=s3db.cache,
                                                  limitby=(0, 1)).first()
 
     parents = Storage()
     parents = current.gis.get_parent_per_level(parents,
-                                               location.id,
+                                               id,
                                                ids=False,
                                                names=True)
 

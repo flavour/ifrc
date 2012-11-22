@@ -167,6 +167,9 @@ class S3XML(S3Codec):
         lonmin="lonmin",
         lonmax="lonmax",
         marker="marker",
+        marker_url="marker_url",
+        marker_height="marker_height",
+        marker_width="marker_width",
         popup="popup",          # for GIS Feature Layers/Queries
         popup_url="popup_url",  # for map popups
         sym="sym",              # for GPS
@@ -500,6 +503,7 @@ class S3XML(S3Codec):
             return reference_map
 
         db = current.db
+        show_ids = current.manager.show_ids
 
         UID = self.UID
         MCI = self.MCI
@@ -511,6 +515,7 @@ class S3XML(S3Codec):
         filter_mci = self.filter_mci
         tablename = table._tablename
         gtablename = current.auth.settings.table_group_name
+        load_table = current.s3db.table
 
         for f in fields:
             try:
@@ -519,8 +524,6 @@ class S3XML(S3Codec):
                 continue
             #if f not in record or not record[f]:
                 #continue
-            #if type(ids) is not list:
-                #ids = [ids]
             ktablename, pkey, multiple = s3_get_foreign_key(dbfield)
             if not ktablename:
                 continue
@@ -540,32 +543,39 @@ class S3XML(S3Codec):
                 query = k_id.belongs(ids)
                 limitby = None
             else:
-                query = k_id == ids #[0]
+                query = k_id == ids
                 limitby = (0, 1)
 
             uid = None
             uids = None
-            supertable = None
 
             if pkey != "id" and "instance_type" in ktable_fields:
 
                 if multiple:
+                    # @todo: can't currently resolve multi-references
+                    # to super-entities
                     continue
 
-                krecord = db(query).select(ogetattr(ktable, UID),
+                srecord = db(query).select(ogetattr(ktable, UID),
                                            ktable.instance_type,
                                            limitby=(0, 1)).first()
-                if not krecord:
+                if not srecord:
                     continue
-                ktablename = krecord.instance_type
-                uid = ogetattr(krecord, UID)
-
+                ktablename = srecord.instance_type
+                uid = ogetattr(srecord, UID)
                 if ktablename == tablename and \
                    UID in record and ogetattr(record, UID) == uid and \
-                   not current.manager.show_ids:
+                   not show_ids:
                     continue
-
-                uids = [uid]
+                ktable = load_table(ktablename)
+                if not ktable:
+                    continue
+                krecord = db(ktable[UID] == uid).select(ktable._id,
+                                                        limitby=(0, 1)).first()
+                if not krecord:
+                    continue
+                ids = [krecord[ktable._id]]
+                uids = [export_uid(uid)]
 
             else:
                 if DELETED in ktable_fields:
@@ -674,11 +684,12 @@ class S3XML(S3Codec):
 
         db = current.db
         gis = current.gis
+        auth = current.auth
         s3db = current.s3db
         request = current.request
         settings = current.deployment_settings
 
-        format = current.auth.permission.format
+        format = auth.permission.format
 
         LATFIELD = self.Lat
         LONFIELD = self.Lon
@@ -688,11 +699,13 @@ class S3XML(S3Codec):
 
         marker_url = None
         symbol = None
+        # Retrieve data prepared earlier in gis.get_locations_and_popups()
         if locations:
             latlons = locations.get("latlons", None)
             geojsons = locations.get("geojsons", None)
             wkts = locations.get("wkts", None)
             popup_url = locations.get("popup_url", None)
+            markers = locations.get("markers", None)
             tooltips = locations.get("tooltips", None)
             attributes = locations.get("attributes", None)
         else:
@@ -700,6 +713,7 @@ class S3XML(S3Codec):
             geojsons = None
             wkts = None
             popup_url = None
+            markers = None
             tooltips = None
             attributes = None
         if marker and format == "kml":
@@ -742,15 +756,27 @@ class S3XML(S3Codec):
 
             LatLon = None
             polygon = False
-            # Use the value calculated in gis.get_geojson_and_popup/get_geojson_theme if we can
+            # Use the value calculated earlier if we can
+            id = record[pkey]
+            if not master and \
+               tablename in auth.org_site_types:
+                # Lookup the right pre-prepared data
+                root = element.getparent()
+                if root.tag == self.TAG.root:
+                    master = root[0]
+                    master_id = master.get(ATTRIBUTE.id, None)
+                    if master_id:
+                        id = int(master_id)
+                        tablename = master.get(ATTRIBUTE.name, None)
+                        master = True
             if latlons and tablename in latlons:
-                LatLon = latlons[tablename].get(record[pkey], None)
+                LatLon = latlons[tablename].get(id, None)
                 if LatLon:
                     lat = LatLon[0]
                     lon = LatLon[1]
             elif geojsons and tablename in geojsons:
                 polygon = True
-                geojson = geojsons[tablename].get(record[pkey], None)
+                geojson = geojsons[tablename].get(id, None)
                 if geojson:
                     # Output the GeoJSON directly into the XML, so that XSLT can simply drop in
                     geometry = etree.SubElement(element, "geometry")
@@ -759,7 +785,7 @@ class S3XML(S3Codec):
                 # Nothing gets here currently
                 # tbc: KML Polygons (or we should also do these outside XSLT)
                 polygon = True
-                wkt = wkts[tablename][record[pkey]]
+                wkt = wkts[tablename][id]
                 # Convert the WKT in XSLT
                 attr[ATTRIBUTE.wkt] = wkt
             elif "polygons" in request.get_vars:
@@ -838,18 +864,26 @@ class S3XML(S3Codec):
                     if format == "geojson":
                         # Assume being used within the Sahana Mapping client
                         # so use local URLs to keep filesize down
-                        url = "%s/%i.plain" % (url, record[pkey])
+                        url = "%s/%i.plain" % (url, id)
                     else:
                         # Assume being used outside the Sahana Mapping client
                         # so use public URLs
                         url = "%s%s/%i" % (settings.get_base_public_url(),
-                                           url, record[pkey])
+                                           url, id)
                     attr[ATTRIBUTE.popup_url] = url
+
+                if markers and tablename in markers:
+                    marker = markers[tablename][id]
+                    attr[ATTRIBUTE.marker_url] = URL(c="static", f="img",
+                                                     args=["markers",
+                                                           marker["image"]])
+                    attr[ATTRIBUTE.marker_height] = str(marker["height"])
+                    attr[ATTRIBUTE.marker_width] = str(marker["width"])
 
                 if tooltips and tablename in tooltips:
                     # Feature Layer / Resource
                     # Retrieve the HTML for the onHover Tooltip
-                    tooltip = tooltips[tablename][record[pkey]]
+                    tooltip = tooltips[tablename][id]
                     try:
                         # encode suitable for use as XML attribute
                         tooltip = self.xml_encode(tooltip).decode("utf-8")
@@ -860,7 +894,7 @@ class S3XML(S3Codec):
 
                 if attributes and tablename in attributes:
                     _attr = ""
-                    attrs = attributes[tablename][record[pkey]]
+                    attrs = attributes[tablename][id]
                     for a in attrs:
                         if _attr:
                             _attr = "%s,[%s]=[%s]" % (_attr, a, attrs[a])
@@ -1912,11 +1946,9 @@ class S3XML(S3Codec):
             col = etree.SubElement(row, cls.TAG.col)
             col.set(cls.ATTRIBUTE.field, str(key))
             if value:
-                text = s3_unicode(value)
-                #text = str(value)
+                text = s3_unicode(value).strip()
                 if text.lower() not in ("null", "<null>"):
                     text = cls.xml_encode(text)
-                    #text = cls.xml_encode(unicode(text.decode("utf-8")))
                     col.text = text
             else:
                 col.text = ""

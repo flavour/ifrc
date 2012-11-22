@@ -32,6 +32,7 @@ from gluon import *
 from gluon.storage import Storage
 from gluon.tools import callback
 from gluon.sqlhtml import StringWidget
+from gluon.validators import Validator
 from s3utils import s3_mark_required, s3_unicode
 
 try:
@@ -627,16 +628,17 @@ class S3SQLCustomForm(S3SQLForm):
             labels = None
 
         # Choose formstyle
+        settings = s3.crud
         if format == "plain":
             # Default formstyle works best when we have no formatting
             formstyle = "table3cols"
         else:
-            formstyle = s3.crud.formstyle
+            formstyle = settings.formstyle
 
         # Retrieve the record
         record = None
         if record_id is not None:
-            query = (self.table._id==record_id)
+            query = (self.table._id == record_id)
             record = db(query).select(limitby=(0, 1)).first()
         self.record_id = record_id
         self.subrows = Storage()
@@ -737,7 +739,8 @@ class S3SQLCustomForm(S3SQLForm):
                                table_name = self.tablename,
                                upload = "default/download",
                                readonly = readonly,
-                               separator = "")
+                               separator = "",
+                               submit_button = settings.submit_button)
 
         # Process the form
         formname = "%s/%s" % (self.tablename, record_id)
@@ -930,16 +933,17 @@ class S3SQLCustomForm(S3SQLForm):
 
         get_config = s3db.get_config
 
-        record = None
+        oldrecord = None
         if record_id:
             accept_id = record_id
             db = current.db
-            db(table._id == record_id).update(**data)
             onaccept = get_config(tablename, "update_onaccept",
                        get_config(tablename, "onaccept", None))
             if onaccept:
-                record = db(table._id == record_id).select(limitby=(0, 1)
-                                                           ).first()
+                # Get oldrecord to save in form
+                oldrecord = db(table._id == record_id).select(limitby=(0, 1)
+                                                              ).first()
+            db(table._id == record_id).update(**data)
         else:
             accept_id = table.insert(**data)
             if not accept_id:
@@ -949,7 +953,7 @@ class S3SQLCustomForm(S3SQLForm):
 
         data[table._id.name] = accept_id
         prefix, name = tablename.split("_", 1)
-        form = Storage(vars=Storage(data), record=record)
+        form = Storage(vars=Storage(data), record=oldrecord)
 
         # Audit
         if record_id is None:
@@ -984,7 +988,6 @@ class S3SQLCustomForm(S3SQLForm):
 
         return accept_id
 
-# =============================================================================
 # =============================================================================
 class S3SQLFormElement(object):
     """ SQL Form Element Base Class """
@@ -1046,7 +1049,7 @@ class S3SQLFormElement(object):
 
         if skip_post_validation and \
            current.request.env.request_method == "POST":
-            requires = lambda value: (value, None)
+            requires = SKIP_POST_VALIDATION(field.requires)
             widget = None
             required = False
             notnull = False
@@ -1218,6 +1221,31 @@ class S3SQLSubForm(S3SQLFormElement):
         """
 
         return True
+
+# =============================================================================
+class SKIP_POST_VALIDATION(Validator):
+
+    def __init__(self, other=None):
+        if other and isinstance(other, (list, tuple)):
+            other = other[0]
+        self.other = other
+        if other:
+            if hasattr(other, 'multiple'):
+                self.multiple = other.multiple
+            if hasattr(other, 'options'):
+                self.options = other.options
+
+    def __call__(self, value):
+        other = self.other
+        if current.request.env.request_method == "POST" or not other:
+            return value, None
+        if not isinstance(other, (list, tuple)):
+            other = [other]
+        for r in other:
+            value, error = r(value)
+            if error:
+                return value, error
+        return value, None
 
 # =============================================================================
 class S3SQLInlineComponent(S3SQLSubForm):
@@ -1486,11 +1514,13 @@ class S3SQLInlineComponent(S3SQLSubForm):
             # Get the item record ID
             if "_id" in item:
                 record_id = item["_id"]
+                # Check permissions to edit this item
+                editable = permit("update", tablename, record_id)
+                deletable = permit("delete", tablename, record_id)
             else:
-                continue
-            # Check permissions to edit this item
-            editable = permit("update", tablename, record_id)
-            deletable = permit("delete", tablename, record_id)
+                record_id = None
+                editable = deletable = True
+
             # Render read-row accordingly
             rowname = "%s-%s" % (formname, i)
             read_row = self._render_item(table, item, fields,
@@ -1500,8 +1530,9 @@ class S3SQLInlineComponent(S3SQLSubForm):
                                          index=i,
                                          _id="read-row-%s" % rowname,
                                          _class="read-row")
-            audit("read", prefix, name,
-                  record=record_id, representation="html")
+            if record_id:
+                audit("read", prefix, name,
+                      record=record_id, representation="html")
             item_rows.append(read_row)
 
         # Add the action rows
@@ -1551,7 +1582,9 @@ class S3SQLInlineComponent(S3SQLSubForm):
 
         # Real input: a hidden text field to store the JSON data
         real_input = "%s_%s" % (self.resource.tablename, field.name)
-        default = dict(_type = "text", value = value)
+        default = dict(_type = "text",
+                       _value = value,
+                       requires=lambda v: (v, None))
         attr = StringWidget._attributes(field, default, **attributes)
         attr["_class"] = attr["_class"] + " hide"
         attr["_id"] = real_input
@@ -1565,7 +1598,6 @@ class S3SQLInlineComponent(S3SQLSubForm):
                      )
         else:
             widget = current.T("No entries currently available")
-
 
         # Render output HTML
         output = DIV(
@@ -1642,7 +1674,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
         if fname in form.vars:
 
             # Retrieve the data
-            data = form.vars[fname]
+            data = json.loads(form.vars[fname])
             if "component" not in data:
                 return
 
@@ -1853,6 +1885,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
 
         T = current.T
         appname = current.request.application
+        settings = current.response.s3.crud
 
         formname = self._formname()
 
@@ -1880,7 +1913,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
         validate = current.manager.validate
         for f in fields:
             fname = f["name"]
-            idxname = "%s_%s_%s_%s" % (formname, fname, rowtype, index)
+            idxname = "%s_i_%s_%s_%s" % (formname, fname, rowtype, index)
             formfield = self._rename_field(table[fname], idxname,
                                            skip_post_validation=True)
 
@@ -1918,7 +1951,8 @@ class S3SQLInlineComponent(S3SQLSubForm):
                                   formstyle=self._formstyle,
                                   upload = "default/download",
                                   readonly=readonly,
-                                  table_name=subform_name)
+                                  table_name=subform_name,
+                                  submit_button = settings.submit_button)
 
         for tr in subform[0]:
             if not tr.attributes["_id"] == "submit_record__row":

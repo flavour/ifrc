@@ -408,7 +408,8 @@ def s3_fullname_bulk(record_ids=[], truncate=True):
 # =============================================================================
 def s3_represent_facilities(db, site_ids, link=True):
     """
-        Represent Facilities
+        Bulk lookup for Facility Representations
+        - used by Home page
     """
 
     table = db.org_site
@@ -429,25 +430,51 @@ def s3_represent_facilities(db, site_ids, link=True):
             instance_ids[instance_type].append(site_id)
 
     results = []
+    represent = db.org_site.instance_type.represent
     for instance_type in instance_types:
-        represent = db.org_site.instance_type.represent
-        instance_type_nice = represent(instance_type)
-        c, f = instance_type.split("_")
         site_ids = instance_ids[instance_type]
         table = db[instance_type]
+        c, f = instance_type.split("_")
         query = table.site_id.belongs(site_ids)
-        records = db(query).select(table.id,
-                                   table.site_id,
-                                   table.name)
-        for record in records:
-            site_str = "%s (%s)" % (record.name, instance_type_nice)
-            if link:
-                site_str = A(site_str, _href=URL(c=c,
-                                                 f=f,
-                                                 args=[record.id],
-                                                 extension=""))
+        if instance_type == "org_facility":
+            instance_type_nice = represent(instance_type)
+            records = db(query).select(table.id,
+                                       table.facility_type_id,
+                                       table.site_id,
+                                       table.name)
+            ttable = db.org_facility_type
+            type_ids = [r.facility_type_id[0] for r in records if r.facility_type_id]
+            facility_types = db(ttable.id.belongs(type_ids)).select(ttable.id,
+                                                                    ttable.name)
+            facility_types = facility_types.as_dict()
+            for record in records:
+                if record.facility_type_id:
+                    facility_type = facility_types[record.facility_type_id[0]]["name"]
+                    site_str = "%s (%s)" % (record.name, facility_type)
+                else:
+                    site_str = "%s (%s)" % (record.name, instance_type_nice)
+                if link:
+                    site_str = A(site_str, _href=URL(c=c,
+                                                     f=f,
+                                                     args=[record.id],
+                                                     extension=""))
 
-            results.append((record.site_id, site_str))
+                results.append((record.site_id, site_str))
+
+        else:
+            instance_type_nice = represent(instance_type)
+            records = db(query).select(table.id,
+                                       table.site_id,
+                                       table.name)
+            for record in records:
+                site_str = "%s (%s)" % (record.name, instance_type_nice)
+                if link:
+                    site_str = A(site_str, _href=URL(c=c,
+                                                     f=f,
+                                                     args=[record.id],
+                                                     extension=""))
+
+                results.append((record.site_id, site_str))
 
     return results
 
@@ -611,48 +638,55 @@ def s3_auth_group_represent(opt):
     return ", ".join(roles)
 
 # =============================================================================
-def s3_represent_name(table):
+def s3_represent_id( table,
+                     fieldname = "name",
+                     translate = False):
     """
-        Returns a represent function for the common case where we return
-        the name of the record.
+        Returns a represent function for a record id.
     """
 
     def represent(id, row=None):
-        if row:
-            return row.name
-        elif not id:
-            return current.messages["NONE"]
-
-        r = current.db(table._id == id).select(table.name,
-                                               limitby=(0, 1)
-                                               ).first()
+        if not row:
+            if not id:
+                return current.messages["NONE"]
+            row  = current.db(table._id == id).select(table[fieldname],
+                                                   limitby=(0, 1)
+                                                   ).first()
         try:
-            return r.name
+            if translate:
+                return current.T(row.name)
+            else:
+                return row.name
         except:
             return current.messages["UNKNOWN_OPT"]
 
     return represent
-
 # =============================================================================
-def s3_represent_name_translate(table):
+def s3_represent_multi_id( table,
+                           fieldname = "name",
+                           translate = False):
     """
-        Returns a represent function for the common case where we return
-        a translated version of the name of the record.
+        Returns a represent function for a record id.
     """
 
-    def represent(id, row=None):
-        if row:
-            return current.T(row.name)
-        elif not id:
+    def represent(ids, row=None):
+        if not ids:
             return current.messages["NONE"]
 
-        r = current.db(table._id == id).select(table.name,
-                                               limitby=(0, 1)
-                                               ).first()
+        ids = [ids] if type(ids) is not list else ids
+
+        row = current.db(table.id.belongs(ids)).select(table.id,
+                                                       table[fieldname]).as_dict()
+
         try:
-            return current.T(r.name)
+            strings = [str(row.get(id)[fieldname]) for id in ids]
         except:
-            return current.messages["UNKNOWN_OPT"]
+            return current.messages["NONE"]
+    
+        if strings:
+            return ", ".join(strings)
+        else:
+            return current.messages["NONE"]
 
     return represent
 
@@ -875,8 +909,8 @@ def s3_register_validation():
         table = current.s3db.auth_organisation
         query = (table.organisation_id != None) & \
                 (table.domain != None)
-        whitelists = db(query).select(table.organisation_id,
-                                      table.domain)
+        whitelists = current.db(query).select(table.organisation_id,
+                                              table.domain)
         if whitelists:
             domains = '''$('#auth_user_organisation_id__row').hide()
 S3.whitelists={
@@ -1764,7 +1798,8 @@ class S3BulkImporter(object):
                                              stylesheet=task[4],
                                              extra_data=extra_data)
             except SyntaxError, e:
-                self.errorList.append("WARNING: import error - %s" % e)
+                self.errorList.append("WARNING: import error - %s (file: %s, stylesheet: %s)" %
+                                     (e, filename, task[4]))
                 return
 
             if not resource.error:
@@ -3222,8 +3257,14 @@ class S3DataTable(object):
         if pagination:
             s3 = current.response.s3
             self.end = real_end
-            aadata = self.aadata(totalrows, filteredrows, id, sEcho,
-                                 flist, stringify=False, **attr)
+            aadata = self.aadata(totalrows,
+                                 filteredrows,
+                                 id,
+                                 sEcho,
+                                 flist,
+                                 action_col=action_col,
+                                 stringify=False,
+                                 **attr)
             cache = {"iCacheLower": self.start,
                      "iCacheUpper": self.end if filteredrows > self.end else filteredrows,
                      "lastJson": aadata}
@@ -3246,6 +3287,7 @@ class S3DataTable(object):
                sEcho,
                flist,
                stringify=True,
+               action_col=None,
                **attr
                ):
         """
@@ -3276,7 +3318,8 @@ class S3DataTable(object):
             flist = self.lfields
         start = self.start
         end = self.end
-        action_col = attr.get("dt_action_col", 0)
+        if action_col is None:
+            action_col = attr.get("dt_action_col", 0)
         structure = {}
         aadata = []
         for i in xrange(start, end):
@@ -3348,7 +3391,13 @@ class S3DataTable(object):
             if bulkCol <= action_col:
                 action_col += 1
 
-        return self.aadata(totalrows, displayrows, id, sEcho, flist,
-                           stringify, **attr)
+        return self.aadata(totalrows,
+                           displayrows,
+                           id,
+                           sEcho,
+                           flist,
+                           action_col=action_col,
+                           stringify=stringify,
+                           **attr)
 
 # END =========================================================================

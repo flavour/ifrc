@@ -481,6 +481,9 @@ def s3_roles_permitted(name="roles_permitted", **attr):
 # Labels that vary by country are set by gis.update_table_hierarchy_labels()
 #
 
+address_L5 = S3ReusableField("L5",
+                             readable=False,
+                             writable=False)
 address_L4 = S3ReusableField("L4",
                              readable=False,
                              writable=False)
@@ -503,11 +506,12 @@ def s3_lx_fields():
     """
 
     fields = (
+            address_L5(),
             address_L4(),
             address_L3(),
             address_L2(),
             address_L1(),
-            address_L0(label=current.messages["COUNTRY"]),
+            address_L0(label=current.messages.COUNTRY),
            )
     return fields
 
@@ -806,7 +810,7 @@ def s3_date(name="date", **attr):
     """
         Return a standard Date field
 
-        Additional options to normal S3ResuableField:
+        Additional options to normal S3ReusableField:
             default == "now" (in addition to usual meanings)
             past = x months
             future = x months
@@ -923,7 +927,7 @@ def s3_datetime(name="date", **attr):
     """
         Return a standard Datetime field
 
-        Additional options to normal S3ResuableField:
+        Additional options to normal S3ReusableField:
             default = "now" (in addition to usual meanings)
             represent = "date" (in addition to usual meanings)
             widget = "date" (in addition to usual meanings)

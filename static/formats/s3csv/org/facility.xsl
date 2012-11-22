@@ -8,19 +8,25 @@
 
          CSV fields:
          Name....................org_facility.name
+         Type....................org_facility.type
          Organisation............org_organisation.name
-         Country.................gis_location.L0 Name or ISO2
          Building................gis_location.name
          Address.................gis_location.addr_street
          Postcode................gis_location.addr_postcode
+         Country.................gis_location.L0 Name or ISO2
          L1......................gis_location.L1
          L2......................gis_location.L2
          L3......................gis_location.L3
+         L4......................gis_location.L4
          Lat.....................gis_location.lat
          Lon.....................gis_location.lon
          Comments................org_facility.comments
-
-         @ToDo: Add support for Types
+         Contact.................org_facility.contact
+         Phone...................org_facility.phone1
+         Phone2..................org_facility.phone2
+         Email...................org_facility.email
+         Website.................org_facility.website
+         Opening Times...........org_facility.opening_times
 
     *********************************************************************** -->
     <xsl:output method="xml"/>
@@ -28,13 +34,43 @@
     <xsl:include href="../commons.xsl"/>
     <xsl:include href="../../xml/countries.xsl"/>
 
-    <xsl:key name="organisation" match="row" use="col[@field='Organisation']"/>
+    <!-- ****************************************************************** -->
+    <!-- Lookup column names -->
+
+    <xsl:variable name="Postcode">
+        <xsl:call-template name="ResolveColumnHeader">
+            <xsl:with-param name="colname">Postcode</xsl:with-param>
+        </xsl:call-template>
+    </xsl:variable>
+
+    <xsl:variable name="OrgName">
+        <xsl:call-template name="ResolveColumnHeader">
+            <xsl:with-param name="colname">Organisation</xsl:with-param>
+        </xsl:call-template>
+    </xsl:variable>
+
+    <!-- ****************************************************************** -->
+    <!-- Indexes for faster processing -->
+    <xsl:key name="facility_type" match="row" use="col[@field='Type']"/>
+    <xsl:key name="organisation" match="row" use="col[contains(
+                    document(../labels.xml)/labels/column[@name='Organisation']/match/text(),
+                    concat('|', @field, '|'))]"/>
 
     <!-- ****************************************************************** -->
     <xsl:template match="/">
         <s3xml>
+            <!-- Facility Types -->
+            <xsl:for-each select="//row[generate-id(.)=generate-id(key('facility_type', col[@field='Type'])[1])]">
+                <xsl:call-template name="FacilityType" />
+            </xsl:for-each>
+
             <!-- Organisations -->
-            <xsl:for-each select="//row[generate-id(.)=generate-id(key('organisation', col[@field='Organisation'])[1])]">
+            <xsl:for-each select="//row[generate-id(.)=
+                                        generate-id(key('jobtitles',
+                                            col[contains(
+                                                document(../labels.xml)/labels/column[@name='Organisation']/match/text(),
+                                                concat('|', @field, '|'))]
+                                        )[1])]">
                 <xsl:call-template name="Organisation"/>
             </xsl:for-each>
 
@@ -46,28 +82,40 @@
     <xsl:template match="row">
 
         <!-- Create the variables -->
-        <xsl:variable name="OrgName" select="col[@field='Organisation']/text()"/>
-        <xsl:variable name="OfficeName" select="col[@field='Name']/text()"/>
+        <xsl:variable name="FacilityName" select="col[@field='Name']/text()"/>
+        <xsl:variable name="Type" select="col[@field='Type']/text()"/>
 
         <resource name="org_facility">
-            <xsl:attribute name="tuid">
-                <xsl:value-of select="$OfficeName"/>
-            </xsl:attribute>
             <!-- Link to Location -->
             <reference field="location_id" resource="gis_location">
                 <xsl:attribute name="tuid">
-                    <xsl:value-of select="$OfficeName"/>
+                    <xsl:value-of select="$FacilityName"/>
                 </xsl:attribute>
             </reference>
             <!-- Link to Organisation -->
-            <reference field="organisation_id" resource="org_organisation">
-                <xsl:attribute name="tuid">
-                    <xsl:value-of select="$OrgName"/>
-                </xsl:attribute>
-            </reference>
+            <xsl:if test="$OrgName!=''">
+                <reference field="organisation_id" resource="org_organisation">
+                    <xsl:attribute name="tuid">
+                        <xsl:value-of select="concat('Org:', $OrgName)"/>
+                    </xsl:attribute>
+                </reference>
+            </xsl:if>
+
+            <xsl:if test="col[@field='Type']!=''">
+                <reference field="facility_type_id" resource="org_facility_type">
+                    <xsl:attribute name="tuid">
+                        <xsl:value-of select="concat('[&quot;', 'FacilityType:', $Type, '&quot;]')"/>
+                    </xsl:attribute>
+                </reference>
+            </xsl:if>
 
             <!-- Facility data -->
-            <data field="name"><xsl:value-of select="$OfficeName"/></data>
+            <data field="name"><xsl:value-of select="$FacilityName"/></data>
+            <data field="opening_times"><xsl:value-of select="col[@field='Opening Times']"/></data>
+            <data field="phone1"><xsl:value-of select="col[@field='Phone']"/></data>
+            <data field="phone2"><xsl:value-of select="col[@field='Phone2']"/></data>
+            <data field="email"><xsl:value-of select="col[@field='Email']"/></data>
+            <data field="website"><xsl:value-of select="col[@field='Website']"/></data>
             <data field="comments"><xsl:value-of select="col[@field='Comments']"/></data>
         </resource>
 
@@ -77,27 +125,49 @@
 
     <!-- ****************************************************************** -->
     <xsl:template name="Organisation">
-        <xsl:variable name="OrgName" select="col[@field='Organisation']/text()"/>
 
-        <resource name="org_organisation">
-            <xsl:attribute name="tuid">
-                <xsl:value-of select="$OrgName"/>
-            </xsl:attribute>
-            <data field="name"><xsl:value-of select="$OrgName"/></data>
-        </resource>
+        <xsl:if test="$OrgName!=''">
+            <resource name="org_organisation">
+                <xsl:attribute name="tuid">
+                    <xsl:value-of select="concat('Org:', $OrgName)"/>
+                </xsl:attribute>
+                <data field="name"><xsl:value-of select="$OrgName"/></data>
+            </resource>
+        </xsl:if>
 
     </xsl:template>
 
     <!-- ****************************************************************** -->
+    <xsl:template name="FacilityType">
 
+        <xsl:variable name="Type" select="col[@field='Type']"/>
+
+        <xsl:if test="$Type!=''">
+            <resource name="org_facility_type">
+                <xsl:attribute name="tuid">
+                    <xsl:value-of select="concat('FacilityType:', $Type)"/>
+                </xsl:attribute>
+                <data field="name"><xsl:value-of select="$Type"/></data>
+            </resource>
+        </xsl:if>
+    </xsl:template>
+
+    <!-- ****************************************************************** -->
     <xsl:template name="Locations">
 
-        <xsl:variable name="OfficeName" select="col[@field='Name']/text()"/>
+        <xsl:variable name="FacilityName" select="col[@field='Name']/text()"/>
         <xsl:variable name="Building" select="col[@field='Building']/text()"/>
         <xsl:variable name="l0" select="col[@field='Country']/text()"/>
         <xsl:variable name="l1" select="col[@field='L1']/text()"/>
         <xsl:variable name="l2" select="col[@field='L2']/text()"/>
         <xsl:variable name="l3" select="col[@field='L3']/text()"/>
+        <xsl:variable name="l4" select="col[@field='L4']/text()"/>
+
+        <xsl:variable name="postcode">
+            <xsl:call-template name="GetColumnValue">
+                <xsl:with-param name="colhdrs" select="$Postcode"/>
+            </xsl:call-template>
+        </xsl:variable>
 
         <!-- Country Code = UUID of the L0 Location -->
         <xsl:variable name="countrycode">
@@ -194,12 +264,60 @@
             </resource>
         </xsl:if>
 
-        <!-- Office Location -->
+        <!-- L4 Location -->
+        <xsl:if test="$l4!=''">
+            <resource name="gis_location">
+                <xsl:attribute name="tuid">
+                    <xsl:value-of select="concat('L4',$l4)"/>
+                </xsl:attribute>
+                <xsl:choose>
+                    <xsl:when test="$l3!=''">
+                        <reference field="parent" resource="gis_location">
+                            <xsl:attribute name="tuid">
+                                <xsl:value-of select="concat('L3',$l3)"/>
+                            </xsl:attribute>
+                        </reference>
+                    </xsl:when>
+                    <xsl:when test="$l2!=''">
+                        <reference field="parent" resource="gis_location">
+                            <xsl:attribute name="tuid">
+                                <xsl:value-of select="concat('L2',$l2)"/>
+                            </xsl:attribute>
+                        </reference>
+                    </xsl:when>
+                    <xsl:when test="$l1!=''">
+                        <reference field="parent" resource="gis_location">
+                            <xsl:attribute name="tuid">
+                                <xsl:value-of select="concat('L1',$l1)"/>
+                            </xsl:attribute>
+                        </reference>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <reference field="parent" resource="gis_location">
+                            <xsl:attribute name="uuid">
+                                <xsl:value-of select="$country"/>
+                            </xsl:attribute>
+                        </reference>
+                    </xsl:otherwise>
+                </xsl:choose>
+                <data field="name"><xsl:value-of select="$l4"/></data>
+                <data field="level"><xsl:text>L4</xsl:text></data>
+            </resource>
+        </xsl:if>
+
+        <!-- Facility Location -->
         <resource name="gis_location">
             <xsl:attribute name="tuid">
-                <xsl:value-of select="$OfficeName"/>
+                <xsl:value-of select="$FacilityName"/>
             </xsl:attribute>
             <xsl:choose>
+                <xsl:when test="$l4!=''">
+                    <reference field="parent" resource="gis_location">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="concat('L4',$l4)"/>
+                        </xsl:attribute>
+                    </reference>
+                </xsl:when>
                 <xsl:when test="$l3!=''">
                     <reference field="parent" resource="gis_location">
                         <xsl:attribute name="tuid">
@@ -234,13 +352,17 @@
                     <data field="name"><xsl:value-of select="$Building"/></data>
                 </xsl:when>
                 <xsl:otherwise>
-                    <data field="name"><xsl:value-of select="$OfficeName"/></data>
+                    <data field="name"><xsl:value-of select="$FacilityName"/></data>
                 </xsl:otherwise>
             </xsl:choose>
             <data field="addr_street"><xsl:value-of select="col[@field='Address']"/></data>
-            <data field="addr_postcode"><xsl:value-of select="col[@field='Postcode']"/></data>
-            <data field="lat"><xsl:value-of select="col[@field='Lat']"/></data>
-            <data field="lon"><xsl:value-of select="col[@field='Lon']"/></data>
+            <data field="addr_postcode"><xsl:value-of select="$postcode"/></data>
+            <xsl:if test="col[@field='Lat']!=''">
+                <data field="lat"><xsl:value-of select="col[@field='Lat']"/></data>
+            </xsl:if>
+            <xsl:if test="col[@field='Lon']!=''">
+                <data field="lon"><xsl:value-of select="col[@field='Lon']"/></data>
+            </xsl:if>
         </resource>
 
     </xsl:template>
