@@ -44,6 +44,7 @@ from gluon import *
 from gluon.serializers import json as jsons
 from gluon.storage import Storage
 from gluon.html import BUTTON
+from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
 from s3crud import S3CRUD
 from s3navigation import s3_search_tabs
@@ -565,7 +566,6 @@ class S3SearchOptionsWidget(S3SearchWidget):
         else:
             field_type = "virtual"
 
-
         if self.options is not None:
             # Custom dict of options {value: label} or callable
             if isinstance(self.options, dict):
@@ -596,17 +596,27 @@ class S3SearchOptionsWidget(S3SearchWidget):
                             values = row[field]
                             if values:
                                 opt_extend([v for v in values
-                                            if v is not None and
-                                               v not in opt_values])
+                                            if v not in opt_values])
                     else:
                         for row in rows:
                             v = row[field]
-                            if v is not None and v not in opt_values:
+                            if v not in opt_values:
                                 opt_append(v)
 
         if len(opt_values) < 1:
             msg = attr.get("_no_opts", T("No options available"))
             return SPAN(msg, _class="no-options-available")
+
+        if field:
+            requires = field.requires
+            if not isinstance(requires, (tuple, list)):
+                requires = [requires]
+        else:
+            requires = [None]
+        if None not in opt_values and \
+           "" not in opt_values and \
+           not isinstance(requires[0], IS_NOT_EMPTY):
+            opt_values.append(None)
 
         if self.options is None:
             opt_list = []
@@ -642,7 +652,11 @@ class S3SearchOptionsWidget(S3SearchWidget):
                 represent_rows = db(query).select(*represent_fields).as_dict(key=represent_fields[0].name)
                 opt_list = []
                 for opt_value in opt_values:
-                    opt_represent = represent % represent_rows[opt_value]
+                    if opt_value not in represent_rows:
+                        continue
+                        #opt_represent = current.messages.NONE
+                    else:
+                        opt_represent = represent % represent_rows[opt_value]
                     if opt_represent:
                         opt_list.append([opt_value, opt_represent])
             else:
@@ -650,7 +664,9 @@ class S3SearchOptionsWidget(S3SearchWidget):
                 opt_list = [(opt_value, s3_unicode(opt_value))
                             for opt_value in opt_values if opt_value]
 
-            options = dict(opt_list)
+            options = OrderedDict([(o or "__NONE__", v) for o, v in opt_list])
+        else:
+            options = OrderedDict([(o or "__NONE__", v) for o, v in options.items()])
 
         # Dummy field
         dummy_field = Storage(name=name,
@@ -665,19 +681,20 @@ class S3SearchOptionsWidget(S3SearchWidget):
             any_all = DIV(
                 T("Filter type "),
                 INPUT(_name="%s_filter" % name,
-                      _id="%s_filter_all" % name,
-                      _type="radio",
-                      _value="all",
-                      value=self.filter_type),
-                LABEL(T("All"),
-                      _for="%s_filter_all" % name),
-                INPUT(_name="%s_filter" % name,
                       _id="%s_filter_any" % name,
                       _type="radio",
                       _value="any",
                       value=self.filter_type),
                 LABEL(T("Any"),
                       _for="%s_filter_any" % name),
+                INPUT(_name="%s_filter" % name,
+                      _id="%s_filter_all" % name,
+                      _type="radio",
+                      _value="all",
+                      value=self.filter_type),
+                LABEL(T("All"),
+                      _for="%s_filter_all" % name),
+
                 _class="s3-checkboxes-widget-filter"
             )
         else:
@@ -704,28 +721,37 @@ class S3SearchOptionsWidget(S3SearchWidget):
                 value = [value]
 
             fs = S3FieldSelector(field_name)
-            fl = fs.resolve(resource)
+            rfield = fs.resolve(resource)
             try:
-                table_field = fl.field
+                table_field = rfield.field
             except:
                 table_field = None
 
-            # What do we do if we need to search within a virtual field
-            # that is a list:* ?
-            if table_field and str(table_field.type).startswith("list"):
-                 query = None
-                 if self.filter_type == "any":
-                     query = S3FieldSelector(field_name).anyof(value)
-                 else:
-                     query = S3FieldSelector(field_name).contains(value)
-            elif "None" in value:
-                # Needs special handling (doesn't show up in 'belongs')
-                query = S3FieldSelector(field_name) == None
-                opts = [v for v in value if v != "None"]
-                if opts:
-                    query = query | S3FieldSelector(field_name).belongs(opts)
+            query = None
+            if "__NONE__" in value:
+                if rfield.ftype in ("string", "text", "virtual") and \
+                   "" not in value:
+                    value.append("")
+                query = (fs == None)
+                value = [v for v in value if v not in ("__NONE__", None)]
+
+            if table_field and rfield.ftype.startswith("list"):
+                if query is not None:
+                    query |= (fs == [])
+                if value:
+                    if self.filter_type == "any":
+                        q = fs.anyof(value)
+                    else:
+                        q = fs.contains(value)
+                else:
+                    q = None
             else:
-                query = S3FieldSelector(field_name).belongs(value)
+                q = fs.belongs(value)
+            if q is not None:
+                if query is not None:
+                    query |= q
+                else:
+                    query = q
 
             return query
         else:
@@ -1341,6 +1367,8 @@ i18n.edit_saved_search="%s"
                                vars=search_url_vars)
         s3.formats.rss = r.url(method="",
                                vars=search_url_vars)
+        s3.formats.xml = r.url(method="",
+                               vars=search_url_vars)
 
         if representation == "plain":
             # Map popup filter
@@ -1427,10 +1455,12 @@ i18n.edit_saved_search="%s"
             datatable = self.crud_string(tablename, "msg_no_match")
             s3.no_formats = True
         else:
+            dt_sDom = s3.get("dataTable_sDom", 'fril<"dataTable_table"t>pi')
             datatable = dt.html(totalrows, displayrows, "list",
                                 dt_pagination=dt_pagination,
                                 dt_displayLength=display_length,
-                                dt_permalink=search_url)
+                                dt_permalink=search_url,
+                                dt_sDom = dt_sDom)
 
         # Add items to output
         output["items"] = datatable

@@ -655,16 +655,18 @@ class S3Config(Storage):
     def get_ui_social_buttons(self):
         """ Display social media Buttons in the footer? """
         return self.ui.get("social_buttons", False)
-    
+
     def get_ui_crud_form(self, tablename):
         """ Get custom crud_forms for diffent tables """
         return self.ui.get("crud_form_%s" % tablename, None)
-    
-    def ui_customize(self, tablename):
+
+    def ui_customize(self, tablename, **attr):
         """ Customizes field settings on a table"""
         customize = self.ui.get("customize_%s" % tablename)
         if customize:
-            customize()
+            return customize(**attr)
+        else:
+            return attr
 
     # =========================================================================
     # Messaging
