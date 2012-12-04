@@ -335,7 +335,7 @@ class S3LocationModel(S3Model):
         if row:
             return row.name
         elif not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         db = current.db
         table = db.gis_location
@@ -352,7 +352,7 @@ class S3LocationModel(S3Model):
         """ FK representation """
 
         if not ids:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         if not isinstance(ids, (list, tuple)):
             ids = [ids]
@@ -609,7 +609,7 @@ class S3LocationModel(S3Model):
     @staticmethod
     def gis_level_represent(level):
         if not level:
-            return current.messages.NONE
+            return current.messages["NONE"]
         elif level == "L0":
             return current.messages.COUNTRY
         else:
@@ -1021,7 +1021,7 @@ class S3GISConfigModel(S3Model):
 
         location_id = self.gis_location_id
 
-        NONE = current.messages.NONE
+        NONE = current.messages["NONE"]
 
         # Shortcuts
         add_component = self.add_component
@@ -1591,7 +1591,7 @@ class S3GISConfigModel(S3Model):
         """
 
         if not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         db = current.db
         table = db.gis_config
@@ -1709,7 +1709,7 @@ class S3GISConfigModel(S3Model):
         """
 
         if not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         if isinstance(id, Row):
             record = id
@@ -1881,7 +1881,7 @@ class S3LayerEntityModel(S3Model):
         marker_id = self.gis_marker_id
         symbology_id = self.gis_symbology_id
 
-        NONE = current.messages.NONE
+        NONE = current.messages["NONE"]
 
         # Shortcuts
         add_component = self.add_component
@@ -2001,10 +2001,13 @@ class S3LayerEntityModel(S3Model):
                              layer_id,
                              config_id(),
                              Field("enabled", "boolean", default=True,
+                                   represent = s3_yes_no_represent,
                                    label=T("Available in Viewer?")),
                              Field("visible", "boolean", default=True,
+                                   represent = s3_yes_no_represent,
                                    label=T("On by default?")),
                              Field("base", "boolean", default=False,
+                                   represent = s3_yes_no_represent,
                                    label=T("Default Base layer?")),
                              Field("style", "text",
                                    # Only used by Theme Layers currently
@@ -2156,6 +2159,7 @@ class S3FeatureLayerModel(S3Model):
                                         writable=False),
                                   Field("trackable", "boolean",
                                         label = T("Trackable"),
+                                        represent = s3_yes_no_represent,
                                         default = False,
                                         comment = DIV(_class="tooltip",
                                                       _title="%s|%s" % (T("Trackable"),
@@ -2209,6 +2213,7 @@ class S3FeatureLayerModel(S3Model):
                                                                         T("Select this if you need this resource to be mapped from site_id instead of location_id.")))),
                                   gis_layer_folder()(),
                                   Field("polygons", "boolean", default=False,
+                                        represent = s3_yes_no_represent,
                                         label=T("Display Polygons?")),
                                   gis_opacity()(),
                                   # @ToDo: Expose the Graphic options
@@ -2435,9 +2440,11 @@ class S3MapModel(S3Model):
                                    default=0,
                                    label=T("Layers")),
                              Field("base", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=False,
                                    label=BASE_LAYER),
                              Field("transparent", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=True,
                                    label=TRANSPARENT),
                              gis_layer_folder()(),
@@ -2733,12 +2740,15 @@ class S3MapModel(S3Model):
                                                                     #T("Timestamps can be correlated with the timestamps on the photos to locate them on the map.")
                                                                   ))),
                              Field("waypoints", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=True,
                                    label=T("Display Waypoints?")),
                              Field("tracks", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=True,
                                    label=T("Display Tracks?")),
                              Field("routes", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=False,
                                    label=T("Display Routes?")),
                              gis_layer_folder()(),
@@ -2920,6 +2930,7 @@ class S3MapModel(S3Model):
                              Field("url3",
                                    label=T("Tertiary Server (Optional)")),
                              Field("base", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=True,
                                    label=BASE_LAYER),
                              Field("attribution",
@@ -3160,9 +3171,11 @@ class S3MapModel(S3Model):
                                    default="1.1.1",
                                    requires=IS_IN_SET(["1.1.1", "1.3.0"], zero=None)),
                              Field("base", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=False,
                                    label=BASE_LAYER),
                              Field("transparent", "boolean", default=True,
+                                   represent = s3_yes_no_represent,
                                    label=TRANSPARENT),
                              gis_layer_folder()(),
                              gis_opacity()(),
@@ -3200,6 +3213,7 @@ class S3MapModel(S3Model):
                                                _title="%s|%s" % (T("Background Color"),
                                                                  T("Optional selection of a background color.")))),
                              Field("tiled", "boolean",
+                                   represent = s3_yes_no_represent,
                                    label=T("Tiled"),
                                    default=False,
                                    comment=DIV(_class="tooltip",
@@ -3214,6 +3228,7 @@ class S3MapModel(S3Model):
                                                _title="%s|%s" % (T("Buffer"),
                                                                  T("The number of tiles around the visible map to download. Zero means that the 1st page loads faster, higher numbers mean subsequent panning is faster.")))),
                              Field("queryable", "boolean",
+                                   represent = s3_yes_no_represent,
                                    default=True,
                                    label=T("Queryable?")),
                              Field("legend_url",
@@ -3536,7 +3551,7 @@ class S3GISThemeModel(S3Model):
         """
 
         if not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
         db = current.db
         table = db.gis_layer_theme
         query = (table.id == id)
@@ -3718,7 +3733,7 @@ def gis_location_represent(id, row=None, show_link=True, simpletext=False):
         db = current.db
         table = db.gis_location
     elif not id:
-        return current.messages.NONE
+        return current.messages["NONE"]
     else:
         db = current.db
         table = db.gis_location
@@ -3873,7 +3888,7 @@ def gis_location_lx_represent(id):
     """
 
     if not id:
-        return current.messages.NONE
+        return current.messages["NONE"]
 
     s3db = current.s3db
     table = s3db.gis_location
@@ -3907,7 +3922,7 @@ def gis_layer_represent(id, row=None, show_link=True):
         s3db = current.s3db
         ltable = s3db.gis_layer_entity
     elif not id:
-        return current.messages.NONE
+        return current.messages["NONE"]
     else:
         db = current.db
         s3db = current.s3db

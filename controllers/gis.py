@@ -41,7 +41,7 @@ def index():
         # Add a full-screen window which will inherit these components
         s3.jquery_ready.append(
 '''$('#gis_fullscreen_map-btn').click(function(evt){
- if (navigator.appVersion.indexOf("MSIE")!=-1){
+ if(navigator.appVersion.indexOf("MSIE")!=-1){
  }else{
  S3.gis.mapWestPanelContainer.removeAll(false)
  S3.gis.mapPanelContainer.removeAll(false)
@@ -50,7 +50,13 @@ def index():
  S3.gis.mapWin.destroy()
  addMapWindow()
  evt.preventDefault()
- }
+ if(document.body.requestFullScreen){
+  document.body.requestFullScreen()
+ }else if(document.body.webkitRequestFullScreen){
+  document.body.webkitRequestFullScreen()
+ }else if(document.body.mozRequestFullScreen){
+  document.body.mozRequestFullScreen()
+}}
 })''')
 
     # Include an embedded Map on the index page
@@ -2364,7 +2370,7 @@ def display_feature():
                                                 table.parent,
                                                 table.lat,
                                                 table.lon,
-                                                #table.wkt,
+                                                table.wkt,
                                                 limitby=(0, 1)).first()
 
     if not feature:
@@ -2393,8 +2399,7 @@ def display_feature():
     bounds = gis.get_bounds(features=[feature])
 
     map = gis.show_map(
-        features = [{"lat"  : lat,
-                     "lon"  : lon}],
+        features = [feature.wkt],
         lat = lat,
         lon = lon,
         #zoom = zoom,
@@ -2454,13 +2459,15 @@ def display_features():
     accessible = auth.s3_accessible_query("read", ltable)
     query2 = query2 & accessible
 
-    features = db(query).select(ltable.ALL, left = [ltable.on(query2)])
+    features = db(query).select(ltable.wkt,
+                                left = [ltable.on(query2)]
+                                )
 
     # Calculate an appropriate BBox
     bounds = gis.get_bounds(features=features)
 
     map = gis.show_map(
-        features = features,
+        features = [f.wkt for f in features],
         bbox = bounds,
         window = True,
         closable = False,

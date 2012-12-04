@@ -235,7 +235,7 @@ settings.org.dependent_fields = \
      "pr_person_details.company"                 : ["Philippine Red Cross"],
      "pr_person_details.affiliations"            : ["Philippine Red Cross"],
      "vol_volunteer.active"                      : ["Timor-Leste Red Cross Society"],
-     "vol_volunteer_cluster.vol_cluster_type_id"      : ["Philippine Red Cross"],
+     "vol_volunteer_cluster.vol_cluster_type_id"     : ["Philippine Red Cross"],
      "vol_volunteer_cluster.vol_cluster_id"          : ["Philippine Red Cross"],
      "vol_volunteer_cluster.vol_cluster_position_id" : ["Philippine Red Cross"],
      }
@@ -279,6 +279,11 @@ settings.project.organisation_roles = {
     #4: T("Customer"), # T("Beneficiary")?
     5: T("Partner")
 }
+
+# -----------------------------------------------------------------------------
+# Inventory Management
+settings.inv.show_mode_of_transport = True
+settings.inv.send_show_time_in = True
 
 # -----------------------------------------------------------------------------
 # Request Management

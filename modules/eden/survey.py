@@ -491,7 +491,7 @@ def survey_template_represent(id, row=None):
     if row:
         return row.name
     elif not id:
-        return current.messages.NONE
+        return current.messages["NONE"]
 
     table = current.s3db.survey_template
     query = (table.id == id)
@@ -1060,7 +1060,7 @@ class S3QuestionModel(S3Model):
             survey_updateMetaData(record,
                                   vars.type,
                                   vars.metadata
-                                 )
+                                  )
 
     # -------------------------------------------------------------------------
     @staticmethod

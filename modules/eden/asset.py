@@ -264,20 +264,26 @@ $(document).ready(function(){
                       ),
                     S3SearchOptionsWidget(
                         name="asset_search_L0",
-                        field="L1",
+                        field="location_id$L0",
                         location_level="L0",
                         cols = 3
                     ),
                     S3SearchOptionsWidget(
                         name="asset_search_L1",
-                        field="L1",
+                        field="location_id$L1",
                         location_level="L1",
                         cols = 3
                     ),
                     S3SearchOptionsWidget(
                         name="asset_search_L2",
-                        field="L2",
+                        field="location_id$L2",
                         location_level="L2",
+                        cols = 3
+                    ),
+                    S3SearchOptionsWidget(
+                        name="asset_search_L3",
+                        field="location_id$L3",
+                        location_level="L3",
                         cols = 3
                     ),
                     S3SearchLocationWidget(
@@ -304,9 +310,9 @@ $(document).ready(function(){
                          (T("Item"), "item_id"),
                          "organisation_id",
                          "site_id",
-                         (T("Country"),"L0"),
-                         "L1",
-                         "L2",
+                         (T("Country"),"location_id$L0"),
+                         "location_id$L1",
+                         "location_id$L2",
                          ]
 
         # Resource Configuration
@@ -323,7 +329,7 @@ $(document).ready(function(){
                         cols=report_fields,
                         fact=[("number", "count", T("Number of items"))],
                         defaults=Storage(
-                                cols="asset.L1",
+                                cols="asset.location_id$L1",
                                 fact="count:asset.number",
                                 rows="asset.item_id$item_category_id"
                             )
@@ -339,9 +345,8 @@ $(document).ready(function(){
                                "site_id",
                                (current.messages.COUNTRY, "location_id$L0"),
                                "location_id$L1",
-                               #"L1",
-                               #"L2",
-                               #"L3",
+                               #"location_id$L2",
+                               #"location_id$L3",
                                "comments",
                                ],
                   realm_components = ["log", "presence"],
@@ -406,6 +411,7 @@ $(document).ready(function(){
                              Field("check_in_to_person", "boolean",
                                    #label = T("Mobile"),      # Relabel?
                                    label = T("Track with this Person?"),
+                                   
                                    comment = DIV(_class="tooltip",
                                                  #_title="%s|%s" % (T("Mobile"),
                                                  _title="%s|%s" % (T("Track with this Person?"),
@@ -461,6 +467,7 @@ $(document).ready(function(){
                              Field("cancel", "boolean",
                                    default = False,
                                    label = T("Cancel Log Entry"),
+                                   represent = s3_yes_no_represent,
                                    comment = DIV(_class="tooltip",
                                                  _title="%s|%s" % (T("Cancel Log Entry"),
                                                                    T("'Cancel' will indicate an asset log entry did not occur")))
@@ -544,7 +551,7 @@ $(document).ready(function(){
         if row:
             id = row.id
         elif not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         db = current.db
         table = db.asset_asset
@@ -866,7 +873,7 @@ def asset_rheader(r):
             s3db = current.s3db
             s3 = current.response.s3
 
-            NONE = current.messages.NONE
+            NONE = current.messages["NONE"]
 
             if record.type == ASSET_TYPE_VEHICLE:
                 tabs = [(T("Asset Details"), None),
@@ -1000,7 +1007,7 @@ class AssetVirtualFields:
                                             limitby=(0, 1)).first()
             if site:
                 return s3db.org_site_represent(site, show_link=False)
-        return current.messages.NONE
+        return current.messages["NONE"]
     
     def assigned_to_person(self):
         current_log = asset_get_current_log(self.asset_asset.id)

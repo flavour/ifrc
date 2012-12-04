@@ -233,6 +233,19 @@ def facility():
                     field.comment = None
                     # Filter out people which are already staff for this office
                     s3base.s3_filter_staff(r)
+                    # Modify list_fields
+                    s3db.configure("hrm_human_resource",
+                                   list_fields=["person_id",
+                                                "phone",
+                                                "email",
+                                                "organisation_id",
+                                                "job_title_id",
+                                                "department_id",
+                                                "site_contact",
+                                                "status",
+                                                "comments",
+                                                ]
+                                   )
 
                 elif cname == "req" and r.method not in ("update", "read"):
                     # Hide fields which don't make sense in a Create form
@@ -533,5 +546,15 @@ def incoming():
     """
 
     return inv_incoming()
+
+# -----------------------------------------------------------------------------
+def facility_geojson():
+    """
+        Create GeoJSON[P] of Facilities for use by a high-traffic website
+        - controller just for testing
+        - function normally run on a schedule
+    """
+
+    s3db.org_facility_geojson()
 
 # END =========================================================================

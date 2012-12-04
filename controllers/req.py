@@ -170,17 +170,18 @@ def req_template():
 
     else:
         # Main Req
-        for fieldname in ["req_ref",
-                          "date",
-                          "date_required",
-                          "date_required_until",
-                          "date_recv",
-                          "recv_by_id",
-                          "commit_status",
-                          "transit_status",
-                          "fulfil_status",
-                          "cancel",
-                          ]:
+        fields = ["req_ref",
+                  "date",
+                  "date_required",
+                  "date_required_until",
+                  "date_recv",
+                  "recv_by_id",
+                  "cancel",
+                  "commit_status",
+                  "transit_status",
+                  "fulfil_status",
+                  ]
+        for fieldname in fields:
             field = table[fieldname]
             field.readable = field.writable = False
         table.purpose.label = T("Details")
@@ -231,31 +232,34 @@ def req_controller():
 
     def prep(r):
 
-        req_table = s3db.req_req
+        table = r.table
         s3.req_prep(r)
 
-        if len(settings.get_req_req_type()) == 1:
-            # Remove type from list_fields
-            list_fields = s3db.get_config("req_req", "list_fields")
-            try:
-                list_fields.remove("type")
-            except:
-                 # It has already been removed.
-                 # This can happen if the req controller is called
-                 # for a second time, such as when printing reports
-                pass
-            s3db.configure("req_req", list_fields=list_fields)
+        #if len(settings.get_req_req_type()) == 1:
+        #    # Remove type from list_fields
+        #    list_fields = s3db.get_config("req_req", "list_fields")
+        #    try:
+        #        list_fields.remove("type")
+        #    except:
+        #         # It has already been removed.
+        #         # This can happen if the req controller is called
+        #         # for a second time, such as when printing reports
+        #        pass
+        #    s3db.configure("req_req", list_fields=list_fields)
+
+        type = (r.record and r.record.type) or \
+               (request.vars and request.vars.type)
 
         if r.interactive:
+            table.requester_id.represent = requester_represent
+
             # Set Fields and Labels depending on type
-            type = (r.record and r.record.type) or \
-                   (request.vars and request.vars.type)
             if type:
                 type = int(type)
-                req_table.type.default = int(type)
+                table.type.default = int(type)
 
                 # This prevents the type from being edited AFTER it is set
-                req_table.type.readable = req_table.type.writable = False
+                table.type.readable = table.type.writable = False
 
                 crud_strings = settings.get_req_req_crud_strings(type)
                 if crud_strings:
@@ -264,31 +268,32 @@ def req_controller():
                 # Filter the query based on type
                 if s3.filter:
                     s3.filter = s3.filter & \
-                                (s3db.req_req.type == type)
+                                (table.type == type)
                 else:
-                    s3.filter = (s3db.req_req.type == type)
+                    s3.filter = (table.type == type)
 
             # These changes are applied via JS in create forms where type is editable
             if type == 1: # Item
-                req_table.date_recv.readable = req_table.date_recv.writable = True
+                table.date_recv.readable = table.date_recv.writable = True
 
-                req_table.purpose.label = T("What the Items will be used for")
-                req_table.site_id.label = T("Deliver To")
-                req_table.request_for_id.label = T("Deliver To")
-                req_table.requester_id.label = T("Site Contact")
-                req_table.recv_by_id.label = T("Delivered To")
+                if settings.get_req_items_ask_purpose():
+                    table.purpose.label = T("What the Items will be used for")
+                table.site_id.label = T("Deliver To")
+                table.request_for_id.label = T("Deliver To")
+                table.requester_id.label = T("Site Contact")
+                table.recv_by_id.label = T("Delivered To")
      
             elif type == 3: # Person
-                req_table.date_required_until.readable = req_table.date_required_until.writable = True
+                table.date_required_until.readable = table.date_required_until.writable = True
 
-                req_table.purpose.label = T("Task Details")
-                req_table.purpose.comment = DIV(_class="tooltip",
-                                                _title="%s|%s" % (T("Task Details"),
-                                                                  T("Include any special requirements such as equipment which they need to bring.")))
-                req_table.site_id.label =  T("Report To")
-                req_table.requester_id.label = T("Volunteer Contact")
-                req_table.request_for_id.label = T("Report To")
-                req_table.recv_by_id.label = T("Reported To")
+                table.purpose.label = T("Task Details")
+                table.purpose.comment = DIV(_class="tooltip",
+                                            _title="%s|%s" % (T("Task Details"),
+                                                              T("Include any special requirements such as equipment which they need to bring.")))
+                table.site_id.label =  T("Report To")
+                table.requester_id.label = T("Volunteer Contact")
+                table.request_for_id.label = T("Report To")
+                table.recv_by_id.label = T("Reported To")
 
             if r.component:
                 if r.component.name == "document":
@@ -307,12 +312,12 @@ def req_controller():
                     #        table.organisation_id.default = site.organisation_id
 
                 elif r.component.name == "req_item":
-                    table = r.component.table
-                    table.site_id.writable = table.site_id.readable = False
-                    s3db.req_hide_quantities(table)
+                    ctable = r.component.table
+                    ctable.site_id.writable = ctable.site_id.readable = False
+                    s3.req_hide_quantities(ctable)
 
                 elif r.component.name == "req_skill":
-                    s3db.req_hide_quantities(r.component.table)
+                    s3.req_hide_quantities(r.component.table)
 
                 elif r.component.alias == "job":
                     s3task.configure_tasktable_crud(
@@ -324,95 +329,17 @@ def req_controller():
                     db.scheduler_task.timeout.writable = False
             else:
                 if r.id:
-                    req_table.is_template.readable = req_table.is_template.writable = False
+                    table.is_template.readable = table.is_template.writable = False
 
-                if type == 8:
-                    req_table.purpose.label = T("Details")
-                    stable = current.s3db.req_summary_option
-                    options = db(stable.deleted == False).select(stable.name,
-                                                                 orderby=~stable.name)
-                    summary_items = [opt.name for opt in options]
-                    s3.js_global.append('''req_summary_items=%s''' % json.dumps(summary_items))
-                    s3.scripts.append("/%s/static/scripts/S3/s3.req_update.js" % appname)
-
-                if r.method not in ("read", "update", "search"):
+                method = r.method
+                if method not in ("map", "read", "search", "update"):
                     # Hide fields which don't make sense in a Create form
                     # - includes one embedded in list_create
                     # - list_fields over-rides, so still visible within list itself
-                    s3db.req_create_form_mods()
+                    s3.req_create_form_mods()
 
-                    if type == 1:
-                        # Dropdown not Autocomplete
-                        itable = s3db.req_req_item
-                        itable.item_id.widget = None
-                        s3.jquery_ready.append('''
-S3OptionsFilter({
- 'triggerName':'item_id',
- 'targetName':'item_pack_id',
- 'lookupPrefix':'supply',
- 'lookupResource':'item_pack',
- 'lookupKey':'item_id',
- 'lookupField':'id',
- 'msgNoRecords':i18n.no_packs,
- 'fncPrep':fncPrepItem,
- 'fncRepresent':fncRepresentItem
-})''')
-                        # We don't want to force people to enter quantities
-                        #itable.quantity.default = 0
-                        # Custom Form
-                        s3forms = s3base.s3forms
-                        crud_form = s3forms.S3SQLCustomForm(
-                                # If not generated automatically
-                                #"req_ref",
-                                "site_id",
-                                "is_template",
-                                "requester_id",
-                                "date",
-                                "priority",
-                                "date_required",
-                                "purpose",
-                                s3forms.S3SQLInlineComponent(
-                                    "req_item",
-                                    label = T("Items"),
-                                    fields = ["item_id",
-                                              "item_pack_id",
-                                              "quantity",
-                                              "comments"
-                                              ]
-                                ),
-                                #"date_recv",
-                                "comments",
-                            )
-                        s3db.configure("req_req", crud_form=crud_form)
-
-                    elif type == 3:
-                        # Custom Form
-                        stable = s3db.req_req_skill
-                        stable.skill_id.label = T("Required Skills (optional)")
-                        stable.skill_id.widget = None
-                        s3forms = s3base.s3forms
-                        crud_form = s3forms.S3SQLCustomForm(
-                                # If not generated automatically
-                                #"req_ref",
-                                "site_id",
-                                "is_template",
-                                "requester_id",
-                                "date",
-                                "priority",
-                                "date_required",
-                                "date_required_until",
-                                "purpose",
-                                s3forms.S3SQLInlineComponent(
-                                    "req_skill",
-                                    label = T("Skills"),
-                                    fields = ["quantity",
-                                              "skill_id",
-                                              "comments"
-                                              ]
-                                ),
-                                "comments",
-                            )
-                        s3db.configure("req_req", crud_form=crud_form)
+                    # Inline Forms
+                    s3.req_inline_form(type, method)
 
                     # Get the default Facility for this user
                     # @ToDo: Use site_id in User Profile (like current organisation_id)
@@ -424,9 +351,14 @@ S3OptionsFilter({
                         if site:
                             r.table.site_id.default = site.site_id
 
-                    if r.method == "map":
-                        # Tell the client to request per-feature markers
-                        s3db.configure("req_req", marker_fn=marker_fn)
+                elif method == "map":
+                    # Tell the client to request per-feature markers
+                    s3db.configure("req_req", marker_fn=marker_fn)
+
+                elif method == "update":
+                    # Inline Forms
+                    s3.req_inline_form(type, method)
+                    s3.scripts.append("/%s/static/scripts/S3/s3.req_update.js" % appname)
 
         elif r.representation == "plain":
             # Map Popups
@@ -440,14 +372,10 @@ S3OptionsFilter({
         if r.component and r.component.name == "commit":
             table = r.component.table
             record = r.record
-            # If there are no commitments yet then run req_commit_all
-            if record.commit_status == 0:
-                redirect(URL(f="req", args=[record.id, "commit_all"]))
             # Allow commitments to be added when doing so as a component
             s3db.configure(table,
                            listadd = True)
 
-            type = record.type
             if type == 1: # Items
                 # Limit site_id to facilities the user has permissions for
                 auth.permitted_facilities(table=r.table,
@@ -542,8 +470,9 @@ S3OptionsFilter({
                     table.organisation_id.readable = table.organisation_id.writable = True
                 else:
                     # Unaffiliated people can't commit on behalf of others
-                    r.component.table.committer_id.writable = False
-                    r.component.table.committer_id.comment = None
+                    field = r.component.table.committer_id
+                    field.writable = False
+                    field.comment = None
 
                 # Non-Item commits shouldn't have a From Inventory
                 # @ToDo: Assets do? (Well, a 'From Site')
@@ -568,8 +497,20 @@ S3OptionsFilter({
     def postp(r, output):
 
         if r.interactive:
-            s3_action_buttons(r)
             if not r.component:
+                s3_action_buttons(r)
+                #s3_action_buttons(r, copyable=True)
+                # if "buttons" in output:
+                    # buttons = output["buttons"]
+                    # if "delete_btn" in buttons:
+                        # delete_btn = buttons["delete_btn"]
+                        # delete_btn = DIV(delete_btn,
+                                         # A(T("Copy Request"),
+                                           # _href=URL(args=[r.id, "copy"],
+                                                     ##vars={"type":r.record.type}
+                                                     # ),
+                                           # _class="action-btn"))
+                        # output["buttons"]["delete_btn"] = delete_btn
                 if settings.get_req_use_commit():
                     # This is appropriate to all
                     s3.actions.append(
@@ -582,64 +523,128 @@ S3OptionsFilter({
                     s3.jquery_ready.append(
 '''S3ConfirmClick('.commit-btn','%s')''' % T("Do you want to commit to this request?"))
                 # This is only appropriate for item requests
-                query = (r.table.type == 1)
-                rows = db(query).select(r.table.id)
-                restrict = [str(row.id) for row in rows]
-                s3.actions.append(
-                    dict(url = URL(c="req", f="req",
-                                   args=["[id]", "req_item"]),
-                         _class = "action-btn",
-                         label = str(T("View Items")),
-                         restrict = restrict
-                        )
-                    )
+                #query = (r.table.type == 1)
+                #rows = db(query).select(r.table.id)
+                #restrict = [str(row.id) for row in rows]
+                #s3.actions.append(
+                #    dict(url = URL(c="req", f="req",
+                #                   args=["[id]", "req_item"]),
+                #         _class = "action-btn",
+                #         label = str(T("View Items")),
+                #         restrict = restrict
+                #        )
+                #    )
                 # This is only appropriate for people requests
-                query = (r.table.type == 3)
-                rows = db(query).select(r.table.id)
-                restrict = [str(row.id) for row in rows]
-                s3.actions.append(
-                    dict(url = URL(c="req", f="req",
-                                   args=["[id]", "req_skill"]),
-                         _class = "action-btn",
-                         label = str(T("View Skills")),
-                         restrict = restrict
-                        )
-                    )
-            elif r.component.name == "req_item" and settings.get_req_prompt_match():
-                req_item_inv_item_btn = dict(url = URL(c = "req",
-                                                       f = "req_item_inv_item",
-                                                       args = ["[id]"]
-                                                      ),
-                                             _class = "action-btn",
-                                             label = str(T("Request from Facility")),
-                                             )
-                s3.actions.append(req_item_inv_item_btn)
-            elif r.component.alias == "job":
-                s3.actions = [
-                    dict(label=str(T("Open")),
-                         _class="action-btn",
-                         url=URL(c="req", f="req_template",
-                                 args=[str(r.id), "job", "[id]"])),
-                    dict(label=str(T("Reset")),
-                         _class="action-btn",
-                         url=URL(c="req", f="req_template",
-                                 args=[str(r.id), "job", "[id]", "reset"])),
-                    dict(label=str(T("Run Now")),
-                         _class="action-btn",
-                         url=URL(c="req", f="req_template",
-                                 args=[str(r.id), "job", "[id]", "run"])),
-                    ]
+                #query = (r.table.type == 3)
+                #rows = db(query).select(r.table.id)
+                #restrict = [str(row.id) for row in rows]
+                #s3.actions.append(
+                #    dict(url = URL(c="req", f="req",
+                #                   args=["[id]", "req_skill"]),
+                #         _class = "action-btn",
+                #         label = str(T("View Skills")),
+                #         restrict = restrict
+                #        )
+                #    )
             else:
-                # We don't yet have other components
-                pass
+                s3_action_buttons(r)
+                if r.component.name == "req_item" and settings.get_req_prompt_match():
+                    req_item_inv_item_btn = dict(url = URL(c = "req",
+                                                           f = "req_item_inv_item",
+                                                           args = ["[id]"]
+                                                          ),
+                                                 _class = "action-btn",
+                                                 label = str(T("Request from Facility")),
+                                                 )
+                    s3.actions.append(req_item_inv_item_btn)
+                if r.component.name == "commit":
+                    if "form" in output:
+                        id = r.record.id
+                        ctable = s3db.req_commit
+                        query = (ctable.deleted == False) & \
+                                (ctable.req_id == id)
+                        exists = current.db(query).select(ctable.id, limitby=(0, 1))
+                        if not exists:
+                            output["form"] = A(T("Commit All"),
+                                               _href=URL(args=[id, "commit_all"]),
+                                               _class="action-btn",
+                                               _id="commit-btn")
+                            s3.jquery_ready.append('''
+S3ConfirmClick('#commit-btn','%s')''' % T("Do you want to commit to this request?"))
+                if r.component.alias == "job":
+                    s3.actions = [
+                        dict(label=str(T("Open")),
+                             _class="action-btn",
+                             url=URL(c="req", f="req_template",
+                                     args=[str(r.id), "job", "[id]"])),
+                        dict(label=str(T("Reset")),
+                             _class="action-btn",
+                             url=URL(c="req", f="req_template",
+                                     args=[str(r.id), "job", "[id]", "reset"])),
+                        dict(label=str(T("Run Now")),
+                             _class="action-btn",
+                             url=URL(c="req", f="req_template",
+                                     args=[str(r.id), "job", "[id]", "run"])),
+                        ]
 
         return output
     s3.postp = postp
 
     output = s3_rest_controller("req", "req",
-                                rheader=eden.req.req_rheader)
+                                rheader=s3db.req_rheader)
 
     return output
+
+# =============================================================================
+def requester_represent(id, show_link=True):
+    """
+        Represent a Requester as Name + Tel#
+    """
+
+    if not id:
+        return current.messages["NONE"]
+
+    htable = s3db.hrm_human_resource
+    ptable = s3db.pr_person
+    ctable = s3db.pr_contact
+
+    query = (htable.id == id) & \
+            (htable.person_id == ptable.id)
+    left = ctable.on((ctable.pe_id == ptable.pe_id) & \
+                     (ctable.contact_method == "SMS"))
+    row = db(query).select(htable.type,
+                           ptable.first_name,
+                           ptable.middle_name,
+                           ptable.last_name,
+                           ctable.value,
+                           left=left,
+                           limitby=(0, 1)).first()
+
+    try:
+        hr = row["hrm_human_resource"]
+    except:
+        return current.messages.UNKNOWN_OPT
+
+    repr = s3_fullname(row.pr_person)
+    if row.pr_contact.value:
+        repr = "%s %s" % (repr, row.pr_contact.value)
+    if show_link:
+        if hr.type == 1:
+            controller = "hrm"
+            group = "staff"
+        else:
+            controller = "vol"
+            group = "volunteer"
+        request.extension = "html"
+        return A(repr,
+                 _href = URL(c = controller,
+                             f = "person",
+                             args = ["contacts"],
+                             vars = {"group": group,
+                                     "human_resource.id": id}
+                             )
+                 )
+    return repr
 
 # =============================================================================
 def req_item():
@@ -739,8 +744,7 @@ def req_item():
 # -----------------------------------------------------------------------------
 def req_item_packs():
     """
-        Called by S3FilterFieldChange to provide the pack options for a
-            particular Item
+        Called by S3OptionsFilter to provide the pack options for an Item
     """
 
     req_item_id = None
@@ -1154,13 +1158,13 @@ def commit_rheader(r):
                                        ),
                                     ),
                                 )
-                prepare_btn = A( T("Prepare Shipment"),
-                              _href = URL(f = "send_commit",
-                                          args = [record.id]
-                                          ),
-                              _id = "send_commit",
-                              _class = "action-btn"
-                              )
+                prepare_btn = A(T("Prepare Shipment"),
+                                _href = URL(f = "send_commit",
+                                            args = [record.id]
+                                            ),
+                                _id = "send_commit",
+                                _class = "action-btn"
+                                )
 
                 s3.rfooter = TAG[""](prepare_btn)
 
@@ -1260,7 +1264,9 @@ def commit_req():
     """
 
     req_id = request.args[0]
-    r_req = s3db.req_req[req_id]
+    table = s3db.req_req
+    r_req = db(table.id == req_id).select(table.type,
+                                          limitby=(0, 1)).first()
     site_id = request.vars.get("site_id")
 
     # User must have permissions over facility which is sending
@@ -1311,15 +1317,20 @@ def commit_req():
         commit_item_quantity = commit_item_quantity / req_item.req_req_item.pack_quantity
 
         if commit_item_quantity:
+            req_item_id = req_item.req_req_item.id
             commit_item_id = citable.insert(commit_id = commit_id,
-                                            req_item_id = req_item.req_req_item.id,
+                                            req_item_id = req_item_id,
                                             item_pack_id = req_item.req_req_item.item_pack_id,
                                             quantity = commit_item_quantity
                                             )
 
-            # Update the req_item.commit_quantity  & req.commit_status
+            # Update the req_item.commit_quantity & req.commit_status
             s3mgr.store_session("req", "commit_item", commit_item_id)
-            s3db.req_commit_item_onaccept(None)
+            form = Storage()
+            form.vars = Storage(
+                    req_item_id = req_item_id
+                )
+            s3db.req_commit_item_onaccept(form)
 
     # Redirect to commit
     redirect(URL(c="req", f="commit",
@@ -1341,7 +1352,11 @@ def send_req():
     siptable = s3db.supply_item_pack
 
     req_id = request.args[0]
-    r_req = s3db.req_req[req_id]
+    table = s3db.req_req
+    r_req = db(table.id == req_id).select(table.req_ref,
+                                          table.requester_id,
+                                          table.site_id,
+                                          limitby=(0, 1)).first()
     site_id = request.vars.get("site_id")
 
     # User must have permissions over facility which is sending
@@ -1358,7 +1373,7 @@ def send_req():
     code = s3db.inv_get_shipping_code("WB",
                                       site_id,
                                       s3db.inv_send.send_ref
-                                     )
+                                      )
     send_id = sendtable.insert(send_ref = code,
                                req_ref = r_req.req_ref,
                                sender_id = auth.s3_logged_in_person(),
@@ -1367,7 +1382,7 @@ def send_req():
                                recipient_id = r_req.requester_id,
                                to_site_id = r_req.site_id,
                                status = s3db.inv_ship_status["IN_PROCESS"],
-                              )
+                               )
 
     # Get the items for this request that have not been fulfilled (in transit)
     query = (ritable.req_id == req_id) & \

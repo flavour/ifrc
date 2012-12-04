@@ -119,6 +119,8 @@ T = current.T
 #settings.L10n.date_format = T("%m-%d-%Y")
 #settings.L10n.time_format = T("%H:%M:%S")
 #settings.L10n.datetime_format = T("%m-%d-%Y %H:%M")
+# Start week on Sunday
+#settings.L10n.firstDOW = 0
 # Number formats (defaults to ISO 31-0)
 # Decimal separator for numbers (defaults to ,)
 settings.L10n.decimal_separator = "."
@@ -238,12 +240,17 @@ settings.L10n.decimal_separator = "."
 #settings.ui.label_postcode = "ZIP Code"
 # Enable Social Media share buttons
 #settings.ui.social_buttons = True
+# Enable this to show pivot table options form by default
+#settings.ui.hide_report_options = False
+# Uncomment to show created_by/modified_by using Names not Emails
+#settings.ui.auth_user_represent = "name"
 
 # -----------------------------------------------------------------------------
 # Persons
 # Uncomment to hide fields in S3AddPersonWidget
 #settings.pr.request_dob = False
 #settings.pr.request_gender = False
+#settings.pr.select_existing = False
 
 # Organisation Management
 # Set the length of the auto-generated org/site code the default is 10
@@ -323,11 +330,15 @@ settings.L10n.decimal_separator = "."
 #settings.inv.shipment_name = "order"
 # Uncomment to not track pack values
 #settings.inv.track_pack_values = False
+#settings.inv.show_mode_of_transport = True
+#settings.inv.send_show_org = False
+#settings.inv.send_show_time_in = True
 #settings.inv.send_form_name = "Tally Out Sheet"
 #settings.inv.send_short_name = "TO"
 #settings.inv.send_ref_field_name = "Tally Out Number"
 #settings.inv.recv_form_name = "Acknowledgement Receipt for Donations Received Form"
 #settings.inv.recv_shortname = "ARDR"
+# Types common to both Send and Receive
 #settings.inv.shipment_types = {
 #         0: T("-"),
 #         1: T("Other Warehouse"),
@@ -336,18 +347,41 @@ settings.L10n.decimal_separator = "."
 #         4: T("Local Purchases"),
 #         5: T("Confiscated Goods from Bureau Of Customs")
 #    }
+#settings.inv.send_types = {
+#        21: T("Distribution")
+#    }
+#settings.inv.send_type_default = 1
+#settings.inv.recv_types = {
+#        32: T("Donation"),
+#        34: T("Purchase"),
+#    }
+#settings.inv.item_status = {
+#        0: current.messages["NONE"],
+#        1: T("Dump"),
+#        2: T("Sale"),
+#        3: T("Reject"),
+#        4: T("Surplus")
+#   }
 
 # Requests Management
-#settings.req.type_inv_label = T("Donations")
-#settings.req.type_hrm_label = T("Volunteers")
+# Label for Inventory Requests
+#settings.req.type_inv_label = "Donations"
+# Label for People Requests
+#settings.req.type_hrm_label = "Volunteers"
+# Label for Requester
+#settings.req.requester_label = "Site Contact"
+# Filter Requester as being from the Site 
+#settings.req.requester_from_site = True
 #settings.req.date_writable = False
 # Allow the status for requests to be set manually,
 # rather than just automatically from commitments and shipments
 #settings.req.status_writable = False
-#settings.req.quantities_writable = True
+#settings.req.item_quantities_writable = True
+#settings.req.skill_quantities_writable = True
 #settings.req.show_quantity_transit = False
 #settings.req.multiple_req_items = False
 #settings.req.prompt_match = False
+#settings.req.items_ask_purpose = False
 #settings.req.use_commit = False
 #settings.req.requester_optional = True
 # Should Requests ask whether Security is required?
@@ -359,9 +393,11 @@ settings.L10n.decimal_separator = "."
 #settings.req.req_form_name = "Request Issue Form"
 #settings.req.req_shortname = "RIS"
 # Restrict the type of requests that can be made, valid values in the
-# list are ["Stock", "People", "Summary", "Other"]. If this is commented out then
+# list are ["Stock", "People", "Other"]. If this is commented out then
 # all types will be valid.
 #settings.req.req_type = ["Stock"]
+# Uncomment to enable Summary 'Site Needs' tab for Offices/Facilities
+#settings.req.summary = True
 
 # Custom Crud Strings for specific req_req types
 #settings.req.req_crud_strings = dict()

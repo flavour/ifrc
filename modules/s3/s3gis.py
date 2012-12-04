@@ -510,6 +510,8 @@ class GIS(object):
             @param features: A list of point features
             @param parent: A location_id to provide a polygonal bounds suitable
                            for validating child locations
+
+            @ToDo: Support Polygons (separate function?)
         """
 
         if parent:
@@ -1467,7 +1469,8 @@ class GIS(object):
         config = GIS.get_config()
 
         if config.default_location_id:
-            return self.get_parent_country(config.default_location_id)
+            return self.get_parent_country(config.default_location_id,
+                                           key_type=key_type)
 
         return None
 
@@ -2159,7 +2162,8 @@ class GIS(object):
                     latlons[row[tablename].id] = (_location.lat, _location.lon)
 
         _latlons = {}
-        _latlons[tablename] = latlons
+        if latlons:
+            _latlons[tablename] = latlons
         _wkts = {}
         _wkts[tablename] = wkts
         _geojsons = {}
@@ -5244,10 +5248,7 @@ class GIS(object):
             @param add_polygon: Whether to include a DrawFeature control to allow drawing a polygon over the map
             @param add_polygon_active: Whether the DrawFeature control should be active by default
             @param features: Simple Features to overlay on Map (no control over appearance & not interactive)
-                [{
-                  "lat": lat,
-                  "lon": lon
-                }]
+                [wkt]
             @param feature_queries: Feature Queries to overlay onto the map & their options (List of Dicts):
                 [{
                   "name"   : T("MyLabel"), # A string: the label for the layer
@@ -5313,6 +5314,9 @@ class GIS(object):
         if not response.warning:
             response.warning = ""
         s3 = response.s3
+        if s3.gis.location_selector_loaded:
+            # Already loaded, bail
+            return ""
         session = current.session
         T = current.T
         db = current.db
@@ -5835,20 +5839,20 @@ S3.gis.lon=%s
         # Simple Features added to the Draft layer
         # - used by the Location Selector
         #
-        _features = ""
         if features:
-            _features = '''S3.gis.features=new Array()\n'''
-            counter = -1
+            simplify = GIS.simplify
+            _f = []
+            append = _f.append
             for feature in features:
-                counter = counter + 1
-                if feature["lat"] and feature["lon"]:
-                    # Generate JS snippet to pass to static
-                    _features += '''S3.gis.features[%i]={
- lat:%f,
- lon:%f
-}\n''' % (counter,
-          feature["lat"],
-          feature["lon"])
+                geojson = simplify(feature, output="geojson")
+                if geojson:
+                    f = dict(type = "Feature",
+                             geometry = json.loads(geojson))
+                    append(f)
+            # Generate JS snippet to pass to static
+            _features = '''S3.gis.features=%s\n''' % json.dumps(_f)
+        else:
+            _features = ""
 
         # ---------------------------------------------------------------------
         # Feature Queries
@@ -6121,6 +6125,15 @@ S3.gis.layers_feature_resources[%i]={
                     (ltable.enabled == True)
             layer = db(query).select(etable.instance_type,
                                      limitby=(0, 1)).first()
+            if not layer:
+                # Use Site Default
+                query = (etable.id == ltable.layer_id) & \
+                        (ltable.config_id == ctable.id) & \
+                        (ctable.uuid == "SITE_DEFAULT") & \
+                        (ltable.base == True) & \
+                        (ltable.enabled == True)
+                layer = db(query).select(etable.instance_type,
+                                         limitby=(0, 1)).first()
             if layer:
                 layer_type = layer.instance_type
                 if layer_type == "gis_layer_openstreetmap":
@@ -6140,6 +6153,7 @@ S3.gis.layers_feature_resources[%i]={
                     layer_types = [XYZLayer]
                 elif layer_type == "gis_layer_empty":
                     layer_types = [EmptyLayer]
+
             if not layer_types:
                 layer_types = [EmptyLayer]
 
@@ -6278,17 +6292,14 @@ i18n.gis_feature_info="%s"
             ready = '''%s
 S3.gis.show_map()''' % ready
         else:
-            ready = "S3.gis.show_map();"
+            ready = "S3.gis.show_map()"
         # Tell YepNope to load all our scripts asynchronously & then run the callback
         script = '''yepnope({
  load:['%s'],
- complete:function(){
-  %s
- }
-})''' % (script, ready)
-
+ complete:function(){%s}})''' % (script, ready)
         html_append(SCRIPT(script))
 
+        s3.gis.location_selector_loaded = 1
         return html
 
 # =============================================================================
@@ -6431,6 +6442,12 @@ class Layer(object):
         # Flag to show whether we've set the default baselayer
         # (otherwise a config higher in the hierarchy can overrule one lower down)
         base = True
+        # Layers requested to be visible via URL (e.g. embedded map)
+        visible = current.request.get_vars.get("layers", None)
+        if visible:
+            visible = visible.split(".")
+        else:
+            visible = []
         for _record in rows:
             record = _record[tablename]
             # Check if we've already seen this layer
@@ -6448,7 +6465,7 @@ class Layer(object):
             if role_required and not s3_has_role(role_required):
                 continue
             # All OK - add SubLayer
-            record["visible"] = _config.visible
+            record["visible"] = _config.visible or str(layer_id) in visible
             if base and _config.base:
                 # name can't conflict with OSM/WMS/ArcREST layers
                 record["_base"] = True
@@ -7204,7 +7221,7 @@ class OpenWeatherMapLayer(Layer):
         if sublayers:
             if current.response.s3.debug:
                 # Non-debug has this included within OpenLayers.js
-                self.scripts.append("scripts/gis/OWM.OpenLayers.1.3.0.2.js")
+                self.scripts.append("scripts/gis/OWM.OpenLayers.js")
             output = {}
             for sublayer in sublayers:
                 if sublayer.type == "station":
@@ -7542,29 +7559,38 @@ class S3Map(S3Search):
             r.http = "POST"
 
         # Process the search forms
-        query, errors = self.process_forms(r,
-                                           simple_form,
-                                           advanced_form,
-                                           form_values)
+        dq, vq, errors = self.process_forms(r,
+                                            simple_form,
+                                            advanced_form,
+                                            form_values)
 
+        search_url = None
+        search_url_vars = Storage()
+        save_search = ""
         if not errors:
             resource = self.resource
-            resource.add_filter(query)
+            if (dq is None or hasattr(dq, "serialize_url")) and \
+               (vq is None or hasattr(vq, "serialize_url")):
+                query = dq
+                if vq is not None:
+                    if query is not None:
+                        query &= vq
+                    else:
+                        query = vq
+                if query is not None:
+                    search_url_vars = query.serialize_url(resource)
+                search_url = r.url(method = "", vars = search_url_vars)
 
-            # Save Search Widget
-            if session.auth and \
-               current.deployment_settings.get_save_search_widget():
+                # Create a Save Search widget
                 save_search = self.save_search_widget(r, query, **attr)
-            else:
-                save_search = DIV()
+
+            # Add sub-queries
+            resource.add_filter(dq)
+            resource.add_filter(vq)
 
             # Add a map for search results
             # (this same map is also used by the Map Search Widget, if-present)
             # Build URL to load the features onto the map
-            if hasattr(query, "serialize_url"):
-                vars = query.serialize_url(resource)
-            else:
-                vars = None
             gis = current.gis
             request = self.request
             marker_fn = s3db.get_config(tablename, "marker_fn")
@@ -7575,7 +7601,7 @@ class S3Map(S3Search):
                                         request.function)
             url = URL(extension="geojson",
                       args=None,
-                      vars=vars)
+                      vars=search_url_vars)
             feature_resources = [{
                     "name"      : T("Search Results"),
                     "id"        : "search_results",

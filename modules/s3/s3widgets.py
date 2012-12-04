@@ -94,6 +94,7 @@ from gluon.storage import Storage
 from s3utils import *
 from s3validators import *
 
+ogetattr = object.__getattribute__
 repr_select = lambda l: len(l.name) > 48 and "%s..." % l.name[:44] or l.name
 
 # =============================================================================
@@ -198,18 +199,23 @@ class S3DateTimeWidget(FormWidget):
 
     def __call__(self, field, value, **attributes):
 
+        settings = current.deployment_settings
         if self.format:
             # default: "%Y-%m-%d %T"
             format = str(self.format)
         else:
-            format = str(current.deployment_settings.get_L10n_datetime_format())
+            format = str(settings.get_L10n_datetime_format())
         request = current.request
         s3 = current.response.s3
 
         if isinstance(value, datetime.datetime):
+            datevalue = value
             value = value.strftime(format)
         elif value is None:
             value = ""
+        else:
+            from dateutil import parser
+            datevalue = parser.parse(value, ignoretz=True)
 
         default = dict(_type = "text",
                        # Prevent default "datetime" calendar from showing up:
@@ -229,6 +235,18 @@ class S3DateTimeWidget(FormWidget):
         earliest = now - timedelta(hours = self.past)
         latest = now + timedelta(hours = self.future)
 
+        # Round to the nearest half hour
+        if value:
+            start = datevalue
+        elif earliest < now < latest:
+            start = now
+        else:
+            start = earliest
+        seconds = (start - start.min).seconds
+        rounding = (seconds + (30 * 60) / 2) // (30 * 60) * (30 * 60)
+        rounded = start + datetime.timedelta(0, rounding - seconds, -start.microsecond)
+
+        rounded = rounded.strftime(format)
         earliest = earliest.strftime(format)
         latest = latest.strftime(format)
 
@@ -241,19 +259,26 @@ class S3DateTimeWidget(FormWidget):
             s3.scripts.append("%s/anytimec.js" % script_dir)
             s3.stylesheets.append("plugins/anytimec.css")
 
+        firstDOW = settings.get_L10n_firstDOW()
         s3.jquery_ready.append(
-'''$('#%(selector)s').AnyTime_picker({
- askSecond:false,
- firstDOW:1,
- earliest:'%(earliest)s',
- latest:'%(latest)s',
- format:'%(format)s',
-})
+'''$('#%(selector)s').click(function(){
+if (!$('#%(selector)s').val()){
+ $('#%(selector)s').val('%(rounded)s')
+ $('#%(selector)s').AnyTime_picker({
+  askSecond:false,
+  firstDOW:%(firstDOW)s,
+  earliest:'%(earliest)s',
+  latest:'%(latest)s',
+  format:'%(format)s'
+ }).focus()
+}})
 clear_button=$('<input type="button" value="clear"/>').click(function(e){
  $('#%(selector)s').val('')
 })
 $('#%(selector)s').after(clear_button)''' % \
-        dict(selector=selector,
+        dict(rounded=rounded,
+             selector=selector,
+             firstDOW=firstDOW,
              earliest=earliest,
              latest=latest,
              format=format.replace("%M", "%i")))
@@ -712,6 +737,7 @@ class S3PersonAutocompleteWidget(FormWidget):
 
         js_autocomplete = "".join((
 '''var %(real_input)s={val:$('#%(dummy_input)s').val(),accept:false}
+try{
 $('#%(dummy_input)s').autocomplete({
  source:'%(url)s',
  delay:%(delay)d,
@@ -763,7 +789,7 @@ $('#%(dummy_input)s').autocomplete({
   name+=' '+item.last
  }
  return $('<li></li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
-}
+}}catch(e){}
 $('#%(dummy_input)s').blur(function(){
  if(!$('#%(dummy_input)s').val()){
   $('#%(real_input)s').val('').change()
@@ -1420,7 +1446,12 @@ class S3LocationDropdownWidget(FormWidget):
 
         s3db = current.s3db
         table = s3db.gis_location
-        query = (table.level == level)
+        if level:
+            query = (table.deleted != True) & \
+                    (table.level == level)
+        else:
+            # Workaround for merge form
+            query = (table.id == value)
         locations = current.db(query).select(table.name,
                                              table.id,
                                              cache=s3db.cache)
@@ -1430,9 +1461,10 @@ class S3LocationDropdownWidget(FormWidget):
             if not value and default and location.name == default:
                 value = location.id
         locations = locations.as_dict()
-        attr_dropdown = OptionsWidget._attributes(field,
-                                                  dict(_type = "int",
-                                                       value = value))
+        attr = dict(attributes)
+        attr["_type"] = "int"
+        attr["value"] = value
+        attr_dropdown = OptionsWidget._attributes(field, attr)
         requires = IS_IN_SET(locations)
         if empty:
             requires = IS_NULL_OR(requires)
@@ -1495,6 +1527,9 @@ class S3LocationSelectorWidget(FormWidget):
                 @ToDo: Inactive Tab: 'Move Location': Defaults to Searching for an Existing Location, with a button to 'Create New Location'
 
         @see: http://eden.sahanafoundation.org/wiki/BluePrintGISLocationSelector
+
+        @ToDo: Support multiple in a page:
+               http://eden.sahanafoundation.org/ticket/1223
     """
 
     def __init__(self,
@@ -1517,6 +1552,10 @@ class S3LocationSelectorWidget(FormWidget):
         settings = current.deployment_settings
         response = current.response
         s3 = current.response.s3
+        if s3.gis.location_selector_loaded:
+            # We don't yet support multiple in a page
+            return TAG[""]()
+
         appname = current.request.application
 
         locations = s3db.gis_location
@@ -1594,8 +1633,9 @@ class S3LocationSelectorWidget(FormWidget):
                                                 locations.name).first()
             if default_location.level:
                 # Add this one to the defaults too
-                defaults[default_location.level] = Storage(name = default_location.name,
-                                                           id = config.default_location_id)
+                defaults[default_location.level] = Storage(name=default_location.name,
+                                                           id=config.default_location_id
+                                                           )
             if "L0" in defaults:
                 default_L0 = defaults["L0"]
                 if default_L0:
@@ -1603,7 +1643,7 @@ class S3LocationSelectorWidget(FormWidget):
                     if id not in countries:
                         # Add the default country to the list of possibles
                         countries[id] = defaults["L0"].name
-                country_snippet = "S3.gis.country = '%s';\n" % \
+                country_snippet = '''S3.gis.country="%s"\n''' % \
                     gis.get_default_country(key_type="code")
         elif len(countries) == 1:
             default_L0.id = countries.keys()[0]
@@ -1721,13 +1761,10 @@ S3.gis.tab="%s"''' % s3.gis.tab
                             map_lon = lon
 
                         query = (locations.id == value)
-                        row = db(query).select(locations.lat,
-                                               locations.lon,
+                        row = db(query).select(locations.wkt,
                                                limitby=(0, 1)).first()
                         if row:
-                            feature = {"lat"  : row.lat,
-                                       "lon"  : row.lon }
-                            features = [feature]
+                            features = [row.wkt]
                         else:
                             features = []
                         map_popup = gis.show_map(
@@ -2134,7 +2171,14 @@ S3.gis.geocoder=true'''
                                _style="cursor:pointer; cursor:hand",
                                _id="gis_location_map-btn",
                                _class="action-btn")
-            map_button_row = TR(map_button, TD(),
+            if geocoder:
+                geocoder_button = A(T("Geocode"),
+                                    _style="cursor:pointer; cursor:hand",
+                                    _id="gis_location_geocoder-btn",
+                                    _class="action-btn")
+            else:
+                geocoder_button = ""
+            map_button_row = TR(TD(geocoder_button, map_button),
                                 _id="gis_location_map_button_row",
                                 _class="locselect box_middle")
         else:
@@ -2179,18 +2223,18 @@ i18n.gis_place_on_map='%s'
 i18n.gis_view_on_map='%s'
 i18n.gis_name_required='%s'
 i18n.gis_country_required="%s"''' % (country_snippet,
-                                        geocoder,
-                                        navigate_away_confirm,
-                                        no_latlon,
-                                        no_map,
-                                        tab,
-                                        attr["_id"],    # Name of the real location or site field
-                                        site,
-                                        PLACE_ON_MAP,
-                                        VIEW_ON_MAP,
-                                        NAME_REQUIRED,
-                                        COUNTRY_REQUIRED
-                                        )
+                                     geocoder,
+                                     navigate_away_confirm,
+                                     no_latlon,
+                                     no_map,
+                                     tab,
+                                     attr["_id"],    # Name of the real location or site field
+                                     site,
+                                     PLACE_ON_MAP,
+                                     VIEW_ON_MAP,
+                                     NAME_REQUIRED,
+                                     COUNTRY_REQUIRED
+                                     )
 
         s3.js_global.append(js_location_selector)
         if s3.debug:
@@ -2199,7 +2243,7 @@ i18n.gis_country_required="%s"''' % (country_snippet,
             script = "s3.locationselector.widget.min.js"
 
         s3.scripts.append("/%s/static/scripts/S3/%s" % (appname, script))
-
+        
         if self.polygon:
             hidden = ""
             if value:
@@ -2230,6 +2274,7 @@ i18n.gis_country_required="%s"''' % (country_snippet,
             wkt_input_row = ""
 
         # The overall layout of the components
+        s3.gis.location_selector_loaded = 1
         return TAG[""](
                         TR(INPUT(**attr)),  # Real input, which is hidden
                         label_row,
@@ -2596,14 +2641,15 @@ class S3ACLWidget(CheckboxesWidget):
 class CheckboxesWidgetS3(OptionsWidget):
     """
         S3 version of gluon.sqlhtml.CheckboxesWidget:
+        - configurable number of columns
         - supports also integer-type keys in option sets
-        - has an identifiable class
+        - has an identifiable class for styling
 
-        Used in Sync, Projects
+        Used in Sync, Projects, Assess
     """
 
-    @staticmethod
-    def widget(field, value, **attributes):
+    @classmethod
+    def widget(cls, field, value, **attributes):
         """
         generates a TABLE tag, including INPUT checkboxes (multiple allowed)
 
@@ -2664,6 +2710,8 @@ class CheckboxesWidgetS3(OptionsWidget):
                 tds.append(TD(INPUT(_type="checkbox",
                                     _name=field.name,
                                     _id=input_id,
+                                    # Hide checkboxes without a label
+                                    _class="" if v else "hide",
                                     requires=attr.get("requires", None),
                                     hideerror=True,
                                     _value=k,
@@ -2688,11 +2736,14 @@ class S3AddPersonWidget(FormWidget):
 
     def __init__(self,
                  controller = None,
-                 select_existing = True):
+                 select_existing = None):
 
         # Controller to retrieve the person record
         self.controller = controller
-        self.select_existing = select_existing
+        if select_existing is not None:
+            self.select_existing = select_existing
+        else:
+            self.select_existing = current.deployment_settings.get_pr_select_existing()
 
     def __call__(self, field, value, **attributes):
 
@@ -2715,59 +2766,78 @@ class S3AddPersonWidget(FormWidget):
         else:
             real_input = str(field).replace(".", "_")
 
-        if self.select_existing:
-            _class ="box_top"
-        else:
-            _class = "hide"
-
         if self.controller is None:
             controller = request.controller
         else:
             controller = self.controller
 
-        # Select from registry buttons
-        select_row = TR(TD(A(T("Select from registry"),
-                             _href="#",
-                             _id="select_from_registry",
-                             _class="action-btn"),
-                           A(T("Remove selection"),
-                             _href="#",
-                             _onclick="clear_person_form();",
-                             _id="clear_form_link",
-                             _class="action-btn hide",
-                             _style="padding-left:15px;"),
-                           A(T("Edit Details"),
-                             _href="#",
-                             _onclick="edit_selected_person_form();",
-                             _id="edit_selected_person_link",
-                             _class="action-btn hide",
-                             _style="padding-left:15px;"),
-                           IMG(_src="/%s/static/img/ajax-loader.gif" % appname,
-                               _height=32,
-                               _width=32,
-                               _id="person_load_throbber",
-                               _class="throbber hide",
-                               _style="padding-left:85px;"),
-                           _class="w2p_fw"),
+        if self.select_existing:
+            # Autocomplete
+            select = '''select_person($('#%s').val())''' % real_input
+            widget = S3PersonAutocompleteWidget(post_process=select)
+            ac_row = TR(TD(LABEL("%s: " % T("Name"),
+                                 _class="hide",
+                                 _id="person_autocomplete_label"),
+                           widget(field,
+                                  None,
+                                  _class="hide")),
                         TD(),
-                        _id="select_from_registry_row",
-                        _class=_class,
-                        _controller=controller,
-                        _field=real_input,
-                        _value=str(value))
+                        _id="person_autocomplete_row",
+                        _class="box_top")
+            # Select from registry buttons
+            _class ="box_top"
+            select_row = TR(TD(A(T("Select from registry"),
+                                 _href="#",
+                                 _id="select_from_registry",
+                                 _class="action-btn"),
+                               A(T("Remove selection"),
+                                 _href="#",
+                                 _onclick="clear_person_form();",
+                                 _id="clear_form_link",
+                                 _class="action-btn hide",
+                                 _style="padding-left:15px;"),
+                               A(T("Edit Details"),
+                                 _href="#",
+                                 _onclick="edit_selected_person_form();",
+                                 _id="edit_selected_person_link",
+                                 _class="action-btn hide",
+                                 _style="padding-left:15px;"),
+                               IMG(_src="/%s/static/img/ajax-loader.gif" % appname,
+                                   _height=32,
+                                   _width=32,
+                                   _id="person_load_throbber",
+                                   _class="throbber hide",
+                                   _style="padding-left:85px;"),
+                               _class="w2p_fw"),
+                            TD(),
+                            _id="select_from_registry_row",
+                            _class=_class,
+                            _controller=controller,
+                            _field=real_input,
+                            _value=str(value))
 
-        # Autocomplete
-        select = '''select_person($('#%s').val())''' % real_input
-        widget = S3PersonAutocompleteWidget(post_process=select)
-        ac_row = TR(TD(LABEL("%s: " % T("Name"),
-                             _class="hide",
-                             _id="person_autocomplete_label"),
-                       widget(field,
-                              None,
-                              _class="hide")),
-                    TD(),
-                    _id="person_autocomplete_row",
-                    _class="box_top")
+        else:
+            _class = "hide"
+            ac_row = ""
+            select_row = TR(TD(A(T("Edit Details"),
+                                 _href="#",
+                                 _onclick="edit_selected_person_form();",
+                                 _id="edit_selected_person_link",
+                                 _class="action-btn hide",
+                                 _style="padding-left:15px;"),
+                               IMG(_src="/%s/static/img/ajax-loader.gif" % appname,
+                                   _height=32,
+                                   _width=32,
+                                   _id="person_load_throbber",
+                                   _class="throbber hide",
+                                   _style="padding-left:85px;"),
+                               _class="w2p_fw"),
+                            TD(),
+                            _id="select_from_registry_row",
+                            _class=_class,
+                            _controller=controller,
+                            _field=real_input,
+                            _value=str(value))
 
         # Embedded Form
         s3db = current.s3db
@@ -2814,13 +2884,22 @@ class S3AddPersonWidget(FormWidget):
                                *fields)
         trs = []
         for tr in form[0]:
-            if not "_id" in tr.attributes or not tr.attributes["_id"].startswith("submit_record"):
-                if "_class" in tr.attributes:
-                    tr.attributes["_class"] = "%s box_middle" % \
-                                                tr.attributes["_class"]
-                else:
-                    tr.attributes["_class"] = "box_middle"
-                trs.append(tr)
+            if "_id" in tr.attributes:
+                # Standard formstyle
+                if tr.attributes["_id"].startswith("submit_record"):
+                    # skip submit row
+                    continue
+            elif "_id" in tr[0][0].attributes:
+                # DIV-based formstyle
+                if tr[0][0].attributes["_id"].startswith("submit_record"):
+                    # skip submit row
+                    continue
+            if "_class" in tr.attributes:
+                tr.attributes["_class"] = "%s box_middle" % \
+                                            tr.attributes["_class"]
+            else:
+                tr.attributes["_class"] = "box_middle"
+            trs.append(tr)
 
         table = DIV(*trs)
 
@@ -2830,7 +2909,7 @@ class S3AddPersonWidget(FormWidget):
                      _class="box_bottom")
 
         # JS
-        s3.jquery_ready.append('''addPersonWidget()''');
+        s3.jquery_ready.append('''addPersonWidget()''')
 
         # Overall layout of components
         return TAG[""](select_row,
@@ -3668,52 +3747,31 @@ def s3_checkboxes_widget(field,
             raise SyntaxError, "widget cannot determine options of %s" % field
 
     help_text = Storage()
-
     if help_field:
-        ftype = str(field.type)
 
-        if ftype[:9] == "reference":
-            ktablename = ftype[10:]
-        elif ftype[:14] == "list:reference":
-            ktablename = ftype[15:]
-        else:
-            # not a reference - no expand
-            # option text = field representation
-            ktablename = None
+        ktablename, pkey, multiple = s3_get_foreign_key(field)
 
-        if isinstance(help_field,dict):
-            # Convert the keys to strings (That's what the options are)
+        if isinstance(help_field, dict):
+            # Convert the keys to strings (that's what the options are)
             for key in help_field.keys():
                 help_text[str(key)] = help_field[key]
 
-        if ktablename is not None:
-            if "." in ktablename:
-                ktablename, pkey = ktablename.split(".", 1)
-            else:
-                pkey = None
+        elif ktablename is not None:
 
             ktable = current.s3db[ktablename]
-
-            if pkey is None:
-                pkey = ktable._id.name
-
-            lookup_field = help_field
-
-            if lookup_field in ktable.fields:
-                query = ktable[pkey].belongs([k for k, v in options])
+            if hasattr(ktable, help_field):
+                keys = [k for k, v in options if str(k).isdigit()]
+                query = ktable[pkey].belongs(keys)
                 rows = current.db(query).select(ktable[pkey],
-                                                ktable[lookup_field]
-                                                )
-
+                                                ktable[help_field])
                 for row in rows:
-                    help_text[str(row[ktable[pkey]])] = row[ktable[lookup_field]]
+                    help_text[str(row[pkey])] = row[help_field]
             else:
                 # Error => no comments available
                 pass
         else:
             # No lookup table => no comments available
             pass
-
 
     options = [(k, v) for k, v in options if k != ""]
     options = sorted(options, key=lambda option: option[1])

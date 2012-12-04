@@ -80,7 +80,7 @@ class S3EventModel(S3Model):
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
-        NONE = current.messages.NONE
+        NONE = current.messages["NONE"]
 
         # ---------------------------------------------------------------------
         # Events
@@ -117,6 +117,7 @@ class S3EventModel(S3Model):
                                    label=T("Zero Hour")),
                              Field("closed", "boolean",
                                    default = False,
+                                   represent = s3_yes_no_represent,
                                    label=T("Closed")),
                              s3_comments(),
                              *s3_meta_fields())
@@ -206,6 +207,7 @@ class S3EventModel(S3Model):
                                    label=T("Zero Hour")),
                              Field("closed", "boolean",
                                    default = False,
+                                   represent = s3_yes_no_represent,
                                    label=T("Closed")),
                              s3_comments(),
                              *s3_meta_fields())
@@ -463,7 +465,7 @@ class S3EventModel(S3Model):
         if row:
             return row.name
         elif not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         db = current.db
         table = db.event_event
@@ -504,7 +506,7 @@ class S3EventModel(S3Model):
         if row:
             return row.name
         elif not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         db = current.db
         table = db.event_incident

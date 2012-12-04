@@ -594,7 +594,7 @@ class S3IRSModel(S3Model):
         if row:
             return row.name
         elif not id:
-            return current.messages.NONE
+            return current.messages["NONE"]
 
         db = current.db
         table = db.irs_ireport
@@ -898,9 +898,9 @@ class S3IRSModel(S3Model):
             code = "".join((
 '''S3.timeline.data=''', data, '''
 S3.timeline.tl_start="''', tl_start.isoformat(), '''"
-S3.timeline.tl_end="''', tl_end.isoformat(), '''"'
-S3.timeline.now="''', now.isoformat()
-))
+S3.timeline.tl_end="''', tl_end.isoformat(), '''"
+S3.timeline.now="''', now.isoformat(), '''"
+'''))
 
             # Control our code in static/scripts/S3/s3.timeline.js
             s3.js_global.append(code)
@@ -1062,7 +1062,7 @@ class S3IRSResponseModel(S3Model):
 
         def response_represent(opt):
             if opt is None:
-                return current.messages.NONE
+                return current.messages["NONE"]
             elif opt:
                 return T("Yes")
             else:

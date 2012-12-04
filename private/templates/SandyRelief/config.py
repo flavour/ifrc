@@ -31,6 +31,8 @@ settings.L10n.utc_offset = "UTC +0500"
 settings.L10n.date_format = T("%m-%d-%Y")
 settings.L10n.time_format = T("%H:%M:%S")
 settings.L10n.datetime_format = T("%m-%d-%Y %H:%M")
+# Start week on Sunday
+settings.L10n.firstDOW = 0
 # Number formats (defaults to ISO 31-0)
 # Decimal separator for numbers (defaults to ,)
 settings.L10n.decimal_separator = "."
@@ -80,7 +82,7 @@ settings.auth.registration_link_user_to = {"staff":T("Staff"),
                                            #"volunteer":T("Volunteer")
                                            }
 
-settings.security.policy = 4 # Controller & Function ACLs
+settings.security.policy = 5 # Controller, Function & Table ACLs
 
 # Resource which need approval
 #settings.auth.record_approval_required_for = ["org_facility"]
@@ -99,15 +101,22 @@ settings.inv.facility_label = "Facility"
 settings.inv.stock_count = True
 # Uncomment to not track pack values
 settings.inv.track_pack_values = False
+settings.inv.send_show_org = False
+# Types common to both Send and Receive
 settings.inv.shipment_types = {
-         #0: T("-"),
-         1: T("Other Warehouse"),
-         2: T("Distribution"),
-         #2: T("Donation"),
-         #3: T("Foreign Donation"),
-         #4: T("Local Purchases"),
-         #5: T("Confiscated Goods from Bureau Of Customs")
+        1: T("Other Warehouse")
     }
+settings.inv.send_types = {
+        #21: T("Distribution")
+    }
+settings.inv.send_type_default = 1
+settings.inv.item_status = {
+        #0: current.messages["NONE"],
+        #1: T("Dump"),
+        #2: T("Sale"),
+        #3: T("Reject"),
+        #4: T("Surplus")
+   }
 
 # Request Management
 settings.req.req_type = ["People", "Stock"]#, "Summary"]
@@ -115,9 +124,18 @@ settings.req.prompt_match = False
 #settings.req.use_commit = False
 settings.req.requester_optional = True
 settings.req.date_writable = False
-settings.req.quantities_writable = True
+settings.req.item_quantities_writable = True
 settings.req.skill_quantities_writable = True
+settings.req.items_ask_purpose = False
 #settings.req.use_req_number = False
+# Label for Requester
+settings.req.requester_label = "Site Contact"
+# Filter Requester as being from the Site 
+settings.req.requester_from_site = True
+# Label for Inventory Requests
+settings.req.type_inv_label = "Supplies"
+# Uncomment to enable Summary 'Site Needs' tab for Offices/Facilities
+settings.req.summary = True
 
 settings.org.site_label = "Facility"
 # Enable certain fields just for specific Organisations
@@ -144,6 +162,8 @@ settings.org.site_inv_req_tabs = False
 # Uncomment to hide fields in S3AddPersonWidget
 settings.pr.request_dob = False
 settings.pr.request_gender = False
+# Doesn't yet work (form fails to submit)
+#settings.pr.select_existing = False
 
 # -----------------------------------------------------------------------------
 # Human Resource Management
@@ -185,6 +205,8 @@ settings.project.milestones = True
 # Uncomment this to disable Sectors in projects
 settings.project.sectors = False
 
+# Uncomment to show created_by/modified_by using Names not Emails
+settings.ui.auth_user_represent = "name"
 # Formstyle
 def formstyle_row(id, label, widget, comment, hidden=False):
     if hidden:
@@ -266,7 +288,7 @@ settings.modules = OrderedDict([
             name_nice = T("Map"),
             #description = "Situation Awareness & Geospatial Analysis",
             restricted = True,
-            module_type = 8,     # 8th item in the menu
+            module_type = 9,     # 8th item in the menu
         )),
     ("pr", Storage(
             name_nice = T("Person Registry"),
@@ -276,23 +298,23 @@ settings.modules = OrderedDict([
             module_type = 10
         )),
     ("org", Storage(
-            name_nice = T("Facilities"),
+            name_nice = T("Locations"),
             #description = 'Lists "who is doing what & where". Allows relief agencies to coordinate their activities',
             restricted = True,
-            module_type = 1
+            module_type = 4
         )),
     # All modules below here should be possible to disable safely
     ("hrm", Storage(
             name_nice = T("Contacts"),
             #description = "Human Resources Management",
             restricted = True,
-            module_type = 2,
+            module_type = 3,
         )),
     ("vol", Storage(
             name_nice = T("Volunteers"),
             #description = "Human Resources Management",
             restricted = True,
-            module_type = 4,
+            module_type = 2,
         )),
     ("cms", Storage(
           name_nice = T("Content Management"),
@@ -323,7 +345,7 @@ settings.modules = OrderedDict([
             name_nice = T("Inventory"),
             #description = "Receiving and Sending Items",
             restricted = True,
-            module_type = 6
+            module_type = 10
         )),
     #("proc", Storage(
     #        name_nice = T("Procurement"),
@@ -335,7 +357,7 @@ settings.modules = OrderedDict([
             name_nice = T("Assets"),
             #description = "Recording and Assigning Assets",
             restricted = True,
-            module_type = 7,
+            module_type = 10,
         )),
     # Vehicle depends on Assets
     #("vehicle", Storage(
@@ -348,13 +370,19 @@ settings.modules = OrderedDict([
             name_nice = T("Requests"),
             #description = "Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested.",
             restricted = True,
-            module_type = 3,
+            module_type = 1,
         )),
     ("project", Storage(
             name_nice = T("Projects"),
             #description = "Tracking of Projects, Activities and Tasks",
             restricted = True,
             module_type = 10
+        )),
+    ("assess", Storage(
+            name_nice = T("Assessments"),
+            #description = "Rapid Assessments & Flexible Impact Assessments",
+            restricted = True,
+            module_type = 5,
         )),
     #("survey", Storage(
     #        name_nice = T("Surveys"),
@@ -468,14 +496,6 @@ settings.modules = OrderedDict([
     #("building", Storage(
     #        name_nice = T("Building Assessments"),
     #        #description = "Building Safety Assessments",
-    #        restricted = True,
-    #        module_type = 10,
-    #    )),
-    # Deprecated by Surveys module
-    # - depends on CR, IRS & Impact
-    #("assess", Storage(
-    #        name_nice = T("Assessments"),
-    #        #description = "Rapid Assessments & Flexible Impact Assessments",
     #        restricted = True,
     #        module_type = 10,
     #    )),
