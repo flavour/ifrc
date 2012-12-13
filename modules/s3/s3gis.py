@@ -7543,7 +7543,10 @@ class S3Map(S3Search):
                 session_options = session.s3.search_options
                 if session_options and tablename in session_options:
                     # session
-                    session_options = session_options[tablename]
+                    if "clear_opts" in r.get_vars:
+                        session_options = Storage()
+                    else:
+                        session_options = session_options[tablename] or Storage()
                 else:
                     # unfiltered
                     session_options = Storage()
@@ -7936,7 +7939,9 @@ class S3ExportPOI(S3Method):
 
 # -----------------------------------------------------------------------------
 class S3ImportPOI(S3Method):
-    """ Import point-of-interest resources for a location """
+    """
+        Import point-of-interest resources for a location
+    """
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -7951,7 +7956,6 @@ class S3ImportPOI(S3Method):
         if r.representation == "html":
 
             T = current.T
-            auth = current.auth
             s3db = current.s3db
             request = current.request
             response = current.response
@@ -7996,7 +8000,7 @@ class S3ImportPOI(S3Method):
                         TR(
                             TD(B("%s: " % T("Password"))),
                             TD(INPUT(_type="text", _name="password",
-                                     _id="password", _value="osm")),
+                                     _id="password", _value="planet")),
                             TD(),
                             ),
                         TR(
@@ -8085,6 +8089,7 @@ class S3ImportPOI(S3Method):
                         # Python < 2.7
                         error = subprocess.call(cmd, shell=True)
                         if error:
+                            s3_debug(cmd)
                             current.session.error = T("OSM file generation failed!")
                             redirect(URL(args=r.id))
                     try:

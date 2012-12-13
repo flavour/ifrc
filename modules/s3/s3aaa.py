@@ -61,6 +61,7 @@ from gluon.contrib.simplejson.ordered_dict import OrderedDict
 from s3error import S3PermissionError
 from s3fields import s3_uid, s3_timestamp, s3_deletion_status, s3_comments
 from s3rest import S3Method
+from s3track import S3Tracker
 from s3utils import s3_mark_required
 
 DEFAULT = lambda: None
@@ -516,6 +517,7 @@ Thank you
         request = current.request
         response = current.response
         session = current.session
+        deployment_settings = current.deployment_settings
         passfield = self.settings.password_field
         try:
             utable[passfield].requires[-1].min_length = 0
@@ -560,6 +562,13 @@ Thank you
                                  )), "",
                        formstyle,
                        "auth_user_remember__row")
+
+            if deployment_settings.set_presence_on_login:
+                addrow(form, XML(""), INPUT(_id="auth_user_clientlocation",
+                                            _name="auth_user_clientlocation",
+                                            _style="display:none"),
+                       "display:none", "auth_user_client_location")
+                current.response.s3.jquery_ready.append('''s3_get_client_location($('#auth_user_clientlocation'))''')
 
             captcha = self.settings.login_captcha or \
                 (self.settings.login_captcha!=False and self.settings.captcha)
@@ -685,6 +694,8 @@ Thank you
             - common function called by login() & register()
         """
 
+        db = current.db
+        deployment_settings = current.deployment_settings
         request = current.request
         session = current.session
         settings = self.settings
@@ -718,7 +729,53 @@ Thank you
 
         # Update the timestamp of the User so we know when they last logged-in
         utable = settings.table_user
-        current.db(utable.id == self.user.id).update(timestmp = request.utcnow)
+        db(utable.id == self.user.id).update(timestmp = request.utcnow)
+
+        # Set user's position
+        # @ToDo: Per-User settings
+        if deployment_settings.set_presence_on_login and \
+           vars.has_key("auth_user_clientlocation") and \
+           vars.get("auth_user_clientlocation"):
+            position = vars.get("auth_user_clientlocation").split("|", 3)
+            userlat = float(position[0])
+            userlon = float(position[1])
+            accuracy = float(position[2]) / 1000 # Ensures accuracy is in km
+            closestpoint = 0;
+            closestdistance = 0;
+            gis = current.gis
+            # @ToDo: Filter to just Sites & Home Addresses?
+            locations = gis.get_features_in_radius(userlat, userlon, accuracy)
+
+            ignore_levels_for_presence = deployment_settings.ignore_levels_for_presence
+            greatCircleDistance = gis.greatCircleDistance
+            for location in locations:
+                if location.level not in ignore_levels_for_presence: 
+                    if closestpoint != 0:
+                        currentdistance = greatCircleDistance(closestpoint.lat,
+                                                              closestpoint.lon,
+                                                              location.lat,
+                                                              location.lon)
+                        if currentdistance < closestdistance:
+                            closestpoint = location
+                            closestdistance = currentdistance
+                    else:
+                        closestpoint = location
+
+            s3tracker = S3Tracker()
+            if closestpoint == 0 and deployment_settings.create_unknown_locations: 
+                # There wasn't any near-by location, so create one
+                newpoint = {"lat": userlat,
+                            "lon": userlon,
+                            "name": "Waypoint"
+                            }
+                closestpoint = current.s3db.gis_location.insert(**newpoint)
+                s3tracker(db.pr_person,
+                          self.user.id).set_location(closestpoint,
+                                                     timestmp=request.utcnow)             
+            else:
+                s3tracker(db.pr_person,
+                          self.user.id).set_location(closestpoint.id,
+                                                     timestmp=request.utcnow)
 
     # -------------------------------------------------------------------------
     def register(self,

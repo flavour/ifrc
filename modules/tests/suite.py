@@ -40,6 +40,7 @@ def loadAllTests():
     addTests(loadTests(CreateStaff))
     addTests(loadTests(CreateStaffJobRole))
     addTests(loadTests(CreateStaffCertificate))
+    addTests(loadTests(SearchStaff))
 
     # Setup Volunteer
     addTests(loadTests(CreateVolunteer))
@@ -90,6 +91,9 @@ def loadAllTests():
     # Create Members
     addTests(loadTests(CreateMember))
 
+    # Search Members
+    addTests(loadTests(SearchMember))
+    
     # Test helpers
     addTests(loadTests(ReportTestHelper))
 

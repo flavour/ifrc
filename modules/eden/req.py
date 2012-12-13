@@ -409,6 +409,12 @@ class S3RequestModel(S3Model):
                 location_level="L4",
                 cols = 3,
             ),
+            S3SearchOptionsWidget(
+                name="req_search_site",
+                field="site_id",
+                label = T("Facility"),
+                cols = 3,
+            ),
             ]
         if use_commit:
             widget = S3SearchOptionsWidget(
@@ -426,6 +432,7 @@ class S3RequestModel(S3Model):
                          #"site_id$location_id$L2",
                          "site_id$location_id$L3",
                          "site_id$location_id$L4",
+                         "site_id",
                          ]
         # @ToDo: id gets stripped in _select_field
         fact_fields = report_fields + [(T("Requests"), "id")]
@@ -647,7 +654,7 @@ i18n.req_details_mandatory="%s"''' % (table.purpose.label,
     def req_inline_form(type, method):
         """
             Function to be called from REST prep functions
-             - to add req_skill & req_skill components as inline forms
+             - to add req_item & req_skill components as inline forms
         """
 
         s3db = current.s3db
@@ -1192,44 +1199,6 @@ S3OptionsFilter({
         # Configure the next page to go to based on the request type
         tablename = "req_req"
 
-        #if table.type.default:
-        #    type = table.type.default
-        #elif "type" in form.vars:
-        #    type = int(form.vars.type)
-        #else:
-        #    type = 1
-        #if type == 1 and settings.has_module("inv"):
-        #    s3db.configure(tablename,
-        #                   create_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_item"]),
-        #                   update_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_item"]))
-        #elif type == 2 and settings.has_module("asset"):
-        #    s3db.configure(tablename,
-        #                   create_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_asset"]),
-        #                   update_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_asset"]))
-        #elif type == 3 and settings.has_module("hrm"):
-        #    s3db.configure(tablename,
-        #                   create_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_skill"]),
-        #                   update_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_skill"]))
-        #elif type == 4 and settings.has_module("cr"):
-        #    s3db.configure(tablename,
-        #                   create_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_shelter"]),
-        #                   update_next = URL(c="req",
-        #                                     f=f,
-        #                                     args=["[id]", "req_shelter"]))
         if is_template:
             s3db.configure(tablename,
                            create_next = URL(c="req",
@@ -1238,6 +1207,46 @@ S3OptionsFilter({
                            update_next = URL(c="req",
                                              f=f,
                                              args=["[id]", "job"]))
+
+        elif not settings.get_req_inline_forms():
+            if table.type.default:
+                type = table.type.default
+            elif "type" in form.vars:
+                type = int(form.vars.type)
+            else:
+                type = 1
+            if type == 1 and settings.has_module("inv"):
+                s3db.configure(tablename,
+                               create_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_item"]),
+                               update_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_item"]))
+            elif type == 2 and settings.has_module("asset"):
+                s3db.configure(tablename,
+                               create_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_asset"]),
+                               update_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_asset"]))
+            elif type == 3 and settings.has_module("hrm"):
+                s3db.configure(tablename,
+                               create_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_skill"]),
+                               update_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_skill"]))
+            elif type == 4 and settings.has_module("cr"):
+                s3db.configure(tablename,
+                               create_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_shelter"]),
+                               update_next = URL(c="req",
+                                                 f=f,
+                                                 args=["[id]", "req_shelter"]))
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1364,7 +1373,7 @@ class S3RequestItemModel(S3Model):
             title_display = T("Request Item Details"),
             title_list = T("Items in Request"),
             title_update = T("Edit Item in Request"),
-            title_search = T("Search Items in Request"),
+            title_search = T("Search Requested Items"),
             subtitle_create = T("Add New Item to Request"),
             label_list_button = T("List Items in Request"),
             label_create_button = ADD_REQUEST_ITEM,
@@ -1388,8 +1397,7 @@ class S3RequestItemModel(S3Model):
                                                     _title="%s|%s" % (T("Request Item"),
                                                                       T("Select Items from the Request"))),
                                       ondelete = "CASCADE",
-                                      script = SCRIPT('''
-$(document).ready(function(){
+                                      script = '''
 S3FilterFieldChange({
  'FilterField':'req_item_id',
  'Field':'item_pack_id',
@@ -1399,8 +1407,7 @@ S3FilterFieldChange({
  'msgNoRecords':i18n.no_packs,
  'fncPrep':fncPrepItem,
  'fncRepresent':fncRepresentItem
-})})'''),
-                                        )
+})''')
 
         if settings.get_req_prompt_match():
             # Shows the inventory items which match a requested item
@@ -2471,10 +2478,19 @@ class S3CommitItemModel(S3Model):
                                   req_table.req_ref,
                                   limitby=(0, 1)).first()
 
+        # Convert the HR to a Person
+        hrtable = s3db.hrm_human_resource
+        requester_id = record.req_req.requester_id
+        if requester_id:
+            recipient_id = db(hrtable.id == requester_id).select(hrtable.person_id,
+                                                                 limitby=(0, 1)
+                                                                 ).first().person_id
+        else:
+            recipient_id = None
         # Create an inv_send and link to the commit
         vars = Storage(sender_id = record.req_commit.committer_id,
                        site_id = record.req_commit.site_id,
-                       recipient_id = record.req_req.requester_id,
+                       recipient_id = recipient_id,
                        to_site_id = record.req_req.site_id,
                        req_ref = record.req_req.req_ref,
                        status = 0)
@@ -2485,22 +2501,23 @@ class S3CommitItemModel(S3Model):
         query = (cim_table.commit_id == commit_id) & \
                 (cim_table.req_item_id == rim_table.id) & \
                 (cim_table.deleted == False)
-        records = db(query).select(rim_table.item_id,
+        records = db(query).select(rim_table.id,
+                                   rim_table.item_id,
                                    rim_table.item_pack_id,
-                                   cim_table.quantity,
                                    rim_table.currency,
-                                   rim_table.id,
+                                   cim_table.quantity,
                                    )
         # Create inv_track_items for each commit item
         for row in records:
-            id = track_table.insert(track_org_id = record.req_commit.organisation_id,
+            rim = row.req_req_item
+            id = track_table.insert(req_item_id = rim.id,
+                                    track_org_id = record.req_commit.organisation_id,
                                     send_id = send_id,
                                     status = 1,
-                                    item_id = row.req_req_item.item_id,
-                                    item_pack_id = row.req_req_item.item_pack_id,
+                                    item_id = rim.item_id,
+                                    item_pack_id = rim.item_pack_id,
+                                    currency = rim.currency,
                                     quantity = row.req_commit_item.quantity,
-                                    currency = row.req_req_item.currency,
-                                    req_item_id = row.req_req_item.id
                                     )
             track_table(track_table.id == id).update(tracking_no = "TN:%6d" % (10000 + id))
 
@@ -2724,6 +2741,8 @@ class S3CommitSkillModel(S3Model):
 # =============================================================================
 def req_item_onaccept(form):
     """
+        Update Request Status
+        Update req_item_category link table
     """
 
     req_id = form.vars.get("req_id", None)
@@ -2738,13 +2757,11 @@ def req_item_onaccept(form):
     # Update req_item_category link table
     item_id = form.vars.get("item_id", None)
     db = current.db
-    sitable = db.supply_item
-    item = db(sitable.id == item_id).select(sitable.item_category_id,
-                                            limitby=(0, 1)
-                                            ).first()
-    if item:
-        item_category_id = item.item_category_id
-        rictable = db.req_req_item_category
+    citable = db.supply_catalog_item
+    cats = db(citable.item_id == item_id).select(citable.item_category_id)
+    rictable = db.req_req_item_category
+    for cat in cats:
+        item_category_id = cat.item_category_id
         query = (rictable.deleted == False) & \
                 (rictable.req_id == req_id) & \
                 (rictable.item_category_id == item_category_id)
@@ -2766,12 +2783,10 @@ def req_item_ondelete(row):
     fks = json.loads(item.deleted_fk)
     req_id = fks["req_id"]
     item_id = fks["item_id"]
-    sitable = db.supply_item
-    item = db(sitable.id == item_id).select(sitable.item_category_id,
-                                            limitby=(0, 1)
-                                            ).first()
-    if item:
-        item_category_id = item.item_category_id
+    citable = db.supply_catalog_item
+    cats = db(citable.item_id == item_id).select(citable.item_category_id)
+    for cat in cats:
+        item_category_id = cat.item_category_id
         # Check if we have other req_items in the same category
         query = (ritable.deleted == False) & \
                 (ritable.req_id == req_id) & \
@@ -3162,7 +3177,6 @@ def req_rheader(r, check_page=False):
                             id = db(query).select(table.id,
                                                   limitby=(0, 1)).first().id
                             transit_status = SPAN(transit_status,
-                                                  "           ",
                                                   A(T("Incoming Shipments"),
                                                     _href = URL(c = instance_type.split("_")[0],
                                                                 f = "incoming",

@@ -272,10 +272,12 @@ if (!$('#%(selector)s').val()){
   format:'%(format)s'
  }).focus()
 }})
-clear_button=$('<input type="button" value="clear"/>').click(function(e){
+clear_button=$('<input id="%(selector)s_clear" type="button" value="clear"/>').click(function(e){
  $('#%(selector)s').val('')
 })
-$('#%(selector)s').after(clear_button)''' % \
+if($('#%(selector)s_clear').length == 0){
+$('#%(selector)s').after(clear_button)
+}''' % \
         dict(rounded=rounded,
              selector=selector,
              firstDOW=firstDOW,
@@ -899,6 +901,7 @@ class S3HumanResourceAutocompleteWidget(FormWidget):
 
         js_autocomplete = "".join((
 '''var %(real_input)s={val:$('#%(dummy_input)s').val(),accept:false}
+try{
 $('#%(dummy_input)s').autocomplete({
  source:'%(url)s',
  delay:%(delay)d,
@@ -989,7 +992,7 @@ $('#%(dummy_input)s').autocomplete({
   }
  }
  return $('<li></li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
-}
+}}catch(e){}
 $('#%(dummy_input)s').blur(function(){
  if(!$('#%(dummy_input)s').val()){
   $('#%(real_input)s').val('').change()
@@ -1091,6 +1094,7 @@ class S3SiteAutocompleteWidget(FormWidget):
   %s}
 }''' % cases, '''
 var %(real_input)s={val:$('#%(dummy_input)s').val(),accept:false}
+try{
 $('#%(dummy_input)s').autocomplete({
  source:'%(url)s',
  delay:%(delay)d,
@@ -1142,7 +1146,7 @@ $('#%(dummy_input)s').autocomplete({
   name+=' ('+s3_site_lookup(item.instance_type)+')'
  }
  return $('<li></li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
-}
+}}catch(e){}
 $('#%(dummy_input)s').blur(function(){
  if(!$('#%(dummy_input)s').val()){
   $('#%(real_input)s').val('').change()
@@ -1346,6 +1350,7 @@ def S3GenericAutocompleteTemplate(post_process,
 var %(real_input)s={val:$('#%(dummy_input)s').val(),accept:false}
 var get_name=%(name_getter)s
 var get_id=%(id_getter)s
+try{
 $('#%(dummy_input)s').autocomplete({
  source:%(source)s,
  delay:%(delay)d,
@@ -1374,7 +1379,7 @@ $('#%(dummy_input)s').autocomplete({
  }
 }).data('autocomplete')._renderItem=function(ul,item){
  return $('<li></li>').data('item.autocomplete',item).append('<a>'+get_name(item)+'</a>').appendTo(ul)
-}''' % locals(),
+}}catch(e){}''' % locals(),
 '''
 $('#%(dummy_input)s').blur(function(){
  $('#%(real_input)s').val($('#%(dummy_input)s').val())
@@ -1503,7 +1508,7 @@ class S3LocationSelectorWidget(FormWidget):
                     Lx as dropdowns. Default label is 'Select previous to populate this dropdown' (Fixme!)
                 Mode not Strict (default):
                     L2-L5 as Autocompletes which create missing locations automatically
-                    @ToDo: L1 as Dropdown? (Have a gis_config setting to inform whether this is populated for a given L0)
+                    @ToDo: Lx as Dropdown (where the 'Edit Lx' is set)
                 Map:
                     @ToDo: Inline or Popup? (Deployment Option?)
                     Set Map Viewport to default on best currently selected Hierarchy
@@ -1644,6 +1649,9 @@ class S3LocationSelectorWidget(FormWidget):
                         countries[id] = defaults["L0"].name
                 country_snippet = '''S3.gis.country="%s"\n''' % \
                     gis.get_default_country(key_type="code")
+        elif len(_countries) == 1:
+            default_L0.id = countries.keys()[0]
+            country_snippet = '''S3.gis.country="%s"\n''' % _countries[0]
         elif len(countries) == 1:
             default_L0.id = countries.keys()[0]
 
@@ -2171,10 +2179,14 @@ S3.gis.geocoder=true'''
                                _id="gis_location_map-btn",
                                _class="action-btn")
             if geocoder:
+                if value:
+                    _class = "action-btn hide"
+                else:
+                    _class = "action-btn"
                 geocoder_button = A(T("Geocode"),
                                     _style="cursor:pointer; cursor:hand",
                                     _id="gis_location_geocoder-btn",
-                                    _class="action-btn")
+                                    _class=_class)
             else:
                 geocoder_button = ""
             map_button_row = TR(TD(geocoder_button, map_button),

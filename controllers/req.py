@@ -248,15 +248,14 @@ def req_controller():
         #    s3db.configure("req_req", list_fields=list_fields)
 
         type = (r.record and r.record.type) or \
-               (request.vars and request.vars.type)
+               (request.vars and int(request.vars.type))
 
         if r.interactive:
             table.requester_id.represent = requester_represent
 
             # Set Fields and Labels depending on type
             if type:
-                type = int(type)
-                table.type.default = int(type)
+                table.type.default = type
 
                 # This prevents the type from being edited AFTER it is set
                 table.type.readable = table.type.writable = False
@@ -264,6 +263,10 @@ def req_controller():
                 crud_strings = settings.get_req_req_crud_strings(type)
                 if crud_strings:
                     s3.crud_strings["req_req"] = crud_strings
+                elif type == 1:
+                    s3.crud_strings["req_req"].title_create = T("Make Supplies Request")
+                elif type == 3:
+                    s3.crud_strings["req_req"].title_create = T("Make People Request")
 
                 # Filter the query based on type
                 if s3.filter:
@@ -338,26 +341,30 @@ def req_controller():
                     # - list_fields over-rides, so still visible within list itself
                     s3.req_create_form_mods()
 
-                    # Inline Forms
-                    s3.req_inline_form(type, method)
+                    if type and settings.get_req_inline_forms():
+                        # Inline Forms
+                        s3.req_inline_form(type, method)
 
                     # Get the default Facility for this user
-                    # @ToDo: Use site_id in User Profile (like current organisation_id)
-                    if settings.has_module("hrm"):
-                        hrtable = s3db.hrm_human_resource
-                        query = (hrtable.person_id == s3_logged_in_person())
-                        site = db(query).select(hrtable.site_id,
-                                                limitby=(0, 1)).first()
-                        if site:
-                            r.table.site_id.default = site.site_id
+                    #if settings.has_module("hrm"):
+                    #    hrtable = s3db.hrm_human_resource
+                    #    query = (hrtable.person_id == s3_logged_in_person())
+                    #    site = db(query).select(hrtable.site_id,
+                    #                            limitby=(0, 1)).first()
+                    #    if site:
+                    #        r.table.site_id.default = site.site_id
+                    # Use site_id in User Profile
+                    if auth.is_logged_in():
+                        r.table.site_id.default = auth.user.site_id
 
                 elif method == "map":
                     # Tell the client to request per-feature markers
                     s3db.configure("req_req", marker_fn=marker_fn)
 
                 elif method == "update":
-                    # Inline Forms
-                    s3.req_inline_form(type, method)
+                    if settings.get_req_inline_forms():
+                        # Inline Forms
+                        s3.req_inline_form(type, method)
                     s3.scripts.append("/%s/static/scripts/S3/s3.req_update.js" % appname)
 
         elif r.representation == "plain":
@@ -653,66 +660,70 @@ def req_item():
         @ToDo: Filter out fulfilled Items?
     """
 
-    # Filter out Template Items
-    table = s3db.req_req_item
-    rtable = s3db.req_req
-    s3.filter = (rtable.is_template == False) & \
-                (rtable.id == table.req_id)
+    if not s3.filter:
+        # Filter out Template Items
+        ritable = s3db.req_req_item
+        rtable = db.req_req
+        s3.filter = (rtable.is_template == False) & \
+                    (rtable.id == ritable.req_id)
 
     # Search method
-    S3SearchOptionsWidget = s3base.S3SearchOptionsWidget
-    req_item_search = (
-        S3SearchOptionsWidget(
-            name="req_search_fulfil_status",
-            label=T("Status"),
-            field="req_id$fulfil_status",
-            options = s3.req_status_opts,
-            cols = 3,
-        ),
-        S3SearchOptionsWidget(
-            name="req_search_priority",
-            label=T("Priority"),
-            field="req_id$priority",
-            options = s3.req_priority_opts,
-            cols = 3,
-        ),
-        #S3SearchOptionsWidget(
-        #  name="req_search_L1",
-        #  field="req_id$site_id$location_id$L1",
-        #  location_level="L1",
-        #  cols = 3,
-        #),
-        #S3SearchOptionsWidget(
-        #  name="req_search_L2",
-        #  field="req_id$site_id$location_id$L2",
-        #  location_level="L2",
-        #  cols = 3,
-        #),
-        S3SearchOptionsWidget(
-            name="req_search_L3",
-            field="req_id$site_id$location_id$L3",
-            location_level="L3",
-            cols = 3,
-        ),
-        S3SearchOptionsWidget(
-            name="req_search_L4",
-            field="req_id$site_id$location_id$L4",
-            location_level="L4",
-            cols = 3,
-        ),
-    )
-    s3db.configure("req_req_item",
-                   search_method = s3base.S3Search(advanced=req_item_search),
-                   )
+    search_method = s3db.get_config("req_req_item", "search_method")
+    if not search_method:
+        S3SearchOptionsWidget = s3base.S3SearchOptionsWidget
+        req_item_search = (
+            S3SearchOptionsWidget(
+                name="req_search_fulfil_status",
+                label=T("Status"),
+                field="req_id$fulfil_status",
+                options = s3.req_status_opts,
+                cols = 3,
+            ),
+            S3SearchOptionsWidget(
+                name="req_search_priority",
+                label=T("Priority"),
+                field="req_id$priority",
+                options = s3.req_priority_opts,
+                cols = 3,
+            ),
+            #S3SearchOptionsWidget(
+            #  name="req_search_L1",
+            #  field="req_id$site_id$location_id$L1",
+            #  location_level="L1",
+            #  cols = 3,
+            #),
+            #S3SearchOptionsWidget(
+            #  name="req_search_L2",
+            #  field="req_id$site_id$location_id$L2",
+            #  location_level="L2",
+            #  cols = 3,
+            #),
+            S3SearchOptionsWidget(
+                name="req_search_L3",
+                field="req_id$site_id$location_id$L3",
+                location_level="L3",
+                cols = 3,
+            ),
+            S3SearchOptionsWidget(
+                name="req_search_L4",
+                field="req_id$site_id$location_id$L4",
+                location_level="L4",
+                cols = 3,
+            ),
+        )
+        s3db.configure("req_req_item",
+                       search_method = s3base.S3Search(advanced=req_item_search),
+                       )
 
     def prep(r):
         if r.interactive:
+
             list_fields = s3db.get_config("req_req_item", "list_fields")
             list_fields.insert(1, "req_id$site_id")
             list_fields.insert(1, "req_id$site_id$location_id$L4")
             list_fields.insert(1, "req_id$site_id$location_id$L3")
             s3db.configure("req_req_item",
-                           insertable=False,
+                           insertable = False,
                            list_fields = list_fields,
                            )
 
@@ -726,7 +737,7 @@ def req_item():
         return True
     s3.prep = prep
 
-    output = s3_rest_controller()
+    output = s3_rest_controller("req", "req_item")
 
     if settings.get_req_prompt_match():
         req_item_inv_item_btn = dict(url = URL(c="req", f="req_item_inv_item",
@@ -1474,5 +1485,54 @@ def commit_item_json():
 
     response.headers["Content-Type"] = "application/json"
     return json_str
+
+# =============================================================================
+def fema():
+    """
+        Custom Report to list all open requests for items that FEMA can supply
+
+        @ToDo: Filter to just Sites that FEMA support
+    """
+
+    ritable = s3db.req_req_item
+    rtable = db.req_req
+    itable = db.supply_item
+    ictable = db.supply_item_category
+    citable = db.supply_catalog_item
+    query = (ictable.name == "FEMA") & \
+            (citable.item_category_id == ictable.id) & \
+            (citable.item_id == itable.id) & \
+            (itable.deleted != True)
+    fema_items = db(query).select(itable.id)
+    fema_item_ids = [item.id for item in fema_items]
+
+    REQ_STATUS_COMPLETE = 2
+    s3.filter = (rtable.deleted != True) & \
+                (rtable.is_template == False) & \
+                (rtable.commit_status != REQ_STATUS_COMPLETE) & \
+                (rtable.transit_status != REQ_STATUS_COMPLETE) & \
+                (rtable.fulfil_status != REQ_STATUS_COMPLETE) & \
+                (ritable.req_id == rtable.id) & \
+                (ritable.quantity > ritable.quantity_commit) & \
+                (ritable.quantity > ritable.quantity_transit) & \
+                (ritable.quantity > ritable.quantity_fulfil) & \
+                (ritable.deleted != True) & \
+                (ritable.item_id.belongs(fema_item_ids))
+
+    # Search method
+    req_item_search = [
+        s3base.S3SearchOptionsWidget(
+            name="req_search_site",
+            field="req_id$site_id",
+            label = T("Facility"),
+            cols = 3,
+        ),
+        ]
+    s3db.configure("req_req_item",
+                   search_method = s3base.S3Search(advanced=req_item_search),
+                   )
+
+    output = req_item()
+    return output
 
 # END =========================================================================

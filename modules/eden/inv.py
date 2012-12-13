@@ -96,7 +96,7 @@ tracking_status = {TRACK_STATUS_UNKNOWN   : T("Unknown"),
                    TRACK_STATUS_TRANSIT   : T("In transit"),
                    TRACK_STATUS_UNLOADING : T("Unloading"),
                    TRACK_STATUS_ARRIVED   : T("Arrived"),
-                   TRACK_STATUS_CANCELED  : T("Canceled"),
+                   TRACK_STATUS_CANCELED  : T("Cancelled"),
                    TRACK_STATUS_RETURNING : T("Returning"),
                    }
 
@@ -124,6 +124,7 @@ class S3WarehouseModel(S3Model):
         T = current.T
         db = current.db
         messages = current.messages
+        NONE = messages["NONE"]
         add_component = self.add_component
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
@@ -194,6 +195,7 @@ class S3WarehouseModel(S3Model):
                                    length=64,           # Mayon Compatibility
                                    label = T("Name")),
                              Field("code", length=10, # Mayon compatibility
+                                   represent = lambda v: v or NONE,
                                    label=T("Code")
                                    # Deployments that don't wants warehouse codes can hide them
                                    #readable=False,
@@ -206,17 +208,21 @@ class S3WarehouseModel(S3Model):
                              #warehouse_type_id(),
                              self.gis_location_id(),
                              Field("phone1", label = T("Phone 1"),
+                                   represent = lambda v: v or NONE,
                                    requires = IS_NULL_OR(s3_phone_requires)),
                              Field("phone2", label = T("Phone 2"),
+                                   represent = lambda v: v or NONE,
                                    requires = IS_NULL_OR(s3_phone_requires)),
                              Field("email", label = T("Email"),
+                                   represent = lambda v: v or NONE,
                                    requires = IS_NULL_OR(IS_EMAIL())),
                              Field("fax", label = T("Fax"),
+                                   represent = lambda v: v or NONE,
                                    requires = IS_NULL_OR(s3_phone_requires)),
                              Field("obsolete", "boolean",
                                    label = T("Obsolete"),
                                    represent = lambda bool: \
-                                    (bool and [T("Obsolete")] or [messages["NONE"]])[0],
+                                    (bool and [T("Obsolete")] or NONE)[0],
                                    default = False,
                                    readable = False,
                                    writable = False),
@@ -462,13 +468,13 @@ class S3InventoryModel(S3Model):
                                                            required = True),
                                   Field("quantity", "double", notnull=True,
                                         label = T("Quantity"),
-                                        represent=lambda v, row=None: \
+                                        represent=lambda v: \
                                             IS_FLOAT_AMOUNT.represent(v, precision=2),
                                         requires = IS_FLOAT_IN_RANGE(0, None),
                                         writable = False),
                                   Field("bin", "string", length=16,
+                                        represent = lambda v: v or NONE,
                                         label = T("Bin"),
-                                        represent = lambda bin: bin or NONE
                                         ),
                                   # @ToDo: Allow items to be marked as 'still on the shelf but allocated to an outgoing shipment'
                                   Field("status", "integer",
@@ -485,7 +491,7 @@ class S3InventoryModel(S3Model):
                                         readable=track_pack_values,
                                         writable=track_pack_values,
                                         label = T("Value per Pack"),
-                                        represent=lambda v, row=None: \
+                                        represent=lambda v: \
                                             IS_FLOAT_AMOUNT.represent(v, precision=2)),
                                   # @ToDo: Move this into a Currency Widget for the pack_value field
                                   s3_currency(readable=track_pack_values,
@@ -494,6 +500,7 @@ class S3InventoryModel(S3Model):
                                   #      "double",
                                   #      compute = record_pack_quantity), # defined in 06_supply
                                   Field("item_source_no", "string", length=16,
+                                        represent=lambda v: v or NONE,
                                         label = itn_label,
                                         ),
                                   # Organisation that owns this item
@@ -546,31 +553,28 @@ class S3InventoryModel(S3Model):
                                                            sort=True),
                                       represent = self.inv_item_represent,
                                       label = INV_ITEM,
-                                      comment = DIV( _class="tooltip",
-                                                     _title="%s|%s" % (INV_ITEM,
-                                                                       T("Select Stock from this Warehouse"))),
+                                      comment = DIV(_class="tooltip",
+                                                    _title="%s|%s" % (INV_ITEM,
+                                                                      T("Select Stock from this Warehouse"))),
                                       ondelete = "CASCADE",
-                                      script = SCRIPT('''
-$(document).ready(function(){
- S3FilterFieldChange({
-  'FilterField':'inv_item_id',
-  'Field':'item_pack_id',
-  'FieldResource':'item_pack',
-  'FieldPrefix':'supply',
-  'url':S3.Ap.concat('/inv/inv_item_packs/'),
-  'msgNoRecords':i18n.no_packs,
-  'fncPrep':fncPrepItem,
-  'fncRepresent':fncRepresentItem
- })
-})'''),
-                                )
+                                      script = '''
+S3FilterFieldChange({
+ 'FilterField':'inv_item_id',
+ 'Field':'item_pack_id',
+ 'FieldResource':'item_pack',
+ 'FieldPrefix':'supply',
+ 'url':S3.Ap.concat('/inv/inv_item_packs/'),
+ 'msgNoRecords':i18n.no_packs,
+ 'fncPrep':fncPrepItem,
+ 'fncRepresent':fncRepresentItem
+})''')
 
         if track_pack_values:
-            rows = ["item_id", (T("Category"), "item_category"), "currency"]
+            rows = ["item_id", "item_id$item_category_id", "currency"]
             cols = ["site_id", "owner_org_id", "supply_org_id", "currency"]
             fact = ["quantity", (T("Total Value"), "total_value"),]
         else:
-            rows = ["item_id", (T("Category"), "item_category")]
+            rows = ["item_id", "item_id$item_category_id"]
             cols = ["site_id", "owner_org_id", "supply_org_id"]
             fact = ["quantity"]
         report_options = Storage(
@@ -654,8 +658,10 @@ $(document).ready(function(){
             list_fields = ["id",
                            "site_id",
                            "item_id",
-                           (T("Item Code"), "item_code"),
-                           (T("Category"), "item_category"),
+                           #(T("Item Code"), "item_code"),
+                           "item_id$item_code",
+                           #(T("Category"), "item_category"),
+                           "item_id$item_category_id",
                            "quantity",
                            "pack_value",
                            (T("Total Value"), "total_value"),
@@ -669,8 +675,10 @@ $(document).ready(function(){
             list_fields = ["id",
                            "site_id",
                            "item_id",
-                           (T("Item Code"), "item_code"),
-                           (T("Category"), "item_category"),
+                           #(T("Item Code"), "item_code"),
+                           "item_id$item_code",
+                           #(T("Category"), "item_category"),
+                           "item_id$item_category_id",
                            "quantity",
                            "bin",
                            "owner_org_id",
@@ -1534,19 +1542,17 @@ class S3TrackingModel(S3Model):
                                              ),
                              inv_item_id(name="send_inv_item_id",
                                          ondelete = "RESTRICT",
-                                         script = SCRIPT('''
-$(document).ready(function(){
- S3FilterFieldChange({
-  'FilterField':'send_inv_item_id',
-  'Field':'item_pack_id',
-  'FieldResource':'item_pack',
-  'FieldPrefix':'supply',
-  'url':S3.Ap.concat('/inv/inv_item_packs/'),
-  'msgNoRecords':i18n.no_packs,
-  'fncPrep':fncPrepItem,
-  'fncRepresent':fncRepresentItem
- })
-})''')),
+                                         script = '''
+S3FilterFieldChange({
+ 'FilterField':'send_inv_item_id',
+ 'Field':'item_pack_id',
+ 'FieldResource':'item_pack',
+ 'FieldPrefix':'supply',
+ 'url':S3.Ap.concat('/inv/inv_item_packs/'),
+ 'msgNoRecords':i18n.no_packs,
+ 'fncPrep':fncPrepItem,
+ 'fncRepresent':fncRepresentItem
+})'''),
                              item_id(ondelete = "RESTRICT"),
                              item_pack_id(ondelete = "SET NULL"),
                              Field("quantity", "double", notnull=True,
@@ -2240,7 +2246,7 @@ $(document).ready(function(){
         tracktable.send_inv_item_id.readable = False
         tracktable.recv_inv_item_id.readable = False
 
-        list_fields = [(T("Item Code"), "item_code"),
+        list_fields = [(T("Item Code"), "item_id$code"),
                        "item_id",
                        (T("Weight (kg)"), "item_id$weight"),
                        (T("Volume (m3)"), "item_id$volume"),
@@ -2250,6 +2256,10 @@ $(document).ready(function(){
                        "quantity",
                        ]
         settings = current.deployment_settings
+        if r.record.req_ref:
+            # This Shipment relates to a request
+            # - show the req_item comments
+            list_fields.append("req_item_id$comments")
         if settings.get_inv_track_pack_values():
             list_fields.append("currency")
             list_fields.append("pack_value")
@@ -2350,16 +2360,15 @@ $(document).ready(function(){
     def inv_recv_onvalidation(form):
         """
             Check that either organisation_id or from_site_id are filled according to the type
+            @ToDo: lookup the type values from s3cfg.py instead of hardcoding it
         """
 
         type = form.vars.type and int(form.vars.type)
         if type == 11 and not form.vars.from_site_id:
             # Internal Shipment needs from_site_id
-            # @ToDo: lookup this value instead of hardcoding it base on s3cfg.py
             form.errors.from_site_id = T("Please enter a %(site)s") % dict(site=current.deployment_settings.get_org_site_label())
         if type >= 32 and not form.vars.organisation_id:
             # Internal Shipment needs from_site_id
-            # @ToDo: lookup this value instead of hardcoding it base on s3cfg.py
             form.errors.organisation_id = T("Please enter an Organisation/Supplier")
 
     # ---------------------------------------------------------------------
@@ -3495,24 +3504,25 @@ def inv_recv_rheader(r):
                     else:
                         msg = T("You need to check all item quantities and allocate to bins before you can receive the shipment")
                         rfooter.append(SPAN(msg))
-            else:
-                if record.status == SHIP_STATUS_RECEIVED:
-                    if current.auth.s3_has_permission("delete",
-                                                      "inv_recv",
-                                                      record_id=record.id):
-                        action.append( A( T("Cancel Shipment"),
-                                        _href = URL(c = "inv",
-                                                    f = "recv_cancel",
-                                                    args = [record.id]
-                                                    ),
-                                        _id = "recv_cancel",
-                                        _class = "action-btn"
-                                        )
-                                     )
+            # FB: Removed as serves no useful purpose & AusRC complained about it
+            #else:
+            #    if record.status == SHIP_STATUS_RECEIVED:
+            #        if current.auth.s3_has_permission("delete",
+            #                                          "inv_recv",
+            #                                          record_id=record.id):
+            #            action.append( A( T("Cancel Shipment"),
+            #                            _href = URL(c = "inv",
+            #                                        f = "recv_cancel",
+            #                                        args = [record.id]
+            #                                        ),
+            #                            _id = "recv_cancel",
+            #                            _class = "action-btn"
+            #                            )
+            #                         )
 
-                        cancel_btn_confirm = SCRIPT("S3ConfirmClick('#recv_cancel', '%s')"
-                                                     % T("Do you want to cancel this received shipment? The items will be removed from the Warehouse. This action CANNOT be undone!") )
-                        rfooter.append(cancel_btn_confirm)
+            #            cancel_btn_confirm = SCRIPT("S3ConfirmClick('#recv_cancel', '%s')"
+            #                                         % T("Do you want to cancel this received shipment? The items will be removed from the Warehouse. This action CANNOT be undone!") )
+            #            rfooter.append(cancel_btn_confirm)
             msg = ""
             if cnt == 1:
                 msg = T("This shipment contains one item")
@@ -4052,20 +4062,20 @@ class InvItemVirtualFields:
             return v
 
     # -------------------------------------------------------------------------
-    def item_code(self):
-        try:
-            return self.inv_inv_item.item_id.code
-        except AttributeError:
-            # not available
-            return current.messages["NONE"]
+    #def item_code(self):
+    #    try:
+    #        return self.inv_inv_item.item_id.code
+    #    except AttributeError:
+    #        # not available
+    #        return current.messages["NONE"]
 
     # -------------------------------------------------------------------------
-    def item_category(self):
-        try:
-            return self.inv_inv_item.item_id.item_category_id.name
-        except AttributeError:
-            # not available
-            return current.messages["NONE"]
+    #def item_category(self):
+    #    try:
+    #        return self.inv_inv_item.item_id.item_category_id.name
+    #    except AttributeError:
+    #        # not available
+    #        return current.messages["NONE"]
 
 # =============================================================================
 class InvTrackItemVirtualFields:
@@ -4087,11 +4097,11 @@ class InvTrackItemVirtualFields:
             return current.messages["NONE"]
 
     # -------------------------------------------------------------------------
-    def item_code(self):
-        try:
-            return self.inv_track_item.item_id.code
-        except AttributeError:
-            # not available
-            return current.messages["NONE"]
+    #def item_code(self):
+    #    try:
+    #        return self.inv_track_item.item_id.code
+    #    except AttributeError:
+    #        # not available
+    #        return current.messages["NONE"]
 
 # END =========================================================================

@@ -1519,7 +1519,7 @@ class S3FacilityModel(S3Model):
             msg_list_empty=T("No Facilities currently registered"))
 
         # Search method
-        def get_facility_opts():
+        def facility_type_opts():
             table = self.org_facility_type
             rows = db(table.deleted == False).select(table.name)
             opts = {}
@@ -1544,7 +1544,7 @@ class S3FacilityModel(S3Model):
                 name="facility_search_type",
                 label=T("Type"),
                 field="facility_type_id",
-                options = get_facility_opts,
+                options = facility_type_opts,
                 cols=2,
             ),
             S3SearchOptionsWidget(
@@ -1605,6 +1605,7 @@ class S3FacilityModel(S3Model):
         configure(tablename,
                   super_entity=("org_site", "doc_entity", "pr_pentity"),
                   deduplicate=self.org_facility_duplicate,
+                  onaccept = self.org_facility_onaccept,
                   search_method=S3Search(advanced=org_facility_search),
                   report_options = Storage(
                     search=org_facility_search,
@@ -1619,6 +1620,24 @@ class S3FacilityModel(S3Model):
                                      fact="name",
                                      aggregate="count")
                     ),
+                  realm_components = ["contact_emergency",
+                                      "physical_description",
+                                      "config",
+                                      "image",
+                                      "req",
+                                      "send",
+                                      "human_resource_site",
+                                      "note",
+                                      "contact",
+                                      "role",
+                                      "asset",
+                                      "commit",
+                                      "inv_item",
+                                      "document",
+                                      "recv",
+                                      "address",
+                                      ],
+                  update_realm = True,
                   )
 
         # ---------------------------------------------------------------------
@@ -1627,6 +1646,16 @@ class S3FacilityModel(S3Model):
         return Storage(
                     org_facility_geojson = self.org_facility_geojson
                 )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def org_facility_onaccept(form):
+        """
+            Update Affiliation, record ownership and component ownership
+        """
+
+        s3db = current.s3db
+        s3db.pr_update_affiliations(s3db.org_facility, form.vars)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2821,6 +2850,7 @@ def org_organisation_controller():
                 record = r.record
                 otable.organisation_type_id.default = record.organisation_type_id
                 otable.multi_sector_id.default = record.multi_sector_id
+                otable.region.default = record.region
                 otable.country.default = record.country
                 # Represent orgs without the parent prefix as we have that context already
                 s3db.org_organisation_branch.branch_id.represent = lambda val: \

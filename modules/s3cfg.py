@@ -281,6 +281,12 @@ class S3Config(Storage):
             ("editor", "Editor"),
             ("super", "Super Editor")
         ]))
+    def get_auth_set_presence_on_login(self):
+        return self.auth.get("set_presence_on_login", False)
+    def get_auth_ignore_levels_for_presence(self):
+        return self.auth.get("ignore_levels_for_presence", ["L0"])
+    def get_auth_create_unknown_locations(self):
+        return self.auth.get("create_unknown_locations", False)
 
     def get_security_archive_not_delete(self):
         return self.security.get("archive_not_delete", True)
@@ -1308,6 +1314,11 @@ class S3Config(Storage):
         return self.req.get("multiple_req_items", True)
     def get_req_show_quantity_transit(self):
         return self.req.get("show_quantity_transit", True)
+    def get_req_inline_forms(self):
+        """
+            Whether Requests module should use inline forms for Items
+        """
+        return self.req.get("inline_forms", True)
     def get_req_prompt_match(self):
         """
             Whether a Requester is prompted to match each line item in an Item request

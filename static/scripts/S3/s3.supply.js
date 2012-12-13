@@ -6,34 +6,34 @@
 */
 // ============================================================================
 
-// Filter Item Packs based on Inv Items and Items
+// Filter Item Packs based on Items
 function fncPrepItem(data) {
-	for (var i = 0; i < data.length; i++) {
-		if (data[i].quantity == 1) {
-			return data[i].name;
-		}
-	}
+    for (var i = 0; i < data.length; i++) {
+        if (data[i].quantity == 1) {
+            return data[i].name;
+        }
+    }
 };
 // ============================================================================
 function fncRepresentItem(record, PrepResult) {
-	if (record.quantity == 1) {
-		return record.name 
-	} else {
-		return record.name + ' (' + record.quantity + ' x ' + PrepResult + ')'
-	}
+    if (record.quantity == 1) {
+        return record.name 
+    } else {
+        return record.name + ' (' + record.quantity + ' x ' + PrepResult + ')'
+    }
 }
 // ============================================================================
 // Displays the number of items available in an inventory
 function InvItemPackIDChange() {     
-	// Cancel previous request
-  	try {S3.JSONRequest[$(this).attr('id')].abort()} catch(err) {};
+    // Cancel previous request
+    try {S3.JSONRequest[$(this).attr('id')].abort()} catch(err) {};
 
     $('#TotalQuantity').remove();   
-    if ($('[name = "inv_item_id"]').length > 0) {
-        id = $('[name = "inv_item_id"]').val()
+    if ($('[name="inv_item_id"]').length > 0) {
+        id = $('[name="inv_item_id"]').val()
     }
-    else if  ($('[name = "send_inv_item_id"]').length > 0) {
-        id = $('[name = "send_inv_item_id"]').val()
+    else if  ($('[name="send_inv_item_id"]').length > 0) {
+        id = $('[name="send_inv_item_id"]').val()
     }
 //Following condition removed since it doesn't appear to be correct
 //the ajax call is looking for the number of items in stock, but
@@ -46,29 +46,29 @@ function InvItemPackIDChange() {
 
     var url = S3.Ap.concat('/inv/inv_item_quantity/' + id);
     if ($('#inv_quantity_ajax_throbber').length == 0) {
-    	$('[name = "quantity"]').after('<div id="inv_quantity_ajax_throbber" class="ajax_throbber" style="float:right"/>'); 
+        $('[name="quantity"]').after('<div id="inv_quantity_ajax_throbber" class="ajax_throbber" style="float:right"/>'); 
     }
     
     // Save JSON Request by element id
     S3.JSONRequest[$(this).attr('id')] = $.getJSON(url, function(data) {
         // @ToDo: Error Checking
-        var InvQuantity = data.inv_inv_item.quantity; 
-        var InvPackQuantity = data.supply_item_pack.quantity; 
-        
-        var PackName = $('[name = "item_pack_id"] option:selected').text();
+        var InvQuantity = data.iquantity; 
+        var InvPackQuantity = data.pquantity; 
+
+        var PackName = $('[name="item_pack_id"] option:selected').text();
         var re = /\(([0-9]*)\sx/;
         var RegExpResult = re.exec(PackName);
         if (RegExpResult == null) {
-        	var PackQuantity = 1
+            var PackQuantity = 1
         } else {
-        	var PackQuantity = RegExpResult[1]
+            var PackQuantity = RegExpResult[1]
         }
-        
+
         var Quantity = (InvQuantity * InvPackQuantity) / PackQuantity;
-                        
-        TotalQuantity = '<span id = "TotalQuantity"> / ' + Quantity.toFixed(2) + ' ' + PackName + ' (' + i18n.in_inv + ')</span>';
+
+        TotalQuantity = '<span id="TotalQuantity"> / ' + Quantity.toFixed(2) + ' ' + PackName + ' (' + i18n.in_inv + ')</span>';
         $('#inv_quantity_ajax_throbber').remove();
-        $('[name = "quantity"]').after(TotalQuantity);
+        $('[name="quantity"]').after(TotalQuantity);
     });
 };
 //============================================================================
@@ -184,7 +184,7 @@ $(document).ready(function() {
 							RecvTable += data[0].id;
 						} else {
 							RecvURL = S3.Ap.concat('/', App, '/', ShipmentType, '/',  data[i].id, '/track_item');
-							RecvTable += "<a href = '" + RecvURL + "'>";
+							RecvTable += "<a href='" + RecvURL + "'>";
 							if (data[i].date != null) {
 								RecvTable += data[i].date.substring(0, 10) + ' - ';
 								RecvTable += data[i].name + '</a>';

@@ -392,19 +392,16 @@ class S3ProjectModel(S3Model):
                                                        not theme_percentages,
                                             writable = mode_3w and \
                                                        not theme_percentages,
-                                            script = SCRIPT('''
-$(document).ready(function(){
- S3FilterFieldChange({
-  'FilterField':'multi_sector_id',
-  'Field':'multi_theme_id',
-  'Widget':'multi_theme_id_widget',
-  'FieldResource':'theme',
-  'url':S3.Ap.concat('/project/project_multi_theme_id_widget?sector_ids='),
-  'GetWidgetHTML':true,
-  'FilterOnLoad':false,
- })
+                                            script = '''
+S3FilterFieldChange({
+ 'FilterField':'multi_sector_id',
+ 'Field':'multi_theme_id',
+ 'Widget':'multi_theme_id_widget',
+ 'FieldResource':'theme',
+ 'url':S3.Ap.concat('/project/project_multi_theme_id_widget?sector_ids='),
+ 'GetWidgetHTML':true,
+ 'FilterOnLoad':false
 })'''),
-                                           ),
                              Field("hfa", "list:integer",
                                    label = T("HFA Priorities"),
                                    readable = mode_drr,
@@ -695,7 +692,7 @@ $(document).ready(function(){
         add_component("project_organisation", project_project="project_id")
 
         # Sites
-        add_component("project_site", project_project="project_id")
+        #add_component("project_site", project_project="project_id")
 
         # Activities
         add_component("project_activity", project_project="project_id")
