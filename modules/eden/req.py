@@ -132,7 +132,7 @@ class S3RequestModel(S3Model):
         req_types_deployed = settings.get_req_req_type()
         req_type_opts = {}
         if settings.has_module("inv") and "Stock" in req_types_deployed:
-            # Number hardcoded in controller
+            # Number hardcoded in controller & JS
             req_type_opts[1] = settings.get_req_type_inv_label()
         #if settings.has_module("asset") and "Asset" in req_types_deployed:
         #    req_type_opts[2] = T("Assets")
@@ -342,47 +342,51 @@ class S3RequestModel(S3Model):
             msg_record_modified = T("Request Updated"),
             msg_record_deleted = T("Request Canceled"),
             msg_list_empty = T("No Requests"))
-
-        # Search method
-        req_req_search = [
-            S3SearchOptionsWidget(
-                name="req_search_transit_status",
-                label=T("Transit Status"),
-                field="transit_status",
+        
+       # Search method
+        req_basic_search = [
+             S3SearchOptionsWidget(
+                name = "req_search_transit_status",
+                label = T("Transit Status"),
+                field = "transit_status",
                 options = req_status_opts,
                 cols = 3,
             ),
             S3SearchOptionsWidget(
-                name="req_search_fulfil_status",
-                label=T("Fulfill Status"),
-                field="fulfil_status",
+                name = "req_search_fulfil_status",
+                label = T("Fulfill Status"),
+                field = "fulfil_status",
                 options = req_status_opts,
                 cols = 3,
-            ),
+            )
+       ]
+        if use_commit:
+            widget = S3SearchOptionsWidget(
+                        name = "req_search_commit_status",
+                        label = T("Commit Status"),
+                        field = "commit_status",
+                        options = req_status_opts,
+                        cols = 3,
+                    )
+            req_basic_search.insert(0, widget)
+        req_advanced_search = req_basic_search + [
             S3SearchOptionsWidget(
-                name="req_search_priority",
-                label=T("Priority"),
-                field="priority",
-                options = req_priority_opts,
-                cols = 3,
-            ),
-            S3SearchOptionsWidget(
-                name="req_search_type",
-                label=T("Type"),
-                field="type",
+                name = "req_search_type",
+                label = T("Type"),
+                field = "type",
                 options = req_type_opts,
                 cols = 3,
             ),
             S3SearchOptionsWidget(
-                name="req_search_item_category",
-                label=T("Item Category"),
-                field="item_category.name",
+                name = "req_search_item_category",
+                label = T("Item Category"),
+                field = "item_category.name",
                 cols = 3,
             ),
             S3SearchOptionsWidget(
-                name="req_search_created_by",
-                label=T("Logged By"),
-                field="created_by",
+                name = "req_search_created_by",
+                label = T("Logged By"),
+                field = "created_by",
                 cols = 3,
             ),
             #S3SearchOptionsWidget(
@@ -398,33 +402,23 @@ class S3RequestModel(S3Model):
             #  cols = 3,
             #),
             S3SearchOptionsWidget(
-                name="req_search_L3",
-                field="site_id$location_id$L3",
-                location_level="L3",
+                name = "req_search_L3",
+                field = "site_id$location_id$L3",
+                location_level = "L3",
                 cols = 3,
             ),
             S3SearchOptionsWidget(
-                name="req_search_L4",
-                field="site_id$location_id$L4",
-                location_level="L4",
+                name = "req_search_L4",
+                field = "site_id$location_id$L4",
+                location_level = "L4",
                 cols = 3,
             ),
             S3SearchOptionsWidget(
-                name="req_search_site",
-                field="site_id",
+                name = "req_search_site",
+                field = "site_id",
                 label = T("Facility"),
                 cols = 3,
-            ),
-            ]
-        if use_commit:
-            widget = S3SearchOptionsWidget(
-                        name="req_search_commit_status",
-                        label=T("Commit Status"),
-                        field="commit_status",
-                        options = req_status_opts,
-                        cols = 3,
-                    )
-            req_req_search.insert(0, widget)
+            )]
 
         report_fields = ["priority",
                          "site_id$organisation_id",
@@ -475,9 +469,9 @@ class S3RequestModel(S3Model):
                        deduplicate = self.req_req_duplicate,
                        listadd = False,
                        orderby = ~table.date,
-                       search_method = S3Search(advanced=req_req_search),
+                       search_method = S3Search(simple = req_basic_search, advanced = req_advanced_search),
                        report_options = Storage(
-                        search=req_req_search,
+                        search=req_advanced_search,
                         rows=report_fields,
                         cols=report_fields,
                         fact=fact_fields,
@@ -1083,6 +1077,8 @@ S3OptionsFilter({
 
         output["subtitle"] = T("Request Items")
 
+        use_commit = current.deployment_settings.get_req_use_commit()
+
         # Get req_items & inv_items from this site
         table = s3db.req_req_item
         query = (table.req_id == r.id ) & \
@@ -1097,23 +1093,32 @@ S3OptionsFilter({
         itable = s3db.inv_inv_item
         query = (itable.site_id == site_id ) & \
                 (itable.deleted == False )
+        inv_items_dict = {}
         inv_items = db(query).select(itable.item_id,
                                      itable.quantity,
-                                     itable.item_pack_id)
-        inv_items_dict = inv_items.as_dict(key = "item_id")
+                                     itable.item_pack_id,
+                                     # VF
+                                     #itable.pack_quantity,
+                                     )
+        for item in inv_items:
+            item_id = item.item_id
+            if item_id in inv_items_dict:
+                inv_items_dict[item_id] += item.quantity * item.pack_quantity
+            else:
+                inv_items_dict[item_id] = item.quantity * item.pack_quantity
 
         if len(req_items):
-            items = TABLE(THEAD(TR(#TH(""),
-                                   TH(table.item_id.label),
-                                   TH(table.quantity.label),
-                                   TH(table.item_pack_id.label),
-                                   TH(table.quantity_commit.label),
-                                   TH(table.quantity_transit.label),
-                                   TH(table.quantity_fulfil.label),
-                                   TH(T("Quantity in %s's Warehouse") % site_name),
-                                   TH(T("Match?"))
-                                  )
-                                ),
+            row = TR(TH(table.item_id.label),
+                     TH(table.quantity.label),
+                     TH(table.item_pack_id.label),
+                     TH(table.quantity_transit.label),
+                     TH(table.quantity_fulfil.label),
+                     TH(T("Quantity in %s's Warehouse") % site_name),
+                     TH(T("Match?"))
+                     )
+            if use_commit:
+                row.insert(TH(3, table.quantity_commit.label))
+            items = TABLE(THEAD(row),
                           _id = "list",
                           _class = "dataTable display")
 
@@ -1121,16 +1126,13 @@ S3OptionsFilter({
             item_pack_represent = table.item_pack_id.represent
             for req_item in req_items:
                 # Convert inv item quantity to req item quantity
-                try:
-                    inv_item = Storage(inv_items_dict[req_item.item_id])
-                    inv_quantity = inv_item.quantity * \
-                                   inv_item.pack_quantity / \
-                                   req_item.pack_quantity
-
-                except:
+                item_id = req_item.item_id
+                if item_id in inv_items_dict:
+                    inv_quantity = inv_items_dict[item_id] / req_item.pack_quantity
+                else:
                     inv_quantity = NONE
 
-                if inv_quantity and inv_quantity != NONE:
+                if inv_quantity != NONE:
                     if inv_quantity < req_item.quantity:
                         status = SPAN(T("Partial"), _class = "req_status_partial")
                     else:
@@ -1138,21 +1140,36 @@ S3OptionsFilter({
                 else:
                     status = SPAN(T("NO"), _class = "req_status_none"),
 
-                items.append(TR(#A(req_item.id),
-                                supply_item_represent(req_item.item_id),
-                                req_item.quantity,
-                                item_pack_represent(req_item.item_pack_id),
-                                # This requires an action btn to get the req_id
-                                req_item.quantity_commit,
-                                req_item.quantity_transit,
-                                req_item.quantity_fulfil,
-                                #req_quantity_represent(req_item.quantity_commit, "commit"),
-                                #req_quantity_represent(req_item.quantity_fulfil, "fulfil"),
-                                #req_quantity_represent(req_item.quantity_transit, "transit"),
-                                inv_quantity,
-                                status,
+                if use_commit:
+                    items.append(TR(#A(req_item.id),
+                                    supply_item_represent(req_item.item_id),
+                                    req_item.quantity,
+                                    item_pack_represent(req_item.item_pack_id),
+                                    # This requires an action btn to get the req_id
+                                    req_item.quantity_commit,
+                                    req_item.quantity_transit,
+                                    req_item.quantity_fulfil,
+                                    #req_quantity_represent(req_item.quantity_commit, "commit"),
+                                    #req_quantity_represent(req_item.quantity_fulfil, "fulfil"),
+                                    #req_quantity_represent(req_item.quantity_transit, "transit"),
+                                    inv_quantity,
+                                    status,
+                                    )
                                 )
-                            )
+                else:
+                    items.append(TR(#A(req_item.id),
+                                    supply_item_represent(req_item.item_id),
+                                    req_item.quantity,
+                                    item_pack_represent(req_item.item_pack_id),
+                                    # This requires an action btn to get the req_id
+                                    req_item.quantity_transit,
+                                    req_item.quantity_fulfil,
+                                    #req_quantity_represent(req_item.quantity_fulfil, "fulfil"),
+                                    #req_quantity_represent(req_item.quantity_transit, "transit"),
+                                    inv_quantity,
+                                    status,
+                                    )
+                                )
                 output["items"] = items
                 #s3.actions = [req_item_inv_item_btn]
                 s3.no_sspag = True # pag won't work
@@ -1398,12 +1415,12 @@ class S3RequestItemModel(S3Model):
                                                                       T("Select Items from the Request"))),
                                       ondelete = "CASCADE",
                                       script = '''
-S3FilterFieldChange({
- 'FilterField':'req_item_id',
- 'Field':'item_pack_id',
- 'FieldResource':'item_pack',
- 'FieldPrefix':'supply',
- 'url':S3.Ap.concat('/req/req_item_packs/'),
+S3OptionsFilter({
+ 'triggerName':'req_item_id',
+ 'targetName':'item_pack_id',
+ 'lookupResource':'item_pack',
+ 'lookupPrefix':'supply',
+ 'lookupURL':S3.Ap.concat('/req/req_item_packs/'),
  'msgNoRecords':i18n.no_packs,
  'fncPrep':fncPrepItem,
  'fncRepresent':fncRepresentItem
@@ -1543,8 +1560,8 @@ S3FilterFieldChange({
             return TAG[""](quantity,
                            A(DIV(_class = "quantity %s ajax_more collapsed" % type
                                  ),
-                            _href = "#",
-                            )
+                             _href = "#",
+                             )
                            )
         else:
             return quantity
@@ -2468,7 +2485,7 @@ class S3CommitItemModel(S3Model):
         com_table = db.req_commit
         cim_table = db.req_commit_item
         send_table = s3db.inv_send
-        track_table = s3db.inv_track_item
+        tracktable = s3db.inv_track_item
 
         query = (com_table.id == commit_id) & \
                 (com_table.req_id == req_table.id) & \
@@ -2508,21 +2525,29 @@ class S3CommitItemModel(S3Model):
                                    rim_table.item_id,
                                    rim_table.item_pack_id,
                                    rim_table.currency,
+                                   rim_table.quantity,
+                                   rim_table.quantity_transit,
+                                   rim_table.quantity_fulfil,
                                    cim_table.quantity,
                                    )
         # Create inv_track_items for each commit item
+        insert = tracktable.insert
         for row in records:
             rim = row.req_req_item
-            id = track_table.insert(req_item_id = rim.id,
-                                    track_org_id = record.req_commit.organisation_id,
-                                    send_id = send_id,
-                                    status = 1,
-                                    item_id = rim.item_id,
-                                    item_pack_id = rim.item_pack_id,
-                                    currency = rim.currency,
-                                    quantity = row.req_commit_item.quantity,
-                                    )
-            track_table(track_table.id == id).update(tracking_no = "TN:%6d" % (10000 + id))
+            # Now done as a VirtualField instead (looks better & updates closer to real-time, so less of a race condition) 
+            #quantity_shipped = max(rim.quantity_transit, rim.quantity_fulfil)
+            #quantity_needed = rim.quantity - quantity_shipped
+            id = insert(req_item_id = rim.id,
+                        track_org_id = record.req_commit.organisation_id,
+                        send_id = send_id,
+                        status = 1,
+                        item_id = rim.item_id,
+                        item_pack_id = rim.item_pack_id,
+                        currency = rim.currency,
+                        #req_quantity = quantity_needed,
+                        quantity = row.req_commit_item.quantity,
+                        )
+            tracktable(tracktable.id == id).update(tracking_no = "TN:%6d" % (10000 + id))
 
         # Create the Waybill
         form = Storage()
