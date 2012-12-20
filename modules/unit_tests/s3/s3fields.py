@@ -165,13 +165,57 @@ class S3RepresentTests(unittest.TestCase):
         self.assertTrue(isinstance(result, lazyT))
         self.assertEqual(result, current.T(self.name1))
 
+    def testRowsPrecedence(self):
+
+        # Check that rows get preferred over values
+        r = S3Represent(lookup="org_organisation")
+
+        otable = current.s3db.org_organisation
+        org1 = otable[self.id1]
+        org2 = otable[self.id2]
+
+        # Test single value
+        self.assertEqual(r(None, row=org1), self.name1)
+        self.assertEqual(r(self.id2, row=org1), self.name1)
+
+        # Test multiple
+        result = r.multiple(None, rows=[org1, org2])
+        self.assertTrue(isinstance(result, basestring))
+        self.assertTrue(", " in result)
+        result = result.split(", ")
+        self.assertEqual(len(result), 2)
+        self.assertTrue(self.name1 in result)
+        self.assertTrue(self.name2 in result)
+
+        result = r.multiple([self.id1], rows=[org1, org2])
+        self.assertTrue(isinstance(result, basestring))
+        self.assertTrue(", " in result)
+        result = result.split(", ")
+        self.assertEqual(len(result), 2)
+        self.assertTrue(self.name1 in result)
+        self.assertTrue(self.name2 in result)
+
+        # Test bulk
+        result = r.bulk(None, rows=[org1, org2])
+        self.assertTrue(len(result), 3)
+        self.assertEqual(result[self.id1], self.name1)
+        self.assertEqual(result[self.id2], self.name2)
+        self.assertTrue(None in result)
+
+        result = r.bulk([self.id1], rows=[org1, org2])
+        self.assertTrue(len(result), 3)
+        self.assertEqual(result[self.id1], self.name1)
+        self.assertEqual(result[self.id2], self.name2)
+        self.assertTrue(None in result)
+
     # -------------------------------------------------------------------------
     def testListReference(self):
         """ Test Foreign Key Representation in list:reference types """
 
         r = S3Represent(lookup="org_organisation",
                         multiple=True,
-                        linkto=URL(c="org", f="organisation", args=["[id]"]))
+                        #linkto=URL(c="org", f="organisation", args=["[id]"]),
+                        show_link=True)
 
         a = current.request.application
                         
@@ -251,8 +295,8 @@ class S3RepresentTests(unittest.TestCase):
         current.auth.override = False
         
 # =============================================================================
-class S3RepresentFKLazyTests(unittest.TestCase):
-    """ Test S3RepresentLazy """
+class S3ExtractLazyFKRepresentationTests(unittest.TestCase):
+    """ Test lazy representation of foreign keys in datatables """
 
     def setUp(self):
 
@@ -368,7 +412,8 @@ class S3RepresentFKLazyTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
 
         renderer = S3Represent(lookup="org_organisation",
-                               linkto=URL(c="org", f="organisation", args=["[id]"]))
+                               #linkto=URL(c="org", f="organisation", args=["[id]"]),
+                               show_link=True)
         table = resource.table
         table.organisation_id.represent = renderer
 
@@ -456,7 +501,8 @@ class S3RepresentFKLazyTests(unittest.TestCase):
 
         ftable = s3db.org_facility
         renderer = S3Represent(lookup="gis_location",
-                               linkto=URL(c="gis", f="location", args=["[id]"]))
+                               #linkto=URL(c="gis", f="location", args=["[id]"]),
+                               show_link=True)
         ftable.location_id.represent = renderer
 
         resource = s3db.resource("org_organisation", id=self.org.id)
@@ -559,7 +605,8 @@ class S3RepresentFKLazyTests(unittest.TestCase):
 
         renderer = S3Represent(lookup="org_facility_type",
                                multiple=True,
-                               linkto=URL(c="org", f="facility_type", args=["[id]"]))
+                               #linkto=URL(c="org", f="facility_type", args=["[id]"]),
+                               show_link=True)
         table = resource.table
         table.facility_type_id.represent = renderer
 
@@ -695,7 +742,8 @@ class S3RepresentFKLazyTests(unittest.TestCase):
         ftable = s3db.table("org_facility")
         renderer = S3Represent(lookup="org_facility_type",
                                multiple=True,
-                               linkto=URL(c="org", f="facility_type", args=["[id]"]))
+                               #linkto=URL(c="org", f="facility_type", args=["[id]"]),
+                               show_link=True)
         ftable.facility_type_id.represent = renderer
 
         org = self.org
@@ -768,6 +816,144 @@ class S3RepresentFKLazyTests(unittest.TestCase):
         current.auth.override = False
 
 # =============================================================================
+class S3ExportLazyFKRepresentationTests(unittest.TestCase):
+    """ Test lazy representations of foreign keys in exports """
+
+    def setUp(self):
+
+        current.auth.override = True
+
+        s3db = current.s3db
+
+        locations = (
+                        Storage(name="FK Represent TestLocation 1"),
+                        Storage(name="FK Represent TestLocation 2"),
+                    )
+        ltable = s3db.gis_location
+        for i in xrange(len(locations)):
+            location = locations[i]
+            location_id = ltable.insert(**location)
+            location["id"] = location_id
+        self.locations = Storage([(l.id, l) for l in locations])
+
+        fac_types = (
+                        Storage(name="FK Represent TestFacType P"),
+                        Storage(name="FK Represent TestFacType Q"),
+                        Storage(name="FK Represent TestFacType R"),
+                    )
+        ttable = s3db.org_facility_type
+        for i in xrange(len(fac_types)):
+            fac_type = fac_types[i]
+            fac_type_id = ttable.insert(**fac_type)
+            fac_type["id"] = fac_type_id
+        self.fac_types = Storage([(t.id, t) for t in fac_types])
+
+        org = Storage(name="FK Represent TestOrg 1")
+
+        otable = s3db.org_organisation
+        org_id = otable.insert(**org)
+        org["id"] = org_id
+        s3db.update_super(otable, org)
+        self.org = org
+
+        facs = (
+                    Storage(name="FK RepresentTestFacility X",
+                            organisation_id=org.id,
+                            facility_type_id=[fac_types[0].id, fac_types[1].id],
+                            location_id=locations[0].id),
+                    Storage(name="FK RepresentTestFacility Y",
+                            organisation_id=org.id,
+                            facility_type_id=[fac_types[1].id, fac_types[2].id],
+                            location_id=locations[1].id),
+               )
+
+        ftable = s3db.org_facility
+        for i in xrange(len(facs)):
+            fac = facs[i]
+            fac_id = ftable.insert(**fac)
+            fac["id"] = fac_id
+            s3db.update_super(ftable, fac)
+        self.facs = facs
+
+    # -------------------------------------------------------------------------
+    def testRepresentReferenceSingleNoLinkto(self):
+        """
+            Test Representation of reference, single value,
+            without linkto
+        """
+
+        s3db = current.s3db
+
+        resource = s3db.resource("org_facility",
+                                 id=[fac.id for fac in self.facs])
+
+        table = resource.table
+
+        # Attach lazy renderers
+        org_id_renderer = S3Represent(lookup="org_organisation")
+        table.organisation_id.represent = org_id_renderer
+
+        fac_type_renderer = S3Represent(lookup="org_facility_type",
+                               multiple=True)
+        table.facility_type_id.represent = fac_type_renderer
+        
+        loc_id_renderer = S3Represent(lookup="gis_location",
+                                      linkto=URL(c="gis", f="location", args=["[id]"]))
+        table.location_id.represent = loc_id_renderer
+
+        # Export with IDs
+        current.manager.show_ids = True
+        tree = resource.export_tree(dereference=False)
+        root = tree.getroot()
+
+        locations = self.locations
+        fac_types = self.fac_types
+        org = self.org
+
+        # Check correct representation in exports
+        for fac in self.facs:
+
+            # Find the element
+            elem = root.findall("resource[@id='%s']" % fac.id)
+            elem = elem[0] if len(elem) else None
+            self.assertNotEqual(elem, None)
+
+            find = lambda name: elem.findall("reference[@field='%s']" % name)
+            
+            organisation_id = find("organisation_id")
+            organisation_id = organisation_id[0] \
+                              if len(organisation_id) else None
+            self.assertNotEqual(organisation_id, None)
+            self.assertEqual(organisation_id.text, org.name)
+
+            location_id = find("location_id")
+            location_id = location_id[0] \
+                          if len(location_id) else None
+            self.assertNotEqual(location_id, None)
+            location = locations[fac.location_id]
+            self.assertEqual(location_id.text, location.name)
+
+            facility_type_id = find("facility_type_id")
+            facility_type_id = facility_type_id[0] \
+                               if len(facility_type_id) else None
+            self.assertNotEqual(facility_type_id, None)
+            
+            ftypes = ", ".join([fac_types[i].name
+                                for i in fac.facility_type_id])
+            self.assertEqual(facility_type_id.text, ftypes)
+
+        # Check that only 1 query per renderer was needed for the export
+        self.assertEqual(org_id_renderer.queries, 1)
+        self.assertEqual(fac_type_renderer.queries, 1)
+        self.assertEqual(loc_id_renderer.queries, 1)
+
+    # -------------------------------------------------------------------------
+    def tearDown(self):
+
+        current.db.rollback()
+        current.auth.override = False
+
+# =============================================================================
 def run_suite(*test_classes):
     """ Run the test suite """
 
@@ -784,7 +970,8 @@ if __name__ == "__main__":
 
     run_suite(
         S3RepresentTests,
-        S3RepresentFKLazyTests,
+        S3ExtractLazyFKRepresentationTests,
+        S3ExportLazyFKRepresentationTests,
     )
 
 # END ========================================================================

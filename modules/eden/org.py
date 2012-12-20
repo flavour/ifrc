@@ -42,11 +42,11 @@ __all__ = ["S3OrganisationModel",
            "org_organisation_logo",
            "org_root_organisation",
            "org_organisation_requires",
-           "org_organisation_represent",
            "org_site_represent",
            "org_rheader",
            "org_organisation_controller",
            "org_office_controller",
+           "org_OrganisationRepresent"
            ]
 
 try:
@@ -81,6 +81,7 @@ class S3OrganisationModel(S3Model):
              "org_organisation_id",
              "org_organisation_branch",
              "org_organisation_user",
+             "org_organisation_represent",
              ]
 
     def model(self):
@@ -444,6 +445,8 @@ class S3OrganisationModel(S3Model):
                                                  title=ORGANISATION,
                                                  tooltip=help)
 
+        org_organisation_represent = org_OrganisationRepresent()
+
         from_organisation_comment = S3AddResourceLink(c="org",
                                                       f="organisation",
                                                       vars=dict(child="from_organisation_id"),
@@ -710,6 +713,7 @@ class S3OrganisationModel(S3Model):
                     org_sector_opts=self.org_sector_opts,
                     org_organisation_type_id=organisation_type_id,
                     org_organisation_id=organisation_id,
+                    org_organisation_represent=org_organisation_represent
                 )
 
     # -------------------------------------------------------------------------
@@ -1851,9 +1855,7 @@ class S3FacilityModel(S3Model):
                                 stable.phone2,
                                 stable.email,
                                 stable.website,
-                                ntable.urgently_needed,
-                                ntable.needed,
-                                ntable.not_needed,
+                                ntable.needs,
                                 gtable.addr_street,
                                 gtable.L1,
                                 gtable.L4,
@@ -1909,12 +1911,14 @@ class S3FacilityModel(S3Model):
                 properties["web"] = o.website
             n = f.req_site_needs
             if n:
-                if n.urgently_needed:
-                    properties["urgent"] = n.urgently_needed
-                if n.needed:
-                    properties["need"] = n.needed
-                if n.not_needed:
-                    properties["no"] = n.not_needed
+                if n.needs:
+                    needs = json.loads(n.needs)
+                    if "urgent" in needs:
+                        properties["urgent"] = needs["urgent"]
+                    if "need" in needs:
+                        properties["need"] = needs["need"]
+                    if "no" in needs:
+                        properties["no"] = needs["no"]
             f = dict(
                 type = "Feature",
                 properties = properties,
@@ -2617,7 +2621,7 @@ def org_organisation_requires(updateable=False,
     """
 
     requires = IS_ONE_OF(current.db, "org_organisation.id",
-                         org_organisation_represent,
+                         org_OrganisationRepresent(),
                          updateable = updateable,
                          orderby = "org_organisation.name",
                          sort = True)
@@ -2626,53 +2630,99 @@ def org_organisation_requires(updateable=False,
     return requires
 
 # =============================================================================
-def org_organisation_represent(id, row=None, show_link=False,
-                               acronym=True, parent=True):
-    """
-        Represent an Organisation in option fields or list views
+class org_OrganisationRepresent(S3Represent):
+    """ Representation of Organisations """
 
-        @param show_link: whether to make the output into a hyperlink
-        @param acronym: whether to show any acronym present
-        @param parent: whether to show the parent Org for branches
-    """
+    def __init__(self,
+                 translate=False,
+                 show_link=False,
+                 parent=True,
+                 acronym=True,
+                 multiple=False):
 
-    db = current.db
-    table = current.s3db.org_organisation
+        if parent:
+            # Need a custom lookup
+            self.parent = True
+            self.lookup_rows = self.custom_lookup_rows
+            fields=["org_organisation.name",
+                    "org_organisation.acronym",
+                    "org_parent_organisation.name"]
+        else:
+            # Can use standard lookup of fields
+            self.parent = False
+            fields = ["name", "acronym"]
 
-    if row:
-        id = row.id
-    elif id:
-        row = db(table.id == id).select(table.name,
-                                        table.acronym,
-                                        limitby=(0, 1)).first()
-    else:
-        return current.messages["NONE"]
+        super(org_OrganisationRepresent, self) \
+             .__init__(lookup="org_organisation",
+                       fields=["org_organisation.name",
+                               "org_organisation.acronym",
+                               "org_parent_organisation.name"],
+                       show_link=show_link,
+                       translate=translate,
+                       multiple=multiple)
 
-    try:
-        represent = row.name
-    except:
-        return current.messages.UNKNOWN_OPT
+        self.parent = parent
+        self.acronym = acronym
 
-    r = None
-    if parent:
+    # -------------------------------------------------------------------------
+    def custom_lookup_rows(self, key, values, fields=[]):
+        """
+            Custom lookup method for organisation rows, does a
+            left join with the parent organisation. Parameters
+            key and fields are not used, but are kept for API
+            compatiblity reasons.
+
+            @param values: the organisation IDs
+        """
+
+        db = current.db
+        s3db = current.s3db
+        otable = s3db.org_organisation
         btable = db.org_organisation_branch
-        query = (btable.branch_id == id) & \
-                (table.id == btable.organisation_id)
-        r = db(query).select(table.name,
-                             limitby=(0, 1)).first()
-        if r:
-            represent = "%s > %s" % (r.name, represent)
+        ptable = db.org_organisation.with_alias("org_parent_organisation")
 
-    if not r and acronym and row.acronym:
-        represent = "%s (%s)" % (represent, row.acronym)
+        left = [btable.on(btable.branch_id == otable.id),
+                ptable.on(ptable.id == btable.organisation_id)]
 
-    if show_link:
-        represent = A(represent,
-                      _href=URL(c="org", f="organisation",
-                                  args=id))
+        if len(values) == 1:
+            query = (otable.id == values[0])
+        else:
+            query = (otable.id.belongs(values))
+        rows = db(query).select(otable.id,
+                                otable.name,
+                                otable.acronym,
+                                ptable.name,
+                                left=left)
+        self.queries += 1
+        return rows
 
-    return represent
+    # -------------------------------------------------------------------------
+    def represent_row(self, row):
+        """
+            Represent a single Row
 
+            @param row: the org_organisation Row
+        """
+
+        if self.parent:
+            # Custom Row (with the parent left-joined)
+            name = row["org_organisation.name"]
+            acronym = row["org_organisation.acronym"]
+        else:
+            # Standard row (from fields)
+            name = row["name"]
+            acronym = row["acronym"]
+
+        if not name:
+            return self.default
+        if self.acronym and acronym:
+            name = "%s (%s)" % (name, acronym)
+        if self.parent:
+            parent = row["org_parent_organisation.name"]
+            if parent:
+                name = "%s > %s" % (parent, name)
+        return name
+        
 # =============================================================================
 def org_site_represent(id, row=None, show_link=True):
     """
@@ -2947,8 +2997,8 @@ def org_organisation_controller():
                 otable.region.default = record.region
                 otable.country.default = record.country
                 # Represent orgs without the parent prefix as we have that context already
-                s3db.org_organisation_branch.branch_id.represent = lambda val: \
-                    s3db.org_organisation_represent(val, parent=False)
+                s3db.org_organisation_branch.branch_id.represent = \
+                    s3db.org_organisation_represent(parent=False)
 
             elif r.component_name == "task" and \
                  r.method != "update" and r.method != "read":

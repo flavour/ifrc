@@ -1447,7 +1447,6 @@ class S3Project3WModel(S3Model):
                   create_next=URL(c="project", f="location",
                                   args=["[id]", "beneficiary"]),
                   search_method=project_location_search,
-                  #onaccept=self.project_location_onaccept,
                   deduplicate=self.project_location_deduplicate,
                   report_options=Storage(search = advanced_search,
                                          rows=report_fields,
@@ -1534,13 +1533,13 @@ class S3Project3WModel(S3Model):
                         ),
                         S3SearchOptionsWidget(
                             name="location_contact_search_L1",
-                            field="person_id$L1",
+                            field="person_id$location_id$L1",
                             location_level="L1",
                             cols = 3,
                         ),
                         S3SearchOptionsWidget(
                             name="location_contact_search_L2",
-                            field="person_id$L2",
+                            field="person_id$location_id$L2",
                             location_level="L2",
                             cols = 3,
                         )
@@ -1551,10 +1550,10 @@ class S3Project3WModel(S3Model):
         configure(tablename,
                   search_method=location_contact_search,
                   list_fields=["person_id",
-                               # (hierarchy["L0"], "person_id$L0"),
-                               # (hierarchy["L1"], "person_id$L1"),
-                               # (hierarchy["L2"], "person_id$L2"),
-                               # (hierarchy["L3"], "person_id$L3"),
+                               # (hierarchy["L0"], "person_id$location_id$L0"),
+                               # (hierarchy["L1"], "person_id$location_id$L1"),
+                               # (hierarchy["L2"], "person_id$location_id$L2"),
+                               # (hierarchy["L3"], "person_id$location_id$L3"),
                                (T("Email"), "email"),
                                (T("Mobile Phone"), "sms"),
                                "project_location_id",
@@ -2024,22 +2023,6 @@ class S3Project3WModel(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
-        return
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def project_location_onaccept(form):
-        """
-            Populate the Lx fields from the location_id
-            - disabled
-        """
-
-        #vars = form.vars
-        #location_id = vars.location_id
-        #if location_id:
-        #    # Populate the Lx fields
-        #    s3_lx_update(current.db.project_location, vars.id)
-
         return
 
     # -------------------------------------------------------------------------

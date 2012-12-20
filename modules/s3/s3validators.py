@@ -105,7 +105,8 @@ class IS_LAT(object):
 
         INPUT(_type="text", _name="name", requires=IS_LAT())
 
-        latitude has to be in degrees between -90 & 90
+        Latitude has to be in decimal degrees between -90 & 90
+        - we attempt to convert DMS format into decimal degrees
     """
     def __init__(self,
                  error_message = "Latitude/Northing should be between -90 & 90!"
@@ -120,9 +121,44 @@ class IS_LAT(object):
             value = float(value)
             if self.minimum <= value <= self.maximum:
                 return (value, None)
-        except ValueError:
-            pass
-        return (value, self.error_message)
+            else:
+                return (value, self.error_message)
+        except:
+            pattern = re.compile("^[0-9]{,3}[\D\W][0-9]{,3}[\D\W][0-9]+$")
+            if not pattern.match(value):
+                return (value, self.error_message)
+            else:
+                val = []
+                val.append(value)
+                sep = []
+                count = 0
+                for i in val[0]:
+                    try:
+                        int(i)
+                        count += 1
+                    except:
+                        sep.append(count)
+                        count += 1
+                sec = ''
+                posn = sep[1]
+                while posn != (count-1):
+                    sec = sec + val[0][posn+1]#to join the numbers for seconds
+                    posn += 1
+                posn2 = sep[0]
+                mins=''
+                while posn2 != (sep[1]-1):
+                    mins = mins + val[0][posn2+1]# to join the numbers for minutes
+                    posn2 += 1
+                deg = ''
+                posn3 = 0
+                while posn3 != (sep[0]):
+                    deg = deg + val[0][posn3] # to join the numbers for degree
+                    posn3 += 1
+                e = int(sec)/60 #formula to get back decimal degree
+                f = int(mins) + e #formula
+                g = int(f) / 60 #formula
+                value = int(deg) + g                
+                return (value, None)
 
 # =============================================================================
 class IS_LON(object):
@@ -131,7 +167,8 @@ class IS_LON(object):
 
         INPUT(_type="text", _name="name", requires=IS_LON())
 
-        longitude has to be in degrees between -180 & 180
+        Longitude has to be in decimal degrees between -180 & 180
+        - we attempt to convert DMS format into decimal degrees
     """
     def __init__(self,
                  error_message = "Longitude/Easting should be between -180 & 180!"
@@ -146,9 +183,44 @@ class IS_LON(object):
             value = float(value)
             if self.minimum <= value <= self.maximum:
                 return (value, None)
-        except ValueError:
-            pass
-        return (value, self.error_message)
+            else:
+                return (value, self.error_message)
+        except:
+            pattern = re.compile("^[0-9]{,3}[\D\W][0-9]{,3}[\D\W][0-9]+$")
+            if not pattern.match(value):
+                return (value, self.error_message)
+            else:
+                val = []
+                val.append(value)
+                sep = []
+                count = 0
+                for i in val[0]:
+                    try:
+                        int(i)
+                        count += 1
+                    except:
+                        sep.append(count)
+                        count += 1
+                sec = ''
+                posn = sep[1]
+                while posn != (count-1):
+                    sec = sec + val[0][posn+1]#to join the numbers for seconds
+                    posn += 1
+                posn2 = sep[0]
+                mins=''
+                while posn2 != (sep[1]-1):
+                    mins = mins + val[0][posn2+1]# to join the numbers for minutes
+                    posn2 += 1
+                deg = ''
+                posn3 = 0
+                while posn3 != (sep[0]):
+                    deg = deg + val[0][posn3] # to join the numbers for degree
+                    posn3 += 1
+                e = int(sec)/60 #formula to get back decimal degree
+                f = int(mins) + e #formula
+                g = int(f) / 60 #formula
+                value = int(deg) + g                
+                return (value, None)
 
 # =============================================================================
 class IS_NUMBER(object):
@@ -404,8 +476,10 @@ class IS_ONE_OF_EMPTY(Validator):
         else:
             self.dbset = dbset
         (ktable, kfield) = str(field).split(".")
+
         if not label:
             label = "%%(%s)s" % kfield
+
         if isinstance(label, str):
             if regex1.match(str(label)):
                 label = "%%(%s)s" % str(label).split(".")[-1]
@@ -413,13 +487,35 @@ class IS_ONE_OF_EMPTY(Validator):
             if not kfield in ks:
                 ks += [kfield]
             fields = ["%s.%s" % (ktable, k) for k in ks]
+        elif hasattr(label, "bulk"):
+            # S3Represent
+            ks = [kfield]
+            if label.custom_lookup:
+                # Represent uses a custom lookup, so we only
+                # retrieve the keys here
+                fields = [kfield]
+                orderby = kfield
+            else:
+                # Represent uses a standard field lookup, so
+                # we can do that right here
+                label._setup()
+                fields = list(label.fields)
+                if kfield not in fields:
+                    fields.insert(0, kfield)
+                # Unlikely, but possible: represent and validator
+                # using different keys - commented for now for
+                # performance reasons (re-enable if ever necessary)
+                #key = label.key
+                #if key and key not in fields:
+                    #fields.insert(0, key)
         else:
             ks = [kfield]
             try:
                 table = current.s3db[ktable]
-                fields =[str(f) for f in table]
+                fields =[str(f) for f in table if f.name not in ("wkt", "the_geom")]
             except RuntimeError:
                 fields = "all"
+
         self.fields = fields
         self.label = label
         self.ktable = ktable
@@ -480,7 +576,7 @@ class IS_ONE_OF_EMPTY(Validator):
             table = db[self.ktable]
 
             if self.fields == "all":
-                fields = [table[f] for f in table.fields]
+                fields = [table[f] for f in table.fields if f not in ("wkt", "the_geom")]
             else:
                 fieldnames = [f.split(".")[1] if "." in f else f for f in self.fields]
                 fields = [table[k] for k in fieldnames if k in table.fields]
@@ -533,7 +629,7 @@ class IS_ONE_OF_EMPTY(Validator):
                 # Note this does not support filtering.
                 orderby = self.orderby or \
                           reduce(lambda a, b: a|b, (f for f in fields
-                                                    if not f.name == "id"))
+                                                    if f.type != "id"))
                 # Caching breaks Colorbox dropdown refreshes
                 #dd = dict(orderby=orderby, cache=(current.cache.ram, 60))
                 dd = dict(orderby=orderby)
@@ -541,8 +637,17 @@ class IS_ONE_OF_EMPTY(Validator):
             self.theset = [str(r[self.kfield]) for r in records]
             label = self.label
             try:
-                # Is a function
-                labels = map(label, [], records)
+                # Is callable
+                if hasattr(label, "bulk"):
+                    # S3Represent => use bulk option
+                    d = label.bulk(None,
+                                   rows=records,
+                                   list_type=False,
+                                   show_link=False)
+                    labels = [d.get(r[self.kfield], d[None]) for r in records]
+                else:
+                    # Standard representation function
+                    labels = map(label, [], records)
             except TypeError:
                 if isinstance(label, str):
                     labels = map(lambda r: label % dict(r), records)

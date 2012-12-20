@@ -47,6 +47,7 @@ __all__ = ["S3HiddenWidget",
            "S3LocationDropdownWidget",
            #"S3CheckboxesWidget",
            "S3MultiSelectWidget",
+           "S3PriorityListWidget",
            "S3ACLWidget",
            "CheckboxesWidgetS3",
            "S3AddPersonWidget",
@@ -458,18 +459,9 @@ class S3AutocompleteWidget(FormWidget):
              self.link_filter, self.post_process, self.delay, self.min_length)
 
         if value:
-            text = str(field.represent(default["value"]))
+            text = s3_unicode(field.represent(value))
             if "<" in text:
-                # Strip Markup
-                try:
-                    markup = etree.XML(text)
-                    text = markup.xpath(".//text()")
-                    if text:
-                        text = " ".join(text)
-                    else:
-                        text = ""
-                except etree.XMLSyntaxError:
-                    pass
+                text = s3_strip_markup(text)
             represent = text
         else:
             represent = ""
@@ -808,18 +800,9 @@ $('#%(dummy_input)s').blur(function(){
 
         if value:
             # Provide the representation for the current/default Value
-            text = str(field.represent(default["value"]))
+            text = str(field.represent(value))
             if "<" in text:
-                # Strip Markup
-                try:
-                    markup = etree.XML(text)
-                    text = markup.xpath(".//text()")
-                    if text:
-                        text = " ".join(text)
-                    else:
-                        text = ""
-                except etree.XMLSyntaxError:
-                    pass
+                text = s3_strip_markup(text)
             represent = text
         else:
             represent = ""
@@ -1009,18 +992,9 @@ $('#%(dummy_input)s').blur(function(){
 
         if value:
             # Provide the representation for the current/default Value
-            text = str(field.represent(default["value"]))
+            text = s3_unicode(field.represent(value))
             if "<" in text:
-                # Strip Markup
-                try:
-                    markup = etree.XML(text)
-                    text = markup.xpath(".//text()")
-                    if text:
-                        text = " ".join(text)
-                    else:
-                        text = ""
-                except etree.XMLSyntaxError:
-                    pass
+                text = s3_strip_markup(text)
             represent = text
         else:
             represent = ""
@@ -1163,18 +1137,9 @@ $('#%(dummy_input)s').blur(function(){
 
         if value:
             # Provide the representation for the current/default Value
-            text = str(field.represent(default["value"]))
+            text = s3_unicode(field.represent(value))
             if "<" in text:
-                # Strip Markup
-                try:
-                    markup = etree.XML(text)
-                    text = markup.xpath(".//text()")
-                    if text:
-                        text = " ".join(text)
-                    else:
-                        text = ""
-                except etree.XMLSyntaxError:
-                    pass
+                text = s3_strip_markup(text)
             represent = text
         else:
             represent = ""
@@ -1282,18 +1247,9 @@ $('#%(dummy_input)s').blur(function(){
 
         if value:
             # Provide the representation for the current/default Value
-            text = str(field.represent(default["value"]))
+            text = s3_unicode(field.represent(value))
             if "<" in text:
-                # Strip Markup
-                try:
-                    markup = etree.XML(text)
-                    text = markup.xpath(".//text()")
-                    if text:
-                        text = " ".join(text)
-                    else:
-                        text = ""
-                except etree.XMLSyntaxError:
-                    pass
+                text = s3_strip_markup(text)
             represent = text
         else:
             represent = ""
@@ -1400,18 +1356,9 @@ $('#%(dummy_input)s').blur(function(){
 
     if value:
         # Provide the representation for the current/default Value
-        text = s3_unicode(field.represent(default["value"]))
+        text = s3_unicode(field.represent(value))
         if "<" in text:
-            # Strip Markup
-            try:
-                markup = etree.XML(text)
-                text = markup.xpath(".//text()")
-                if text:
-                    text = " ".join(text)
-                else:
-                    text = ""
-            except etree.XMLSyntaxError:
-                pass
+            text = s3_strip_markup(text)
         represent = text
     else:
         represent = ""
@@ -2286,24 +2233,23 @@ i18n.gis_country_required="%s"''' % (country_snippet,
 
         # The overall layout of the components
         s3.gis.location_selector_loaded = 1
-        return TAG[""](
-                        TR(INPUT(**attr)),  # Real input, which is hidden
-                        label_row,
-                        tab_rows,
-                        Lx_search_rows,
-                        search_rows,
-                        L0_rows,
-                        name_rows,
-                        street_rows,
-                        postcode_rows,
-                        Lx_rows,
-                        wkt_input_row,
-                        map_button_row,
-                        latlon_rows,
-                        divider,
-                        TR(map_popup, TD(), _class="box_middle"),
-                        requires=requires
-                      )
+        return TAG[""](TR(INPUT(**attr)),  # Real input, which is hidden
+                       label_row,
+                       tab_rows,
+                       Lx_search_rows,
+                       search_rows,
+                       L0_rows,
+                       name_rows,
+                       street_rows,
+                       postcode_rows,
+                       Lx_rows,
+                       wkt_input_row,
+                       map_button_row,
+                       latlon_rows,
+                       divider,
+                       TR(map_popup, TD(), _class="box_middle"),
+                       requires=requires
+                       )
 
 # =============================================================================
 class S3LatLonWidget(DoubleWidget):
@@ -2381,13 +2327,12 @@ i18n.gis_range_error={degrees:{lat:'%s',lon:'%s'},minutes:'%s',seconds:'%s',deci
                         dms_boxes,
                         _class="gis_coord_wrap")
         else:
-            return SPAN(
-                        decimal,
+            return SPAN(decimal,
                         dms_boxes,
                         *controls,
                         requires = field.requires,
                         _class="gis_coord_wrap"
-                      )
+                        )
 
 # =============================================================================
 class S3CheckboxesWidget(OptionsWidget):
@@ -2566,10 +2511,42 @@ $('#%s').multiselect({
        selector,
        selector))
 
-        return TAG[""](
-                        MultipleOptionsWidget.widget(field, value, **attributes),
-                        requires = field.requires
-                      )
+        return TAG[""](MultipleOptionsWidget.widget(field, value, **attributes),
+                       requires = field.requires
+                       )
+
+# =============================================================================
+class S3PriorityListWidget(StringWidget):
+
+    """
+        Widget to broadcast facility needs
+    """
+    
+    def __call__(self, field, value, **attributes):
+
+        s3 = current.response.s3
+
+        default = dict(
+            _type = "text",
+            value = (value != None and str(value)) or "",
+            )
+        attr = StringWidget._attributes(field, default, **attributes)
+
+        # @ToDo: i18n strings in JS
+        #T = current.T
+
+        selector = str(field).replace(".", "_")
+        s3.jquery_ready.append('''
+$('#%s').removeClass('list').addClass('prioritylist').prioritylist()''' % \
+            (selector))
+
+        # @ToDo: minify
+        s3.scripts.append("/%s/static/scripts/S3/s3.prioritylist.js" % current.request.application)
+        s3.stylesheets.append("S3/s3.prioritylist.css")
+
+        return TAG[""](INPUT(**attr),
+                       requires = field.requires
+                       )
 
 # =============================================================================
 class S3ACLWidget(CheckboxesWidget):

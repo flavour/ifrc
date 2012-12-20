@@ -29,6 +29,7 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
+import sys
 import datetime
 from uuid import uuid4
 
@@ -40,6 +41,7 @@ from gluon import *
 #from gluon.validators import *
 from gluon.dal import Query, SQLCustomType
 from gluon.storage import Storage
+from gluon.languages import lazyT
 
 from s3navigation import S3ScriptItem
 from s3utils import S3DateTime, s3_auth_user_represent, s3_auth_user_represent_name, s3_auth_group_represent, s3_unicode
@@ -201,7 +203,7 @@ class S3Represent(object):
         @group Internal Methods: _setup,
                                  _lookup
     """
-
+    
     def __init__(self,
                  lookup=None,
                  key=None,
@@ -210,6 +212,7 @@ class S3Represent(object):
                  options=None,
                  translate=False,
                  linkto=None,
+                 show_link=False,
                  multiple=False,
                  default=None,
                  none=None):
@@ -229,6 +232,7 @@ class S3Represent(object):
             @param translate: translate all representations (using T)
             @param linkto: a URL (as string) to link representations to,
                            with "[id]" as placeholder for the key
+            @param show_link: whether to add a URL to representations
             @param default: default representation for unknown options
             @param none: representation for empty fields (None or empty list)
         """
@@ -242,6 +246,7 @@ class S3Represent(object):
         self.list_type = multiple
         self.translate = translate
         self.linkto = linkto
+        self.show_link = show_link
         self.default = default
         self.none = none
         self.setup = False
@@ -249,9 +254,21 @@ class S3Represent(object):
         self.queries = 0
         self.lazy = []
         self.lazy_show_link = False
+        # Attributes to simulate being a function for sqlhtml's represent()
+        self.func_code = Storage(co_argcount = 2)
+        self.func_defaults = None
+
+        if hasattr(self, "lookup_rows"):
+            self.custom_lookup = True
+        else:
+            self.lookup_rows = self._lookup_rows
+            self.custom_lookup = False
+
+        self.func_code = Storage(co_argcount = 3)
+        self.func_defaults = ["row", "show_link"]
 
     # -------------------------------------------------------------------------
-    def lookup_rows(self, key, values, fields=[]):
+    def _lookup_rows(self, key, values, fields=[]):
         """
             Lookup all rows referenced by values.
             (in foreign key representations)
@@ -277,23 +294,27 @@ class S3Represent(object):
             (in foreign key representations)
 
             @param row: the row
+
+            @return: the representation of the Row, or None if there
+                     is an error in the Row
         """
 
         labels = self.labels
+
         if self.slabels:
+            # String Template
             v = labels % row
         elif self.clabels:
+            # External Renderer
             v = labels(row)
         else:
-            values = [row[f] for f in self.fields]
+            # Default
+            values = [row[f] for f in self.fields if row[f] not in (None, "")]
             if values:
-                try:
-                    v = " ".join([v for v in values if v])
-                except:
-                    v = " ".join([v for v in values if v])
+                v = " ".join([s3_unicode(v) for v in values])
             else:
                 v = self.none
-        if self.translate:
+        if self.translate and not type(v) is lazyT:
             return current.T(v)
         else:
             return v
@@ -331,10 +352,21 @@ class S3Represent(object):
             @param show_link: render the representation as link
         """
 
-        show_link = show_link and self.linkto is not None
+        self._setup()
+        show_link = show_link and self.show_link
+
         if self.list_type:
-            return self.multiple(value, rows=row,
-                                 list_type=False, show_link=show_link)
+            # Is a list-type => use multiple
+            return self.multiple(value,
+                                 rows=row,
+                                 list_type=False,
+                                 show_link=show_link)
+
+        # Prefer the row over the value
+        if row and self.table:
+            value = row[self.key]
+
+        # Lookup the representation
         if value:
             rows = [row] if row is not None else None
             items = self._lookup([value], rows=rows)
@@ -356,8 +388,14 @@ class S3Represent(object):
             @param show_link: render each representation as link
         """
 
-        show_link = show_link and self.linkto is not None
-        if self.list_type and list_type:
+        self._setup()
+        show_link = show_link and self.show_link
+
+        # Get the values
+        if rows and self.table:
+            key = self.key
+            values = [row[key] for row in rows]
+        elif self.list_type and list_type:
             from itertools import chain
             try:
                 hasnone = None in values
@@ -370,6 +408,8 @@ class S3Represent(object):
                 raise ValueError("List of lists expected, got %s" % values)
         else:
             values = [values] if type(values) is not list else values
+
+        # Lookup the representations
         if values:
             default = self.default
             items = self._lookup(values, rows=rows)
@@ -391,7 +431,7 @@ class S3Represent(object):
         return self.none
 
     # -------------------------------------------------------------------------
-    def bulk(self, values, rows=None, show_link=True):
+    def bulk(self, values, rows=None, list_type=True, show_link=True):
         """
             Represent multiple values as dict {value: representation}
 
@@ -407,8 +447,14 @@ class S3Represent(object):
                    would still have to construct the final string/HTML.
         """
 
-        show_link = show_link and self.linkto is not None
-        if self.list_type:
+        self._setup()
+        show_link = show_link and self.show_link
+
+        # Get the values
+        if rows and self.table:
+            key = self.key
+            values = [row[key] for row in rows]
+        elif self.list_type and list_type:
             from itertools import chain
             try:
                 hasnone = None in values
@@ -421,6 +467,8 @@ class S3Represent(object):
                 raise ValueError("List of lists expected, got %s" % values)
         else:
             values = [values] if type(values) is not list else values
+
+        # Lookup the representations
         if values:
             labels = self._lookup(values, rows=rows)
             if show_link:
@@ -446,7 +494,7 @@ class S3Represent(object):
                               be the same as used with bulk()
         """
 
-        show_link = show_link and self.linkto is not None
+        show_link = show_link and self.show_link
         if show_link:
             labels = [(labels[v], ", ")
                       if v in labels else (self.default, ", ")
@@ -477,12 +525,13 @@ class S3Represent(object):
         if self.none is None:
             self.none = messages["NONE"]
 
-        # Lookup table options
+        # Initialize theset
         if self.options is not None:
             self.theset = self.options
         else:
             self.theset = {}
-            
+
+        # Lookup table parameters and linkto
         if self.table is None:
             tablename = self.tablename
             if tablename:
@@ -496,9 +545,15 @@ class S3Represent(object):
                         else:
                             self.fields = [self.key]
                     self.table = table
+                if self.linkto is None and self.show_link:
+                    c, f = tablename.split("_", 1)
+                    self.linkto = URL(c=c, f=f, args=["[id]"])
 
+        # What type of renderer do we use?
         labels = self.labels
+        # String template?
         self.slabels = isinstance(labels, basestring)
+        # External renderer?
         self.clabels = callable(labels)
 
         self.setup = True
@@ -510,17 +565,16 @@ class S3Represent(object):
             Lazy lookup values.
 
             @param values: list of values to lookup
-            @param rows: rows referenced by values (if values are foreign
-                         keys), optional
+            @param rows: rows referenced by values (if values are foreign keys)
+                         optional
         """
 
-        self._setup()
         theset = self.theset
-
-        ogetattr = object.__getattribute__
-
+        
         items = {}
         lookup = {}
+
+        # Check whether values are already in theset
         for v in values:
             if v is None:
                 items[v] = self.none
@@ -531,42 +585,145 @@ class S3Represent(object):
         if self.table is None or not lookup:
             return items
 
+        # Get the primary key
         pkey = self.key
         table = self.table
+        ogetattr = object.__getattribute__
         try:
             key = ogetattr(table, pkey)
         except AttributeError:
             return items
 
+        # Use the given rows to lookup the values
         pop = lookup.pop
         represent_row = self.represent_row
-        if rows:
+        if rows and not self.custom_lookup:
             for row in rows:
                 k = row[key]
                 if k not in theset:
                     theset[k] = represent_row(row)
                 if pop(k, None):
                     items[k] = theset[k]
-            if not lookup:
-                return items
 
-        lookup = lookup.keys()
-        try:
-            # Need for speed: assume all fields are in table
-            fields = [ogetattr(table, f) for f in self.fields]
-        except AttributeError:
-            # Ok - they are not: provide debug output and filter fields
-            if current.response.s3.debug:
-                from s3utils import s3_debug
-                s3_debug(sys.exc_info()[1])
-            fields = [ogetattr(table, f)
-                      for f in self.fields if hasattr(table, f)]
-        rows = self.lookup_rows(key, lookup, fields=fields)
+        # Retrieve additional rows as needed
+        if lookup:
+            if not self.custom_lookup:
+                try:
+                    # Need for speed: assume all fields are in table
+                    fields = [ogetattr(table, f) for f in self.fields]
+                except AttributeError:
+                    # Ok - they are not: provide debug output and filter fields
+                    if current.response.s3.debug:
+                        from s3utils import s3_debug
+                        s3_debug(sys.exc_info()[1])
+                    fields = [ogetattr(table, f)
+                              for f in self.fields if hasattr(table, f)]
+            else:
+                fields = []
+            rows = self.lookup_rows(key, lookup.keys(), fields=fields)
+            for row in rows:
+                k = row[key]
+                lookup.pop(k, None)
+                items[k] = theset[k] = represent_row(row)
 
-        for row in rows:
-            k = row[key]
-            items[k] = theset[k] = represent_row(row)
+        if lookup:
+            for k in lookup:
+                items[k] = self.default
+
+        # Done
         return items
+
+# =============================================================================
+class S3RepresentLazy(object):
+    """
+        Lazy Representation of a field value, utilizes the bulk-feature
+        of S3Represent-style representation methods
+    """
+
+    def __init__(self, value, renderer):
+        """
+            Constructor
+
+            @param value: the value
+            @param renderer: the renderer (S3Represent instance)
+        """
+
+        self.value = value
+        self.renderer = renderer
+
+        self.multiple = False
+        renderer.lazy.append(value)
+
+    def __repr__(self):
+        """ Represent as string """
+
+        value = self.value
+        renderer = self.renderer
+        if renderer.lazy:
+            labels = renderer.bulk(renderer.lazy)
+            renderer.lazy = []
+        else:
+            labels = renderer.theset
+        if renderer.list_type:
+            if self.multiple:
+                return renderer.multiple(value, show_link=False)
+            else:
+                return renderer.render_list(value, labels, show_link=False)
+        else:
+            if self.multiple:
+                return renderer.multiple(value, show_link=False)
+            else:
+                return renderer(value, show_link=False)
+
+    def render(self):
+        """ Render as HTML """
+
+        value = self.value
+        renderer = self.renderer
+        if renderer.lazy:
+            labels = renderer.bulk(renderer.lazy)
+            renderer.lazy = []
+        else:
+            labels = renderer.theset
+        if renderer.list_type:
+            if self.multiple:
+                return renderer.multiple(value)
+            else:
+                return renderer.render_list(value, labels)
+        else:
+            if self.multiple:
+                return renderer.multiple(value)
+            else:
+                return renderer(value)
+
+    def render_node(self, element, attributes, name):
+        """
+            Render as text or attribute of an XML element
+
+            @param element: the element
+            @param attributes: the attributes dict of the element
+            @param name: the attribute name
+        """
+
+        # Render value
+        text = repr(self)
+
+        # Strip markup + XML-escape
+        if text and "<" in text:
+            try:
+                stripper = S3MarkupStripper()
+                stripper.feed(text)
+                text = stripper.stripped()
+            except:
+                pass
+        text = current.xml.xml_encode(text)
+
+        # Add to node
+        if element is not None:
+            element.text = text
+        else:
+            attributes[name] = text
+        return
 
 # =============================================================================
 # Record identity meta-fields
@@ -839,282 +996,6 @@ def s3_roles_permitted(name="roles_permitted", **attr):
                         comment = comment,
                         ondelete = ondelete)
     return f()
-
-# =============================================================================
-# Lx
-#
-# These fields are populated onaccept from location_id
-# - for many reads to fewer writes, this is faster than Virtual Fields
-# - @ToDO: No need for virtual fields - replace with simple joins
-#
-# Labels that vary by country are set by gis.update_table_hierarchy_labels()
-#
-
-address_L5 = S3ReusableField("L5",
-                             readable=False,
-                             writable=False)
-address_L4 = S3ReusableField("L4",
-                             readable=False,
-                             writable=False)
-address_L3 = S3ReusableField("L3",
-                             readable=False,
-                             writable=False)
-address_L2 = S3ReusableField("L2",
-                             readable=False,
-                             writable=False)
-address_L1 = S3ReusableField("L1",
-                             readable=False,
-                             writable=False)
-address_L0 = S3ReusableField("L0",
-                             readable=False,
-                             writable=False)
-
-def s3_lx_fields():
-    """
-        Return the fields used to report on resources by location
-    """
-
-    fields = (
-            address_L5(),
-            address_L4(),
-            address_L3(),
-            address_L2(),
-            address_L1(),
-            address_L0(label=current.messages.COUNTRY),
-           )
-    return fields
-
-# -----------------------------------------------------------------------------
-def s3_lx_onvalidation(form):
-    """
-        Write the Lx fields from the Location
-        - used by pr_person, hrm_training, irs_ireport
-
-        @ToDo: Allow the reverse operation.
-        If these fields are populated then create/update the location
-    """
-
-    vars = form.vars
-    if "location_id" in vars and vars.location_id:
-
-        db = current.db
-        table = current.s3db.gis_location
-        query = (table.id == vars.location_id)
-        location = db(query).select(table.name,
-                                    table.level,
-                                    table.parent,
-                                    table.path,
-                                    limitby=(0, 1)).first()
-        if location:
-            if location.level == "L0":
-                vars.L0 = location.name
-            elif location.level == "L1":
-                vars.L1 = location.name
-                if location.parent:
-                    query = (table.id == location.parent)
-                    country = db(query).select(table.name,
-                                               limitby=(0, 1)).first()
-                    if country:
-                        vars.L0 = country.name
-            else:
-                # Get Names of ancestors at each level
-                vars = current.gis.get_parent_per_level(vars,
-                                                        vars.location_id,
-                                                        feature=location,
-                                                        ids=False,
-                                                        names=True)
-
-# -----------------------------------------------------------------------------
-def s3_lx_update(table, record_id):
-    """
-        Write the Lx fields from the Location
-        - used by hrm_human_resource & pr_address
-
-        @ToDo: Allow the reverse operation.
-        If these fields are populated then create/update the location
-    """
-
-    if "location_id" in table:
-
-        db = current.db
-        ltable = current.s3db.gis_location
-        query = (table.id == record_id) & \
-                (ltable.id == table.location_id)
-        location = db(query).select(ltable.id,
-                                    ltable.name,
-                                    ltable.level,
-                                    ltable.parent,
-                                    ltable.path,
-                                    limitby=(0, 1)).first()
-        if location:
-            vars = Storage()
-            if location.level == "L0":
-                vars.L0 = location.name
-            elif location.level == "L1":
-                vars.L1 = location.name
-                if location.parent:
-                    query = (ltable.id == location.parent)
-                    country = db(query).select(ltable.name,
-                                               limitby=(0, 1)).first()
-                    if country:
-                        vars.L0 = country.name
-            else:
-                # Get Names of ancestors at each level
-                vars = current.gis.get_parent_per_level(vars,
-                                                        location.id,
-                                                        feature=location,
-                                                        ids=False,
-                                                        names=True)
-            # Update record
-            db(table.id == record_id).update(**vars)
-
-# =============================================================================
-# Addresses
-#
-# These fields are populated onaccept from location_id
-#
-# @ToDo: Add Postcode to gis.update_table_hierarchy_labels()
-#
-
-address_building_name = S3ReusableField("building_name",
-                                        readable=False,
-                                        writable=False)
-address_address = S3ReusableField("address",
-                                  readable=False,
-                                  writable=False)
-address_postcode = S3ReusableField("postcode",
-                                   readable=False,
-                                   writable=False)
-
-def s3_address_fields():
-    """
-       Return the fields used to add an address to a site
-    """
-
-    T = current.T
-    fields = (
-            address_building_name(label=T("Building Name")),
-            address_address(label=T("Address")),
-            address_postcode(label=current.deployment_settings.get_ui_label_postcode()),
-            address_L4(),
-            address_L3(),
-            address_L2(),
-            address_L1(),
-            address_L0(),
-           )
-    return fields
-
-# -----------------------------------------------------------------------------
-# Hide Address fields in Create forms
-# inc list_create (list_fields over-rides)
-def s3_address_hide(table):
-    table.building_name.readable = False
-    table.address.readable = False
-    table.L4.readable = False
-    table.L3.readable = False
-    table.L2.readable = False
-    table.L1.readable = False
-    table.L0.readable = False
-    table.postcode.readable = False
-    return
-
-# -----------------------------------------------------------------------------
-def s3_address_onvalidation(form):
-    """
-        Write the Address fields from the Location
-        - used by pr_address, org_office & cr_shelter
-
-        @ToDo: Allow the reverse operation.
-        If these fields are populated then create/update the location
-    """
-
-    vars = form.vars
-    if "location_id" in vars and vars.location_id:
-
-        db = current.db
-        table = current.s3db.gis_location
-        # Read Postcode & Street Address
-        query = (table.id == vars.location_id)
-        location = db(query).select(table.addr_street,
-                                    table.addr_postcode,
-                                    table.name,
-                                    table.level,
-                                    table.parent,
-                                    table.path,
-                                    limitby=(0, 1)).first()
-        if location:
-            vars.address = location.addr_street
-            vars.postcode = location.addr_postcode
-            if location.level == "L0":
-                vars.L0 = location.name
-            elif location.level == "L1":
-                vars.L1 = location.name
-                if location.parent:
-                    query = (table.id == location.parent)
-                    country = db(query).select(table.name,
-                                               limitby=(0, 1)).first()
-                    if country:
-                        vars.L0 = country.name
-            else:
-                if location.level is None:
-                    vars.building_name = location.name
-                # Get Names of ancestors at each level
-                vars = current.gis.get_parent_per_level(vars,
-                                                        vars.location_id,
-                                                        feature=location,
-                                                        ids=False,
-                                                        names=True)
-
-# -----------------------------------------------------------------------------
-def s3_address_update(table, record_id):
-    """
-        Write the Address fields from the Location
-        - used by asset_asset & hrm_human_resource
-
-        @ToDo: Allow the reverse operation.
-        If these fields are populated then create/update the location
-    """
-
-    if "location_id" in table:
-
-        db = current.db
-        ltable = current.s3db.gis_location
-        # Read Postcode & Street Address
-        query = (table.id == record_id) & \
-                (ltable.id == table.location_id)
-        location = db(query).select(ltable.id,
-                                    ltable.addr_street,
-                                    ltable.addr_postcode,
-                                    ltable.name,
-                                    ltable.level,
-                                    ltable.parent,
-                                    ltable.path,
-                                    limitby=(0, 1)).first()
-        if location:
-            vars = Storage()
-            vars.address = location.addr_street
-            vars.postcode = location.addr_postcode
-            if location.level == "L0":
-                vars.L0 = location.name
-            elif location.level == "L1":
-                vars.L1 = location.name
-                if location.parent:
-                    query = (ltable.id == location.parent)
-                    country = db(query).select(ltable.name,
-                                               limitby=(0, 1)).first()
-                    if country:
-                        vars.L0 = country.name
-            else:
-                if location.level is None:
-                    vars.building_name = location.name
-                # Get Names of ancestors at each level
-                vars = current.gis.get_parent_per_level(vars,
-                                                        location.id,
-                                                        feature=location,
-                                                        ids=False,
-                                                        names=True)
-            # Update record
-            db(table.id == record_id).update(**vars)
 
 # =============================================================================
 # Comments
