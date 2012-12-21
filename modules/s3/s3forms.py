@@ -532,9 +532,14 @@ class S3SQLDefaultForm(S3SQLForm):
             while tr:
                 f = tr.attributes.get("_id", None)
                 if not f:
-                    # DIV-based form-style
-                    f = tr[0][0].attributes.get("_id", None)
-                if f.startswith(tablename):
+                    try:
+                        # DIV-based form-style
+                        f = tr[0][0].attributes.get("_id", None)
+                    except:
+                        # Something else
+                        # @ToDo: Support DRRPP formstyle
+                        f = None
+                if f and f.startswith(tablename):
                     f = f[len(tablename) + 1 : -6]
                     for k in subheadings.keys():
                         if k in done:
@@ -959,6 +964,7 @@ class S3SQLCustomForm(S3SQLForm):
         data[table._id.name] = accept_id
         prefix, name = tablename.split("_", 1)
         form = Storage(vars=Storage(data), record=oldrecord)
+        #form = Storage(vars=data, record=oldrecord)
 
         # Audit
         if record_id is None:
@@ -969,7 +975,7 @@ class S3SQLCustomForm(S3SQLForm):
                   record=accept_id, representation=format)
 
         # Update super entity links
-        s3db.update_super(table, data)
+        s3db.update_super(table, form.vars)
 
         if accept_id:
             if record_id is None:
@@ -981,7 +987,7 @@ class S3SQLCustomForm(S3SQLForm):
                 # Update realm
                 update_realm = s3db.get_config(table, "update_realm")
                 if update_realm:
-                    current.auth.set_realm_entity(table, Storage(data),
+                    current.auth.set_realm_entity(table, form.vars,
                                                   force_update=True)
 
             # Store session vars

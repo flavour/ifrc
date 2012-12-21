@@ -1680,6 +1680,7 @@ class S3FacilityModel(S3Model):
                                             "email",
                                             "website",
                                             "site_details.last_contacted",
+                                            "obsolete",
                                             "comments",
                                             )
 
@@ -1736,8 +1737,7 @@ class S3FacilityModel(S3Model):
             Update Affiliation, record ownership and component ownership
         """
 
-        s3db = current.s3db
-        s3db.pr_update_affiliations(s3db.org_facility, form.vars)
+        current.s3db.pr_update_affiliations("org_facility", form.vars)
 
     # -------------------------------------------------------------------------
     @staticmethod

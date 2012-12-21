@@ -254,8 +254,10 @@ class S3Represent(object):
         self.queries = 0
         self.lazy = []
         self.lazy_show_link = False
+        
         # Attributes to simulate being a function for sqlhtml's represent()
-        self.func_code = Storage(co_argcount = 2)
+        # Make sure we indicate only 1 position argument
+        self.func_code = Storage(co_argcount = 1)
         self.func_defaults = None
 
         if hasattr(self, "lookup_rows"):
@@ -263,9 +265,6 @@ class S3Represent(object):
         else:
             self.lookup_rows = self._lookup_rows
             self.custom_lookup = False
-
-        self.func_code = Storage(co_argcount = 3)
-        self.func_defaults = ["row", "show_link"]
 
     # -------------------------------------------------------------------------
     def _lookup_rows(self, key, values, fields=[]):
