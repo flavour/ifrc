@@ -46,6 +46,7 @@ except ImportError:
     raise
 
 from ..s3codec import S3Codec
+from ..s3utils import s3_unicode, s3_strip_markup
 
 # =============================================================================
 class S3XLS(S3Codec):
@@ -75,13 +76,12 @@ class S3XLS(S3Codec):
 
 
     # -------------------------------------------------------------------------
-    def extractResource(self, resource, list_fields, report_groupby):
+    def extractResource(self, resource, list_fields):
         """
             Extract the items from the resource
 
             @param resource: the resource
             @param list_fields: fields to include in list views
-            @param report_groupby: a Field object of the field to group the records by
         """
 
         title = self.crud_string(resource.tablename, "title_list")
@@ -111,7 +111,8 @@ class S3XLS(S3Codec):
                                limit=None,
                                orderby=orderby)
 
-        items = resource.extract(rows, list_fields, represent=True)
+        items = resource.extract(rows, list_fields,
+                                 represent=True, show_links=False)
 
         return (title, types, lfields, heading, items)
 
@@ -121,11 +122,11 @@ class S3XLS(S3Codec):
             Export data as a Microsoft Excel spreadsheet
 
             @param data_source: the source of the data that is to be encoded
-                               as a spreadsheet. This may be:
-                               resource: the resource
-                               item:     a list of pre-fetched values
-                                         the headings are in the first row
-                                         the data types are in the second row
+                                as a spreadsheet. This may be:
+                                resource: the resource
+                                item:     a list of pre-fetched values
+                                          the headings are in the first row
+                                          the data types are in the second row
             @param attr: dictionary of parameters:
                  * title:          The main title of the report
                  * list_fields:    Fields to include in list views
@@ -169,8 +170,7 @@ class S3XLS(S3Codec):
             items = data_source[2:]
         else:
             (title, types, lfields, headers, items) = self.extractResource(data_source,
-                                                                           list_fields,
-                                                                           report_groupby)
+                                                                           list_fields)
         report_groupby = lfields[group] if group else None
         if len(items) > 0 and len(headers) != len(items[0]):
             from ..s3utils import s3_debug
@@ -191,10 +191,12 @@ List Fields %s""" % (request.url, len(headers), len(items[0]), headers, list_fie
         # Initialize output
         output = StringIO()
 
-        # Create the workbook and a sheet in it
+        # Create the workbook
         book = xlwt.Workbook(encoding="utf-8")
+
+        # Add a sheet
         # The spreadsheet doesn't like a / in the sheet name, so replace any with a space
-        sheet1 = book.add_sheet(str(title.replace("/"," ")))
+        sheet1 = book.add_sheet(str(title.replace("/", " ")))
 
         # Styles
         styleLargeHeader = xlwt.XFStyle()
@@ -279,18 +281,7 @@ List Fields %s""" % (request.url, len(headers), len(items[0]), headers, list_fie
             else:
                 style = styleOdd
             if report_groupby:
-                represent = item[report_groupby]
-                # Strip away markup from representation
-                try:
-                    markup = etree.XML(str(represent))
-                    text = markup.xpath(".//text()")
-                    if text:
-                        text = " ".join(text)
-                    else:
-                        text = ""
-                    represent = text
-                except:
-                    pass
+                represent = s3_strip_markup(s3_unicode(item[report_groupby]))
                 if subheading != represent:
                     subheading = represent
                     sheet1.write_merge(rowCnt, rowCnt, 0, totalCols,
@@ -301,6 +292,7 @@ List Fields %s""" % (request.url, len(headers), len(items[0]), headers, list_fie
                         style = styleEven
                     else:
                         style = styleOdd
+
             for field in lfields:
                 label = headers[field]
                 if label == groupby_label:
@@ -308,25 +300,12 @@ List Fields %s""" % (request.url, len(headers), len(items[0]), headers, list_fie
                 if label == "Id":
                     colCnt += 1
                     continue
-                represent = item[field]
+                represent = s3_strip_markup(s3_unicode(item[field]))
                 coltype = types[colCnt]
                 if coltype == "sort":
                     continue
-                if type(represent) is not str:
-                    represent = unicode(represent)
                 if len(represent) > max_cell_size:
                     represent = represent[:max_cell_size]
-                # Strip away markup from representation
-                try:
-                    markup = etree.XML(str(represent))
-                    text = markup.xpath(".//text()")
-                    if text:
-                        text = " ".join(text)
-                    else:
-                        text = ""
-                    represent = text
-                except:
-                    pass
                 value = represent
                 if coltype == "date":
                     try:

@@ -743,7 +743,13 @@ function S3OptionsFilter(settings) {
 
         // Get the lookup value from the trigger field
         var lookupValue = '';
-        if (triggerField.length == 1) {
+        if (triggerField.attr('type') == 'checkbox') {
+            checkboxesWidget = triggerField.closest('.checkboxes-widget-s3');
+            if (checkboxesWidget) {
+                triggerField = checkboxesWidget;
+            }
+        }
+        if (triggerField.length == 1 && !triggerField.hasClass('checkboxes-widget-s3')) {
             // SELECT
             lookupValue = triggerField.val();
         } else if (triggerField.length > 1) {
@@ -752,6 +758,12 @@ function S3OptionsFilter(settings) {
             triggerField.filter('input:checked').each(function() {
                 lookupValue.push($(this).val());
             });
+        } else if (triggerField.hasClass('checkboxes-widget-s3')) {
+            lookupValue = new Array();
+            triggerField.find('input:checked').each(function() {
+                lookupValue.push($(this).val());
+            });
+            
         }
 
         // Disable the target field if no value selected
@@ -1097,5 +1109,39 @@ S3.slider = function(fieldname, minval, maxval, steprange, value) {
         }
     });
 };
+
+// ============================================================================
+/**
+ * Reusable function to add a querystring variable to an existing URL and redirect into it.
+ * It accounts for existing variables and will override an existing one.
+ * Sample usage: _onchange="S3reloadWithQueryStringVars({'_language': $(this).val()});")
+ */
+
+function S3reloadWithQueryStringVars (queryStringVars) {
+    var existingQueryVars = location.search ? location.search.substring(1).split("&") : [],
+        currentUrl = location.search ? location.href.replace(location.search,"") : location.href,
+        newQueryVars = {},
+        newUrl = currentUrl + "?";
+    if(existingQueryVars.length > 0) {
+        for (var i = 0; i < existingQueryVars.length; i++) {
+            var pair = existingQueryVars[i].split("=");
+            newQueryVars[pair[0]] = pair[1];
+        }
+    }
+    if(queryStringVars) {
+        for (var queryStringVar in queryStringVars) {
+            newQueryVars[queryStringVar] = queryStringVars[queryStringVar];
+        }
+    }
+    if(newQueryVars) { 
+        for (var newQueryVar in newQueryVars) {
+            newUrl += newQueryVar + "=" + newQueryVars[newQueryVar] + "&";
+        }
+        newUrl = newUrl.substring(0, newUrl.length-1);
+        window.location.href = newUrl;
+    } else {
+        window.location.href = location.href;
+    }
+}
 
 // ============================================================================

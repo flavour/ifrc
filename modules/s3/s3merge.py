@@ -79,7 +79,16 @@ class S3Merge(S3Method):
                 if remove:
                     output = self.unmark(r, **attr)
                 elif self.record_id:
-                    output = self.mark(r, **attr)
+                    if r.component and not r.component.multiple:
+                        if r.http == "POST":
+                            output = self.mark(r, **attr)
+                        else:
+                            # This does really not make much sense here
+                            # => duplicate list is filtered per master
+                            # and hence there is always only one record
+                            output = self.duplicates(r, **attr)
+                    else:
+                        output = self.mark(r, **attr)
                 else:
                     output = self.duplicates(r, **attr)
             elif r.http == "DELETE":
@@ -173,6 +182,9 @@ class S3Merge(S3Method):
         auth = current.auth
         system_roles = auth.get_system_roles()
         if not auth.s3_has_role(system_roles.ADMIN):
+            return ""
+        if r.component and not r.component.multiple:
+            # Cannot de-duplicate single-components
             return ""
 
         s3 = current.session.s3
@@ -272,6 +284,7 @@ class S3Merge(S3Method):
         # Datatable Filter
         totalrows = displayrows = resource.count()
         if representation == "aadata":
+            # Workaround for datatables with 2 action columns:
             searchq, orderby, left = resource.datatable_filter(list_fields,
                                                                vars)
             if searchq is not None:
@@ -297,22 +310,23 @@ class S3Merge(S3Method):
         response = current.response
 
         if representation == "aadata":
-
+            
             output = dt.json(totalrows,
                              displayrows,
                              datatable_id,
                              sEcho,
                              dt_bulk_actions = [(current.T("Merge"),
                                                  "merge", "pair-action")])
-
         elif representation == "html":
             # Initial HTML response
             T = current.T
             output = {"title": T("De-duplicate Records")}
 
-            url = "/%s/%s/%s/deduplicate.aadata" % (r.application,
-                                                  r.controller,
-                                                  r.function)
+            url = r.url(representation="aadata")
+
+            #url = "/%s/%s/%s/deduplicate.aadata" % (r.application,
+                                                    #r.controller,
+                                                    #r.function)
             items =  dt.html(totalrows,
                              displayrows,
                              datatable_id,
@@ -331,7 +345,7 @@ class S3Merge(S3Method):
                     SPAN(T("You need to have at least 2 records in this list in order to merge them."),
                       _style="float:left; padding-right:10px;"),
                     A(T("Find more"),
-                      _href=r.url(method="search", id=0, vars={}))
+                      _href=r.url(method="search", id=0, component_id=0, vars={}))
                 )
             else:
                 output["add_btn"] = DIV(

@@ -166,12 +166,13 @@ class S3OrganisationModel(S3Model):
 
         configure("org_sector", deduplicate=self.org_sector_duplicate)
 
-        sector_comment = S3AddResourceLink(c="org", f="sector",
-                                           label=ADD_SECTOR,
-                                           title=SECTOR,
-                                           tooltip=help)
+        sector_comment = lambda child: S3AddResourceLink(c="org", f="sector",
+                                                         vars={"child":child},
+                                                         label=ADD_SECTOR,
+                                                         title=SECTOR,
+                                                         tooltip=help)
 
-        represent = s3_represent_id(table)
+        represent = S3Represent(lookup="org_sector")
         sector_id = S3ReusableField("sector_id", "reference org_sector",
                                     sortby="abrv",
                                     requires=IS_NULL_OR(
@@ -183,7 +184,7 @@ class S3OrganisationModel(S3Model):
                                                           )
                                                         ),
                                     represent=represent,
-                                    comment=sector_comment,
+                                    comment=sector_comment("sector_id"),
                                     label=SECTOR,
                                     ondelete="SET NULL")
 
@@ -198,8 +199,9 @@ class S3OrganisationModel(S3Model):
                                                           multiple=True
                                                           )
                                                         ),
-                                    represent=s3_represent_multi_id(table),
-                                    comment=sector_comment,
+                                    represent=S3Represent(lookup="org_sector",
+                                                          multiple=True),
+                                    comment=sector_comment("multi_sector_id"),
                                     label=SECTOR,
                                     ondelete="SET NULL")
 
@@ -2654,9 +2656,7 @@ class org_OrganisationRepresent(S3Represent):
 
         super(org_OrganisationRepresent, self) \
              .__init__(lookup="org_organisation",
-                       fields=["org_organisation.name",
-                               "org_organisation.acronym",
-                               "org_parent_organisation.name"],
+                       fields=fields,
                        show_link=show_link,
                        translate=translate,
                        multiple=multiple)
@@ -2998,7 +2998,7 @@ def org_organisation_controller():
                 otable.country.default = record.country
                 # Represent orgs without the parent prefix as we have that context already
                 s3db.org_organisation_branch.branch_id.represent = \
-                    s3db.org_organisation_represent(parent=False)
+                    org_OrganisationRepresent(parent=False)
 
             elif r.component_name == "task" and \
                  r.method != "update" and r.method != "read":
@@ -3075,6 +3075,20 @@ def org_organisation_controller():
                             msg_list_empty=T("No Partner Organisations currently registered")
                             ),
                     }
+
+                # Filter type field
+                type_names = [name.lower().strip()
+                              for name in type_filter.split(",")]
+                fquery = s3db.org_organisation_type.name.lower() \
+                                                   .belongs(type_names)
+                field = r.table.organisation_type_id
+                field.requires = IS_ONE_OF(current.db(fquery),
+                                    "org_organisation_type.id",
+                                    label=field.represent,
+                                    error_message=T("Please choose a type"),
+                                    sort=True)
+                field.comment = None # AddResourceLink makes no sense here
+
                 if type_filter in type_crud_strings:
                     s3.crud_strings.org_organisation = type_crud_strings[type_filter]
 

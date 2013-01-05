@@ -185,8 +185,7 @@ class S3MainMenu(object):
                            **attr)(
                             MM("Logout", m="logout", _id="auth_menu_logout"),
                             MM("User Profile", m="profile"),
-                            MM("Personal Data", c="pr", f="person", m="update",
-                                vars={"person.pe_id" : auth.user.pe_id}),
+                            MM("Personal Data", c="default", f="person", m="update"),
                             MM("Contact Details", c="pr", f="person",
                                 args="contact",
                                 vars={"person.pe_id" : auth.user.pe_id}),
@@ -366,7 +365,7 @@ class S3OptionsMenu(object):
         # ATTN: Do not specify a controller for the main menu to allow
         #       re-use of this menu by other controllers
         return M(restrict=[ADMIN])(
-                    M("Settings", c="admin", f="settings")(
+                    M("Settings", c="admin", f="setting")(
                         settings_messaging,
                     ),
                     M("User Management", c="admin", f="user")(

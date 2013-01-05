@@ -320,7 +320,10 @@ def project_multi_theme_id_widget():
     """
     ptable = s3db.project_project
     sector_ids = [int(id) for id in request.vars.sector_ids.split(",") if id]
-    value = [int(id) for id in request.vars.value.split(",") if id]
+    if "value" in request.vars:
+        value = [int(id) for id in request.vars.value.split(",") if id]
+    else:
+        value = []
     
     set_project_multi_theme_id_requires(sector_ids)
     widget = ptable.multi_theme_id.widget(ptable.multi_theme_id,
@@ -366,7 +369,8 @@ def organisation():
                                args="report", vars=request.get_vars),
                      _class="action-btn")
 
-        return s3_rest_controller(list_btn=list_btn,
+        return s3_rest_controller("org", resourcename,
+                                  list_btn=list_btn,
                                   csv_template="organisation")
     else:
         tabs = [

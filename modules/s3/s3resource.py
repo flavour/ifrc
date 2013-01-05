@@ -781,6 +781,7 @@ class S3Resource(object):
             @param ondelete: on-delete callback
             @param format: the representation format of the request (optional)
             @param cascade: this is a cascade delete (prevents rollbacks/commits)
+            @param replaced_by: used by record merger
 
             @return: number of records deleted
 
@@ -1762,7 +1763,8 @@ class S3Resource(object):
                    as_tree=False,
                    as_json=False,
                    maxbounds=False,
-                   pretty_print=False, **args):
+                   pretty_print=False,
+                   **args):
         """
             Export this resource as S3XML
 
@@ -3662,9 +3664,8 @@ class S3Resource(object):
                                        "list:in",
                                        "list:st",
                                        "referen",
-                                       "list:re"):
-
-                        options = []
+                                       "list:re",
+                                       "string"):
                         requires = field.requires
                         if not isinstance(requires, (list, tuple)):
                             requires = [requires]
@@ -3676,10 +3677,10 @@ class S3Resource(object):
                                 try:
                                     options = r.options()
                                 except:
-                                    pass
-                    elif ftype in ("string", "text"):
+                                    options = []
+                    if options is None and ftype in ("string", "text"):
                         wqueries.append(field.lower().like("%%%s%%" % w))
-                    if options is not None:
+                    elif options is not None:
                         opts[fname] = options
                         vlist = [v for v, t in options
                                    if s3_unicode(t).lower().find(w) != -1]
@@ -3711,7 +3712,12 @@ class S3Resource(object):
             columns = []
             for i in xrange(numcols):
                 try:
-                    rfield = rfields[int(vars["iSortCol_%s" % i])]
+                    iSortCol = int(vars["iSortCol_%s" % i])
+                    # for every non-sortable column to the left of sortable column subtract 1
+                    for j in xrange(iSortCol):
+                        if vars["bSortable_%s" % j] == 'false' :
+                            iSortCol -= 1
+                    rfield = rfields[iSortCol + 1]
                 except:
                     columns.append(None)
                 else:

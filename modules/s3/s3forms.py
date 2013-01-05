@@ -203,7 +203,7 @@ class S3SQLDefaultForm(S3SQLForm):
                                           format=format)
 
             # De-duplicate link table entries
-            record_id = self.deduplicate_link(request, record_id)
+            self.record_id = record_id = self.deduplicate_link(request, record_id)
 
             # Add asterisk to labels of required fields
             mark_required = self._config("mark_required", default = [])
@@ -391,6 +391,7 @@ class S3SQLDefaultForm(S3SQLForm):
                 query = (table[lkey] == _lkey) & (table[rkey] == _rkey)
                 row = current.db(query).select(table._id, limitby=(0, 1)).first()
                 if row is not None:
+                    tablename = self.tablename
                     record_id = row[pkey]
                     formkey = session.get("_formkey[%s/None]" % tablename)
                     formname = "%s/%s" % (tablename, record_id)
@@ -434,8 +435,7 @@ class S3SQLDefaultForm(S3SQLForm):
         success = True
         error = None
 
-        formname = "%s/%s" % (self.tablename,
-                              self.record_id)
+        formname = "%s/%s" % (self.tablename, self.record_id)
         if form.accepts(vars,
                         current.session,
                         formname=formname,
@@ -1151,9 +1151,12 @@ class S3SQLField(S3SQLFormElement):
 
         rfield = S3ResourceField(resource, self.selector)
 
-        subtables = Storage([(c.tablename, c.alias)
-                             for c in resource.components.values()
-                             if not c.multiple])
+        if resource.components:
+            subtables = Storage([(c.tablename, c.alias)
+                                 for c in resource.components.values()
+                                 if not c.multiple])
+        else:
+            subtables = Storage()
 
         tname = rfield.tname
         if rfield.field is not None:
@@ -1169,6 +1172,9 @@ class S3SQLField(S3SQLFormElement):
                 name = "sub_%s_%s" % (alias, rfield.fname)
                 f = self._rename_field(field, name)
                 return alias, rfield.field.name, f
+
+            else:
+                raise SyntaxError("Invalid subtable: %s" % tname)
         else:
             raise SyntaxError("Invalid selector: %s" % self.selector)
 

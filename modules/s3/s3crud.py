@@ -1686,6 +1686,9 @@ class S3CRUD(S3Method):
 
         record_id = attr.get("record_id", None)
 
+        remove_filters = lambda vars: dict([(k, vars[k])
+                                            for k in vars if "." not in k])
+
         # Button labels
         crud_string = self.crud_string
         ADD = crud_string(tablename, "label_create_button")
@@ -1699,7 +1702,7 @@ class S3CRUD(S3Method):
         href_add = url(method="create", representation=representation)
         href_edit = url(method="update", representation=representation)
         href_delete = url(method="delete", representation=representation)
-        href_list = url(method="")
+        href_list = url(method="", vars=remove_filters(r.get_vars))
 
         # Table CRUD configuration
         config = self._config
@@ -1812,21 +1815,28 @@ class S3CRUD(S3Method):
             table = r.table
             args = ["[id]"]
 
+        get_vars = Storage()
+        if "viewing" in r.get_vars:
+            get_vars["viewing"] = r.get_vars["viewing"]
+
         # Open-action (Update or Read)
         if editable and has_permission("update", table) and \
            not ownership_required("update", table):
             if not update_url:
-                update_url = URL(args = args + ["update"])
+                update_url = URL(args = args + ["update"],
+                                 vars = get_vars)
             s3crud.action_button(labels.UPDATE, update_url)
         else:
             if not read_url:
-                read_url = URL(args = args)
+                read_url = URL(args = args,
+                               vars = get_vars)
             s3crud.action_button(labels.READ, read_url)
 
         # Delete-action
         if deletable and has_permission("delete", table):
             if not delete_url:
-                delete_url = URL(args = args + ["delete"])
+                delete_url = URL(args = args + ["delete"],
+                                 vars = get_vars)
             if ownership_required("delete", table):
                 # Check which records can be deleted
                 query = auth.s3_accessible_query("delete", table)
@@ -2160,19 +2170,21 @@ class S3CRUD(S3Method):
                     if update:
                         return str(URL(r=r, c=c, f=f,
                                        args=args + ["update"],
-                                       vars=r.vars))
+                                       vars=r.get_vars))
                     else:
                         return str(URL(r=r, c=c, f=f,
                                        args=args,
-                                       vars=r.vars))
+                                       vars=r.get_vars))
                 else:
                     args = [record_id]
                     if update:
                         return str(URL(r=r, c=c, f=f,
-                                       args=args + ["update"]))
+                                       args=args + ["update"],
+                                       vars=r.get_vars))
                     else:
                         return str(URL(r=r, c=c, f=f,
-                                       args=args))
+                                       args=args,
+                                       vars=r.get_vars))
         return list_linkto
 
 # END =========================================================================

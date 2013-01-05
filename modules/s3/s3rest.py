@@ -1186,7 +1186,10 @@ class S3Request(object):
         args = Storage()
         if stylesheet is not None:
             if r.component:
-                args.update(id=r.id, component=r.component.tablename)
+                args.update(id=r.id,
+                            component=r.component.tablename)
+                if r.component.alias:
+                    args.update(alias=r.component.alias)
             mode = _vars.get("xsltmode", None)
             if mode is not None:
                 args.update(mode=mode)
@@ -1359,7 +1362,7 @@ class S3Request(object):
         """
 
         json_formats = current.manager.json_formats
-        if format in json_formats:
+        if r.representation in json_formats:
             as_json = True
             content_type = "application/json"
         else:
