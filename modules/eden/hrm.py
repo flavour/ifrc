@@ -172,6 +172,8 @@ class S3HRModel(S3Model):
                                   Field("code",
                                         #readable=False,
                                         #writable=False,
+                                        represent = lambda v: \
+                                            v or messages["NONE"],
                                         label=T("Staff ID")),
                                   self.hrm_job_title_id(
                                                         #readable = False if group == "volunteer" else True,
@@ -346,7 +348,34 @@ class S3HRModel(S3Model):
 
         # Email & Phone
         # @ToDo: Replace with Filterable Components
-        table.virtualfields.append(HRMVirtualFields())
+        #table.virtualfields.append(HRMVirtualFields())
+        add_component("pr_contact",
+                       hrm_human_resource=dict(
+                            name="email",
+                            link="pr_person",
+                            joinby="id",
+                            key="pe_id",
+                            fkey="pe_id",
+                            pkey="person_id",
+                            filterby="contact_method",
+                            filterfor="EMAIL",
+                            #multiple=False,
+                        )
+                      )
+    
+        add_component("pr_contact",
+                        hrm_human_resource=dict(
+                            name="phone",
+                            link="pr_person",
+                            joinby="id",
+                            key="pe_id",
+                            fkey="pe_id",
+                            pkey="person_id",
+                            filterby="contact_method",
+                            filterfor="SMS",
+                            #multiple=False,
+                        )
+                      )
 
         # Components
         # Availability
@@ -626,10 +655,15 @@ class S3HRModel(S3Model):
     def hrm_human_resource_ondelete(row):
         """ On-delete routine for HR records """
 
-        htable = current.db.hrm_human_resource
+        db = current.db
+        htable = db.hrm_human_resource
 
         if row and "id" in row:
-            record = htable[row.id]
+            record = db(htable.id == row.id).select(htable.deleted,
+                                                    htable.deleted_fk,
+                                                    htable.person_id,
+                                                    limitby=(0, 1)
+                                                    ).first()
         else:
             return
 
@@ -639,10 +673,9 @@ class S3HRModel(S3Model):
                 person_id = fk.get("person_id", None)
             except:
                 return
-            if not person_id:
-                return
 
-            current.s3db.pr_update_affiliations(htable, record)
+            if person_id:
+                current.s3db.pr_update_affiliations(htable, record)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3470,9 +3503,9 @@ def hrm_compose():
     s3db = current.s3db
     vars = current.request.vars
 
-    if "hrm_id" in vars:
-        id = vars.hrm_id
-        fieldname = "hrm_id"
+    if "human_resource.id" in vars:
+        fieldname = "human_resource.id"
+        id = vars.get(fieldname)
         table = s3db.pr_person
         htable = s3db.hrm_human_resource
         query = (htable.id == id) & \
@@ -4628,7 +4661,8 @@ def hrm_group_controller():
             ]
 
     output = current.rest_controller("pr", "group",
-                                rheader=lambda r: s3db.pr_rheader(r, tabs=tabs))
+                                     rheader=lambda r: \
+                                        s3db.pr_rheader(r, tabs=tabs))
 
     return output
 

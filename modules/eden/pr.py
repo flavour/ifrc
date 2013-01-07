@@ -421,7 +421,7 @@ class S3PersonEntity(S3Model):
                                         itable.organisation_id,
                                         limitby=(0, 1)).first()
                 if instance:
-                    s3db.pr_update_affiliations("org_site", instance)
+                    pr_update_affiliations("org_site", instance)
         return
 
     # -------------------------------------------------------------------------
@@ -1017,6 +1017,7 @@ class S3GroupModel(S3Model):
                                    requires = IS_NOT_EMPTY()),
                              Field("description",
                                    label=T("Group Description"),
+                                   represent = lambda v: v or messages["NONE"],
                                    comment = DIV(_class="tooltip",
                                                  _title="%s|%s" % (T("Group description"),
                                                                    T("A brief description of the group (optional)")))
@@ -1255,6 +1256,7 @@ class S3ContactModel(S3Model):
         T = current.T
 
         define_table = self.define_table
+        messages = current.messages
         super_link = self.super_link
 
         # ---------------------------------------------------------------------
@@ -1276,11 +1278,12 @@ class S3ContactModel(S3Model):
                                    default = "SMS",
                                    label = T("Contact Method"),
                                    represent = lambda opt: \
-                                        contact_methods.get(opt, current.messages.UNKNOWN_OPT)),
+                                        contact_methods.get(opt, messages.UNKNOWN_OPT)),
                              Field("value",
                                    label= T("Value"),
                                    notnull=True,
                                    requires = IS_NOT_EMPTY(),
+                                   represent = lambda v: v or messages["NONE"],
                                   ),
                              Field("priority", "integer",
                                    label= T("Priority"),
