@@ -156,10 +156,6 @@ class S3LocationModel(S3Model):
                              Field("lon", "double",
                                    label = T("Longitude"),
                                    requires = IS_NULL_OR(IS_LON()),
-                                   comment = A(T("Conversion Tool"),
-                                               _style="cursor:pointer;",
-                                               _title=T("You can use the Conversion Tool to convert from either GPS coordinates or Degrees/Minutes/Seconds."),
-                                               _id="gis_location_converter-btn"),
                                    ),
                              Field("wkt", "text",
                                    # Full WKT validation is done in the onvalidation callback
@@ -985,7 +981,7 @@ class S3LocationHierarchyModel(S3Model):
             table[field].comment = DIV(
                         _class="tooltip",
                         _title="%s|%s|%s" % (
-                            T("Is editing level L%d locations allowed?" % n),
+                            T("Is editing level L%d locations allowed?") % n,
                             edit_Ln_tip_1,
                             edit_Ln_tip_2
                             )
@@ -2259,14 +2255,16 @@ class S3FeatureLayerModel(S3Model):
                         list_fields=["id",
                                      "name",
                                      "description",
-                                     "module",
-                                     "resource",
+                                     "controller",
+                                     "function",
                                      "filter",
-                                     "filter_field",
-                                     "filter_value",
+                                     #"filter_field",
+                                     #"filter_value",
                                      "popup_label",
                                      "popup_fields",
                                      "dir",
+                                     "trackable",
+                                     "polygons",
                                      ])
 
         # Components
@@ -2402,7 +2400,8 @@ class S3MapModel(S3Model):
                              Field("shape",
                                    requires=IS_NULL_OR(IS_IN_SET(["circle", "square", "star", "x", "cross", "triangle"]))),
                              Field("size", "integer"),
-                             Field("colour", requires=IS_NULL_OR(IS_HTML_COLOUR())),
+                             Field("colour", requires=IS_NULL_OR(IS_HTML_COLOUR()),
+                                 widget=S3ColorPickerWidget(),),
                              gis_opacity()(),
                              *s3_meta_fields())
 
@@ -3220,6 +3219,7 @@ class S3MapModel(S3Model):
                              Field("bgcolor", length=32,
                                    label=T("Background Color"),
                                    requires=IS_NULL_OR(IS_HTML_COLOUR()),
+                                   widget=S3ColorPickerWidget(),
                                    comment=DIV(_class="tooltip",
                                                _title="%s|%s" % (T("Background Color"),
                                                                  T("Optional selection of a background color.")))),

@@ -83,8 +83,8 @@
 
         <xsl:variable name="Status" select="data[@field='status_id']"/>
         <xsl:variable name="Countries" select="data[@field='country_dummy']"/>
-        <xsl:variable name="LeadOrganisation" select="reference[@field='lead_organisation_id']/@uuid"/>
-        <xsl:variable name="ContactOrganisation" select="reference[@field='contact_organisation_id']/@uuid"/>
+        <xsl:variable name="LeadOrganisation" select="reference[@field='lead_organisation_id']"/>
+        <xsl:variable name="ContactOrganisation" select="reference[@field='contact_organisation_id']"/>
         <xsl:variable name="ContactName" select="data[@field='contact_name']"/>
         <xsl:variable name="ContactEmail" select="data[@field='contact_email']"/>
         <xsl:variable name="ContactPhone" select="data[@field='contact_phone']"/>
@@ -187,6 +187,7 @@
 
             <xsl:call-template name="splitList">
                 <xsl:with-param name="list"><xsl:value-of select="data[@field='link_dummy']"/></xsl:with-param>
+                <xsl:with-param name="listsep">,http://</xsl:with-param>
                 <xsl:with-param name="arg">link</xsl:with-param>
             </xsl:call-template>
 
@@ -260,6 +261,14 @@
                             </xsl:if>
                         </xsl:attribute>
                     </reference>
+                    <!-- Project Locations -->
+                    <xsl:call-template name="splitList">
+                        <xsl:with-param name="arg">project_location</xsl:with-param>
+                        <!--<xsl:with-param name="listsep">;</xsl:with-param>-->
+                        <xsl:with-param name="list">
+                            <xsl:value-of select="$Countries"/>
+                        </xsl:with-param>
+                    </xsl:call-template>
                 </xsl:otherwise>
             </xsl:choose>
 
@@ -290,7 +299,9 @@
                     <xsl:value-of select="$ContactOrganisation"/>
                 </xsl:attribute>
 
-                <data field="name"><xsl:value-of select="reference[@field='contact_organisation_id']"/></data>
+                <data field="name">
+                    <xsl:value-of select="reference[@field='contact_organisation_id']"/>
+                </data>
 
                 <xsl:if test="$ContactName!=''">
                     <resource name="hrm_human_resource">
@@ -358,18 +369,29 @@
     <xsl:template match="resource[@name='drrpp_file']">
     
         <xsl:variable name="File" select="data[@field='file']"/>
+        <xsl:variable name="Filename" select="substring-after($File, '/download/drrpp_file')"/>
 
         <resource name="doc_document">
             <xsl:attribute name="tuid">
                 <xsl:value-of select="substring-after($File, '/download/')"/>
             </xsl:attribute>
+            <data field="name">
+                <xsl:choose>
+                    <xsl:when test="string-length($Filename) &gt; 128">
+                        <xsl:value-of select="substring($Filename, 0, 128)"/>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:value-of select="$Filename"/>
+                    </xsl:otherwise>
+                </xsl:choose>
+            </data>
             <reference field="doc_id" resource="project_project">
                 <xsl:attribute name="tuid">
                     <xsl:value-of select="reference[field='project_id']/@uuid"/>
                 </xsl:attribute>
                 <data field="file">
                     <xsl:attribute name="filename">
-                        <xsl:value-of select="concat('doc_document', substring-after($File, '/download/drrpp_file'))"/>
+                        <xsl:value-of select="concat('doc_document', $Filename)"/>
                     </xsl:attribute>
                     <xsl:attribute name="url">
                         <xsl:text>local</xsl:text>
@@ -384,18 +406,29 @@
     <xsl:template match="resource[@name='drrpp_framework_file']">
 
         <xsl:variable name="File" select="data[@field='file']"/>
+        <xsl:variable name="Filename" select="substring-after($File, '/download/drrpp_file')"/>
 
         <resource name="doc_document">
             <xsl:attribute name="tuid">
                 <xsl:value-of select="substring-after($File, '/download/')"/>
             </xsl:attribute>
+            <data field="name">
+                <xsl:choose>
+                    <xsl:when test="string-length($Filename) &gt; 128">
+                        <xsl:value-of select="substring($Filename, 0, 128)"/>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:value-of select="$Filename"/>
+                    </xsl:otherwise>
+                </xsl:choose>
+            </data>
             <reference field="doc_id" resource="project_framework">
                 <xsl:attribute name="tuid">
                     <xsl:value-of select="reference[field='framework_id']/@uuid"/>
                 </xsl:attribute>
                 <data field="file">
                     <xsl:attribute name="filename">
-                        <xsl:value-of select="concat('doc_document', substring-after($File, '/download/drrpp_file'))"/>
+                        <xsl:value-of select="concat('doc_document', $Filename)"/>
                     </xsl:attribute>
                     <xsl:attribute name="url">
                         <xsl:text>local</xsl:text>
@@ -505,7 +538,7 @@
                     <data field="name"><xsl:value-of select="$URL"/></data>
                 </xsl:otherwise>
             </xsl:choose>
-            <data field="url"><xsl:value-of select="translate($URL, ' ', '')"/></data>
+            <data field="url"><xsl:value-of select="translate($URL, ' ', '%20')"/></data>
             <data field="comments"><xsl:value-of select="data[@field='comment']"/></data>
         </resource>
 
@@ -560,6 +593,9 @@
     <xsl:template match="resource[@name='drrpp_output']">
 
         <resource name="project_output">
+            <xsl:attribute name="tuid">
+                <xsl:value-of select="concat('OUTPUT',data[@field='name'])"/>
+            </xsl:attribute>
             <data field="name"><xsl:value-of select="data[@field='output']"/></data>
             <xsl:choose>
                 <xsl:when test="data[@field='status']='Proposed'">
@@ -580,7 +616,7 @@
 
         <resource name="org_organisation">
             <xsl:attribute name="tuid">
-                <xsl:value-of select="@uuid"/>
+                <xsl:value-of select="data[@field='name']"/>
             </xsl:attribute>
             <xsl:attribute name="created_on">
                 <xsl:value-of select="@created_on"/>
@@ -665,7 +701,9 @@
                 </xsl:if>
                 <!-- NB This requires a custom onvalidation to lookup the org to convert to integer-->
                 <xsl:if test="$organisation!=''">
-                    <data field="organisation_id"><xsl:value-of select="$organisation"/></data>
+                    <data field="organisation_id">
+                        <xsl:value-of select="$organisation"/>
+                    </data>
                 </xsl:if>
             </resource>
         </xsl:if>
@@ -698,6 +736,31 @@
                 <xsl:value-of select="concat(',&quot;', 'urn:iso:std:iso:3166:-1:code:', $CountryCode, '&quot;')"/>
             </xsl:when>
 
+            <!-- Project Locations -->
+            <xsl:when test="$arg='project_location'">
+                <xsl:variable name="CountryCode">
+                    <xsl:choose>
+                        <xsl:when test="string-length($item)!=2">
+                            <xsl:call-template name="countryname2iso">
+                                <xsl:with-param name="country">
+                                    <xsl:value-of select="$item"/>
+                                </xsl:with-param>
+                            </xsl:call-template>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:value-of select="$item"/>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </xsl:variable>
+                <resource name="project_location">
+                    <reference field="location_id" resource="gis_location">
+                        <xsl:attribute name="uuid">
+                            <xsl:value-of select="concat('urn:iso:std:iso:3166:-1:code:', $CountryCode)"/>
+                        </xsl:attribute>
+                    </reference>
+                </resource>
+            </xsl:when>
+
             <!-- Hazard list -->
             <xsl:when test="$arg='hazard'">
                 <resource name="project_hazard">
@@ -722,9 +785,11 @@
             <xsl:when test="$arg='impl_org'">
                 <resource name="project_organisation">
                     <data field="role">2</data>
-                    <resource name="org_organisation">
-                        <data field="name"><xsl:value-of select="$item"/></data>
-                    </resource>
+                    <reference field="organisation_id" resource="org_organisation">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="$item"/>
+                        </xsl:attribute>
+                    </reference>
                 </resource>
             </xsl:when>
 
@@ -732,21 +797,27 @@
             <xsl:when test="$arg='donor'">
                 <resource name="project_organisation">
                     <data field="role">3</data>
-                    <resource name="org_organisation">
-                        <data field="name"><xsl:value-of select="$item"/></data>
-                    </resource>
+                    <reference field="organisation_id" resource="org_organisation">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="$item"/>
+                        </xsl:attribute>
+                    </reference>
                 </resource>
             </xsl:when>
 
             <!-- Outputs -->
             <xsl:when test="$arg='output'">
                 <resource name="project_output">
+                    <xsl:attribute name="tuid">
+                        <xsl:value-of select="concat('OUTPUT',$item)"/>
+                    </xsl:attribute>
                     <data field="name"><xsl:value-of select="$item"/></data>
+                    <!-- Not needed as inline component
                     <reference field="project_id" resource="project_project">
                         <xsl:attribute name="tuid">
                             <xsl:value-of select="reference[@field='project_id']/@uuid"/>
                         </xsl:attribute>
-                    </reference>
+                    </reference>-->
                 </resource>
             </xsl:when>
 
@@ -756,7 +827,17 @@
                     <xsl:attribute name="tuid">
                         <xsl:value-of select="substring-before($item, ';')"/>
                     </xsl:attribute>
-                    <data field="name"><xsl:value-of select="substring-after($item, ';')"/></data>
+                    <data field="name">
+                        <xsl:variable name="Filename" select="substring-after($item, ';')"/>
+                        <xsl:choose>
+                            <xsl:when test="string-length($Filename) &gt; 128">
+                                <xsl:value-of select="substring($Filename, 0, 128)"/>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <xsl:value-of select="$Filename"/>
+                            </xsl:otherwise>
+                        </xsl:choose>
+                    </data>
                     <data field="file">
                         <xsl:attribute name="filename">
                             <xsl:value-of select="concat('doc_document', substring-after(substring-before($item, ';'), 'drrpp_file'))"/>
@@ -771,15 +852,26 @@
             <!-- Links -->
             <xsl:when test="$arg='link'">
                 <resource name="doc_document">
-                    <xsl:choose>
-                        <xsl:when test="string-length($item) &gt; 128">
-                            <data field="name"><xsl:value-of select="substring($item, 0, 128)"/></data>
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <data field="name"><xsl:value-of select="$item"/></data>
-                        </xsl:otherwise>
-                    </xsl:choose>
-                    <data field="url"><xsl:value-of select="translate($item, ' ', '')"/></data>
+                    <data field="name">
+                        <xsl:choose>
+                            <xsl:when test="string-length($item) &gt; 128">
+                                <xsl:value-of select="substring($item, 0, 128)"/>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <xsl:value-of select="$item"/>
+                            </xsl:otherwise>
+                        </xsl:choose>
+                    </data>
+                    <data field="url">
+                        <xsl:choose>
+                            <xsl:when test="substring($item, 1, 4) = 'http'">
+                                <xsl:value-of select="translate($item, ' ', '%20')"/>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <xsl:value-of select="concat('http://', translate($item, ' ', '%20'))"/>
+                            </xsl:otherwise>
+                        </xsl:choose>
+                    </data>
                 </resource>
             </xsl:when>
 

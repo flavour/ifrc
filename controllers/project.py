@@ -41,7 +41,7 @@ def inline():
                     # Project Organisations
                     S3SQLInlineComponent(
                         "organisation",
-                        label=T("Participating Organisations"),
+                        label=T("Participating Organizations"),
                         fields=["organisation_id",
                                 "role",
                                 "amount"
@@ -117,6 +117,14 @@ def project():
                     r.method = "search"
                     # If just a few Projects, then a List is sufficient
                     #r.method = "list"
+                elif request.get_vars.get("project.status_id", None):
+                    stable = s3db.project_status
+                    status = request.get_vars.get("project.status_id")
+                    row = db(stable.name == status).select(stable.id,
+                                                           limitby=(0, 1)).first()
+                    if row:
+                        table.status_id.default = row.id
+                        table.status_id.writable = False
             else:
                 if r.component_name == "organisation":
                     if r.method != "update":
@@ -220,6 +228,18 @@ def project():
                     doc_table.person_id.readable = doc_table.person_id.writable = False
                     doc_table.location_id.readable = doc_table.location_id.writable = False
 
+        elif r.component_name == "human_resource":
+            # We need to also filter PDF/XLS/RSS/XML exports
+            # Use the group to filter the component list
+            group = r.vars.get("group", None)
+            if group:
+                if group == "staff":
+                    group = 1
+                elif group == "volunteer":
+                    group = 2
+                filter_by_type = (db.hrm_human_resource.type == group)
+                r.resource.add_component_filter("human_resource", filter_by_type)
+
         return True
     s3.prep = prep
 
@@ -252,6 +272,7 @@ def project():
                               "project", # Need to specify as sometimes we come via index()
                               rheader=rheader,
                               csv_template="project")
+
 # -----------------------------------------------------------------------------
 def set_project_multi_theme_id_requires(sector_ids):
     """
@@ -359,20 +380,22 @@ def organisation():
     """ RESTful CRUD controller """
 
     if settings.get_project_multiple_organisations():
+        # e.g. IFRC
         s3db.configure("project_organisation",
                        insertable=False,
                        editable=False,
                        deletable=False)
 
-        list_btn = A(T("Funding Report"),
-                     _href=URL(c="project", f="organisation",
-                               args="report", vars=request.get_vars),
-                     _class="action-btn")
+        #list_btn = A(T("Funding Report"),
+        #             _href=URL(c="project", f="organisation",
+        #                      args="report", vars=request.get_vars),
+        #             _class="action-btn")
 
-        return s3_rest_controller("org", resourcename,
-                                  list_btn=list_btn,
-                                  csv_template="organisation")
+        return s3_rest_controller(#list_btn=list_btn,
+                                  )
+
     else:
+        # e.g. DRRPP
         tabs = [
                 (T("Basic Details"), None),
                 (T("Projects"), "project"),

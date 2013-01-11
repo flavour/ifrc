@@ -236,7 +236,7 @@ class S3ProjectModel(S3Model):
 
         crud_form = s3forms.S3SQLCustomForm(
                         "name",
-                        # Project Organisations
+                        # Project Sectors
                         s3forms.S3SQLInlineComponent(
                             "theme_sector",
                             label=T("Theme Sectors"),
@@ -328,7 +328,7 @@ class S3ProjectModel(S3Model):
                              # - although Lead Org is still cached here to avoid the need for a virtual field to lookup
                              organisation_id(
                                 label = org_label,
-                                requires = self.org_organisation_requires(updateable=True,
+                                requires = self.org_organisation_requires(updateable=True, # Only allowed to add Projects for Orgs that the user has write access to
                                                                           required=True),
                                 ),
                              Field("name", unique = True,
@@ -385,7 +385,8 @@ class S3ProjectModel(S3Model):
                                        readable = use_sectors,
                                        writable = use_sectors,
                                        widget = lambda f, v, **attr: \
-                                        CheckboxesWidgetS3.widget(f, v, cols=3, **attr),
+                                        CheckboxesWidgetS3.widget(f, v, cols=3,
+                                                                  **attr),
                                        ),
                              multi_theme_id(
                                             readable = mode_3w and \
@@ -406,14 +407,16 @@ S3OptionsFilter({
                                    label = T("HFA Priorities"),
                                    readable = mode_drr,
                                    writable = mode_drr,
-                                   requires = IS_NULL_OR(IS_IN_SET(project_hfa_opts.keys(),
-                                                                   labels = ["HFA %s" % hfa for hfa in project_hfa_opts.keys()],
-                                                                   multiple = True)),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(project_hfa_opts.keys(),
+                                                          labels = ["HFA %s" % hfa \
+                                                                    for hfa in project_hfa_opts.keys()],
+                                                          multiple = True)),
                                    represent = self.hfa_opts_represent,
                                    widget = lambda f, v, **attr: \
-                                              s3_grouped_checkboxes_widget(f, v,
-                                                                           help_field=project_hfa_opts,
-                                                                           **attr)
+                                    s3_grouped_checkboxes_widget(f, v,
+                                                                 help_field=project_hfa_opts,
+                                                                 **attr)
                                    ),
                              Field("objectives", "text",
                                    readable = mode_3w,
@@ -819,7 +822,7 @@ S3OptionsFilter({
 
         crud_form = s3forms.S3SQLCustomForm(
                         "name",
-                        # Project Organisations
+                        # Project Sectors
                         s3forms.S3SQLInlineComponent(
                             "activity_type_sector",
                             label=T("Activity Type Sectors"),
@@ -890,7 +893,7 @@ S3OptionsFilter({
         settings = current.deployment_settings
         if settings.get_project_multiple_organisations():
             # Create/update project_organisation record from the organisation_id
-            # Not in form.vars if added via component tab)
+            # (Not in form.vars if added via component tab)
             vars = form.vars
             organisation_id = vars.organisation_id or \
                               current.request.post_vars.organisation_id
@@ -909,6 +912,15 @@ S3OptionsFilter({
                               organisation_id = organisation_id,
                               role = lead_role,
                               )
+
+        # Done via Custom Form instead
+        #if settings.get_project_locations_from_countries():
+        #    # Create project_location records from the countries_id
+        #    countries_id = form.vars.countries_id
+        #    if record and record.countries_id == countries_id:
+        #        # No need to make changes
+        #        return
+            
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1531,13 +1543,13 @@ class S3Project3WModel(S3Model):
                         ),
                         S3SearchOptionsWidget(
                             name="location_contact_search_L1",
-                            field="person_id$location_id$L1",
+                            field="project_location_id$location_id$L1",
                             location_level="L1",
                             cols = 3,
                         ),
                         S3SearchOptionsWidget(
                             name="location_contact_search_L2",
-                            field="person_id$location_id$L2",
+                            field="project_location_id$location_id$L2",
                             location_level="L2",
                             cols = 3,
                         )
@@ -1891,16 +1903,16 @@ class S3Project3WModel(S3Model):
                          "amount",
                          "currency",
                          ]
-        report_options = Storage( rows = report_fields,
-                                  cols = report_fields,
-                                  fact = report_fields,
-                                  #methods = ["sum"],
-                                  defaults = Storage( rows = "organisation.organisation_id",
-                                                      cols  ="organisation.currency",
-                                                      fact = "organisation.amount",
-                                                      aggregate = "sum",
-                                                      totals = False
-                                                      )
+        report_options = Storage(rows = report_fields,
+                                 cols = report_fields,
+                                 fact = report_fields,
+                                 #methods = ["sum"],
+                                 defaults = Storage(rows = "organisation.organisation_id",
+                                                    cols = "organisation.currency",
+                                                    fact = "organisation.amount",
+                                                    aggregate = "sum",
+                                                    totals = False
+                                                    )
                                  )
 
         # Resource Configuration
@@ -2084,7 +2096,7 @@ class S3Project3WModel(S3Model):
             project.organisation to point to the same organisation
             & update the realm_entity.
 
-            In DRRPP, update the donors field
+            #In DRRPP, update the donors field
         """
         db = current.db
         s3db = current.s3db
@@ -2097,19 +2109,19 @@ class S3Project3WModel(S3Model):
                                                      limitby=(0, 1)
                                                      ).first().project_id
 
-        if current.deployment_settings.get_template() == "DRRPP":
-            dtable = db.project_drrpp
+        #if current.deployment_settings.get_template() == "DRRPP":
+        #    dtable = db.project_drrpp
 
             # Get all the Donors for this Project
-            query = (otable.deleted == False) & \
-                    (otable.role == 3) & \
-                    (otable.project_id == project_id)
-            rows = db(query).select(otable.organisation_id)
-            if rows:
-                db(dtable.project_id == project_id).update(
-                        # @ToDo: Remove if row.organisation_id once we have the DRRPP import working
-                        donors=[row.organisation_id for row in rows if row.organisation_id]
-                    )
+        #    query = (otable.deleted == False) & \
+        #            (otable.role == 3) & \
+        #            (otable.project_id == project_id)
+        #    rows = db(query).select(otable.organisation_id)
+        #    if rows:
+        #        db(dtable.project_id == project_id).update(
+        #                # @ToDo: Remove if row.organisation_id once we have the DRRPP import working
+        #                donors=[row.organisation_id for row in rows if row.organisation_id]
+        #            )
 
         if str(vars.role) == \
              str(current.response.s3.project_organisation_lead_role):
@@ -2782,13 +2794,13 @@ class S3ProjectDRRPPModel(S3Model):
                            label = T("Duration (months)"),
                            ),
                      Field("activities", "text",
-                           label = T("Activities)"),
+                           label = T("Activities"),
                            ),
                      # Populated onaccept from project_organisation
-                     # IS this field needed? Donors should be saved under project_organisation
-                     Field("donors", "list:reference org_organisation",
-                           label = T("Donor(s)"),
-                           ),
+                     # Is this field needed? Donors should be saved under project_organisation
+                     #Field("donors", "list:reference org_organisation",
+                     #      label = T("Donor(s)"),
+                     #      ),
                      Field("rfa", "list:integer",
                            label = T("RFA Priorities"),
                            requires = IS_NULL_OR(IS_IN_SET(project_rfa_opts().keys(),
@@ -2812,7 +2824,7 @@ class S3ProjectDRRPPModel(S3Model):
                      Field("focal_person", "string",
                            label = T("Focal Person"),
                            ),
-                     self.org_organisation_id(label = (T("Organisation"))),
+                     self.org_organisation_id(label = (T("Organization"))),
                      Field("email", "string",
                            label = T("Focal Person"),
                            ),
@@ -2890,10 +2902,13 @@ class S3ProjectDRRPPModel(S3Model):
         data = item.data
         name = data.get("name", None)
         project_id = data.get("project_id", None)
-        if name and project_id:
+        if name:
             table = item.table
-            query = (table.project_id == project_id) & \
-                    (table.name == name)
+            query = (table.name == name)
+            if project_id:
+                query &= ((table.project_id == project_id) | \
+                          (table.project_id == None))
+
             duplicate = current.db(query).select(table.id,
                                                  limitby=(0, 1)).first()
             if duplicate:
@@ -4241,12 +4256,12 @@ def multi_theme_percentage_represent(id):
 # =============================================================================
 def project_location_represent(id, row=None):
     """
+        Represent a Project Location (Community)
     """
 
-    if not id:
-        return current.messages["NONE"]
-
     if not row:
+        if not id:
+            return current.messages["NONE"]
         db = current.db
         table = db.project_location
         row = db(table.id == id).select(table.location_id,
@@ -4294,7 +4309,7 @@ class S3ProjectDRRPPVirtualFields:
     # -------------------------------------------------------------------------
     def rfa(self):
         """
-            Donors for Project
+            RFAs for Project
 
             @ToDo: Replace this with component lookup
                    - or make role configurable

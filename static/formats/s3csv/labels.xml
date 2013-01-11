@@ -52,7 +52,7 @@
          <xsl:key name="examplekey"
             match="row"
             use="col[contains(
-                    document(../labels.xml)/labels/column[@name='StandardName']/match/text(),
+                    document('../labels.xml')/labels/column[@name='StandardName']/match/text(),
                     concat('|', @field, '|'))]"/>
 
     *********************************************************************** -->

@@ -362,7 +362,7 @@ class S3HRModel(S3Model):
                             #multiple=False,
                         )
                       )
-    
+
         add_component("pr_contact",
                         hrm_human_resource=dict(
                             name="phone",
@@ -3889,9 +3889,10 @@ def hrm_service_record(r, **attr):
         list_fields = ["person_id$first_name"]
         name = s3_fullname(r.record.person_id)
         exporter = S3Exporter().pdf
-        return exporter(r,
+        return exporter(r.resource,
+                        request=r,
                         method = "list",
-                        #pdf_componentname = "inv_track_item",
+                        #pdf_componentname = "track_item",
                         pdf_title = "%s - %s" % \
                             (name, current.T("Volunteer Service Record")),
                         #pdf_filename = send_ref,

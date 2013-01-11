@@ -109,35 +109,50 @@ class S3RL_PDF(S3Codec):
         )
 
     # -------------------------------------------------------------------------
-    def encode(self, r, **attr):
+    def encode(self, resource, **attr):
         """
             Export data as a PDF document
 
-            @param r: the S3Request object
-            @param attr: dictionary of parameters:
-                 * pdf_callback:    callback to be used rather than r
-                 * method:          "read" to not include a list view when no component is specified
-                 * list_fields:     Fields to include in list views
-                 * pdf_componentname: The name of the component to use
-                                         This should be a component of the resource
-                 * pdf_title:    The title of the report
-                 * pdf_filename: The filename of the report
-                 * pdf_header:   The header (maybe a callback)
-                 * rHeader:         used if pdf_header doesn't exist
-                 * pdf_header_padding: add this amount of space between the header and the body
-                 * pdf_footer:   The footer (maybe a callback)
-                 * rFooter:         used if pdf_footer doesn't exist
-                 * pdf_footer_padding: add this amount of space between the body and the footer
-                 * use_colour:      True to add colour to the cells. default False
-                 * pdf_groupby:  How to group the results
-                 * pdf_orderby:  How to sort rows (within any level of grouping)
-                 * pdf_hide_comments: don't show the comments in a table
-                 * pdf_table_autogrow: Indicates that a table should grow to
+            @param resource: the resource
+            @param attr: dictionary of keyword arguments, in s3_rest_controller
+                         passed through from the calling controller
+
+            @keyword request: the S3Request
+            @keyword method: "read" to not include a list view when no
+                             component is specified
+            @keyword list_fields: fields to include in lists
+            
+            @keyword pdf_componentname: enforce this component
+            
+            @keyword pdf_groupby: how to group the results
+            @keyword pdf_orderby: how to sort rows (within any level of grouping)
+
+            @keyword pdf_callback: callback to be used rather than request
+
+            @keyword pdf_title: the title of the report
+            @keyword pdf_filename: the filename for the report
+            
+            @keyword rheader: HTML page header (override by pdf_header)
+            @keyword rfooter: HTML page footer (override by pdf_footer)
+            @keyword pdf_header: callback to generate the HTML header
+                                 (overrides rheader)
+            @keyword pdf_footer: callback to generate the HTML footer,
+                                 or static HTML (overrides rfooter)
+
+            @keyword pdf_header_padding: add this amount of space between
+                                         the header and the body
+            @keyword pdf_footer_padding: add this amount of space between
+                                         the body and the footer
+
+            @keyword pdf_hide_comments: don't show the comments in a table
+
+            @keyword pdf_table_autogrow: Indicates that a table should grow to
                                           fill the available space. Valid values:
                                           H - Horizontal
                                           V - Vertical
                                           B - Both
-                * pdf_paper_alignment: Portrait (default) or Landscape
+            @keyword pdf_paper_alignment: Portrait (default) or Landscape
+            @keyword use_colour:      True to add colour to the cells. default False
         """
 
         if not PILImported:
@@ -147,7 +162,7 @@ class S3RL_PDF(S3Codec):
             redirect(URL(extension=""))
 
         # Settings
-        self.r = r
+        r = self.r = attr.get("request", None)
         self.list_fields = attr.get("list_fields")
         self.pdf_groupby = attr.get("pdf_groupby")
         self.pdf_orderby = attr.get("pdf_orderby")
@@ -188,7 +203,7 @@ class S3RL_PDF(S3Codec):
         footer_flowable = None
         footer = attr.get("pdf_footer")
         if not footer:
-            footer = attr.get("rFooter")
+            footer = attr.get("rfooter")
         if footer:
             footer_flowable = self.get_html_flowable(footer,
                                                      doc.printable_width)
@@ -202,26 +217,26 @@ class S3RL_PDF(S3Codec):
         body_flowable = None
 
         doc.calc_body_size(header_flowable, footer_flowable)
+
         callback = attr.get("pdf_callback")
+        pdf_componentname = attr.get("pdf_componentname", None)
         if callback:
+            # Get the document body from the callback
             body_flowable = self.get_html_flowable(callback(r),
                                                    doc.printable_width)
-        elif attr.get("pdf_componentname"):
-            componentname = attr.get("pdf_componentname")
-            (prefix, component) = componentname.split("_", 1)
+
+        elif pdf_componentname: # and resource.parent is None:
+            # Enforce a particular component
             resource = current.s3db.resource(r.tablename,
-                                             components = [component],
+                                             components = [pdf_componentname],
                                              id = r.id)
-            body_flowable = self.get_resource_flowable(resource.components[component],
-                                                       doc)
-        elif r.link:
-            body_flowable = self.get_resource_flowable(r.link, doc)
-        elif r.component:
-            body_flowable = self.get_resource_flowable(r.component, doc)
-        else:
-            method = attr.get("method", "list")
-            if method != "read":
-                body_flowable = self.get_resource_flowable(r.resource, doc)
+            if pdf_componentname in resource.components:
+                component = resource.components[pdf_componentname]
+                body_flowable = self.get_resource_flowable(component, doc)
+
+        elif r.component or attr.get("method", "list") != "read":
+            # Use the requested resource
+            body_flowable = self.get_resource_flowable(resource, doc)
 
         styleSheet = getSampleStyleSheet()
         style = styleSheet["Normal"]
@@ -254,16 +269,21 @@ class S3RL_PDF(S3Codec):
             The rules (for example) could be an rHeader callback
         """
 
-        # Let's assume that it's a callable
-        try:
-            # switch the representation to html so the callback doesn't barf
-            repr = self.r.representation
-            self.r.representation = "html"
-            html = rules(self.r)
-            self.r.representation = repr
-        except:
-            # okay so maybe it wasn't ... it could be an HTML object
+        if callable(rules):
+            # Callback to produce the HTML (e.g. rheader)
+            r = self.r
+            # Switch to HTML representation
+            representation = r.representation
+            r.representation = "html"
+            try:
+                html = rules(r)
+            except:
+                html = ""
+            r.representation = representation
+        else:
+            # Static HTML
             html = rules
+
         parser = S3html2pdf(pageWidth = printable_width,
                             exclude_class_list=["tabs"])
         result = parser.parse(html)
@@ -636,14 +656,24 @@ class S3PDFTable(object):
             dappend = data.append
             for selector in rfields:
                 value = row[selector.colname]
-                if isinstance(value, basestring):
-                    dappend(value)
-                else:
-                    try:
-                        # Extract the text from the html tag
-                        dappend(value.components[0])
-                    except:
-                        dappend(s3_unicode(value))
+
+                # Try to convert Web2py elements to ReportLab equivalents
+                dvalue = None
+                while True:
+                    if isinstance(value, (basestring, lazyT)):
+                        dvalue = value
+                    elif isinstance(value, IMG):
+                        dvalue = S3html2pdf.parse_img(value)[0]
+                    elif isinstance(value, DIV):
+                        if len(value.components) > 0:
+                            value = value.components[0]
+                            continue
+                        else:
+                            dvalue = s3_unicode(value)
+                    else:
+                        dvalue = s3_unicode(value)
+                    break
+                dappend(dvalue)
             rdata.append(data)
         self.raw_data = rdata
         self.labels = [selector.label for selector in self.rfields]
@@ -1140,7 +1170,7 @@ class S3html2pdf():
         elif isinstance(html, P):
             return self.parse_p(html)
         elif isinstance(html, IMG):
-            return self.parse_img(html)
+            return S3html2pdf.parse_img(html)
         elif isinstance(html, DIV):
             return self.parse_div(html)
         elif (isinstance(html, str) or isinstance(html, lazyT)):
@@ -1197,14 +1227,27 @@ class S3html2pdf():
         return content
 
     # -------------------------------------------------------------------------
-    def parse_img(self, html):
+    @staticmethod
+    def parse_img(html):
         """
-        """
+        Parses an IMG element from Web2py and converts it into an Image
+        that ReportLab can use.
 
+        @param html: the IMG element  to convert
+        @return: a list containing an Image that ReportLab can use
+
+
+        @note: The `src` attribute of the image must either
+        point to a static resource, directly to a file, or to an upload.
+        """
         I = None
         from reportlab.platypus import Image
+
         if "_src" in html.attributes:
             src = html.attributes["_src"]
+            if src.startswith("/%s/static" % current.request.application):
+                src = src.split("/%s/" % current.request.application)[-1]
+                src = os.path.join(current.request.folder, src)
             if os.path.exists(src):
                 I = Image(src)
             else:
@@ -1218,22 +1261,21 @@ class S3html2pdf():
         iwidth = I.drawWidth
         iheight = I.drawHeight
         # @todo: extract the number from a 60px value
-#        if "_height" in html.attributes:
-#            height = int(html.attributes["_height"]) * inch / 80.0
-#            width = iwidth * (height / iheight)
-#        elif "_width" in html.attributes:
-#            width = int(html.attributes["_width"]) * inch / 80.0
-#            height = iheight * (width / iwidth)
-#        else:
-#            height = 1.0 * inch
-#            width = iwidth * (height / iheight)
+        #        if "_height" in html.attributes:
+        #            height = int(html.attributes["_height"]) * inch / 80.0
+        #            width = iwidth * (height / iheight)
+        #        elif "_width" in html.attributes:
+        #            width = int(html.attributes["_width"]) * inch / 80.0
+        #            height = iheight * (width / iwidth)
+        #        else:
+        #            height = 1.0 * inch
+        #            width = iwidth * (height / iheight)
         height = 1.0 * inch
         width = iwidth * (height / iheight)
         I.drawHeight = height
         I.drawWidth = width
         return [I]
 
-    # -------------------------------------------------------------------------
     def parse_p(self, html):
         """
         """

@@ -1086,6 +1086,7 @@ class S3OptionsMenu(object):
                     M("Sent Shipments", c="inv", f="send")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Search", m="search"),
                         M("Search Shipped Items", f="track_item", m="search"),
                     ),
                     M("Items", c="supply", f="item")(
@@ -1528,9 +1529,8 @@ class S3OptionsMenu(object):
                       ),
                     M("Funding", f="organisation", args="report"),
                  ),
-                 M("Import", f="index", p="create")(
-                    M("Import Projects", f="project",
-                      m="import", p="create"),
+                 M("Import", f="project", m="import", p="create")(
+                    M("Import Projects", m="import", p="create"),
                     M("Import Project Organizations", f="organisation",
                       m="import", p="create"),
                     M(IMPORT, f="location",

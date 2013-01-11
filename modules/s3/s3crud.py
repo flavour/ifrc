@@ -332,7 +332,8 @@ class S3CRUD(S3Method):
                 try:
                     infile = open(infile, "rb")
                 except:
-                    session.error = current.T("Cannot read from file: %s" % infile)
+                    session.error = current.T("Cannot read from file: %(filename)s") % \
+                                                dict(filename=infile)
                     redirect(r.url(method="", representation="html"))
             try:
                 self.import_csv(infile, table=table)
@@ -520,7 +521,7 @@ class S3CRUD(S3Method):
 
         elif representation == "pdf":
             exporter = S3Exporter().pdf
-            return exporter(r, **attr)
+            return exporter(resource, request=r, **attr)
 
         elif representation == "xls":
             list_fields = _config("list_fields")
@@ -1063,7 +1064,8 @@ class S3CRUD(S3Method):
 
         elif representation == "pdf":
             exporter = S3Exporter().pdf
-            return exporter(r,
+            return exporter(resource,
+                            request=r,
                             list_fields=list_fields,
                             report_hide_comments = report_hide_comments,
                             report_filename = report_filename,
