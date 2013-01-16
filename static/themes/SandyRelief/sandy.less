@@ -940,6 +940,28 @@ b.red {
 	}
 }
 
+.paging_full_numbers {
+	height: 31px!important;
+	line-height: 31px!important;
+	padding: 0 15px;
+	a.paginate_button, 
+	a.paginate_active {
+		border: 0!important;
+		.border-radius(0)!important;
+		padding: 0 9px!important;
+		margin: 0!important;
+	}
+	a.paginate_active {
+		background-color: @brand!important;
+	}
+}
+
+
+.paginate_button_disabled {
+	opacity: .4;
+	background: transparent!important;
+}
+
 
 .list_formats {
     position: absolute;
@@ -975,6 +997,9 @@ b.red {
     td.sorting_1 {
         background-color: @brandlight!important;
     }
+	tr.even td.sorting_1 {
+		background-color: #fff9d9!important;
+	}
     tfoot th {
 	    border-top: 0;
     }

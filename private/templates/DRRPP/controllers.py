@@ -55,12 +55,12 @@ class index():
 
         list_img = A(IMG(_src="/%s/static/themes/DRRPP/img/list_img.png" % appname,
                          _id="list_img"),
-                     _href=URL(c="project", f="project", args=["list"]),
+                     _href=URL(c="project", f="project", args=["search"]),
                      _title="Project List")
 
         matrix_img = A(IMG(_src="/%s/static/themes/DRRPP/img/matrix_img.png" % appname,
                            _id="matrix_img"),
-                       _href=URL(c="project", f="project", args=["matrix"]),
+                       _href=URL(c="project", f="project", args=["report"]),
                        _title="Project Matrix Report")
 
         map_img = A(IMG(_src="/%s/static/themes/DRRPP/img/map_img.png" % appname,
@@ -70,7 +70,8 @@ class index():
 
         graph_img = A(IMG(_src="/%s/static/themes/DRRPP/img/graph_img.png" % appname,
                           _id="graph_img"),
-                      _href=URL(c="project", f="project", args=["graphs"]),
+                      _href=URL(c="project", f="project", args=["report"],
+                                vars=dict(chart="breakdown:rows")),
                       _title="Project Graph")
 
         add_pipeline_project_link = URL(c="project",
@@ -180,13 +181,13 @@ class index():
                     TABLE(TR(projects,
                              A("Projects",
                                _href=URL(c="project", f="project",
-                                         args=["list"]))
+                                         args=["search"]))
                              ),
                           TR(TD(),
                              TABLE(TR(projects,
                                       A("Current Projects",
                                         _href=URL(c="project", f="project",
-                                                  args=["list"],
+                                                  args=["search"],
                                                   vars={"status_id":2}))
                                      )
                                    )
@@ -195,7 +196,7 @@ class index():
                              TABLE(TR(projects,
                                       A("Proposed Projects",
                                         _href=URL(c="project", f="project",
-                                                  args=["list"],
+                                                  args=["search"],
                                                   vars={"status_id":1}))
                                      )
                                     )
@@ -204,7 +205,7 @@ class index():
                              TABLE(TR(projects,
                                       A("Completed Projects",
                                         _href=URL(c="project", f="project",
-                                                  args=["list"],
+                                                  args=["search"],
                                                   vars={"status_id":3}))
                                      )
                                     )
@@ -774,6 +775,8 @@ class organisations():
     @staticmethod
     def _regional():
         """
+            Regional Organisations
+            - Filtered subset of Organisations
         """
 
         from s3 import S3FieldSelector, s3_request
@@ -794,7 +797,7 @@ class organisations():
             "website",
             "region",
             "year",
-            (T("Notes"), "comments")
+            (T("Notes"), "comments"),
         ]
         return (s3request, field_list)
 
@@ -802,10 +805,16 @@ class organisations():
     @staticmethod
     def _groups():
         """
+            Committees/Mechanisms/Forums & Networks
+            - Filtered subset of Organisations
         """
 
         from s3 import S3FieldSelector, s3_request
         T = current.T
+
+        s3db = current.s3db
+        table = s3db.org_organisation
+        table.virtualfields.append(s3db.org_organisation_address_virtual_field())
 
         s3request = s3_request("org", "organisation", extension="aadata")
         #(S3FieldSelector("project.id") != None) & \
@@ -819,8 +828,8 @@ class organisations():
             "acronym",
             (T("Type"), "organisation_type_id"),
             "year",
-            "address",
-            (T("Notes"), "comments")
+            (T("Address"), "address"),
+            (T("Notes"), "comments"),
         ]
         return (s3request, field_list)
 
@@ -865,28 +874,29 @@ class organisations():
             if orderby and str(orderby)==str(field_name):
                 orderby=field
 
-        records = resource.select(
-            fields=field_list,
-            start=None,
-            limit=None,
-            orderby=orderby,
-            #as_page=True,
-        )
+        records = resource.select(fields=field_list,
+                                  start=None,
+                                  limit=None,
+                                  orderby=orderby,
+                                  #as_page=True,
+                                  )
 
         if records is None:
             records = []
 
         rows = []
+        rsappend = rows.append
         represent = current.manager.represent
         for record in records:
             row = []
-
+            rappend = row.append
             for field in fields:
-                row.append(
-                    represent(field=field, record=record)
-                )
+                if isinstance(field, basestring):
+                    rappend(record[field])
+                else:
+                    rappend(represent(field=field, record=record))
 
-            rows.append(row)
+            rsappend(row)
 
         options = json.dumps({
             "iDisplayLength": limit,
@@ -904,12 +914,11 @@ class organisations():
             "sDom": 'rifpl<"dataTable_table"t>p'
         })
 
-        table = Storage(
-            cols=cols,
-            rows=rows,
-            options=options,
-            classes="dataTable display"
-        )
+        table = Storage(cols=cols,
+                        rows=rows,
+                        options=options,
+                        classes="dataTable display"
+                        )
 
         return table
 

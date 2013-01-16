@@ -37,8 +37,9 @@ settings.auth.record_approval_required_for = ["org_organisation", "project_proje
 
 # L10n settings
 settings.L10n.languages = OrderedDict([
-    ("en", "English"),
+    ("en-gb", "English"),
 ])
+settings.L10n.default_language = "en-gb"
 # Default timezone for users
 settings.L10n.utc_offset = "UTC +0700"
 # Number formats (defaults to ISO 31-0)
@@ -80,7 +81,7 @@ settings.ui.cluster = True
 
 # Organisations
 # Uncomment to add summary fields for Organisations/Offices for # National/International staff
-settings.org.summary = True
+#settings.org.summary = True # Doesn't work with DRRPP formstyle
 
 # Projects
 # Uncomment this to use settings suitable for a global/regional organisation (e.g. DRR)
@@ -101,6 +102,7 @@ settings.project.multiple_organisations = True
 # Uncomment this to disable Sectors in projects
 settings.project.sectors = False
 # Uncomment this to customise
+# Links to Filtered Components for Donors & Partners
 settings.project.organisation_roles = {
     1: T("Lead Organization"),
     2: T("Partner Organization"),
@@ -113,21 +115,20 @@ def formstyle_row(id, label, widget, comment, hidden=False):
         hide = "hide"
     else:
         hide = ""
-    row = DIV(
-           DIV(comment,label,
-                _id=id + "1",
-                _class="w2p_fl %s" % hide),
-          DIV(widget,
-                _id=id,
-                _class="w2p_fw %s" % hide),
-          _class = "w2p_r",
-             
-            )
+    row = DIV(DIV(comment, label,
+                  _id=id + "1",
+                  _class="w2p_fl %s" % hide),
+              DIV(widget,
+                  _id=id,
+                  _class="w2p_fw %s" % hide),
+              _class = "w2p_r",
+              )
     return row
+
 def form_style(self, xfields):
     """
         @ToDo: Requires further changes to code to use
-        - Adding a formstyle_row setting to use for indivdual rows
+        - Adding a formstyle_row setting to use for individual rows
         Use new Web2Py formstyle to generate form using DIVs & CSS
         CSS can then be used to create MUCH more flexible form designs:
         - Labels above vs. labels to left
@@ -139,13 +140,16 @@ def form_style(self, xfields):
         form.append(formstyle_row(id, a, b, c))
 
     return form
+
 settings.ui.formstyle_row = formstyle_row
-settings.ui.formstyle = form_style
+#settings.ui.formstyle = form_style # Breaks e.g. org/organisation/create
+settings.ui.formstyle = formstyle_row
 
 def customize_project_project(**attr):
     s3db = current.s3db
+    s3 = current.response.s3
     
-    current.response.s3.crud_strings.project_project.title_search = T("Project List")
+    s3.crud_strings.project_project.title_search = T("Project List")
     table = s3db.project_project
     table.budget.label = T("Total Funding")
 
@@ -167,9 +171,9 @@ def customize_project_project(**attr):
     #table.file.widget = SQLFORM.widgets.upload.widget
     table.comments.widget = SQLFORM.widgets.string.widget
     
-    current.response.s3["dataTable_sDom"] = 'ripl<"dataTable_table"t>p'
+    s3["dataTable_sDom"] = 'ripl<"dataTable_table"t>p'
     
-    current.response.s3.formats = Storage(xls= None, xml = None)
+    s3.formats = Storage(xls= None, xml = None)
     
     return attr
 
@@ -195,7 +199,7 @@ settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
         # Outputs
         s3forms.S3SQLInlineComponent(
             "output",
-            label=T("Outputs:"),
+            label=T("Outputs"),
             #comment = "Bob",
             fields=["output", "status"],
         ),
@@ -206,8 +210,12 @@ settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
         s3forms.S3SQLInlineComponent(
             "organisation",
             name = "partner",
-            label=T("Partner Organizations:"),
-            fields=["organisation_id", "comments"],
+            label=T("Partner Organizations"),
+            fields=["organisation_id",
+                    # Explicit label as otherwise label from filter comes in!
+                    #(T("Comments"), "comments"),
+                    "comments",
+                    ],
             filterby = dict(field = "role",
                             options = "2"
                             )
@@ -216,7 +224,7 @@ settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
         s3forms.S3SQLInlineComponent(
             "organisation",
             name = "donor",
-            label=T("Donor(s):"),
+            label=T("Donor(s)"),
             fields=["organisation_id", "amount", "currency"],
             filterby = dict(field = "role",
                             options = "3"

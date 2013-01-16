@@ -387,7 +387,7 @@ class S3Resource(object):
         component.values = hook.values
 
         if hook.filterby is not None:
-            component.filter = (hook.table[hook.filterby] == hook.filterfor)
+            component.filter = (hook.table[hook.filterby].belongs(hook.filterfor))
         else:
             component.filter = None    
 
@@ -607,6 +607,7 @@ class S3Resource(object):
 
         # Limitby
         if vfltr is None:
+            #limitby = None
             limitby = self.limitby(start=start, limit=limit)
             if limitby is not None:
                 attributes["limitby"] = limitby
@@ -3140,10 +3141,11 @@ class S3Resource(object):
                     continue
                 else:
                     this = record[key]
-                if record_id in duplicates and value not in this:
+                if record_id in duplicates:
                     if lazy:
-                        this.value.append(lazy_value)
-                    else:
+                        if lazy_value not in this.value:
+                            this.value.append(lazy_value)
+                    elif value not in this:
                         this.append(value)
                 elif joined and value != this:
                     if lazy:
@@ -3212,7 +3214,7 @@ class S3Resource(object):
 
         table = self.table
 
-        prefix = lambda s: "%s.%s" % (self.alias, s) \
+        prefix = lambda s: "~.%s" % s \
                            if "." not in s.split("$", 1)[0] else s
 
         # Store field selectors
@@ -3281,7 +3283,7 @@ class S3Resource(object):
             # Skip components
             if skip_components:
                 head = rfield.selector.split("$", 1)[0]
-                if "." in head and head.split(".")[0] != self.alias:
+                if "." in head and head.split(".")[0] not in ("~", self.alias):
                     continue
 
             # De-duplicate columns
@@ -4148,7 +4150,7 @@ class S3ResourceField(object):
             fn = selector
 
         multiple = True
-        if tn and tn != resource.alias:
+        if tn and tn not in ("~", resource.alias):
             # Field in a component
             if tn not in resource.components:
                 hook = s3db.get_component(resource.tablename, tn)
@@ -4972,7 +4974,7 @@ class S3ResourceQuery(object):
                 return
             if "." not in n:
                 if resource is not None:
-                    n = "%s.%s" % (resource.alias, n)
+                    n = "~.%s" % n
                 else:
                     return url_query
             if o == self.LIKE:
@@ -5118,6 +5120,8 @@ class S3URLQuery(object):
                 alias = resource.alias
             else:
                 alias = selectors[0].split(".", 1)[0]
+            if alias == "~":
+                alias = resource.alias
             if alias not in query:
                 query[alias] = [q]
             else:
@@ -6141,8 +6145,12 @@ class S3Pivottable(object):
         def prefix(s):
             if isinstance(s, (tuple, list)):
                 return prefix(s[-1])
-            return "%s.%s" % (alias, s) \
-                   if "." not in s.split("$", 1)[0] else s
+            if "." not in s.split("$", 1)[0]:
+                return "%s.%s" % (alias, s)
+            elif s[:2] == "~.":
+                return "%s.%s" % (alias, s[2:])
+            else:
+                return s
 
         self.pkey = pkey = prefix(table._id.name)
         self.rows = rows = self.rows and prefix(self.rows) or None
@@ -6757,7 +6765,7 @@ class S3RecordMerger(object):
         fn = None
         if "." in key:
             alias, fn = key.split(".", 1)
-            if alias != self.resource.alias:
+            if alias not in ("~", self.resource.alias):
                 fn = None
         elif self.main is None:
             fn = key
