@@ -86,6 +86,8 @@ else:
 
 ogetattr = object.__getattribute__
 
+TEXTTYPES = ("string", "text")
+
 # =============================================================================
 class S3Resource(object):
     """
@@ -106,9 +108,9 @@ class S3Resource(object):
         S3 framework rules.
     """
 
-    def __init__(self, table,
-                 name=None,
+    def __init__(self, tablename,
                  id=None,
+                 prefix=None,
                  uid=None,
                  filter=None,
                  vars=None,
@@ -123,10 +125,8 @@ class S3Resource(object):
         """
             Constructor
 
-            @param table: The table, tablename, a resource
-                          or the prefix of the table name (=module name)
-            @param name: name of the resource (without prefix),
-                         required if "table" is a table name prefix
+            @param tablename: tablename, Table, or an S3Resource instance
+            @param prefix: prefix to use for the tablename
 
             @param id: record ID (or list of record IDs)
             @param uid: record UID (or list of record UIDs)
@@ -147,13 +147,6 @@ class S3Resource(object):
 
             @param approved: include approved records
             @param unapproved: include unapproved records
-
-            @note: instead of prefix/name it is also possible to specify
-                   the tablename, i.e. S3Resource("prefix_name") instead
-                   of S3Resource("prefix", "name").
-
-            @note: instead of prefix/name it is also possible to specify
-                   a table or a resource as first parameter.
         """
 
         s3db = current.s3db
@@ -163,25 +156,26 @@ class S3Resource(object):
         # Names ---------------------------------------------------------------
 
         self.table = None
-        if id is None and \
-           (isinstance(name, (int, long, list, tuple)) or \
-            isinstance(name, str) and name.isdigit()):
-            id, name = name, id
-        if name is None:
-            if isinstance(table, Table):
-                self.table = table
-                tablename = table._tablename
-            elif isinstance(table, S3Resource):
-                self.table = table.table
-                tablename = table.tablename
-            else:
-                tablename = table
+        self._alias = None
+
+        if prefix is None:
+            if not isinstance(tablename, basestring):
+                if isinstance(tablename, Table):
+                    self.table = tablename
+                    self._alias = self.table._tablename
+                    tablename = self._alias
+                elif isinstance(tablename, S3Resource):
+                    self.table = tablename.table
+                    self._alias = self.table._tablename
+                    tablename = tablename.tablename
+                else:
+                    raise SyntaxError("illegal argument")
             if "_" in tablename:
                 prefix, name = tablename.split("_", 1)
             else:
-                prefix, name = None, tablename
+                raise SyntaxError("invalid tablename: %s" % tablename)
         else:
-            prefix = table
+            name = tablename
             tablename = "%s_%s" % (prefix, name)
 
         self.prefix = prefix
@@ -209,8 +203,9 @@ class S3Resource(object):
         # Set default approver
         auth.permission.set_default_approver(table)
 
-        self._alias = tablename
-        """ Table alias (the tablename used in joins/queries) """
+        if not self._alias:
+            self._alias = tablename
+            """ Table alias (the tablename used in joins/queries) """
 
         if parent is not None:
             if parent.tablename == self.tablename:
@@ -246,6 +241,9 @@ class S3Resource(object):
         self.include_deleted = include_deleted
         self._approved = approved
         self._unapproved = unapproved
+
+        # Component Filter
+        self.filter = None
 
         # Resource Filter
         self.rfilter = None
@@ -3659,7 +3657,7 @@ class S3Resource(object):
         if sSearch in vars and iColumns in vars:
 
             # Build filter
-            text = vars[sSearch] or ""
+            text = vars[sSearch]
             words = [w for w in text.lower().split()]
 
             if words:
@@ -3774,7 +3772,7 @@ class S3Resource(object):
                     iSortCol = int(vars["iSortCol_%s" % i])
                     # for every non-sortable column to the left of sortable column subtract 1
                     for j in xrange(iSortCol):
-                        if vars["bSortable_%s" % j] == 'false' :
+                        if vars.get("bSortable_%s" % j, 'true') == 'false' :
                             iSortCol -= 1
                     rfield = rfields[iSortCol + 1]
                 except:
@@ -3948,14 +3946,15 @@ class S3FieldSelector(object):
 
     # -------------------------------------------------------------------------
     def expr(self, val):
-        if not self.op:
-            return val
-        elif val is not None:
+
+        if self.op and val is not None:
             if self.op == self.LOWER and \
-               hasattr(val, "lower") and callable(val.lower):
+               hasattr(val, "lower") and callable(val.lower) and \
+               (not isinstance(val, Field) or val.type in TEXTTYPES):
                 return val.lower()
             elif self.op == self.UPPER and \
-                 hasattr(val, "upper") and callable(val.upper):
+                 hasattr(val, "upper") and callable(val.upper) and \
+                 (not isinstance(val, Field) or val.type in TEXTTYPES):
                 return val.upper()
         return val
 
@@ -4702,7 +4701,11 @@ class S3ResourceQuery(object):
             else:
                 q = l.belongs(r)
         elif op == self.LIKE:
-            q = l.like(str(r))
+            if isinstance(l, Field) and l.type not in TEXTTYPES:
+                q = (l == s3_unicode(r).replace("%", ""))
+            else:
+                q = l.like(s3_unicode(r))
+            #q = l.like(s3_unicode(r))
         elif op == self.LT:
             q = l < r
         elif op == self.LE:
@@ -5080,47 +5083,23 @@ class S3URLQuery(object):
         if not vars:
             return query
 
+        subquery = cls._subquery
+        allof = lambda l, r: l if r is None else r if l is None else r & l
+            
         for key, value in vars.iteritems():
 
             if not key.find(".") > 0:
                 continue
 
             selectors, op, invert = cls.parse_expression(key)
-            v = cls.parse_value(value)
 
-            q = None
-            for fs in selectors:
-
-                if op == S3ResourceQuery.LIKE:
-                    # Auto-lowercase and replace wildcard
-                    f = S3FieldSelector(fs).lower()
-                    if isinstance(v, basestring):
-                        v = v.replace("*", "%").lower()
-                    elif isinstance(v, list):
-                        v = [x.replace("*", "%").lower() for x in v]
-                else:
-                    f = S3FieldSelector(fs)
-
-                rquery = None
-                try:
-                    rquery = S3ResourceQuery(op, f, v)
-                except SyntaxError:
-                    if current.response.s3.debug:
-                        from s3utils import s3_debug
-                        s3_debug("Invalid URL query operator: %s "
-                                 "(sub-query ignored)" % op)
-                    q = None
-                    break
-
-                # Invert operation
-                if invert:
-                    rquery = ~rquery
-
-                # Add to subquery
-                if q is None:
-                    q = rquery
-                else:
-                    q |= rquery
+            if type(value) is list:
+                # Multiple queries with the same selector (AND)
+                q = reduce(allof,
+                           [subquery(selectors, op, invert, v) for v in value],
+                           None)
+            else:
+                q = subquery(selectors, op, invert, value)
 
             if q is None:
                 continue
@@ -5237,6 +5216,55 @@ class S3URLQuery(object):
             return vlist[0]
         return vlist
         
+    # -------------------------------------------------------------------------
+    @classmethod
+    def _subquery(cls, selectors, op, invert, value):
+        """
+            Construct a sub-query from URL selectors, operator and value
+
+            @param selectors: the selector(s)
+            @param op: the operator
+            @param invert: invert the query
+            @param value: the value
+        """
+
+        v = cls.parse_value(value)
+
+        q = None
+        for fs in selectors:
+
+            if op == S3ResourceQuery.LIKE:
+                # Auto-lowercase and replace wildcard
+                f = S3FieldSelector(fs).lower()
+                if isinstance(v, basestring):
+                    v = v.replace("*", "%").lower()
+                elif isinstance(v, list):
+                    v = [x.replace("*", "%").lower() for x in v]
+            else:
+                f = S3FieldSelector(fs)
+
+            rquery = None
+            try:
+                rquery = S3ResourceQuery(op, f, v)
+            except SyntaxError:
+                if current.response.s3.debug:
+                    from s3utils import s3_debug
+                    s3_debug("Invalid URL query operator: %s (sub-query ignored)" % op)
+                q = None
+                break
+
+            # Invert operation
+            if invert:
+                rquery = ~rquery
+
+            # Add to subquery
+            if q is None:
+                q = rquery
+            else:
+                q |= rquery
+
+        return q
+
 # =============================================================================
 class S3ResourceFilter(object):
     """ Class representing a resource filter """

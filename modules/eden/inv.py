@@ -313,7 +313,7 @@ class S3WarehouseModel(S3Model):
                   )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage()
 
@@ -610,7 +610,7 @@ S3OptionsFilter({
                 ),
                 S3SearchOptionsWidget(
                     name="owner_org_seach",
-                    label=T("Owning Organisation"),
+                    label=T("Owning Organization"),
                     field="owner_org_id",
                     represent="%(name)s",
                     comment=T("If none are selected, then all are searched."),
@@ -618,7 +618,7 @@ S3OptionsFilter({
                 ),
                 S3SearchOptionsWidget(
                     name="supply_org_seach",
-                    label=T("Donating Organisation"),
+                    label=T("Donating Organization"),
                     field="supply_org_id",
                     represent="%(name)s",
                     comment=T("If none are selected, then all are searched."),
@@ -704,7 +704,7 @@ S3OptionsFilter({
                        )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                     inv_item_id = inv_item_id,
@@ -1041,7 +1041,7 @@ class S3TrackingModel(S3Model):
                                    represent =  org_site_represent
                                    ),
                              organisation_id(
-                                label = T("To Organisation"),
+                                label = T("To Organization"),
                                 readable = show_org,
                                 writable = show_org,
                                 ),
@@ -1110,6 +1110,7 @@ class S3TrackingModel(S3Model):
                 simple=(S3SearchSimpleWidget(
                           name="send_search_text_simple",
                           label=T("Search"),
+                          comment=T("Search for an item by text."),
                           field=["sender_id$first_name",
                                  "sender_id$middle_name",
                                  "sender_id$last_name",
@@ -1125,6 +1126,7 @@ class S3TrackingModel(S3Model):
                 advanced=(S3SearchSimpleWidget(
                             name="send_search_text_advanced",
                             label=T("Search"),
+                            comment=T("Search for an item by text."),
                             field=["sender_id$first_name",
                                    "sender_id$middle_name",
                                    "sender_id$last_name",
@@ -1141,6 +1143,7 @@ class S3TrackingModel(S3Model):
                          S3SearchOptionsWidget(
                            name="send_search_org",
                            label=T("To Organization"),
+                           comment=T("If none are selected, then all are searched."),
                            field="to_site_id",
                            cols=2
                          ),
@@ -1158,12 +1161,14 @@ class S3TrackingModel(S3Model):
                            name="recv_search_date",
                            method="range",
                            label=T("Date Sent"),
+                           comment=T("Search for a shipment sent between these dates."),
                            field="date"
                          ),
                          S3SearchMinMaxWidget(
                            name="recv_search_delivery_date",
                            method="range",
                            label=T("Estimated Delivery Date"),
+                           comment=T("Search for a shipment which has an estimated delivery between these dates."),
                            field="delivery_date"
                    )
            ))
@@ -1287,7 +1292,7 @@ class S3TrackingModel(S3Model):
                                    label = T("Shipment Type"),
                                    default = 0,
                                    ),
-                             organisation_id( label = T("Organisation/Supplier")
+                             organisation_id( label = T("Organization/Supplier")
                                     ),
                              # This is a reference, not a super-link, so we can override
                              Field("from_site_id", "reference org_site",
@@ -1792,7 +1797,7 @@ S3OptionsFilter({
                   )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(inv_get_shipping_code = self.inv_get_shipping_code,
                        inv_send_controller = self.inv_send_controller,
@@ -2437,7 +2442,7 @@ S3OptionsFilter({
 
         vars = form.vars
         if not vars.to_site_id and not vars.organisation_id:
-            error = T("Please enter a %(site)s OR an Organisation") % dict(site=current.deployment_settings.get_org_site_label())
+            error = T("Please enter a %(site)s OR an Organization") % dict(site=current.deployment_settings.get_org_site_label())
             errors = form.errors
             errors.to_site_id = error
             errors.organisation_id = error
@@ -2456,7 +2461,7 @@ S3OptionsFilter({
             form.errors.from_site_id = T("Please enter a %(site)s") % dict(site=current.deployment_settings.get_org_site_label())
         if type >= 32 and not form.vars.organisation_id:
             # Internal Shipment needs from_site_id
-            form.errors.organisation_id = T("Please enter an Organisation/Supplier")
+            form.errors.organisation_id = T("Please enter an Organization/Supplier")
 
     # ---------------------------------------------------------------------
     @staticmethod

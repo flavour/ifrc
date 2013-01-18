@@ -341,6 +341,46 @@ class ResourceFilterQueryTests(unittest.TestCase):
         current.auth.override = True
 
     # -------------------------------------------------------------------------
+    @unittest.skipIf(not current.deployment_settings.has_module("org"), "org module disabled")
+    def testTextOperatorWithNonTextField(self):
+        """ Test query construction for non-text fields with text operator """
+
+        q = (S3FieldSelector("id").lower().like("%123%"))
+        resource = current.s3db.resource("org_organisation", filter=q)
+        query = resource.rfilter.get_query()
+
+        #self.assertEqual(str(query), "(((org_organisation.deleted <> 'T') AND "
+                                     #"(org_organisation.id > 0)) AND "
+                                     #"(org_organisation.id LIKE '%123%'))")
+
+        self.assertEqual(str(query), "(((org_organisation.deleted <> 'T') AND "
+                                     "(org_organisation.id > 0)) AND "
+                                     "(org_organisation.id = 123))")
+
+        q = (S3FieldSelector("id").lower().like("%12%3%"))
+        resource = current.s3db.resource("org_organisation", filter=q)
+        query = resource.rfilter.get_query()
+
+        #self.assertEqual(str(query), "(((org_organisation.deleted <> 'T') AND "
+                                     #"(org_organisation.id > 0)) AND "
+                                     #"(org_organisation.id LIKE '%12%3%'))")
+
+        self.assertEqual(str(query), "(((org_organisation.deleted <> 'T') AND "
+                                     "(org_organisation.id > 0)) AND "
+                                     "(org_organisation.id = 123))")
+
+        q = (S3FieldSelector("id").lower().like("%abc%"))
+        resource = current.s3db.resource("org_organisation", filter=q)
+        query = resource.rfilter.get_query()
+
+        #self.assertEqual(str(query), "(((org_organisation.deleted <> 'T') AND "
+                                     #"(org_organisation.id > 0)) AND "
+                                     #"(org_organisation.id LIKE '%abc%'))")
+
+        self.assertEqual(str(query), "((org_organisation.deleted <> 'T') AND "
+                                     "(org_organisation.id > 0))")
+
+    # -------------------------------------------------------------------------
     @unittest.skipIf(not current.deployment_settings.has_module("project"), "project module disabled")
     def testMasterFilterConstruction(self):
         """ Test master resource filter construction """
@@ -2350,6 +2390,29 @@ class URLQueryParserTests(unittest.TestCase):
                                      "(project_project.id > 0)) AND "
                                      "((LOWER(org_organisation.name) LIKE 'test%') OR "
                                      "(LOWER(org_organisation.name) LIKE 'other%')))")
+
+    # -------------------------------------------------------------------------
+    @unittest.skipIf(not current.deployment_settings.has_module("project"), "project module disabled")
+    def testParseURLQueryWithMultipleValues(self):
+        """ Test URL query parsing with multiple values (AND) """
+
+        url_query = {"project.organisation_id$name__like": ["Test*", "Other*"]}
+
+        resource = current.s3db.resource("project_project", vars=url_query)
+        rfilter = resource.rfilter
+
+        # Check joins
+        joins = rfilter.get_left_joins()
+        self.assertTrue(isinstance(joins, list))
+        self.assertEqual(joins[0], "org_organisation ON "
+                                   "(project_project.organisation_id = org_organisation.id)")
+
+        # Check query
+        query = rfilter.get_query()
+        self.assertEqual(str(query), "(((project_project.deleted <> 'T') AND "
+                                     "(project_project.id > 0)) AND "
+                                     "((LOWER(org_organisation.name) LIKE 'other%') AND "
+                                     "(LOWER(org_organisation.name) LIKE 'test%')))")
 
     # -------------------------------------------------------------------------
     @unittest.skipIf(not current.deployment_settings.has_module("project"), "project module disabled")

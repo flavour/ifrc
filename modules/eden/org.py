@@ -726,7 +726,7 @@ class S3OrganisationModel(S3Model):
                              *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                     org_sector_id=sector_id,
@@ -1022,7 +1022,7 @@ class S3OrganisationModel(S3Model):
         if vars and \
            vars.branch_id and \
            int(vars.branch_id) == int(vars.organisation_id):
-            error = current.T("Cannot make an Organisation a branch of itself!")
+            error = current.T("Cannot make an Organization a branch of itself!")
             form.errors["branch_id"] = error
             current.response.error = error
 
@@ -1128,7 +1128,7 @@ class S3OrganisationSummaryModel(S3Model):
                                   *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                 )
@@ -1165,7 +1165,7 @@ class S3OrganisationTypeTagModel(S3Model):
                                   *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                 )
@@ -1303,7 +1303,7 @@ class S3SiteModel(S3Model):
                        )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                     org_site_id=site_id
@@ -1744,7 +1744,7 @@ class S3FacilityModel(S3Model):
                   )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                     org_facility_geojson = self.org_facility_geojson
@@ -2065,7 +2065,7 @@ class S3RoomModel(S3Model):
                        )
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                     org_room_id=room_id,
@@ -2196,8 +2196,8 @@ class S3OfficeModel(S3Model):
                                    ),
                              self.org_organisation_id(
                                  #widget=S3OrganisationAutocompleteWidget(default_from_profile=True),
-                                 requires = self.org_organisation_requires(updateable=True,
-                                                                           required=True),
+                                 requires = org_organisation_requires(updateable=True,
+                                                                      required=True),
                                  ),
                              office_type_id(
                                             #readable = False,
@@ -2325,7 +2325,7 @@ class S3OfficeModel(S3Model):
                                           joinby="office_id"))
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                     org_office_type_id=office_type_id,
@@ -2496,7 +2496,7 @@ class S3OfficeSummaryModel(S3Model):
                                   *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                 )
@@ -2530,7 +2530,7 @@ class S3OfficeTypeTagModel(S3Model):
                                   *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Pass variables back to global scope (s3db.*)
+        # Pass names back to global scope (s3.*)
         #
         return Storage(
                 )
@@ -2849,12 +2849,29 @@ def org_rheader(r, tabs=[]):
                     (T("Warehouses"), "warehouse"),
                     (T("Facilities"), "facility"),
                     (T("Staff & Volunteers"), "human_resource"),
+                    (T("Assets"), "asset"),
                     (T("Projects"), "project"),
                     (T("User Roles"), "roles"),
                     #(T("Tasks"), "task"),
                     ]
-            if settings.has_module("asset"):
-                tabs.insert(6,(T("Assets"), "asset"))
+            # If a filter is being applied to the Organisations, amend the tabs accordingly
+            type_filter = current.request.get_vars.get("organisation.organisation_type_id$name", None)
+            if type_filter:
+                if type_filter == "Supplier":
+                    tabs = [(T("Basic Details"), None),
+                            (T("Offices"), "office"),
+                            (T("Warehouses"), "warehouse"),
+                            (T("Contacts"), "human_resource"),
+                            ]
+                elif type_filter == "Bilateral,Government,Intergovernmental,NGO,UN agency":
+                    tabs = [(T("Basic Details"), None),
+                            (T("Branches"), "branch"),
+                            (T("Offices"), "office"),
+                            (T("Warehouses"), "warehouse"),
+                            (T("Contacts"), "human_resource"),
+                            (T("Projects"), "project"),
+                            ]
+
         rheader_tabs = s3_rheader_tabs(r, tabs)
 
         if table.multi_sector_id.readable and record.multi_sector_id:
@@ -3056,7 +3073,7 @@ def org_organisation_controller():
             s3db.configure("project_project", create_next=None)
 
             # If a filter is being applied to the Organisations, change the CRUD Strings accordingly
-            type_filter = request.get_vars["organisation.organisation_type_id$name"]
+            type_filter = request.get_vars.get("organisation.organisation_type_id$name", None)
             if type_filter:
                 ADD_NS = T("Add National Society")
                 ADD_PARTNER = T("Add Partner Organization")

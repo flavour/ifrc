@@ -2063,9 +2063,12 @@ class GIS(object):
                 #    end = datetime.datetime.now()
                 #    duration = end - start
                 #    duration = "{:.2f}".format(duration.total_seconds())
-                #    query = (ftable.id == layer_id)
-                #    layer_name = db(query).select(ftable.name,
-                #                                  limitby=(0, 1)).first().name
+                #    if layer_id:
+                #        query = (ftable.id == layer_id)
+                #        layer_name = db(query).select(ftable.name,
+                #                                      limitby=(0, 1)).first().name
+                #    else:
+                #        layer_name = "Unknown"
                 #    _debug("tooltip lookup of layer %s completed in %s seconds" % \
                 #            (layer_name, duration))
 
@@ -2212,8 +2215,8 @@ class GIS(object):
 
         if resource:
             # We can lookup the representations in bulk rather than 1/record
-            if DEBUG:
-                start = datetime.datetime.now()
+            #if DEBUG:
+            #    start = datetime.datetime.now()
             represents = {}
             values = [r[fieldname] for r in resource if r[fieldname]]
             if not values:
@@ -2254,12 +2257,12 @@ class GIS(object):
                 for value in values:
                     represents[value] = value
 
-            if DEBUG:
-                end = datetime.datetime.now()
-                duration = end - start
-                duration = '{:.2f}'.format(duration.total_seconds())
-                _debug("representation of %s completed in %s seconds" % \
-                        (fieldname, duration))
+            #if DEBUG:
+            #    end = datetime.datetime.now()
+            #    duration = end - start
+            #    duration = '{:.2f}'.format(duration.total_seconds())
+            #    _debug("representation of %s completed in %s seconds" % \
+            #            (fieldname, duration))
             return represents
 
         else:
@@ -7969,14 +7972,16 @@ class S3ImportPOI(S3Method):
 
             title = T("Import from OpenStreetMap")
 
-            res_select = [TR(TD(B(T("Select resources to import:"))),
-                _colspan=3)]
+            res_select = [TR(TD(B("%s: " % T("Select resources to import")),
+                                _colspan=3))]
             for resource in current.deployment_settings.get_gis_poi_resources():
-                id = "res_"+resource
-                res_select.append(TR(
-                    TD(LABEL(resource, _for=id)),
-                    TD(INPUT(_type="checkbox", _name=id, _id = id,
-                        _checked=True)), TD()))
+                id = "res_" + resource
+                res_select.append(TR(TD(LABEL(resource, _for=id)),
+                                     TD(INPUT(_type="checkbox",
+                                              _name=id,
+                                              _id=id,
+                                              _checked=True)),
+                                     TD()))
 
             form = FORM(
                     TABLE(
@@ -8126,7 +8131,7 @@ class S3ImportPOI(S3Method):
 
                 import_res = []
                 for resource in current.deployment_settings.get_gis_poi_resources():
-                    if getattr(form.vars, "res_" + resource):
+                    if getattr(vars, "res_" + resource):
                         import_res.append(resource)
 
                 for tablename in import_res:
