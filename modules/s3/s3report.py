@@ -469,18 +469,22 @@ class S3Report(S3CRUD):
                     TD(widget.widget(resource, vars)),
                     TD(comment))
             tappend(tr)
+            
+        hide = current.deployment_settings.get_ui_hide_report_filter_options()
 
         return FIELDSET(
                     LEGEND(T("Filter Options"),
                         BUTTON(self.SHOW,
                                _type="button",
                                _class="toggle-text",
-                               _style="display:none"),
+                               _style="display:none" if not hide else ""),
                         BUTTON(self.HIDE,
                                _type="button",
-                               _class="toggle-text")
+                               _class="toggle-text",
+                               _style="display:none" if hide else "")
                     ),
-                    TABLE(trows),
+                    TABLE(trows,
+                          _style="display:none" if hide else ""),
                     _id="filter_options"
                 )
 
@@ -536,7 +540,9 @@ class S3Report(S3CRUD):
                             TD(INPUT(_type="checkbox",
                                      _id="report-totals",
                                      _name="totals",
-                                     value=show_totals))))
+                                     value=show_totals)),
+                         _class = "report-show-totals-option")
+                         )
 
         # Render field set
         form_report_options = FIELDSET(
@@ -574,7 +580,8 @@ class S3Report(S3CRUD):
             fields = [f.name for f in resource.readable_fields()]
 
         prefix = lambda v: "%s.%s" % (resource.alias, v) \
-                           if "." not in v.split("$", 1)[0] else v
+                           if "." not in v.split("$", 1)[0] \
+                           else v.replace("~", resource.alias)
 
         attr = Storage(attr)
         if "_name" not in attr:
@@ -591,7 +598,7 @@ class S3Report(S3CRUD):
 
         table = self.table
         rfields, j, l, d = resource.resolve_selectors(fields)
-        opts = [(f.selector, f.label) for f in rfields
+        opts = [(prefix(f.selector), f.label) for f in rfields
                 if f.show and
                    (f.field is None or f.field.name != table._id.name)]
         dummy_field = Storage(name=name, requires=IS_IN_SET(opts))
@@ -624,7 +631,8 @@ class S3Report(S3CRUD):
             methods = [f.name for f in resource.readable_fields()]
 
         prefix = lambda v: "%s.%s" % (resource.alias, v) \
-                           if "." not in v.split("$", 1)[0] else v
+                           if "." not in v.split("$", 1)[0] \
+                           else v.replace("~", resource.alias)
 
         attr = Storage(attr)
         if "_name" not in attr:
