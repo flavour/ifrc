@@ -2,7 +2,7 @@
 
 """ Sahana Eden Organisation Model
 
-    @copyright: 2009-2012 (c) Sahana Software Foundation
+    @copyright: 2009-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -174,7 +174,7 @@ class S3OrganisationModel(S3Model):
                                                          title=SECTOR,
                                                          tooltip=help)
 
-        represent = S3Represent(lookup="org_sector")
+        represent = S3Represent(lookup=tablename)
         sector_id = S3ReusableField("sector_id", "reference org_sector",
                                     sortby="abrv",
                                     requires=IS_NULL_OR(
@@ -646,11 +646,11 @@ class S3OrganisationModel(S3Model):
         # Assets
         # @ToDo
         #add_component("asset_asset",
-                      #org_organisation = "donated_by_id")
+        #              org_organisation = "donated_by_id")
 
         # Requests
         #add_component("req_req",
-                       #org_organisation = "donated_by_id")
+        #              org_organisation = "donated_by_id")
 
         # -----------------------------------------------------------------------------
         # Enable this to allow migration of users between instances
@@ -687,6 +687,7 @@ class S3OrganisationModel(S3Model):
                              organisation_id(ondelete="CASCADE"),
                              organisation_id("branch_id",
                                              label=T("Branch"),
+                                             default=None,
                                              ondelete="CASCADE"),
                              *s3_meta_fields())
 
@@ -1688,21 +1689,20 @@ class S3FacilityModel(S3Model):
             #report_fields.append((T("High Priority Open Requests"), "reqs"))
 
         # Custom Form
-        crud_form = s3forms.S3SQLCustomForm("name",
-                                            "code",
-                                            "facility_type_id",
-                                            "organisation_id",
-                                            "location_id",
-                                            "opening_times",
-                                            "contact",
-                                            "phone1",
-                                            "phone2",
-                                            "email",
-                                            "website",
-                                            "site_details.last_contacted",
-                                            "obsolete",
-                                            "comments",
-                                            )
+        crud_form = S3SQLCustomForm("name",
+                                    "code",
+                                    "facility_type_id",
+                                    "organisation_id",
+                                    "location_id",
+                                    "opening_times",
+                                    "contact",
+                                    "phone1",
+                                    "phone2",
+                                    "email",
+                                    "website",
+                                    "site_details.last_contacted",
+                                    "obsolete",
+                                    "comments")
 
         configure(tablename,
                   super_entity=("org_site", "doc_entity", "pr_pentity"),
@@ -2049,12 +2049,14 @@ class S3RoomModel(S3Model):
                            )
 
         # Reusable field for other tables to reference
-        room_id = S3ReusableField("room_id", table, sortby="name",
+        represent = S3Represent(lookup=tablename)
+        room_id = S3ReusableField("room_id", table,
+                                  sortby="name",
                                   requires=IS_NULL_OR(
-                                                IS_ONE_OF(db, "org_room.id",
-                                                          self.org_room_represent
-                                                          )),
-                                  represent=self.org_room_represent,
+                                            IS_ONE_OF(db, "org_room.id",
+                                                      represent
+                                                      )),
+                                  represent=represent,
                                   label=T("Room"),
                                   comment=room_comment,
                                   ondelete="SET NULL"
@@ -2085,25 +2087,6 @@ class S3RoomModel(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
-
-    # -----------------------------------------------------------------------------
-    @staticmethod
-    def org_room_represent(id, row=None):
-        """ FK representation """
-
-        if row:
-            return row.name
-        elif not id:
-            return current.messages["NONE"]
-
-        db = current.db
-        table = db.org_room
-        r = db(table.id == id).select(table.name,
-                                      limitby=(0, 1)).first()
-        try:
-            return r.name
-        except:
-            return current.messages.UNKNOWN_OPT
 
 # =============================================================================
 class S3OfficeModel(S3Model):
@@ -2151,14 +2134,15 @@ class S3OfficeModel(S3Model):
             msg_record_deleted=T("Office Type deleted"),
             msg_list_empty=T("No Office Types currently registered"))
 
+        represent = S3Represent(lookup=tablename)
         office_type_id = S3ReusableField("office_type_id", table,
                                 sortby="name",
                                 requires=IS_NULL_OR(
                                             IS_ONE_OF(db, "org_office_type.id",
-                                                      self.org_office_type_represent,
+                                                      represent,
                                                       sort=True
                                                       )),
-                                represent=self.org_office_type_represent,
+                                represent=represent,
                                 label=T("Office Type"),
                                 comment=S3AddResourceLink(c="org",
                                             f="office_type",
@@ -2345,44 +2329,6 @@ class S3OfficeModel(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_office_type_represent(id, row=None):
-        """ FK representation """
-
-        if row:
-            return row.name
-        elif not id:
-            return current.messages["NONE"]
-
-        db = current.db
-        table = db.org_office_type
-        r = db(table.id == id).select(table.name,
-                                      limitby=(0, 1)).first()
-        try:
-            return current.T(r.name)
-        except:
-            return current.messages.UNKNOWN_OPT
-
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def org_office_represent(id, row=None):
-        """ FK representation """
-
-        if row:
-            return row.name
-        elif not id:
-            return current.messages["NONE"]
-
-        db = current.db
-        table = db.org_office
-        r = db(table.id == id).select(table.name,
-                                      limitby=(0, 1)).first()
-        try:
-            return r.name
-        except:
-            return current.messages.UNKNOWN_OPT
 
     # ---------------------------------------------------------------------
     @staticmethod

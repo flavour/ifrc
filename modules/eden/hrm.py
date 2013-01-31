@@ -2,7 +2,7 @@
 
 """ Sahana Eden Human Resources Management
 
-    @copyright: 2011-2012 (c) Sahana Software Foundation
+    @copyright: 2011-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -518,7 +518,7 @@ class S3HRModel(S3Model):
                       "status",
                       ]
         # Custom Form
-        crud_form = s3forms.S3SQLCustomForm(*fields)
+        crud_form = S3SQLCustomForm(*fields)
 
         if settings.get_hrm_org_required():
             mark_required = ["organisation_id"]
@@ -2155,8 +2155,13 @@ class S3HRSkillModel(S3Model):
                                                                    tooltip=T("Add a new certificate to the catalog.")),
                                          ondelete = "RESTRICT")
 
+        if settings.get_hrm_use_skills():
+            create_next = URL(f="certificate",
+                              args=["[id]", "certificate_skill"])
+        else:
+            create_next = None
         configure("hrm_certificate",
-                  create_next=URL(f="certificate", args=["[id]", "certificate_skill"]),
+                  create_next=create_next,
                   deduplicate=self.hrm_certificate_duplicate)
 
         # Components
@@ -4399,8 +4404,9 @@ def hrm_rheader(r, tabs=[],
 
     elif resourcename == "certificate":
         # Tabs
-        tabs = [(T("Certificate Details"), None),
-                (T("Skill Equivalence"), "certificate_skill")]
+        tabs = [(T("Certificate Details"), None)]
+        if current.deployment_settings.get_hrm_use_skills():
+            tabs.append((T("Skill Equivalence"), "certificate_skill"))
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(TABLE(
                             TR(TH("%s: " % table.name.label),
