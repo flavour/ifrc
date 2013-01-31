@@ -517,9 +517,9 @@ class S3Represent(object):
         # Default representations
         messages = current.messages
         if self.default is None:
-            self.default = messages.UNKNOWN_OPT
+            self.default = s3_unicode(messages.UNKNOWN_OPT)
         if self.none is None:
-            self.none = messages["NONE"]
+            self.none = s3_unicode(messages["NONE"])
 
         # Initialize theset
         if self.options is not None:
@@ -711,6 +711,8 @@ class S3RepresentLazy(object):
 
         # Render value
         text = self.represent()
+        if hasattr(text, "xml"):
+ 	        text = s3_unicode(text)
 
         # Strip markup + XML-escape
         if text and "<" in text:
@@ -723,11 +725,11 @@ class S3RepresentLazy(object):
 
         # Add to node
         if text is not None:
- 	         if element is not None:
- 	             element.text = text
- 	         else:
- 	             attributes[name] = text
- 	         return
+ 	        if element is not None:
+ 	            element.text = text
+ 	        else:
+ 	            attributes[name] = text
+ 	        return
 
 # =============================================================================
 # Record identity meta-fields
