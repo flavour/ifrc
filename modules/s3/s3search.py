@@ -1496,6 +1496,10 @@ i18n.edit_saved_search="%s"
         format_url = r.url(method="", vars=search_url_vars)
         for f in ("pdf", "xls", "rss", "xml"):
             formats[f] = format_url
+        for f in table.fields:
+            if f in ["location_id", "site_id"]:
+                formats["kml"] = format_url
+                break
 
         # List fields
         if not list_fields:
