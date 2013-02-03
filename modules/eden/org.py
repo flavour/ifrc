@@ -206,6 +206,12 @@ class S3OrganisationModel(S3Model):
                                     ondelete="SET NULL")
 
         # Components
+        add_component("project_project",
+                      org_sector=Storage(
+                                link="project_sector_project",
+                                joinby="sector_id",
+                                key="project_id",
+                                actuate="hide"))
         #add_component("project_activity_type",
         #              org_sector=Storage(
         #                        link="project_activity_type_sector",
@@ -1608,11 +1614,12 @@ class S3FacilityModel(S3Model):
         # Search method
         def facility_type_opts():
             table = self.org_facility_type
-            rows = db(table.deleted == False).select(table.name)
+            rows = db(table.deleted == False).select(table.id, table.name)
             opts = {}
             for row in rows:
                 name = row.name
-                opts[name] = name
+                id = row.id
+                opts[id] = name
             return opts
 
         org_facility_search = [
@@ -1717,8 +1724,8 @@ class S3FacilityModel(S3Model):
                     cols=report_fields,
                     #facts=report_fields,
                     #methods=["count", "list", "sum"],
-                    fact = [("id", "count", T("Number of facilities")),
-                            ("name", "list", T("List of facilities"))],
+                    fact = [("id", "count", T("Number of Facilities")),
+                            ("name", "list", T("List of Facilities"))],
                     defaults=Storage(rows="location_id$L4",
                                      cols="facility_type_id",
                                      fact="name",
@@ -2267,11 +2274,31 @@ class S3OfficeModel(S3Model):
                       ),
             ))
 
+        # Experimental: filter form
+        office_filter = [
+            S3TextFilter("name"),
+            S3OptionsFilter("organisation_id", cols=3)
+        ]
+
         configure(tablename,
                   super_entity=("pr_pentity", "org_site"),
                   onaccept=self.org_office_onaccept,
                   deduplicate=self.org_office_duplicate,
                   search_method=office_search,
+                  ## Experimental: filter form (used by S3CRUD.list_div)
+                  #filter_widgets=[
+                  #      S3TextFilter(["name", "email", "comments"],
+                  #                   label=T("Search"),
+                  #                   comment=T("Search for office by text.")),
+                  #      S3OptionsFilter("organisation_id",
+                  #                      label=messages.ORGANISATION,
+                  #                      comment=T("Search for office by organization."),
+                  #                      represent="%(name)s",
+                  #                      cols=3),
+                  #      S3OptionsFilter("location_id$L1",
+                  #                      location_level="L1",
+                  #                      cols=3)
+                  #],
                   list_fields=["id",
                                "name",
                                "organisation_id", # Filtered in Component views

@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2012 (c) Sahana Software Foundation
+    @copyright: 2009-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -345,10 +345,12 @@ $('#%s').click(function(){
             click_end = "}})"
             if click_to_show:
                 # Hide by default
-                script = "%s\n%s\n%s\n%s\n%s\n%s" % (hide, click_start, show, middle, hide, click_end)
+                script = '''%s\n%s\n%s\n%s\n%s\n%s''' % \
+                    (hide, click_start, show, middle, hide, click_end)
             else:
                 # Show by default
-                script = "%s\n%s\n%s\n%s\n%s\n%s" % (show, click_start, hide, middle, show, click_end)
+                script = '''%s\n%s\n%s\n%s\n%s\n%s''' % \
+                    (show, click_start, hide, middle, show, click_end)
             response.s3.jquery_ready.append(script)
 
         return TAG[""](
@@ -395,18 +397,14 @@ class S3ColorPickerWidget(FormWidget):
         if style not in s3.stylesheets:
             s3.stylesheets.append(style)
 
-        s3.jquery_ready.append("""
-        var sp_options = %s;
-        sp_options.change = function (color) {
-            this.value = color.toHex();
-        };
-        $('.color').spectrum(sp_options);
-        """ % json.dumps(self.options) if self.options else "")
+        s3.jquery_ready.append('''
+var sp_options=%s
+sp_options.change=function(color){this.value=color.toHex()}
+$('.color').spectrum(sp_options)''' % json.dumps(self.options) if self.options else "")
 
-        attr = self._attributes(field, {
-            "_class": "color",
-            "_value": value
-        }, **attributes)
+        attr = self._attributes(field, {"_class": "color",
+                                        "_value": value
+                                        }, **attributes)
 
         return INPUT(**attr)
 
@@ -2674,10 +2672,9 @@ $('#%s').addClass('multiselect')
 $('#%s').multiselect({
  dividerLocation:0.5,
  sortable:false
-})
-''' % (selector,
-       selector,
-       selector))
+})''' % (selector,
+         selector,
+         selector))
 
         return TAG[""](MultipleOptionsWidget.widget(field, value, **attributes),
                        requires = field.requires
@@ -3897,7 +3894,6 @@ def s3_grouped_checkboxes_widget(field,
 
     return widget
 
-
 # =============================================================================
 def s3_checkboxes_widget(field,
                          value,
@@ -3923,7 +3919,8 @@ def s3_checkboxes_widget(field,
     values = not isinstance(value, (list, tuple)) and [value] or value
     values = [str(v) for v in values]
 
-    attributes["_name"] = "%s_widget" % field.name
+    field_name = field.name
+    attributes["_name"] = "%s_widget" % field_name
     if "_class" not in attributes:
         attributes["_class"] = "s3-checkboxes-widget"
 
@@ -3969,6 +3966,7 @@ def s3_checkboxes_widget(field,
     
     input_index = start_at_id
     rows = []
+    rappend = rows.append
     count = len(options)
     mods = count % cols
     num_of_rows = count / cols
@@ -3977,9 +3975,10 @@ def s3_checkboxes_widget(field,
 
     for r in range(num_of_rows):
         cells = []
+        cappend = cells.append
 
         for k, v in options[r * cols:(r + 1) * cols]:
-            input_id = "id-%s-%s" % (field.name, str(input_index))
+            input_id = "id-%s-%s" % (field_name, input_index)
 
             title = help_text.get(str(k), None)
             if title:
@@ -3987,19 +3986,19 @@ def s3_checkboxes_widget(field,
             else:
                 label_attr = {}
 
-            cells.append(TD(INPUT(_type="checkbox",
-                                  _name=field.name,
-                                  _id=input_id,
-                                  hideerror=True,
-                                  _value=s3_unicode(k).encode("utf-8"),
-                                  value=(k in values)),
-                            LABEL(v,
-                                  _for=input_id,
-                                  **label_attr)))
+            cappend(TD(INPUT(_type="checkbox",
+                             _name=field_name,
+                             _id=input_id,
+                             hideerror=True,
+                             _value=s3_unicode(k).encode("utf-8"),
+                             value=(k in values)),
+                       LABEL(v,
+                             _for=input_id,
+                             **label_attr)))
 
             input_index += 1
 
-        rows.append(TR(cells))
+        rappend(TR(cells))
 
     if rows:
         rows[-1][0][0]["hideerror"] = False

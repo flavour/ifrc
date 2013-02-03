@@ -2,7 +2,7 @@
 
 """ S3 Reporting Framework
 
-    @copyright: 2011-2012 (c) Sahana Software Foundation
+    @copyright: 2011-2013 (c) Sahana Software Foundation
     @license: MIT
 
     @requires: U{B{I{Python 2.6}} <http://www.python.org>}
@@ -284,7 +284,7 @@ class S3Report(S3CRUD):
                 else:
                     e = str(e)
                 msg = "%s: %s" % (msg, e)
-                r.error(400, msg, next=r.url(vars=[]))
+                r.error(400, msg, next=r.url(vars={"clear":1}))
             except:
                 raise
                 msg = T("Could not generate report")
@@ -295,7 +295,7 @@ class S3Report(S3CRUD):
                 else:
                     e = str(e)
                 msg = "%s: %s" % (msg, e)
-                r.error(400, msg, next=r.url(vars=[]))
+                r.error(400, msg, next=r.url(vars={"clear":1}))
 
             # Convert the pivot table into a S3ContingencyTable
             if representation in ("html", "iframe"):
@@ -477,14 +477,14 @@ class S3Report(S3CRUD):
                         BUTTON(self.SHOW,
                                _type="button",
                                _class="toggle-text",
-                               _style="display:none" if not hide else ""),
+                               _style="display:none" if not hide else None),
                         BUTTON(self.HIDE,
                                _type="button",
                                _class="toggle-text",
-                               _style="display:none" if hide else "")
+                               _style="display:none" if hide else None)
                     ),
                     TABLE(trows,
-                          _style="display:none" if hide else ""),
+                          _style="display:none" if hide else None),
                     _id="filter_options"
                 )
 
@@ -550,11 +550,11 @@ class S3Report(S3CRUD):
                     BUTTON(self.SHOW,
                            _type="button",
                            _class="toggle-text",
-                           _style="display:none" if not hidden else ""),
+                           _style="display:none" if not hidden else None),
                     BUTTON(self.HIDE,
                            _type="button",
                            _class="toggle-text",
-                           _style="display:none" if hidden else "")
+                           _style="display:none" if hidden else None)
                 ),
                 selectors, _id="report_options")
 
@@ -929,6 +929,8 @@ class S3ContingencyTable(TABLE):
         cells = report.cell
         rvals = report.row
 
+        cell_vals = Storage()
+
         for i in xrange(numrows):
 
             # Initialize row
@@ -999,9 +1001,23 @@ class S3ContingencyTable(TABLE):
                                             layer_ids.append(int(fk))
                                             layer_values[fk] = s3_unicode(field.represent(fk))
                                 else:
-                                    if id is not None and id not in layer_ids:
-                                        layer_ids.append(int(id))
-                                        layer_values[id] = s3_unicode(represent(f, fvalue))
+                                    if type(fvalue) is not list:
+                                        fvalue = [fvalue]
+                                    for val in fvalue:
+                                        if val is not None:
+                                            if val not in cell_vals:
+                                                next_id = len(cell_vals)
+                                                cell_vals[val] = next_id
+                                                layer_ids.append(next_id)
+                                                layer_values[next_id] = s3_unicode(represent(f, val))
+                                            else:
+                                                prev_id = cell_vals[val]
+                                                if prev_id not in layer_ids:
+                                                    layer_ids.append(prev_id)
+
+                                    #if id is not None and id not in layer_ids:
+                                        #layer_ids.append(int(id))
+                                        #layer_values[id] = s3_unicode(represent(f, fvalue))
 
                     cell_ids.append(layer_ids)
                     cell_lookup_table[layer_idx] = layer_values
@@ -1010,11 +1026,11 @@ class S3ContingencyTable(TABLE):
                 #        + render layer selector in the layer title corner to
                 #        + switch between layers
                 #        OR: give every layer a title row (probably better method)
-                vals = DIV([DIV(v) for v in vals])
+                vals = [DIV(v, _class="report-cell-value") for v in vals]
 
                 if any(cell_ids):
                     cell_attr = {"_data-records": cell_ids}
-                    vals = (A(_class="report-cell-zoom"), vals)
+                    vals.append(DIV(_class="report-cell-zoom"))
                 else:
                     cell_attr = {}
 

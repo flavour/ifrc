@@ -4,7 +4,7 @@
 
     @author: Dominic König <dominic[at]aidiq.com>
 
-    @copyright: 2009-2012 (c) Sahana Software Foundation
+    @copyright: 2009-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -131,6 +131,7 @@ class S3DVIModel(S3Model):
 
         # Resource configuration
         configure(tablename,
+                  orderby=~table.date,
                   list_fields = ["id",
                                  "date",
                                  "marker",

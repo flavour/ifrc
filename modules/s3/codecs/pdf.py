@@ -3,7 +3,7 @@
 """
     S3 Adobe PDF codec
 
-    @copyright: 2011 (c) Sahana Software Foundation
+    @copyright: 2011-13 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -297,7 +297,7 @@ class S3RL_PDF(S3Codec):
             use the list of readable fields.
         """
 
-        from s3.s3utils import S3DataTable
+        from s3.s3data import S3DataTable
 
         list_fields = self.list_fields
         if list_fields:

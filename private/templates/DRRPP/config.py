@@ -53,13 +53,14 @@ settings.L10n.thousands_separator = ","
 
 # Finance settings
 settings.fin.currencies = {
-    "AUD" : T("Australian Dollars"),
-    "CAD" : T("Canadian Dollars"),
-    "EUR" : T("Euros"),
-    "GBP" : T("Great British Pounds"),
-    "PHP" : T("Philippine Pesos"),
-    "CHF" : T("Swiss Francs"),
+    #"AUD" : T("Australian Dollars"),
+    #"CAD" : T("Canadian Dollars"),
+    #"EUR" : T("Euros"),
+    #"GBP" : T("Great British Pounds"),
+    #"PHP" : T("Philippine Pesos"),
+    #"CHF" : T("Swiss Francs"),
     "USD" : T("United States Dollars"),
+    "NZD" : T("New Zealand Dollars"),
 }
 
 # Security Policy
@@ -151,14 +152,16 @@ settings.ui.formstyle = formstyle_row
 def customize_project_project(**attr):
     s3db = current.s3db
     s3 = current.response.s3
-    
-    s3.crud_strings.project_project.title_search = T("Project List")
-    table = s3db.project_project
-    table.budget.label = T("Total Funding")
 
-    # For Inline Forms
+    tablename = "project_project"
+    s3.crud_strings.project_project.title_search = T("Project List")
+
+    s3db.project_project.budget.label = T("Total Funding")
+    
     location_id = s3db.project_location.location_id
+    # Limit to just Countries
     location_id.requires = s3db.gis_country_requires
+    # Use dropdown, not AC
     location_id.widget = None
 
     # In DRRPP this is a free field
@@ -171,21 +174,55 @@ def customize_project_project(**attr):
     table = s3db.doc_document
     table.file.widget = lambda field, value, download_url: \
         SQLFORM.widgets.upload.widget(field, value, download_url, _size = 15)
-    #table.file.widget = SQLFORM.widgets.upload.widget
     table.comments.widget = SQLFORM.widgets.string.widget
-    
+
     s3["dataTable_sDom"] = 'ripl<"dataTable_table"t>p'
-    
+
+    # Don't show export buttons for XLS/XML    
     s3.formats = Storage(xls= None, xml = None)
+    
+    table.name.label = T("Project Title")
     
     attr["rheader"] = None
     
-    return attr
+    standard_prep = s3.prep
+    
+    # custom Post-process
+    def drrpp_prep(r):
+        # Call standard prep
+        if callable(standard_prep):
+            output = standard_prep(r)
+        else:
+            output = True
+        if r.interactive:
+            # Is Cook Islands in the Locations?
+            pltable = s3db.project_location
+            ltable = s3db.gis_location
+            query = (pltable.project_id == r.id) & \
+                    (pltable.location_id == ltable.id) & \
+                    (ltable.name =="Cook Islands")
+            if current.db(query).select(pltable.id,
+                                        limitby=(0, 1)).first() is None:
+                drrpptable = s3db.project_drrpp
+                drrpptable.pifacc.readable = False
+                drrpptable.pifacc.writable = False
+                drrpptable.jnap.readable = False
+                drrpptable.jnap.writable = False
+                drrpptable.L1.readable = False
+                drrpptable.L1.writable = False
+            else:
+                # If no Cook Islands are checked, then check them all
+                script = '''
+if($('[name=sub_drrpp_L1]').is(':checked')==false){
+ $('[name=sub_drrpp_L1]').attr('checked','checked')}'''
+                s3.jquery_ready.append(script)
+        return output
+    
+    s3.prep = drrpp_prep
 
-settings.ui.customize_project_project = customize_project_project
-
-from s3 import s3forms
-settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
+    from s3 import s3forms
+    
+    crud_form = s3forms.S3SQLCustomForm(
         "name",
         "code",
         "status_id",
@@ -194,43 +231,60 @@ settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
         "drrpp.duration",
         s3forms.S3SQLInlineComponent(
             "location",
-            label=T("Countries"),
-            fields=["location_id"],
+            label = T("Countries"),
+            fields = ["location_id"],
         ),
-        "multi_hazard_id",
-        "multi_theme_id",
+        "drrpp.L1",
+        s3forms.S3SQLInlineComponentCheckbox(
+            "hazard",
+            label = T("Hazards"),
+            field = "hazard_id",
+            cols = 4,
+        ),
+        #s3forms.S3SQLInlineComponentCheckbox(
+        #    "sector",
+        #    label = T("Sectors"),
+        #    field = "sector_id",
+        #    cols = 4,
+        #),
+        s3forms.S3SQLInlineComponentCheckbox(
+            "theme",
+            label = T("Themes"),
+            field = "theme_id",
+            cols = 3,
+        ),
         "objectives",
         "drrpp.activities",
         # Outputs
         s3forms.S3SQLInlineComponent(
             "output",
-            label=T("Outputs"),
+            label = T("Outputs"),
             #comment = "Bob",
-            fields=["output", "status"],
+            fields = ["output", "status"],
         ),
-        "hfa",
+        "drr.hfa",
         "drrpp.rfa",
+        "drrpp.pifacc",
+        "drrpp.jnap",
         "organisation_id",
-        # Partner Org
+        # Partner Orgs
         s3forms.S3SQLInlineComponent(
             "organisation",
             name = "partner",
-            label=T("Partner Organizations"),
-            fields=["organisation_id",
-                    # Explicit label as otherwise label from filter comes in!
-                    #(T("Comments"), "comments"),
-                    "comments",
-                    ],
+            label = T("Partner Organizations"),
+            fields = ["organisation_id",
+                      "comments", # NB This is labelled 'Role' in DRRPP
+                      ],
             filterby = dict(field = "role",
                             options = "2"
                             )
         ),
-        # Donor
+        # Donors
         s3forms.S3SQLInlineComponent(
             "organisation",
             name = "donor",
-            label=T("Donor(s)"),
-            fields=["organisation_id", "amount", "currency"],
+            label = T("Donor(s)"),
+            fields = ["organisation_id", "amount", "currency"],
             filterby = dict(field = "role",
                             options = "3"
                             )
@@ -240,12 +294,12 @@ settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
         "drrpp.focal_person",
         "drrpp.organisation_id",
         "drrpp.email",
-        # Files - Inline Forms don't support Files
+        # Files
         s3forms.S3SQLInlineComponent(
             "document",
             name = "file",
-            label=T("Files"),
-            fields=["file", "comments"],
+            label = T("Files"),
+            fields = ["file", "comments"],
             filterby = dict(field = "file",
                             options = "",
                             invert = True,
@@ -255,8 +309,8 @@ settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
         s3forms.S3SQLInlineComponent(
             "document",
             name = "url",
-            label=T("Links"),
-            fields=["url", "comments"],
+            label = T("Links"),
+            fields = ["url", "comments"],
             filterby = dict(field = "url",
                             options = None,
                             invert = True,
@@ -264,8 +318,15 @@ settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
         ),
         "drrpp.parent_project",
         "comments",
-        
     )
+
+             
+    s3db.configure(tablename,
+                   crud_form = crud_form)
+    
+    return attr
+
+settings.ui.customize_project_project = customize_project_project
 
 # Comment/uncomment modules here to disable/enable them
 settings.modules = OrderedDict([

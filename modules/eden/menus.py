@@ -2,7 +2,7 @@
 
 """ Sahana Eden Menu Structure and Layout
 
-    @copyright: 2011-2012 (c) Sahana Software Foundation
+    @copyright: 2011-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1156,7 +1156,8 @@ class S3OptionsMenu(object):
                         #M("Search Requested Items", f="req_item", m="search"),
                     ),
                     M("Commitments", c="req", f="commit", check=use_commit)(
-                        M("List All")
+                        M("List All"),
+                        M("Search", m="search"),
                     ),
                 )
 
@@ -1522,7 +1523,8 @@ class S3OptionsMenu(object):
                         M("Search", m="search"),
                      ),
                      M("Communities", f="location")(
-                        M("New", m="create"),
+                        # Better created from tab (otherwise Activity Type filter won't work)
+                        #M("New", m="create"),
                         M("List All"),
                         M("Map", m="map"),
                         M("Search", m="search"),
@@ -1664,7 +1666,8 @@ class S3OptionsMenu(object):
                           m="search", check=req_skills),
                     ),
                     M("Commitments", f="commit", check=use_commit)(
-                        M("List All")
+                        M("List All"),
+                        M("Search", m="search"),
                     ),
                     M("Items", c="supply", f="item")(
                         M("New", m="create"),

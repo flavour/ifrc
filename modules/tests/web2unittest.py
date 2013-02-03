@@ -127,6 +127,12 @@ class SeleniumUnitTest(Web2UnitTest):
             this can be modified by the callback function
         """
 
+        # Commit to start a new transaction: if MySQL gets straight the
+        # same query straight within the same transaction, it wouldn't
+        # even look at the table, but just return the cached response, so
+        # the actual test condition (e.g. in create) gets optimized away...
+        current.db.commit()
+
         query = (table.deleted != True)
         for details in data:
             query = query & (table[details[0]] == details[1])
@@ -203,7 +209,12 @@ class SeleniumUnitTest(Web2UnitTest):
 
         browser = self.browser
 
-        browser.find_element_by_xpath("//a[text()='Clear']").click()
+        clear_button = browser.find_elements_by_xpath("//a[text()='Clear']")
+        if clear_button[0].is_displayed() :
+           clear_button[0].click()
+        else:
+           clear_button[1].click()
+
 
         try:
             if form_type == self.search.advanced_form:
@@ -502,9 +513,11 @@ class SeleniumUnitTest(Web2UnitTest):
             self.fill_fields(fields)
 
         # Open the report options fieldset:
-        report_options = browser.find_element_by_css_selector("#report_options button")
-        if report_options.is_displayed():
-            report_options.click()
+        report_options = browser.find_elements_by_css_selector("#report_options button")
+        if report_options[0].is_displayed():
+            report_options[0].click()
+        else:
+            report_options[1].click()
 
         # Select the item to make a report of:
         rows_select = browser.find_element_by_id("report-rows")

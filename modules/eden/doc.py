@@ -2,7 +2,7 @@
 
 """ Sahana Eden Document Library
 
-    @copyright: 2011-2012 (c) Sahana Software Foundation
+    @copyright: 2011-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -76,6 +76,7 @@ class S3DocumentLibrary(S3Model):
                                irs_ireport=T("Incident Report"),
                                project_project=T("Project"),
                                project_activity=T("Project Activity"),
+                               project_framework=T("Project Framework"),
                                project_task=T("Task"),
                                hms_hospital=T("Hospital"),
                                org_office=T("Office"),

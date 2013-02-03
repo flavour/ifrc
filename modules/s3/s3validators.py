@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: (c) 2010-2012 Sahana Software Foundation
+    @copyright: (c) 2010-2013 Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -804,7 +804,7 @@ class IS_ONE_OF_EMPTY(Validator):
                         return (value, self.error_message)
                     return (values, None)
             elif self.theset:
-                if value in self.theset:
+                if str(value) in self.theset:
                     if self._and:
                         return self._and(value)
                     else:

@@ -32,6 +32,9 @@
         <xsl:for-each select="//resource[@name='drrpp_framework']">
             <xsl:apply-templates select="."/>
         </xsl:for-each>
+        <xsl:for-each select="//resource[@name='drrpp_framework_organisation']">
+            <xsl:apply-templates select="."/>
+        </xsl:for-each>
         <xsl:for-each select="//resource[@name='drrpp_group']">
             <xsl:apply-templates select="."/>
         </xsl:for-each>
@@ -54,6 +57,9 @@
             <xsl:apply-templates select="."/>
         </xsl:for-each>
         <xsl:for-each select="//resource[@name='auth_user']">
+            <xsl:apply-templates select="."/>
+        </xsl:for-each>
+        <xsl:for-each select="//resource[@name='drrpp_org_contact_user']">
             <xsl:apply-templates select="."/>
         </xsl:for-each>
         <resource name="org_organisation_type">
@@ -111,10 +117,8 @@
                 <xsl:value-of select="@modified_by"/>
             </xsl:attribute>
 
-            <xsl:if test="data[@field='approved']='True'">
-                <xsl:attribute name="approved_by">
-                    <xsl:value-of select="@modified_by"/>
-                </xsl:attribute>
+            <xsl:if test="data[@field='approved']='False'">
+                <xsl:attribute name="approved">false</xsl:attribute>
             </xsl:if>
 
             <data field="name"><xsl:value-of select="data[@field='name']"/></data>
@@ -135,9 +139,11 @@
                 </reference>
             </xsl:if>
 
-            <data field="hfa">
-                [<xsl:value-of select="translate(substring($HFA, 2, string-length($HFA) - 2), '|', ',')"/>]
-            </data>
+            <resource name="project_drr">
+                <data field="hfa">
+                    [<xsl:value-of select="translate(substring($HFA, 2, string-length($HFA) - 2), '|', ',')"/>]
+                </data>
+            </resource>
 
             <resource name="project_drrpp">
                 <xsl:if test="data[@field='parent_project']!='None'">
@@ -198,35 +204,20 @@
             </xsl:call-template>
 
             <!-- Project Hazards -->
-            <xsl:if test="$Hazards!=''">
-                <reference field="multi_hazard_id" resource="project_hazard">
-                    <xsl:attribute name="tuid">
-                        <xsl:variable name="HazardList">
-                            <xsl:call-template name="quoteList">
-                                <xsl:with-param name="prefix"><xsl:value-of select="'Hazard:'"/></xsl:with-param>
-                                <xsl:with-param name="list"><xsl:value-of select="$Hazards"/></xsl:with-param>
-                            </xsl:call-template>
-                        </xsl:variable>
-                        <xsl:value-of select="concat('[', $HazardList, ']')"/>
-                    </xsl:attribute>
-                </reference>
-            </xsl:if>
+            <xsl:call-template name="splitList">
+                <xsl:with-param name="list">
+                    <xsl:value-of select="$Hazards"/>
+                </xsl:with-param>
+                <xsl:with-param name="arg">hazard_ref</xsl:with-param>
+            </xsl:call-template>
 
             <!-- Project Themes -->
-            <xsl:if test="$Themes!=''">
-                <!-- Embedded within record -->
-                <reference field="multi_theme_id" resource="project_theme">
-                    <xsl:attribute name="tuid">
-                        <xsl:variable name="ThemeList">
-                            <xsl:call-template name="quoteList">
-                                <xsl:with-param name="prefix"><xsl:value-of select="'Theme:'"/></xsl:with-param>
-                                <xsl:with-param name="list"><xsl:value-of select="$Themes"/></xsl:with-param>
-                            </xsl:call-template>
-                        </xsl:variable>
-                        <xsl:value-of select="concat('[', $ThemeList, ']')"/>
-                    </xsl:attribute>
-                </reference>
-            </xsl:if>
+            <xsl:call-template name="splitList">
+                <xsl:with-param name="list">
+                    <xsl:value-of select="$Themes"/>
+                </xsl:with-param>
+                <xsl:with-param name="arg">theme_ref</xsl:with-param>
+            </xsl:call-template>
 
             <!-- Countries -->
             <xsl:choose>
@@ -259,13 +250,17 @@
         </resource>
 
         <xsl:call-template name="splitList">
-            <xsl:with-param name="list"><xsl:value-of select="$Hazards"/></xsl:with-param>
-            <xsl:with-param name="arg">hazard</xsl:with-param>
+            <xsl:with-param name="list">
+                <xsl:value-of select="$Hazards"/>
+            </xsl:with-param>
+            <xsl:with-param name="arg">hazard_res</xsl:with-param>
         </xsl:call-template>
 
         <xsl:call-template name="splitList">
-            <xsl:with-param name="list"><xsl:value-of select="$Themes"/></xsl:with-param>
-            <xsl:with-param name="arg">theme</xsl:with-param>
+            <xsl:with-param name="list">
+                <xsl:value-of select="$Themes"/>
+            </xsl:with-param>
+            <xsl:with-param name="arg">theme_res</xsl:with-param>
         </xsl:call-template>
 
         <xsl:if test="$Status">
@@ -371,7 +366,7 @@
             </data>
             <reference field="doc_id" resource="project_project">
                 <xsl:attribute name="tuid">
-                    <xsl:value-of select="reference[field='project_id']/@uuid"/>
+                    <xsl:value-of select="reference[@field='project_id']/@uuid"/>
                 </xsl:attribute>
                 <data field="file">
                     <xsl:attribute name="filename">
@@ -408,17 +403,17 @@
             </data>
             <reference field="doc_id" resource="project_framework">
                 <xsl:attribute name="tuid">
-                    <xsl:value-of select="reference[field='framework_id']/@uuid"/>
+                    <xsl:value-of select="reference[@field='framework_id']/@uuid"/>
                 </xsl:attribute>
-                <data field="file">
-                    <xsl:attribute name="filename">
-                        <xsl:value-of select="concat('doc_document', $Filename)"/>
-                    </xsl:attribute>
-                    <xsl:attribute name="url">
-                        <xsl:text>local</xsl:text>
-                    </xsl:attribute>
-                </data>
             </reference>
+            <data field="file">
+                <xsl:attribute name="filename">
+                    <xsl:value-of select="concat('doc_document', $Filename)"/>
+                </xsl:attribute>
+                <xsl:attribute name="url">
+                    <xsl:text>local</xsl:text>
+                </xsl:attribute>
+            </data>
         </resource>
 
     </xsl:template>
@@ -437,17 +432,19 @@
             <xsl:attribute name="modified_on">
                 <xsl:value-of select="@modified_on"/>
             </xsl:attribute>
-            <xsl:attribute name="created_by">
-                <xsl:value-of select="@created_by"/>
-            </xsl:attribute>
-            <xsl:attribute name="modified_by">
-                <xsl:value-of select="@modified_by"/>
-            </xsl:attribute>
-
-            <xsl:if test="data[@field='approved']='True'">
-                <xsl:attribute name="approved_by">
+            <xsl:if test="@created_by!=''">
+                <xsl:attribute name="created_by">
+                    <xsl:value-of select="@created_by"/>
+                </xsl:attribute>
+            </xsl:if>
+            <xsl:if test="@modified_by!=''">
+                <xsl:attribute name="modified_by">
                     <xsl:value-of select="@modified_by"/>
                 </xsl:attribute>
+            </xsl:if>
+
+            <xsl:if test="data[@field='approved']='False'">
+                <xsl:attribute name="approved">false</xsl:attribute>
             </xsl:if>
 
             <data field="name"><xsl:value-of select="data[@field='name']"/></data>
@@ -459,6 +456,43 @@
                 <xsl:with-param name="arg">file</xsl:with-param>
             </xsl:call-template>
 
+        </resource>
+
+    </xsl:template>
+
+    <!-- ****************************************************************** -->
+    <xsl:template match="resource[@name='drrpp_framework_organisation']">
+
+        <resource name="project_framework_organisation">
+
+            <!--<xsl:attribute name="tuid">
+                <xsl:value-of select="@uuid"/>
+            </xsl:attribute>-->
+            <xsl:attribute name="created_on">
+                <xsl:value-of select="@created_on"/>
+            </xsl:attribute>
+            <xsl:attribute name="modified_on">
+                <xsl:value-of select="@modified_on"/>
+            </xsl:attribute>
+            <!-- Not in source XML
+            <xsl:attribute name="created_by">
+                <xsl:value-of select="@created_by"/>
+            </xsl:attribute>
+            <xsl:attribute name="modified_by">
+                <xsl:value-of select="@modified_by"/>
+            </xsl:attribute>-->
+
+            <reference field="framework_id" resource="project_framework">
+                <xsl:attribute name="tuid">
+                    <xsl:value-of select="reference[@field='framework_id']/@uuid"/>
+                </xsl:attribute>
+            </reference>
+            <reference field="organisation_id" resource="org_organisation">
+                <xsl:attribute name="tuid">
+                    <!--<xsl:value-of select="reference[@field='organisation_id']/@uuid"/>-->
+                    <xsl:value-of select="reference[@field='organisation_id']"/>
+                </xsl:attribute>
+            </reference>
         </resource>
 
     </xsl:template>
@@ -511,7 +545,7 @@
         <resource name="doc_document">
             <reference field="doc_id" resource="project_project">
                 <xsl:attribute name="tuid">
-                    <xsl:value-of select="reference[field='project_id']/@uuid"/>
+                    <xsl:value-of select="reference[@field='project_id']/@uuid"/>
                 </xsl:attribute>
             </reference>
             <xsl:choose>
@@ -600,6 +634,8 @@
 
         <resource name="org_organisation">
             <xsl:attribute name="tuid">
+                <!--<xsl:value-of select="@uuid"/>-->
+                <!-- Need this format for Dummy fields -->
                 <xsl:value-of select="data[@field='name']"/>
             </xsl:attribute>
             <xsl:attribute name="created_on">
@@ -608,17 +644,19 @@
             <xsl:attribute name="modified_on">
                 <xsl:value-of select="@modified_on"/>
             </xsl:attribute>
-            <xsl:attribute name="created_by">
-                <xsl:value-of select="@created_by"/>
-            </xsl:attribute>
-            <xsl:attribute name="modified_by">
-                <xsl:value-of select="@modified_by"/>
-            </xsl:attribute>
-
-            <xsl:if test="data[@field='approved']='True'">
-                <xsl:attribute name="approved_by">
+            <xsl:if test="@created_by!=''">
+                <xsl:attribute name="created_by">
+                    <xsl:value-of select="@created_by"/>
+                </xsl:attribute>
+            </xsl:if>
+            <xsl:if test="@modified_by!=''">
+                <xsl:attribute name="modified_by">
                     <xsl:value-of select="@modified_by"/>
                 </xsl:attribute>
+            </xsl:if>
+
+            <xsl:if test="data[@field='approved']='False'">
+                <xsl:attribute name="approved">false</xsl:attribute>
             </xsl:if>
 
             <data field="name"><xsl:value-of select="data[@field='name']"/></data>
@@ -671,6 +709,9 @@
 
         <xsl:if test="$first_name!=$last_name and $first_name!='Test' and $last_name!='Test' and $first_name!='test' and $last_name!='test'">
             <resource name="auth_user">
+                <xsl:attribute name="tuid">
+                    <xsl:value-of select="@url"/>
+                </xsl:attribute>
                 <data field="first_name"><xsl:value-of select="$first_name"/></data>
                 <data field="last_name"><xsl:value-of select="$last_name"/></data>
                 <data field="email"><xsl:value-of select="data[@field='email']"/></data>
@@ -691,6 +732,31 @@
                 </xsl:if>
             </resource>
         </xsl:if>
+
+    </xsl:template>
+
+    <!-- ****************************************************************** -->
+    <xsl:template match="resource[@name='drrpp_org_contact_user']">
+
+        <resource name="auth_membership">
+            <reference field="group_id" resource="auth_group">
+                <xsl:attribute name="uuid">ORG_ADMIN</xsl:attribute>
+            </reference>
+            <reference field="user_id" resource="auth_user">
+                <xsl:attribute name="tuid">
+                    <xsl:value-of select="concat('http://drrprojects.net/drrp/auth/user/',reference[@field='user_id']/@value)"/>
+                </xsl:attribute>
+            </reference>
+            <!-- Need to add this manually afterwards
+            <data field="pe_id">
+                <xsl:attribute name="tuid">-->
+                    <!--<xsl:value-of select="@uuid"/>-->
+                    <!-- Need this format for Dummy fields --><!--
+                    <xsl:value-of select="reference[@field='organisation_id']"/>
+                </xsl:attribute>
+            </data>
+            -->
+        </resource>
 
     </xsl:template>
 
@@ -745,8 +811,17 @@
                 </resource>
             </xsl:when>
 
-            <!-- Hazard list -->
-            <xsl:when test="$arg='hazard'">
+            <!-- Hazards -->
+            <xsl:when test="$arg='hazard_ref'">
+                <resource name="project_hazard_project">
+                    <reference field="hazard_id" resource="project_hazard">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="concat($HazardPrefix, $item)"/>
+                        </xsl:attribute>
+                    </reference>
+                </resource>
+            </xsl:when>
+            <xsl:when test="$arg='hazard_res'">
                 <resource name="project_hazard">
                     <xsl:attribute name="tuid">
                         <xsl:value-of select="concat($HazardPrefix, $item)"/>
@@ -755,8 +830,17 @@
                 </resource>
             </xsl:when>
 
-            <!-- Theme list -->
-            <xsl:when test="$arg='theme'">
+            <!-- Themes -->
+            <xsl:when test="$arg='theme_ref'">
+                <resource name="project_theme_project">
+                    <reference field="theme_id" resource="project_theme">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="concat($ThemePrefix, $item)"/>
+                        </xsl:attribute>
+                    </reference>
+                </resource>
+            </xsl:when>
+            <xsl:when test="$arg='theme_res'">
                 <resource name="project_theme">
                     <xsl:attribute name="tuid">
                         <xsl:value-of select="concat($ThemePrefix, $item)"/>

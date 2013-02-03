@@ -2,7 +2,7 @@
 
 """ S3 RESTful API
 
-    @copyright: 2009-2012 (c) Sahana Software Foundation
+    @copyright: 2009-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -863,6 +863,10 @@ class S3Request(object):
                     else:
                         current.session.error = self.ERROR.BAD_RECORD
                         redirect(URL(r=self, c=self.prefix, f=self.name))
+
+        if self.interactive and self.representation == "html":
+            settings = current.deployment_settings
+            attr = settings.ui_customize(self.tablename, **attr)
 
         # Pre-process
         if hooks is not None:
@@ -1916,10 +1920,6 @@ class S3Method(object):
         if self.method == "_init":
             return None
 
-        if r.interactive and r.representation == "html":
-            settings = current.deployment_settings
-            attr = settings.ui_customize(self.tablename, **attr)
-
         # Apply method
         output = self.apply_method(r, **attr)
 
@@ -2105,6 +2105,7 @@ class S3Method(object):
                         # Propagate all other errors to the caller
                         raise
                 else:
+                    resolve = False
                     display = handler
                 if isinstance(display, dict) and resolve:
                     output.update(**display)
@@ -2112,6 +2113,17 @@ class S3Method(object):
                     output.update(**{key: display})
                 elif key in output and callable(handler):
                     del output[key]
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _remove_filters(vars):
+        """
+            Remove all filters from URL vars
+
+            @param vars: the URL vars as dict
+        """
+
+        return dict([(k, v) for k, v in vars.items() if "." not in k])
 
     # -------------------------------------------------------------------------
     @staticmethod

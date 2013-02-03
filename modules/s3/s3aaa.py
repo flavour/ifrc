@@ -370,7 +370,7 @@ Thank you
                       label=messages.label_description),
                 migrate = migrate,
                 fake_migrate=fake_migrate,
-                *(s3_timestamp()+s3_deletion_status()))
+                *(s3_timestamp() + s3_deletion_status()))
             settings.table_group = gtable
 
         # Group membership table (user<->role)
@@ -385,10 +385,11 @@ Thank you
                       requires = IS_IN_DB(db, "%s.id" % gname,
                                           "%(id)s: %(role)s"),
                       label=label_group_id),
+                # Realm
                 Field("pe_id", "integer"),
                 migrate = migrate,
                 fake_migrate=fake_migrate,
-                *(s3_uid()+s3_timestamp()+s3_deletion_status()))
+                *(s3_uid() + s3_timestamp() + s3_deletion_status()))
 
         security_policy = deployment_settings.get_security_policy()
         # Define Eden permission table
@@ -443,7 +444,7 @@ Thank you
                       requires = IS_NOT_EMPTY()),
                 migrate = migrate,
                 fake_migrate=fake_migrate,
-                *(s3_uid()+s3_timestamp()+s3_deletion_status()))
+                *(s3_uid() + s3_timestamp() + s3_deletion_status()))
 
     # -------------------------------------------------------------------------
     def login_bare(self, username, password):
@@ -1385,7 +1386,7 @@ S3OptionsFilter({
         for element in elements:
             pe_string = element.text
 
-            if pe_string:
+            if pe_string and "=" in pe_string:
                 pe_type, pe_value =  pe_string.split("=")
                 pe_tablename, pe_field =  pe_type.split(".")
 
@@ -4622,25 +4623,27 @@ class S3Permission(object):
                 user_id = user.id
                 query = (table[OUSR] == user_id)
 
-            # Public record query
-            public = None
-            if OUSR in table.fields:
-                public = (table[OUSR] == None)
-            if OGRP in table.fields:
-                q = (table[OGRP] == None)
-                if public:
-                    public &= q
-                else:
-                    public = q
-            if use_realm:
-                q = (table[OENT] == None)
-                if public:
-                    public &= q
-                else:
-                    public = q
+            if not current.deployment_settings.get_security_strict_ownership():
 
-            if query is not None and public is not None:
-                query |= public
+                # Any authenticated user owns all records with no owner
+                public = None
+                if OUSR in table.fields:
+                    public = (table[OUSR] == None)
+                if OGRP in table.fields:
+                    q = (table[OGRP] == None)
+                    if public:
+                        public &= q
+                    else:
+                        public = q
+                if use_realm:
+                    q = (table[OENT] == None)
+                    if public:
+                        public &= q
+                    else:
+                        public = q
+
+                if query is not None and public is not None:
+                    query |= public
 
             # Group ownerships
             if OGRP in table.fields:
@@ -4811,7 +4814,7 @@ class S3Permission(object):
             @param t: the table or tablename
             @param record: the record or record ID (None for any record)
         """
-
+        
         # Multiple methods?
         if isinstance(method, (list, tuple)):
             query = None
@@ -5944,6 +5947,7 @@ class S3RoleManager(S3Method):
             table = self.table
 
             # Show permission matrix?
+            # (convert value to a boolean)
             show_matrix = vars.get("matrix", False) and True
 
             # Title and subtitle
@@ -7348,11 +7352,9 @@ class S3EntityRoleManager(S3Method):
         """
             Returns the realm (list of pe_ids) that this user can manage
             or raises a permission error if the user is not logged in
-
-            @todo: avoid multiple lookups in current.auth
         """
-        auth = current.auth
 
+        auth = current.auth
         system_roles = auth.get_system_roles()
         ORG_ADMIN = system_roles.ORG_ADMIN
         ADMIN = system_roles.ADMIN
@@ -7424,6 +7426,7 @@ class S3EntityRoleManager(S3Method):
                 ...
             }
         """
+
         if not entity_id and not user_id:
             raise RuntimeError("Not enough arguments")
 
@@ -7470,6 +7473,7 @@ class S3EntityRoleManager(S3Method):
 
             @return: SQLFORM
         """
+
         fields = self.get_form_fields()
         form = SQLFORM.factory(*fields,
                                table_name="roles",
@@ -7485,6 +7489,7 @@ class S3EntityRoleManager(S3Method):
 
             @return: list of Fields
         """
+
         fields = []
         requires = IS_NULL_OR(IS_IN_SET(self.acls.keys(),
                                         labels=self.acls.values()))
@@ -7503,6 +7508,7 @@ class S3EntityRoleManager(S3Method):
 
             @return: Storage() to pre-populate the role form
         """
+
         form_vars = Storage()
 
         fo = self.foreign_object
@@ -7526,6 +7532,7 @@ class S3EntityRoleManager(S3Method):
             @param before: list of role_uids (current values for the user)
             @param after: list of role_uids (new values from the admin)
         """
+
         auth = current.auth
         assign_role = auth.s3_assign_role
         retract_role = auth.s3_retract_role
@@ -7558,6 +7565,7 @@ class S3OrgRoleManager(S3EntityRoleManager):
 
             @return: dictionary for view
         """
+
         context = super(S3OrgRoleManager, self).get_context_data(r, **attr)
         context["foreign_object_label"] = current.T("Users")
         return context
@@ -7584,6 +7592,7 @@ class S3OrgRoleManager(S3EntityRoleManager):
             @return: dictionary containing the ID and username/email of
                      the user account.
         """
+
         user = self.request.get_vars.get("edit", None)
         if user:
             user = dict(id=int(user), name=self.objects.get(int(user), None))
@@ -7596,6 +7605,7 @@ class S3OrgRoleManager(S3EntityRoleManager):
 
             @return: dictionary with ID and username/email of user account
         """
+
         return self.user
 
     # -------------------------------------------------------------------------
@@ -7605,6 +7615,7 @@ class S3OrgRoleManager(S3EntityRoleManager):
 
             @return: dictionary with user IDs as the keys.
         """
+
         assigned_roles = super(S3OrgRoleManager, self).get_assigned_roles
         return assigned_roles(entity_id=self.entity["id"])
 
@@ -7616,6 +7627,7 @@ class S3OrgRoleManager(S3EntityRoleManager):
 
             @return: list of Fields
         """
+
         T = current.T
 
         fields = super(S3OrgRoleManager, self).get_form_fields()
@@ -7664,6 +7676,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
 
             @return: dictionary for view
         """
+
         context = super(S3PersonRoleManager, self).get_context_data(r, **attr)
         context["foreign_object_label"] = current.T("Organizations / Teams / Facilities")
         return context
@@ -7676,6 +7689,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
 
             @return: dictionary with pe_id and name of the org/office.
         """
+
         entity = self.request.get_vars.get("edit", None)
         if entity:
             entity = dict(id=int(entity),
@@ -7690,6 +7704,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
 
             @return: dictionary with ID and username/email of the user account
         """
+
         utable = current.auth.settings.table_user
         ptable = current.s3db.pr_person_user
 
@@ -7714,6 +7729,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
         """
             We are on a user/person so we want to target an entity (org/office)
         """
+
         return self.entity
 
     # -------------------------------------------------------------------------
@@ -7723,6 +7739,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
 
             @return: dictionary of assigned roles with entity pe_id as the keys
         """
+
         user_id = self.user["id"]
         return super(S3PersonRoleManager, self).get_assigned_roles(user_id=user_id)
 
@@ -7734,6 +7751,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
 
             @return: list of Fields
         """
+
         s3db = current.s3db
         fields = super(S3PersonRoleManager, self).get_form_fields()
 

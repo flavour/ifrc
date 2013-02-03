@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2012 (c) Sahana Software Foundation
+    @copyright: 2009-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -112,6 +112,7 @@ class FieldS3(Field):
                        uploadfolder,
                        compute)
 
+    # -------------------------------------------------------------------------
     def join_via(self, value):
         if self.type.find("reference") == 0:
             return Query(self, "=", value)
@@ -150,6 +151,7 @@ class S3ReusableField(object):
         self.__type = type
         self.attr = Storage(attr)
 
+    # -------------------------------------------------------------------------
     def __call__(self, name=None, **attr):
 
         if not name:
@@ -650,10 +652,12 @@ class S3RepresentLazy(object):
         self.multiple = False
         renderer.lazy.append(value)
 
+    # -------------------------------------------------------------------------
     def __repr__(self):
 
         return s3_unicode(self.represent())
 
+    # -------------------------------------------------------------------------
     def represent(self):
         """ Represent as string """
 
@@ -675,6 +679,7 @@ class S3RepresentLazy(object):
             else:
                 return renderer(value, show_link=False)
 
+    # -------------------------------------------------------------------------
     def render(self):
         """ Render as HTML """
 
@@ -700,6 +705,7 @@ class S3RepresentLazy(object):
             else:
                 return renderer(value)
 
+    # -------------------------------------------------------------------------
     def render_node(self, element, attributes, name):
         """
             Render as text or attribute of an XML element
@@ -712,7 +718,7 @@ class S3RepresentLazy(object):
         # Render value
         text = self.represent()
         if hasattr(text, "xml"):
- 	        text = s3_unicode(text)
+            text = s3_unicode(text)
 
         # Strip markup + XML-escape
         if text and "<" in text:
@@ -725,11 +731,11 @@ class S3RepresentLazy(object):
 
         # Add to node
         if text is not None:
- 	        if element is not None:
- 	            element.text = text
- 	        else:
- 	            attributes[name] = text
- 	        return
+            if element is not None:
+                element.text = text
+            else:
+                attributes[name] = text
+            return
 
 # =============================================================================
 # Record identity meta-fields

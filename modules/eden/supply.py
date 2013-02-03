@@ -2,7 +2,7 @@
 
 """ Sahana Eden Supply Model
 
-    @copyright: 2009-2012 (c) Sahana Software Foundation
+    @copyright: 2009-2013 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -80,7 +80,7 @@ class S3SupplyModel(S3Model):
              "supply_item_category_represent",
              "supply_item_add",
              "supply_item_pack_virtualfields",
-            ]
+             ]
 
     def model(self):
 
@@ -211,14 +211,14 @@ class S3SupplyModel(S3Model):
                                    "reference supply_item_category",
                                    label = T("Parent"),
                                    represent = self.item_category_represent,
-                                   ondelete = "RESTRICT"),
+                                   ondelete = "RESTRICT",
+                                   ),
                              Field("code", length=16,
                                    label = T("Code"),
-                                   #required = True
+                                   #required = True,
                                    ),
                              Field("name", length=128,
-                                   label = T("Name")
-                                   ),
+                                   label = T("Name")),
                              Field("can_be_asset", "boolean",
                                    default=True,
                                    readable=asset,

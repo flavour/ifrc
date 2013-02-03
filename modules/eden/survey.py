@@ -2,7 +2,7 @@
 
 """ Sahana Eden Survey Tool
 
-    @copyright: 2011-2012 (c) Sahana Software Foundation
+    @copyright: 2011-2013 (c) Sahana Software Foundation
     @license: MIT
 
     ADAT - Assessment Data Analysis Tool
@@ -753,7 +753,7 @@ def survey_build_template_summary(template_id):
     """
     """
 
-    from s3.s3utils import S3DataTable
+    from s3.s3data import S3DataTable
     T = current.T
 
     table = TABLE(_id="template_summary",
@@ -2484,7 +2484,7 @@ def buildSeriesSummary(series_id, posn_offset):
     """
     """
 
-    from s3.s3utils import S3DataTable
+    from s3.s3data import S3DataTable
     T = current.T
 
     table = TABLE(_id="series_summary",

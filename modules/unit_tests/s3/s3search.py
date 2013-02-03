@@ -144,7 +144,6 @@ class TestS3SearchMinMaxWidget(unittest.TestCase):
         self.assertEqual(str(output),
                          str(INPUT(_name="wname", _id="id-wname", _class="wclass")))
 
-
 # =============================================================================
 class S3FilterWidgetTests(unittest.TestCase):
     """ Tests for S3FilterWidget base class helper methods """
@@ -173,7 +172,7 @@ class S3FilterWidgetTests(unittest.TestCase):
         widget.widget = lambda resource, values: ""
 
         resource = current.s3db.resource("org_office")
-        
+
         output = widget(resource, get_vars={})
         self.assertTrue(isinstance(output[0], INPUT))
 
@@ -194,7 +193,7 @@ class S3FilterWidgetTests(unittest.TestCase):
 
         v = attr["_value"]
         self.assertEqual(v, "~.name|~.organisation_id$name")
-            
+
     def testSelector(self):
         """ Test construction of the URL query selector for a filter widget """
 

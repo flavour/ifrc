@@ -282,6 +282,102 @@ settings.project.organisation_roles = {
     5: T("Partner")
 }
 
+from s3 import s3forms
+settings.ui.crud_form_project_project = s3forms.S3SQLCustomForm(
+        "organisation_id",
+        "name",
+        #"code",
+        "description",
+        "status_id",
+        "start_date",
+        "end_date",
+        #s3forms.S3SQLInlineComponent(
+        #    "location",
+        #    label = T("Countries"),
+        #    fields = ["location_id"],
+        #),
+        s3forms.S3SQLInlineComponentCheckbox(
+            "hazard",
+            label = T("Hazards"),
+            field = "hazard_id",
+            cols = 4,
+        ),
+        s3forms.S3SQLInlineComponentCheckbox(
+            "sector",
+            label = T("Sectors"),
+            field = "sector_id",
+            cols = 4,
+        ),
+        s3forms.S3SQLInlineComponentCheckbox(
+            "theme",
+            label = T("Themes"),
+            field = "theme_id",
+            cols = 4,
+            # Filter Theme by Sector
+            filter = {"linktable": "project_theme_sector",
+                      "lkey": "theme_id",
+                      "rkey": "sector_id",
+                      },
+            script = '''
+S3OptionsFilter({
+ 'triggerName':'defaultsector-sector_id',
+ 'targetName':'defaulttheme-theme_id',
+ 'targetWidget':'defaulttheme-theme_id_widget',
+ 'lookupResource':'theme',
+ 'lookupURL':S3.Ap.concat('/project/theme_sector_widget?sector_ids='),
+ 'getWidgetHTML':true,
+ 'showEmptyField':false
+})'''
+        ),
+        "drr.hfa",
+        "objectives",
+        "human_resource_id",
+        # Partner Orgs
+        #s3forms.S3SQLInlineComponent(
+        #    "organisation",
+        #    name = "partner",
+        #    label = T("Partner Organizations"),
+        #    fields = ["organisation_id",
+        #              "comments", # NB This is labelled 'Role' in DRRPP
+        #              ],
+        #    filterby = dict(field = "role",
+        #                    options = "2"
+        #                    )
+        #),
+        # Donors
+        #s3forms.S3SQLInlineComponent(
+        #    "organisation",
+        #    name = "donor",
+        #    label = T("Donor(s)"),
+        #    fields = ["organisation_id",
+        #              "amount",
+        #              "currency"],
+        #    filterby = dict(field = "role",
+        #                    options = "3"
+        #                    )
+        #),
+        #"budget",
+        #"currency",
+        "comments",
+    )
+settings.ui.crud_form_project_location = s3forms.S3SQLCustomForm(
+        "project_id",
+        "location_id",
+        # @ToDo: Grouped Checkboxes
+        s3forms.S3SQLInlineComponentCheckbox(
+            "activity_type",
+            label = T("Activity Types"),
+            field = "activity_type_id",
+            cols = 3,
+            # Filter Activity Type by Sector
+            filter = {"linktable": "project_activity_type_sector",
+                      "lkey": "activity_type_id",
+                      "rkey": "sector_id",
+                      },
+        ),
+        "comments",
+    )
+
 # -----------------------------------------------------------------------------
 # Inventory Management
 settings.inv.show_mode_of_transport = True
