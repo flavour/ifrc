@@ -152,9 +152,9 @@ class S3ProjectModel(S3Model):
         # Reusable Field
         def project_status_represent(id, row=None):
             if id or row:
-                return s3_represent_id(self.project_status)(id, row)
+                return S3Represent(lookup=tablename)(id, row)
             else:
-                # Why?
+                # Why? Seems more confusing than NONE
                 return T("No Status")
 
         status_id = S3ReusableField("status_id", table,
@@ -1897,7 +1897,8 @@ class S3ProjectFrameworkModel(S3Model):
 
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
-        ORGANISATION = current.messages.ORGANISATION
+        messages = current.messages
+        ORGANISATION = messages.ORGANISATION
         ORGANISATIONS = T("Organization(s)")
 
         # ---------------------------------------------------------------------
@@ -1914,6 +1915,7 @@ class S3ProjectFrameworkModel(S3Model):
                                          comment=None,
                                          ),
                              Field("time_frame",
+                                   represent = lambda v: v or messages.NONE,
                                    label = T("Time Frame"),
                                    ),
                              *s3_meta_fields())
@@ -1952,8 +1954,8 @@ class S3ProjectFrameworkModel(S3Model):
                 "document",
                 label = T("Files"),
                 fields = ["file"],
-                filterby = dict(field = "url",
-                                options = None,
+                filterby = dict(field = "file",
+                                options = "",
                                 invert = True,
                                 )
             ),
@@ -1970,15 +1972,16 @@ class S3ProjectFrameworkModel(S3Model):
                                       ]
                        )
 
+        represent = S3Represent(lookup=tablename)
         framework_id = S3ReusableField("framework_id", table,
-                        label = ORGANISATION,
-                        requires = IS_NULL_OR(
-                                    IS_ONE_OF(db, "project_framework.id",
-                                              self.project_framework_represent
-                                              )),
-                        represent = self.project_framework_represent,
-                        ondelete = "CASCADE",
-                        )
+                                       label = ORGANISATION,
+                                       requires = IS_NULL_OR(
+                                                    IS_ONE_OF(db, "project_framework.id",
+                                                              represent
+                                                              )),
+                                       represent = represent,
+                                       ondelete = "CASCADE",
+                                       )
 
         self.add_component("project_framework_organisation",
                            project_framework="framework_id")
@@ -2013,25 +2016,6 @@ class S3ProjectFrameworkModel(S3Model):
         # Pass names back to global scope (s3.*)
         return dict(
         )
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def project_framework_represent(id, row=None):
-        """ FK representation """
-
-        if row:
-            return row.name
-        if not id:
-            return current.messages["NONE"]
-
-        db = current.db
-        table = db.project_framework
-        r = db(table.id == id).select(table.name,
-                                      limitby = (0, 1)).first()
-        try:
-            return r.name
-        except:
-            return current.messages.UNKNOWN_OPT
 
 # =============================================================================
 class S3ProjectHazardModel(S3Model):
@@ -3111,6 +3095,8 @@ class S3ProjectDRRPPModel(S3Model):
         ltable = self.gis_location
         project_id = self.project_project_id
 
+        NONE = current.messages["NONE"]
+
         project_rfa_opts = self.project_rfa_opts()
         project_pifacc_opts = self.project_pifacc_opts()
         project_jnap_opts = self.project_jnap_opts()
@@ -3125,10 +3111,13 @@ class S3ProjectDRRPPModel(S3Model):
                                            )
                         ),
                      Field("parent_project",
+                           represent = lambda v: v or NONE,
                            label = T("Parent Project")),
                      Field("duration", "integer",
+                           represent = lambda v: v or NONE,
                            label = T("Duration (months)")),
                      Field("activities", "text",
+                           represent = lambda v: v or NONE,
                            label = T("Activities")),
                      Field("rfa", "list:integer",
                            label = T("RFA Priorities"),
@@ -3182,7 +3171,7 @@ class S3ProjectDRRPPModel(S3Model):
                            label = T("Cook Islands"),
                            requires = IS_NULL_OR(
                                         IS_ONE_OF(db, "gis_location.id",
-                                                  s3_represent_id(ltable),
+                                                  S3Represent(lookup="gis_location"),
                                                   filterby = "L0",
                                                   filter_opts = ["Cook Islands"],
                                                   not_filterby = "name",
@@ -3194,19 +3183,20 @@ class S3ProjectDRRPPModel(S3Model):
                            ),
                      Field("outputs", "text",
                            label = "%s (Old - do NOT use)" % T("Outputs"),
+                           represent = lambda v: v or NONE,
                            readable = False,
                            writable = False,
                            ),
                      # @ToDo: Use the project_project.human_resource_id with a better widget.
                      # @ToDo: Becase RMS uses the human_resource_id field, the focal person from RMS won't be visible in DRRPP
                      Field("focal_person",
+                           represent = lambda v: v or NONE,
                            label = T("Focal Person")),
                      self.org_organisation_id(label = T("Organization")),
                      Field("email",
                            requires=IS_NULL_OR(IS_EMAIL()),
+                           represent = lambda v: v or NONE,
                            label = T("Email")),
-                     Field("duration", "integer",
-                           label = T("Duration (months)")),
                      *s3_meta_fields())
 
         # CRUD Strings
@@ -3225,8 +3215,10 @@ class S3ProjectDRRPPModel(S3Model):
                                            )
                         ),
                      Field("output",
+                           represent = lambda v: v or NONE,
                            label = T("Output")),
-                     Field("status", "string",
+                     Field("status",
+                           represent = lambda v: v or NONE,
                            label = T("Status")),
                      *s3_meta_fields())
 
@@ -3873,12 +3865,11 @@ class S3ProjectTaskModel(S3Model):
                        ]
 
         # Virtual Fields
-        #table.virtualfields.append(S3ProjectTimeVirtualFields())
+        table.day = Field.Lazy(project_time_day)
+        table.week = Field.Lazy(project_time_week)
 
-        report_fields = list_fields
-        #                           + [(T("Day"), "day"),
-        #                              (T("Week"), "week")
-        #                              ]
+        report_fields = list_fields + \
+                        [(T("Day"), "day"), (T("Week"), "week")]
 
         task_time_search = [S3SearchOptionsWidget(name="person_id",
                                                   label = T("Person"),
@@ -3920,6 +3911,7 @@ class S3ProjectTaskModel(S3Model):
         configure(tablename,
                   onaccept=self.time_onaccept,
                   search_method=S3Search(advanced=task_time_search),
+                  report_fields=["date"],
                   report_options=Storage(
                         rows = report_fields,
                         cols = report_fields,
@@ -3969,14 +3961,11 @@ class S3ProjectTaskModel(S3Model):
         ptable = db.project_project
         ttable = db.project_task
         ltable = db.project_task_project
-        query = (ttable.deleted == False) & \
+        query = (ttable.deleted != True) & \
                 (ltable.task_id == ttable.id) & \
                 (ltable.project_id == ptable.id)
-        opts = db(query).select(ptable.name)
-        _dict = {}
-        for opt in opts:
-            _dict[opt.name] = opt.name
-        return _dict
+        rows = db(query).select(ptable.id, ptable.name)
+        return dict([(row.id, row.name) for row in rows])
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4816,52 +4805,61 @@ class S3ProjectTaskVirtualFields:
             return None
 
 # =============================================================================
-class S3ProjectTimeVirtualFields:
+# project_time virtual fields
+#
+def project_time_day(row):
     """
-        Virtual fields for the project_time table
-        - deprecated
+        Virtual field for project_time - abbreviated string format for
+        date, allows grouping per day instead of the individual datetime,
+        used for project time report.
+
+        Requires "date" to be in the additional report_fields
+
+        @param row: the Row
     """
 
-    extra_fields = ["date"]
+    default = "-"
 
-    # -------------------------------------------------------------------------
-    def day(self):
-        """
-            Day of the last Week this time entry relates to
-            - used by the 'Last Week's Work' report
-        """
+    try:
+        thisdate = row["project_time.date"]
+    except AttributeError:
+        return default
+    if not thisdate:
+        return default
 
-        default = "-"
+    now = current.request.utcnow
+    week = datetime.timedelta(days=7)
+    if thisdate < (now - week):
+        # Ignore data older than the last week
+        # - should already be filtered in controller anyway
+        return default
 
-        try:
-            thisdate = self.project_time.date
-        except AttributeError:
-            return default
-        if not thisdate:
-            return default
+    return thisdate.date().strftime("%d %B")
 
-        now = current.request.utcnow
-        week = datetime.timedelta(days=7)
-        if thisdate < (now - week):
-            # Ignore data older than the last week
-            # - should already be filtered in controller anyway
-            return default
+# =============================================================================
+def project_time_week(row):
+    """
+        Virtual field for project_time - returns the date of the Monday
+        (=first day of the week) of this entry, used for project time report.
 
-        return thisdate.date().strftime("%d %B")
+        Requires "date" to be in the additional report_fields
 
-    # -------------------------------------------------------------------------
-    def week(self):
-        """
-            Returns the date of the Monday previous to this time entry
-        """
+        @param row: the Row
+    """
 
-        # Convert the datetime to a date
-        day = self.project_time.date.date()
+    default = "-"
 
-        # Count back to monday
-        monday = day - datetime.timedelta(days=day.weekday())
+    try:
+        thisdate = row["project_time.date"]
+    except AttributeError:
+        return default
+    if not thisdate:
+        return default
 
-        return monday
+    day = thisdate.date()
+    monday = day - datetime.timedelta(days=day.weekday())
+
+    return monday
 
 # =============================================================================
 def project_ckeditor():

@@ -1443,10 +1443,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
                         if fname in row:
                             value = row[fname]
                             try:
-                                text = represent(field,
-                                                 value = value,
-                                                 strip_markup = True,
-                                                 xml_escape = True)
+                                text = represent(field, value = value)
                             except:
                                 text = s3_unicode(value)
                         else:
@@ -1686,9 +1683,10 @@ class S3SQLInlineComponent(S3SQLSubForm):
         else:
             data = value
 
+        NONE = current.messages["NONE"]
         if data["data"] == []:
             # Don't render a subform for NONE
-            return current.messages["NONE"]
+            return NONE
 
         thead = self._render_headers(data,
                                      readonly=True,
@@ -1704,6 +1702,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
         audit = component.audit
         prefix, name = component.prefix, component.name
 
+        xml_decode = current.xml.xml_decode
         for item in items:
             if "_id" in item:
                 record_id = item["_id"]
@@ -1711,8 +1710,11 @@ class S3SQLInlineComponent(S3SQLSubForm):
                 continue
             audit("read", prefix, name,
                   record=record_id, representation="html")
-            columns = [TD(item[f["name"]]["text"]) for f in fields]
-            trs.append(TR(columns, _class="read-row"))
+            trow = TR(_class="read-row")
+            for f in fields:
+                text = xml_decode(item[f["name"]]["text"])
+                trow.append(XML(xml_decode(text)))
+            trs.append(trow)
 
         return TABLE(thead,
                      TBODY(trs),
@@ -1986,19 +1988,6 @@ class S3SQLInlineComponent(S3SQLSubForm):
         T = current.T
         settings = current.response.s3.crud
 
-        # Render the action icons for this item
-        action = self._action_icon
-        add = action(T("Add this entry"),
-                     "add.png", "add", index, throbber=True)
-        rmv = action(T("Remove this entry"),
-                     "remove.png", "rmv", index)
-        edt = action(T("Edit this entry"),
-                     "edit.png", "edt", index)
-        cnc = action(T("Cancel editing"),
-                     "cancel.png", "cnc", index)
-        rdy = action(T("Update this entry"),
-                     "apply.png", "rdy", index, throbber=True)
-
         columns = []
         rowtype = readonly and "read" or "edit"
         pkey = table._id.name
@@ -2070,21 +2059,33 @@ class S3SQLInlineComponent(S3SQLSubForm):
             if not tr.attributes["_id"] == "submit_record__row":
                 columns.append(tr[0])
 
+        # Render the action icons for this item
+        action = self._action_icon
         if readonly:
             if editable:
+                edt = action(T("Edit this entry"),
+                             "edit.png", "edt", index)
                 columns.append(edt)
             else:
                 columns.append(TD())
             if deletable:
+                rmv = action(T("Remove this entry"),
+                             "remove.png", "rmv", index)
                 columns.append(rmv)
             else:
                 columns.append(TD())
         else:
             if index != "none" or item:
+                rdy = action(T("Update this entry"),
+                             "apply.png", "rdy", index, throbber=True)
                 columns.append(rdy)
+                cnc = action(T("Cancel editing"),
+                             "cancel.png", "cnc", index)
                 columns.append(cnc)
             else:
                 columns.append(TD())
+                add = action(T("Add this entry"),
+                             "add.png", "add", index, throbber=True)
                 columns.append(add)
 
         return TR(columns, **attributes)

@@ -4058,30 +4058,42 @@ class S3Resource(object):
         return (searchq, orderby, left)
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def sortleft(joins):
+    @classmethod
+    def sortleft(cls, joins):
         """
             Sort a list of left-joins by their interdependency
 
             @param joins: the list of joins
         """
 
-        s = []
-        append, insert = s.append, s.insert
+        if len(joins) <= 1:
+            return joins
+        r = list(joins)
+
+        tables = current.db._adapter.tables
+
+        append = r.append
+        head = None
         for i in xrange(len(joins)):
-            join = joins[i]
-            try:
-                tn = join.first._tablename
-            except AttributeError:
-                tn = str(join.first)
-            for j in xrange(len(s)):
-                if "%s." % tn in str(s[j].second):
-                    insert(j, join)
-                    join = None
+            join = r.pop(0)
+            head = join
+            tablenames = tables(join.second)
+            for j in r:
+                try:
+                    tn = j.first._tablename
+                except AttributeError:
+                    tn = str(j.first)
+                if tn in tablenames:
+                    head = None
                     break
-            if join:
+            if head is not None:
+                break
+            else:
                 append(join)
-        return s
+        if head is not None:
+            return [head] + cls.sortleft(r)
+        else:
+            raise RuntimeError("circular left-join dependency")
 
     # -------------------------------------------------------------------------
     def list_fields(self, key="list_fields"):
@@ -6432,9 +6444,9 @@ class S3Pivottable(object):
             rdim = irows[rindex]["value"] if rindex != OTHER else None
             if represent:
                 repr_str = row_repr(rdim) if rindex != OTHER else others
-                orows.append((rindex, rdim, repr_str, rtotal))
+                orows.append((rindex, s3_unicode(rdim), repr_str, rtotal))
             else:
-                orows.append((rindex, rdim, rtotal))
+                orows.append((rindex, s3_unicode(rdim), rtotal))
             for cindex, ctotal in cols:
                 value = cells[rindex][cindex]
                 if type(value) is list:
@@ -6444,9 +6456,9 @@ class S3Pivottable(object):
                     cdim = icols[cindex]["value"] if cindex != OTHER else None
                     if represent:
                         repr_str = col_repr(cdim) if cindex != OTHER else others
-                        ocols.append((cindex, cdim, repr_str, ctotal))
+                        ocols.append((cindex, s3_unicode(cdim), repr_str, ctotal))
                     else:
-                        ocols.append((cindex, cdim, ctotal))
+                        ocols.append((cindex, s3_unicode(cdim), ctotal))
             ctotals = False
             ocells.append(orow)
 
