@@ -564,7 +564,7 @@ class S3OptionsMenu(object):
 
         ADMIN = current.session.s3.system_roles.ADMIN
 
-        if current.deployment_settings.get_ui_camp():
+        if current.deployment_settings.get_ui_label_camp():
             shelter = "Camps"
             types = "Camp Settings"
         else:
@@ -763,6 +763,8 @@ class S3OptionsMenu(object):
 
         MAP_ADMIN = current.session.s3.system_roles.MAP_ADMIN
 
+        gis_menu = current.deployment_settings.get_gis_menu()
+
         def config_menu(i):
             auth = current.auth
             if not auth.is_logged_in():
@@ -815,7 +817,8 @@ class S3OptionsMenu(object):
                         M("List All"),
                         M("Search", m="search"),
                         M("Import from CSV", m="import", restrict=[MAP_ADMIN]),
-                        M("Import from OpenStreetMap", m="import_poi", restrict=[MAP_ADMIN]),
+                        M("Import from OpenStreetMap", m="import_poi",
+                          restrict=[MAP_ADMIN]),
                         #M("Geocode", f="geocode_manual"),
                     ),
                     #M("Population Report", f="location", m="report",
@@ -829,6 +832,8 @@ class S3OptionsMenu(object):
                         M("Hierarchy", f="hierarchy"),
                         M("Layers", f="catalog"),
                         M("Markers", f="marker"),
+                        M("Menu", f="menu",
+                          check=[gis_menu]),
                         M("Projections", f="projection"),
                         M("Symbology", f="symbology"),
                     )
@@ -1344,8 +1349,8 @@ class S3OptionsMenu(object):
                     M("Membership Types", f="membership_type")(
                         M("Add Membership Type", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
-                        M("Import", f="person", m="import"),
+                        #M("Search", m="search"),
+                        #M("Import", m="import"),
                     ),
                 )
 
@@ -1405,7 +1410,7 @@ class S3OptionsMenu(object):
         """ ORG / Organization Registry """
 
         ADMIN = current.session.s3.system_roles.ADMIN
-        SECTORS = "Clusters" if current.deployment_settings.get_ui_cluster() \
+        SECTORS = "Clusters" if current.deployment_settings.get_ui_label_cluster() \
                              else "Sectors"
 
         return M(c="org")(

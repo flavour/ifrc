@@ -37,11 +37,11 @@
                            S3Pivottable
 """
 
+import collections
+import datetime
 import re
 import sys
-import datetime
 import time
-import collections
 
 from itertools import product, chain
 
@@ -76,9 +76,9 @@ from gluon.languages import lazyT
 from gluon.storage import Storage
 from gluon.tools import callback
 
+from s3data import S3DataTable, S3DataList
 from s3fields import S3Represent, S3RepresentLazy
 from s3utils import s3_has_foreign_key, s3_get_foreign_key, s3_unicode, S3MarkupStripper
-from s3data import S3DataTable, S3DataList
 from s3validators import IS_ONE_OF
 
 DEBUG = False
@@ -810,17 +810,28 @@ class S3Resource(object):
 
         # Retrieve the rows
         attributes["cacheable"] = cacheable
+
+        hasids = False
+
         if numrows != 0:
+            pkey = str(table._id)
+            for qf in qfields:
+                if str(qf) == pkey:
+                    hasids = True
+                    break
+
             rows = db(query).select(*qfields, **attributes)
 
             if vfltr is None:
+                if (getids or left_joins) and ids is None and hasids:
+                    ids = list(set([row[table._id] for row in rows]))
+                    if numrows is None:
+                        numrows = len(ids)
                 if count and numrows is None:
                     numrows = len(rows)
-                if getids and ids is None:
-                    ids = list(set([row[table._id] for row in rows]))
         else:
             rows = [] # None?
-
+           
         # Restore virtual fields
         if not virtual:
             osetattr(table, "virtualfields", vf)
@@ -840,8 +851,9 @@ class S3Resource(object):
             else:
                 rows = rfilter(rows, start=start, limit=limit)
 
-            if getids:
+            if (getids or left_joins) and hasids:
                 ids = list(set([row[table._id] for row in rows]))
+                numrows = len(ids)
 
         if not getids:
             ids = []
@@ -3016,6 +3028,7 @@ class S3Resource(object):
         # Get the structure of the main resource
         root = etree.Element(xml.TAG.root)
         main = xml.get_struct(self.prefix, self.name,
+                              alias=self.alias,
                               parent=root,
                               meta=meta,
                               options=options,
@@ -3026,6 +3039,7 @@ class S3Resource(object):
             prefix = component.prefix
             name = component.name
             sub = xml.get_struct(prefix, name,
+                                 alias=component.alias,
                                  parent=main,
                                  meta=meta,
                                  options=options,
@@ -4917,6 +4931,15 @@ class S3ResourceQuery(object):
                         else:
                             query |= q
                 return query
+
+        # Convert date(time) strings
+        if ftype  == "datetime" and \
+           isinstance(rfield, basestring):
+            rfield = S3TypeConverter.convert(datetime.datetime, rfield)
+        elif ftype  == "date" and \
+             isinstance(rfield, basestring):
+            rfield = S3TypeConverter.convert(datetime.date, rfield)
+            
         query = query_bare(op, lfield, rfield)
         if invert:
             query = ~(query)
@@ -5226,10 +5249,12 @@ class S3ResourceQuery(object):
         url_query = Storage()
         def _serialize(n, o, v, invert):
             try:
+                quote = lambda s: s if "," not in s else '"%s"' % s
                 if isinstance(v, list):
-                    v = ",".join([S3TypeConverter.convert(str, val) for val in v])
+                    v = ",".join([quote(S3TypeConverter.convert(str, val))
+                                  for val in v])
                 else:
-                    v = S3TypeConverter.convert(str, v)
+                    v = quote(S3TypeConverter.convert(str, v))
             except:
                 return
             if "." not in n:
@@ -6926,18 +6951,29 @@ class S3TypeConverter(object):
             return b
         elif isinstance(b, basestring):
             try:
+                # ISO Format is standard (e.g. in URLs)
                 tfmt = current.xml.ISOFORMAT
                 (y, m, d, hh, mm, ss, t0, t1, t2) = time.strptime(b, tfmt)
             except ValueError:
-                tfmt = "%Y-%m-%d %H:%M:%S"
-                (y, m, d, hh, mm, ss, t0, t1, t2) = time.strptime(b, tfmt)
+                try:
+                    # Try localized datetime format
+                    tfmt = str(current.deployment_settings.get_L10n_datetime_format())
+                    (y, m, d, hh, mm, ss, t0, t1, t2) = time.strptime(b, tfmt)
+                except ValueError:
+                    # dateutil as last resort
+                    try:
+                        dt = current.xml.decode_iso_datetime(b)
+                    except:
+                        raise ValueError
+                    else:
+                        return dt
             return datetime.datetime(y, m, d, hh, mm, ss)
         else:
             raise TypeError
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def _date(b):
+    @classmethod
+    def _date(cls, b):
         """ Convert into datetime.date """
 
         if isinstance(b, datetime.date):
@@ -6945,9 +6981,10 @@ class S3TypeConverter(object):
         elif isinstance(b, basestring):
             format = current.deployment_settings.get_L10n_date_format()
             validator = IS_DATE(format=format)
-            value, error = validator(v)
+            value, error = validator(b)
             if error:
-                raise ValueError
+                # May be specified as datetime-string?
+                value = cls._datetime(b).date()
             return value
         else:
             raise TypeError

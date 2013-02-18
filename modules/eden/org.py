@@ -128,7 +128,7 @@ class S3OrganisationModel(S3Model):
                              *s3_meta_fields())
 
         # CRUD strings
-        if settings.get_ui_cluster():
+        if settings.get_ui_label_cluster():
             SECTOR = T("Cluster")
             ADD_SECTOR = T("Add Cluster")
             help = T("If you don't see the Cluster in the list, you can add a new one by clicking link 'Add Cluster'.")
@@ -239,7 +239,7 @@ class S3OrganisationModel(S3Model):
                              # *s3_meta_fields())
 
         ##CRUD strings
-        # if settings.get_ui_cluster():
+        # if settings.get_ui_label_cluster():
             # SUBSECTOR = T("Cluster Subsector")
             # crud_strings[tablename] = Storage(
                 # title_create = T("Add Cluster Subsector"),
@@ -483,14 +483,15 @@ class S3OrganisationModel(S3Model):
         auth = current.auth
         organisation_id = S3ReusableField("organisation_id", table,
                                           sortby="name",
-                                          default = auth.user.organisation_id if auth.is_logged_in() else None,
+                                          default = auth.user.organisation_id if auth.is_logged_in() \
+                                                                              else None,
                                           requires=org_organisation_requires(),
                                           represent=org_organisation_represent,
                                           label=ORGANISATION,
                                           comment=organisation_comment,
                                           ondelete="RESTRICT",
                                           widget = widget,
-                                         )
+                                          )
 
         organisations_id = S3ReusableField("organisations_id",
                                            "list:reference org_organisation",
@@ -2275,18 +2276,12 @@ class S3OfficeModel(S3Model):
                       ),
             ))
 
-        # Experimental: filter form
-        office_filter = [
-            S3TextFilter("name"),
-            S3OptionsFilter("organisation_id", cols=3)
-        ]
-
         configure(tablename,
                   super_entity=("pr_pentity", "org_site"),
                   onaccept=self.org_office_onaccept,
                   deduplicate=self.org_office_duplicate,
                   search_method=office_search,
-                  ## Experimental: filter form (used by S3CRUD.list_div)
+                  # Experimental: filter form (used by S3CRUD.list_div)
                   #filter_widgets=[
                   #      S3TextFilter(["name", "email", "comments"],
                   #                   label=T("Search"),
@@ -2608,11 +2603,12 @@ def org_root_organisation(organisation_id=None, pe_id=None):
     return None, None
 
 # =============================================================================
-def org_organisation_requires(updateable=False,
-                              required=False):
+def org_organisation_requires(required=False,
+                              updateable=False
+                              ):
     """
-        Optionally: Filter the list of organisations for a form field to
-        just those which the user has update permissions for
+        @param required: Whether the selection is optional or mandatory
+        @param updateable: Whether the list should be filtered to just those which the user has Write access to
     """
 
     requires = IS_ONE_OF(current.db, "org_organisation.id",
@@ -2848,7 +2844,7 @@ def org_rheader(r, tabs=[]):
         rheader_tabs = s3_rheader_tabs(r, tabs)
 
         if table.multi_sector_id.readable and record.multi_sector_id:
-            if settings.get_ui_cluster():
+            if settings.get_ui_label_cluster():
                 sector_label = T("Cluster(s)")
             else:
                 sector_label = T("Sector(s)")
@@ -2963,7 +2959,7 @@ def org_organisation_controller():
             r.table.country.default = gis.get_default_country("code")
 
             if not r.component and r.method not in ["read", "update", "delete"]:
-                # Filter out branches
+                # Filter Locations
                 lfilter = current.session.s3.location_filter
                 if lfilter:
                     # Include those whose parent is in a different country
@@ -2984,12 +2980,15 @@ def org_organisation_controller():
                             tag = db(query).select(ttable.value,
                                                    limitby=(0, 1)).first()
                             code = tag.value
+                        # Filter out Branches
                         branch_filter = (S3FieldSelector("parent.id") == None) | \
                                         (S3FieldSelector("parent.country") != code) | \
                                         (S3FieldSelector("parent.country") == None)
                     else:
+                        # Filter out Branches
                         branch_filter = (S3FieldSelector("parent.id") == None)
                 else:
+                    # Filter out Branches
                     branch_filter = (S3FieldSelector("parent.id") == None)
                 r.resource.add_filter(branch_filter)
 

@@ -95,6 +95,7 @@ class S3ProjectModel(S3Model):
              "project_pifacc_opts",
              "project_rfa_opts",
              "project_theme_opts",
+             "project_hazard_opts",
              ]
 
     def model(self):
@@ -150,21 +151,15 @@ class S3ProjectModel(S3Model):
             msg_list_empty = T("No Statuses currently registered"))
 
         # Reusable Field
-        def project_status_represent(id, row=None):
-            if id or row:
-                return S3Represent(lookup=tablename)(id, row)
-            else:
-                # Why? Seems more confusing than NONE
-                return T("No Status")
-
+        represent = S3Represent(lookup=tablename)
         status_id = S3ReusableField("status_id", table,
                                     label = T("Status"),
                                     sortby = "name",
                                     requires = IS_NULL_OR(
                                                 IS_ONE_OF(db, "project_status.id",
-                                                          project_status_represent,
+                                                          represent,
                                                           sort=True)),
-                                    represent = project_status_represent,
+                                    represent = represent,
                                     comment = S3AddResourceLink(title=ADD_STATUS,
                                                                 c="project",
                                                                 f="status"),
@@ -185,8 +180,9 @@ class S3ProjectModel(S3Model):
                              self.org_organisation_id(
                                 label = org_label,
                                 requires = self.org_organisation_requires(
-                                    updateable=True, # Only allowed to add Projects for Orgs that the user has write access to
-                                    required=True
+                                    required=True,
+                                    # Only allowed to add Projects for Orgs that the user has write access to
+                                    updateable=True,
                                     ),
                                 ),
                              Field("name", unique = True,
@@ -286,26 +282,19 @@ class S3ProjectModel(S3Model):
                     field = "organisation_id",
                     cols = 3
                 ))
-        if settings.get_template() == "DRRPP":
-            append(S3SearchOptionsWidget(
-                    name = "project_search_location",
-                    label = T("Country"),
-                    field = "location.location_id",
-                    cols = 3
-                    ))
-        else:
-            append(S3SearchOptionsWidget(
-                    name = "project_search_L0",
-                    field = "location.location_id$L0",
-                    location_level="L0",
-                    cols = 3
-                    ))
-            append(S3SearchOptionsWidget(
-                    name = "project_search_L1",
-                    field = "location.location_id$L1",
-                    location_level="L1",
-                    cols = 3
-                    ))
+
+        append(S3SearchOptionsWidget(
+                name = "project_search_L0",
+                field = "location.location_id$L0",
+                location_level="L0",
+                cols = 3
+                ))
+        append(S3SearchOptionsWidget(
+                name = "project_search_L1",
+                field = "location.location_id$L1",
+                location_level="L1",
+                cols = 3
+                ))
             #append(S3SearchOptionsWidget(
             #        name = "project_search_L2",
             #        label = T("Countries"),
@@ -315,7 +304,7 @@ class S3ProjectModel(S3Model):
             #        ))
 
         if use_sectors:
-            if settings.get_ui_cluster():
+            if settings.get_ui_label_cluster():
                 sector = T("Cluster")
             else:
                 sector = T("Sector")
@@ -359,20 +348,6 @@ class S3ProjectModel(S3Model):
                         cols = 5
                     ))
 
-        if settings.get_template() == "DRRPP":
-            project_rfa_opts = self.project_rfa_opts()
-            options = {}
-            #options = {None:NONE} To search NO RFA
-            for key in project_rfa_opts.keys():
-                options[key] = "RFA %s" % key
-            append(S3SearchOptionsWidget(
-                        name = "project_search_rfa",
-                        label = T("RFA"),
-                        field = "drrpp.rfa",
-                        options = options,
-                        help_field = project_rfa_opts,
-                        cols = 6
-                    ))
         if multi_orgs:
             append(S3SearchOptionsWidget(
                         name = "project_search_partners",
@@ -404,69 +379,36 @@ class S3ProjectModel(S3Model):
                                   args=["[id]", "task"])
         else:
             # Default
-            #create_next = URL(c="project", f="project",
-            #                  args=["[id]", "display"])
             create_next = None
 
-        if settings.get_template() == "DRRPP":
-            list_fields = ["id",
-                           "name",
-                           "start_date",
-                           (T("Countries"), "location.location_id"),
-                           (T("Hazards"), "hazard.name"),
-                           (T("Lead Organization"), "organisation_id"),
-                           (T("Donors"), "donor.organisation_id"),
-                           ]
-            report_fields = [#(T("Projects"), "name"),
-                             (T("Countries"), "location.location_id"),
-                             (T("Hazards"), "hazard.name"),
-                             (T("Themes"), "theme.name"),
-                             (T("HFA Priorities"), "drr.hfa"),
-                             (T("RFA Priorities"), "drrpp.rfa"),
-                             (T("Lead Organization"), "organisation_id"),
-                             (T("Partner Organizations"), "partner.organisation_id"),
-                             (T("Donors"), "donor.organisation_id"),
-                             ]
-            report_col_default = "location.location_id"
+        list_fields = ["id"]
+        append = list_fields.append
+        if use_codes:
+            append("code")
+        append("name")
+        append("organisation_id")
+        if mode_3w:
+            append((T("Locations"), "location.location_id"))
+        if use_sectors:
+            append((T("Sectors"), "sector.name"))
+        if mode_drr:
+            append((T("Hazards"), "hazard.name"))
+            #append("drr.hfa")
+        append((T("Themes"), "theme.name"))
+        if multi_orgs:
+            table.virtualfields.append(S3ProjectOrganisationFundingVirtualFields())
+            append((T("Total Funding Amount"), "total_organisation_amount"))
+        if multi_budgets:
+            table.virtualfields.append(S3ProjectBudgetVirtualFields())
+            append((T("Total Annual Budget"), "total_annual_budget"))
+        append("start_date")
+        append("end_date")
 
-            if "chart" in current.request.vars:
-                crud_strings[tablename].title_report  = T("Project Graph")
-                report_fact_fields = [("project.id", "count")]
-                report_fact_default = "project.id"
-            else:
-                crud_strings[tablename].title_report  = T("Project Matrix")
-                report_fact_fields = [(field, "count") for field in report_fields]
-                report_fact_default = "theme.name"
-
-        else:
-            list_fields = ["id"]
-            append = list_fields.append
-            if use_codes:
-                append("code")
-            append("name")
-            append("organisation_id")
-            if mode_3w:
-                append((T("Locations"), "location.location_id"))
-            if use_sectors:
-                append((T("Sectors"), "sector.name"))
-            if mode_drr:
-                append((T("Hazards"), "hazard.name"))
-                #append("drr.hfa")
-            append((T("Themes"), "theme.name"))
-            if multi_orgs:
-                table.virtualfields.append(S3ProjectOrganisationFundingVirtualFields())
-                append((T("Total Funding Amount"), "total_organisation_amount"))
-            if multi_budgets:
-                table.virtualfields.append(S3ProjectBudgetVirtualFields())
-                append((T("Total Annual Budget"), "total_annual_budget"))
-            append("start_date")
-            append("end_date")
-
-            report_fields = list_fields
-            report_col_default = "location.location_id"
-            report_fact_fields = [(field, "count") for field in report_fields]
-            report_fact_default = "project.organisation_id"
-            #report_fact_default = "theme.name"
+        report_fields = list_fields
+        report_col_default = "location.location_id"
+        report_fact_fields = [(field, "count") for field in report_fields]
+        report_fact_default = "project.organisation_id"
+        #report_fact_default = "theme.name"
 
         configure(tablename,
                   super_entity="doc_entity",
@@ -493,6 +435,7 @@ class S3ProjectModel(S3Model):
                                       "task",
                                       "organisation",
                                       "activity",
+                                      "activity_type",
                                       "annual_budget",
                                       "beneficiary",
                                       "location",
@@ -556,6 +499,14 @@ class S3ProjectModel(S3Model):
 
         # Activities
         add_component("project_activity", project_project="project_id")
+        
+        # Activity Types
+        add_component("project_activity_type",
+                      project_project=Storage(
+                                link="project_activity_type_project",
+                                joinby="project_id",
+                                key="activity_type_id",
+                                actuate="link"))        
 
         # Milestones
         add_component("project_milestone", project_project="project_id")
@@ -612,13 +563,6 @@ class S3ProjectModel(S3Model):
                           project_project=Storage(joinby="project_id",
                                                   multiple = False))
 
-        # DRRPP
-        if settings.get_template() == "DRRPP":
-            add_component("project_drrpp",
-                          project_project=Storage(joinby="project_id",
-                                                  multiple = False))
-            add_component("project_output", project_project="project_id")
-
         # ---------------------------------------------------------------------
         # Project Human Resources
         #
@@ -648,6 +592,7 @@ class S3ProjectModel(S3Model):
             project_pifacc_opts = self.project_pifacc_opts,
             project_rfa_opts = self.project_rfa_opts,
             project_theme_opts = self.project_theme_opts,
+            project_hazard_opts = self.project_hazard_opts,
         )
 
     # -------------------------------------------------------------------------
@@ -1160,6 +1105,8 @@ class S3ProjectActivityModel(S3Model):
                        "comments"
                        ]
         if mode_task:
+            list_fields.insert(3, "time_estimated")
+            list_fields.insert(4, "time_actual")
             append((T("Time Estimated"), "time_estimated"))
             append((T("Time Actual"), "time_actual"))
             create_next = URL(c="project", f="activity",
@@ -1340,6 +1287,7 @@ class S3ProjectActivityTypeModel(S3Model):
 
     names = ["project_activity_type",
              "project_activity_type_location",
+             "project_activity_type_project",
              "project_activity_type_sector",
              "project_activity_type_id",
              ]
@@ -1435,6 +1383,15 @@ class S3ProjectActivityTypeModel(S3Model):
                              activity_type_id(empty=False),
                              self.project_location_id(empty=False),
                              *s3_meta_fields())
+        
+        # ---------------------------------------------------------------------
+        # Activity Type - Project Link Table
+        #
+        tablename = "project_activity_type_project"
+        table = define_table(tablename,
+                             activity_type_id(empty=False),
+                             self.project_project_id(empty=False),
+                             *s3_meta_fields())        
 
         crud_strings[tablename] = Storage(
             title_create = T("New Activity Type"),
@@ -1922,23 +1879,23 @@ class S3ProjectFrameworkModel(S3Model):
 
         # CRUD Strings
         if current.deployment_settings.get_auth_record_approval():
-            msg_record_created = T("Framework added, awaiting administrator's approval")
+            msg_record_created = T("Policy or Strategy added, awaiting administrator's approval")
         else:
-            msg_record_created = T("Framework added")
+            msg_record_created = T("Policy or Strategy added")
         crud_strings[tablename] = Storage(
-            title_create = T("Add Framework"),
-            title_display = T("Framework"),
-            title_list = T("Frameworks"),
-            title_update = T("Edit Framework"),
-            title_search = T("Search Frameworks"),
-            title_upload = T("Import Framework data"),
-            subtitle_create = T("Add New Framework"),
-            label_list_button = T("List Frameworks"),
-            label_create_button = T("Add Framework"),
+            title_create = T("Add Policy or Strategy"),
+            title_display = T("Policy or Strategy"),
+            title_list = T("Policies & Strategies"),
+            title_update = T("Edit Policy or Strategy"),
+            title_search = T("Search Policies & Strategies"),
+            title_upload = T("Import Policies & Strategies"),
+            subtitle_create = T("Add New Policy or Strategy"),
+            label_list_button = T("List Policies & Strategies"),
+            label_create_button = T("Add Policy or Strategy"),
             msg_record_created = msg_record_created,
-            msg_record_modified = T("Framework updated"),
-            msg_record_deleted = T("Framework deleted"),
-            msg_list_empty = T("No Frameworks found")
+            msg_record_modified = T("Policy or Strategy updated"),
+            msg_record_deleted = T("Policy or Strategy deleted"),
+            msg_list_empty = T("No Policies or Strategies found")
         )
 
         crud_form = S3SQLCustomForm(
@@ -1961,9 +1918,19 @@ class S3ProjectFrameworkModel(S3Model):
             ),
         )
 
+        # search_method = S3Search(simple = S3SearchSimpleWidget(
+                # name = "project_framework_search_text",
+                # label = T("Name"),
+                # comment = T("Search for a Policy or Strategy by name or description."),
+                # field = ["name",
+                         # "description",
+                         # ]
+            # ))
+        
         self.configure(tablename,
                        super_entity="doc_entity",
                        crud_form = crud_form,
+                       #search_method = search_method,
                        list_fields = ["name",
                                       (ORGANISATIONS, "framework_organisation.organisation_id"),
                                       "description",
@@ -2003,14 +1970,13 @@ class S3ProjectFrameworkModel(S3Model):
             title_list = T("Organizations"),
             title_update = T("Edit Organization"),
             title_search = T("Search Organizations"),
-            title_upload = T("Import Framework data"),
             subtitle_create = T("Add New Organization"),
             label_list_button = T("List Organizations"),
             label_create_button = T("Add Organization"),
-            msg_record_created = T("Organization added to Framework"),
+            msg_record_created = T("Organization added to Policy/Strategy"),
             msg_record_modified = T("Organization updated"),
-            msg_record_deleted = T("Organization removed from Framework"),
-            msg_list_empty = T("No Organizations found for this Framework")
+            msg_record_deleted = T("Organization removed from Policy/Strategy"),
+            msg_list_empty = T("No Organizations found for this Policy/Strategy")
         )
 
         # Pass names back to global scope (s3.*)
@@ -2608,8 +2574,11 @@ class S3ProjectOrganisationModel(S3Model):
         table = self.define_table(tablename,
                                   self.project_project_id(),
                                   self.org_organisation_id(
-                                    requires = self.org_organisation_requires(updateable=True,
-                                                                              required=True),
+                                    requires = self.org_organisation_requires(
+                                                    required=True,
+                                                    # Need to be able to add Partners/Donors not just Lead org
+                                                    #updateable=True,
+                                                    ),
                                     widget = None,
                                     comment=S3AddResourceLink(c="org",
                                                               f="organisation",
@@ -3113,7 +3082,12 @@ class S3ProjectDRRPPModel(S3Model):
                         ),
                      Field("parent_project",
                            represent = lambda v: v or NONE,
-                           label = T("Parent Project")),
+                           label = T("Parent Project"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Parent Project"),
+                                                           T("The parent project or programme which this project is implemented under"))), 
+                           
+                     ),
                      Field("duration", "integer",
                            represent = lambda v: v or NONE,
                            label = T("Duration (months)")),
@@ -3589,7 +3563,7 @@ class S3ProjectTaskModel(S3Model):
                      ]
 
         if settings.get_project_milestones():
-            list_fields.insert(5, (T("Milestone"), "task_milestone.milestone_id"))
+            list_fields.insert(5, (T("Milestone"), "milestone.name"))
             advanced_task_search.insert(4, S3SearchOptionsWidget(
                                             name = "task_search_milestone",
                                             label = T("Milestone"),
@@ -3680,7 +3654,7 @@ class S3ProjectTaskModel(S3Model):
                                 autocomplete="name",
                                 autodelete=False))
 
-        # Activities (for imports)
+        # Activities
         add_component("project_activity",
                       project_task=Storage(
                                 link="project_task_activity",
@@ -3690,7 +3664,7 @@ class S3ProjectTaskModel(S3Model):
                                 autocomplete="name",
                                 autodelete=False))
 
-        # Milestones (for imports)
+        # Milestones
         add_component("project_milestone",
                       project_task=Storage(
                                 link="project_task_milestone",
@@ -4141,8 +4115,7 @@ class S3ProjectTaskModel(S3Model):
         """
             When a Task is created:
                 * Process the additional fields: Project/Activity/Milestone
-                * create associated Link Tables
-                * ensure that it is owned by the Project Customer
+                * create associated Link Table records
                 * notify assignee
         """
 
@@ -4150,9 +4123,7 @@ class S3ProjectTaskModel(S3Model):
         s3db = current.s3db
         session = current.session
 
-        vars = form.vars
-        id = vars.id
-        _vars = current.request.post_vars
+        id = form.vars.id
 
         if session.s3.event:
             # Create a link between this Task & the active Event
@@ -4160,46 +4131,43 @@ class S3ProjectTaskModel(S3Model):
             etable.insert(event_id=session.s3.event,
                           task_id=id)
 
+        ltp = db.project_task_project
+
         vars = current.request.post_vars
-        table = db.project_task
-        if "project_id" in vars:
+        project_id = vars.get("project_id", None)
+        if project_id:
             # Create Link to Project
-            ltable = db.project_task_project
-            if vars.project_id:
-                link_id = ltable.insert(task_id = id,
-                                        project_id = _vars.project_id)
+            link_id = ltp.insert(task_id = id,
+                                 project_id = project_id)
 
-        if "activity_id" in vars:
+        activity_id = vars.get("activity_id", None)
+        if activity_id:
             # Create Link to Activity
-            ltable = db.project_task_activity
-            if vars.activity_id:
-                link_id = ltable.insert(task_id = id,
-                                        activity_id = _vars.activity_id)
+            lta = db.project_task_activity
+            link_id = lta.insert(task_id = id,
+                                 activity_id = activity_id)
 
-        if "milestone_id" in vars:
+        milestone_id = vars.get("milestone_id", None)
+        if milestone_id:
             # Create Link to Milestone
             ltable = db.project_task_milestone
-            if vars.milestone_id:
-                link_id = ltable.insert(task_id = id,
-                                        milestone_id = _vars.milestone_id)
+            link_id = ltable.insert(task_id = id,
+                                    milestone_id = milestone_id)
 
         # Make sure the task is also linked to the project
         # when created under an activity
-        if id:
+        row = db(ltp.task_id == id).select(ltp.project_id,
+                                           limitby=(0, 1)).first()
+        if not row:
             lta = db.project_task_activity
-            ltp = db.project_task_project
             ta = db.project_activity
-            query = (ltp.task_id == id)
-            row = db(query).select(ltp.project_id,
+            query = (lta.task_id == id) & \
+                    (lta.activity_id == ta.id)
+            row = db(query).select(ta.project_id,
                                    limitby=(0, 1)).first()
-            if not row:
-                query = (lta.task_id == id) & \
-                        (lta.activity_id == ta.id)
-                row = db(query).select(ta.project_id,
-                                       limitby=(0, 1)).first()
-                if row and row.project_id:
-                    ltp.insert(task_id=id,
-                               project_id=row.project_id)
+            if row and row.project_id:
+                ltp.insert(task_id=id,
+                           project_id=row.project_id)
 
         # Notify Assignee
         task_notify(form)
@@ -4256,12 +4224,12 @@ class S3ProjectTaskModel(S3Model):
 
         vars = current.request.post_vars
         if "project_id" in vars:
-            ptable = db.project_project
             ltable = db.project_task_project
             filter = (ltable.task_id == id)
             project = vars.project_id
             if project:
                 # Create the link to the Project
+                #ptable = db.project_project
                 #master = s3db.resource("project_task", id=id)
                 #record = db(ptable.id == project).select(ptable.id,
                 #                                         limitby=(0, 1)).first()
@@ -4282,12 +4250,12 @@ class S3ProjectTaskModel(S3Model):
             links.delete(ondelete=ondelete)
 
         if "activity_id" in vars:
-            atable = db.project_activity
             ltable = db.project_task_activity
             filter = (ltable.task_id == id)
             activity = vars.activity_id
             if vars.activity_id:
                 # Create the link to the Activity
+                #atable = db.project_activity
                 #master = s3db.resource("project_task", id=id)
                 #record = db(atable.id == activity).select(atable.id,
                 #                                          limitby=(0, 1)).first()
@@ -4308,12 +4276,12 @@ class S3ProjectTaskModel(S3Model):
             links.delete(ondelete=ondelete)
 
         if "milestone_id" in vars:
-            mtable = db.project_milestone
             ltable = db.project_task_milestone
             filter = (ltable.task_id == id)
             milestone = vars.milestone_id
             if milestone:
                 # Create the link to the Milestone
+                #mtable = db.project_milestone
                 #master = s3db.resource("project_task", id=id)
                 #record = db(mtable.id == milestone).select(mtable.id,
                 #                                           limitby=(0, 1)).first()
@@ -4917,6 +4885,7 @@ def project_rheader(r):
     if resourcename == "project":
         mode_3w = settings.get_project_mode_3w()
         mode_task = settings.get_project_mode_task()
+        attachments_label = settings.get_ui_label_attachments()
 
         # Tabs
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -4949,7 +4918,7 @@ def project_rheader(r):
         if mode_3w:
             append((T("Documents"), "document"))
         else:
-            append((T("Attachments"), "document"))
+            append((attachments_label, "document"))
         if settings.get_hrm_show_staff():
             append((T("Staff"), "human_resource", dict(group="staff")))
         if settings.has_module("vol"):
@@ -4987,7 +4956,7 @@ def project_rheader(r):
                 (T("Contact Persons"), "contact")]
         if settings.get_project_mode_task():
             tabs.append((T("Tasks"), "task"))
-            tabs.append((T("Attachments"), "document"))
+            tabs.append((attachments_label, "document"))
         else:
             tabs.append((T("Documents"), "document"))
         rheader_fields = []
@@ -5001,7 +4970,7 @@ def project_rheader(r):
         # Tabs
         tabs = [(T("Details"), None)]
         append = tabs.append
-        append((T("Attachments"), "document"))
+        append((attachments_label, "document"))
         if settings.has_module("msg"):
             append((T("Notify"), "dispatch"))
         #(T("Roles"), "job_role"),
@@ -5129,16 +5098,35 @@ def project_task_form_inject(r, output, project=True):
 
     table = s3db.project_task_activity
     field = table.activity_id
-    if r.id:
-        query = (table.task_id == r.id)
-        default = db(query).select(table.activity_id,
+    default = None
+    if r.component_id:
+        query = (table.task_id == r.component_id)
+        default = db(query).select(field,
                                    limitby=(0, 1)).first()
         if default:
             default = default.activity_id
-    else:
+    elif r.id:
+        query = (table.task_id == r.id)
+        default = db(query).select(field,
+                                   limitby=(0, 1)).first()
+        if default:
+            default = default.activity_id
+    if not default:
         default = field.default
     field_id = "%s_%s" % (table._tablename, field.name)
-    field.requires=IS_IN_SET([default])
+    if r.component:
+        requires = {}
+        table = db.project_activity
+        query = (table.project_id == r.id)
+        rows = db(query).select(table.id, table.name)
+        for row in rows:
+            requires[row.id] = row.name
+        field.requires = IS_IN_SET(requires)
+    else:
+        if default:
+            field.requires = IS_IN_SET([default])
+        else:
+            field.requires = IS_IN_SET([])
     widget = SQLFORM.widgets.options.widget(field, default)
     label = field.label
     label = LABEL(label, label and sep, _for=field_id,
@@ -5147,14 +5135,15 @@ def project_task_form_inject(r, output, project=True):
                                 c="project",
                                 f="activity",
                                 tooltip=T("If you don't see the activity in the list, you can add a new one by clicking link 'Add Activity'."))
-    options = {
-        "triggerName": "project_id",
-        "targetName": "activity_id",
-        "lookupPrefix": "project",
-        "lookupResource": "activity",
-        "optional": True,
-    }
-    s3.jquery_ready.append('''S3OptionsFilter(%s)''' % json.dumps(options))
+    if project:
+        options = {
+            "triggerName": "project_id",
+            "targetName": "activity_id",
+            "lookupPrefix": "project",
+            "lookupResource": "activity",
+            "optional": True,
+        }
+        s3.jquery_ready.append('''S3OptionsFilter(%s)''' % json.dumps(options))
     row_id = field_id + SQLFORM.ID_ROW_SUFFIX
     row = s3_formstyle(row_id, label, widget, comment)
     try:
@@ -5171,7 +5160,7 @@ def project_task_form_inject(r, output, project=True):
     if settings.get_project_milestones():
         table = s3db.project_task_milestone
         field = table.milestone_id
-        if r.id:
+        if project and r.id:
             query = (table.task_id == r.id)
             default = db(query).select(field,
                                        limitby=(0, 1)).first()
@@ -5270,7 +5259,7 @@ def project_task_controller():
         tablename = "project_task"
         table = s3db.project_task
         statuses = s3.project_task_active_statuses
-        crud_strings = s3.crud_strings["project_task"]
+        crud_strings = s3.crud_strings[tablename]
 
         if r.record:
             if r.interactive:

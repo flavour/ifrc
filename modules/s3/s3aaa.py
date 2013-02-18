@@ -211,7 +211,7 @@ Thank you
 
         # Site types (for OrgAuth)
         T = current.T
-        if deployment_settings.get_ui_camp():
+        if deployment_settings.get_ui_label_camp():
             shelter = T("Camp")
         else:
             shelter = T("Shelter")
@@ -507,6 +507,8 @@ Thank you
         db = current.db
         T = current.T
 
+        current.response.title = T("Login")
+
         utable = self.settings.table_user
         if self.settings.login_userfield:
             username = self.settings.login_userfield
@@ -656,9 +658,10 @@ Thank you
             if cas_user:
                 cas_user[passfield] = None
                 user = self.get_or_create_user(utable._filter_fields(cas_user))
-                form = Storage()
-                form.vars = user
-                self.s3_register(form)
+                # @ToDo: Complete Registration for new users
+                #form = Storage()
+                #form.vars = user
+                #self.s3_register(form)
             elif hasattr(cas, "login_form"):
                 return cas.login_form()
             else:
@@ -1454,7 +1457,7 @@ S3OptionsFilter({
             record["image"] = newfilename
 
         if len(record) > 1:
-            temptable.update_or_insert( **record )
+            temptable.update_or_insert(**record)
 
     # -------------------------------------------------------------------------
     def s3_verify_user(self, user):

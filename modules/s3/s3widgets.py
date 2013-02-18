@@ -202,6 +202,30 @@ class S3DateTimeWidget(FormWidget):
 
     def __call__(self, field, value, **attributes):
 
+        self.injectJS(field, value, **attributes)
+
+        default = dict(_type = "text",
+                       # Prevent default "datetime" calendar from showing up:
+                       _class = "anytime",
+                       value = value,
+                       old_value = value)
+
+        # FormWidget._attributes will override what's supplied in default with
+        # what's in attributes. Caller may want to supply additional classes.
+        # Don't force them to know we're using anytime.
+        classes = attributes.get("_class", None)
+        if classes and "anytime" not in classes:
+            attributes["_class"] = "%s %s" % (classes, "anytime")
+
+        attr = StringWidget._attributes(field, default, **attributes)
+               
+        return TAG[""](
+                        INPUT(**attr),
+                        requires = field.requires
+                      )
+
+    def injectJS(self, field, value, **attributes):
+	
         settings = current.deployment_settings
         if self.format:
             # default: "%Y-%m-%d %T"
@@ -210,7 +234,6 @@ class S3DateTimeWidget(FormWidget):
             format = str(settings.get_L10n_datetime_format())
         request = current.request
         s3 = current.response.s3
-
         if isinstance(value, datetime.datetime):
             datevalue = value
             value = value.strftime(format)
@@ -220,15 +243,11 @@ class S3DateTimeWidget(FormWidget):
             from dateutil import parser
             datevalue = parser.parse(value, ignoretz=True)
 
-        default = dict(_type = "text",
-                       # Prevent default "datetime" calendar from showing up:
-                       _class = "anytime",
-                       value = value,
-                       old_value = value)
-
-        attr = StringWidget._attributes(field, default, **attributes)
-
-        selector = str(field).replace(".", "_")
+        # If _id is supplied, use it for the selector string.
+        if "_id" in attributes:
+            selector = attributes["_id"]
+        else:
+            selector = str(field).replace(".", "_")
 
         now = request.utcnow
         offset = S3DateTime.get_offset_value(current.session.s3.utc_offset)
@@ -288,10 +307,6 @@ $('#%(selector)s').after(clear_button)
              latest=latest,
              format=format.replace("%M", "%i")))
 
-        return TAG[""](
-                        INPUT(**attr),
-                        requires = field.requires
-                      )
 
 # =============================================================================
 class S3BooleanWidget(BooleanWidget):

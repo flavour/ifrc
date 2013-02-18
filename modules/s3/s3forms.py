@@ -25,7 +25,6 @@
     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
     OTHER DEALINGS IN THE SOFTWARE.
-
 """
 
 import os
@@ -767,7 +766,8 @@ class S3SQLCustomForm(S3SQLForm):
                         keepvalues=False,
                         hideerror=False):
 
-            self.accept(form, format=format)
+            link = options.get("link", None)
+            self.accept(form, format=format, link=link)
             response.confirmation = message
 
         return form
@@ -833,12 +833,13 @@ class S3SQLCustomForm(S3SQLForm):
         return
 
     # -------------------------------------------------------------------------
-    def accept(self, form, format=None):
+    def accept(self, form, format=None, link=None):
         """
             Create/update all records from the form.
 
             @param form: the form
             @param format: data format extension (for audit)
+            @param link: resource.link for linktable components
         """
 
         db = current.db
@@ -848,7 +849,8 @@ class S3SQLCustomForm(S3SQLForm):
         main_data = self._extract(form)
         master_id = self._accept(self.record_id,
                                  main_data,
-                                 format=format)
+                                 format=format,
+                                 link=link)
         if not master_id:
             return
         else:
@@ -925,7 +927,7 @@ class S3SQLCustomForm(S3SQLForm):
             return subform
 
     # -------------------------------------------------------------------------
-    def _accept(self, record_id, data, alias=None, format=None):
+    def _accept(self, record_id, data, alias=None, format=None, link=None):
         """
             Create or update a record
 
@@ -933,6 +935,7 @@ class S3SQLCustomForm(S3SQLForm):
             @param data: the data
             @param alias: the component alias
             @param format: the request format (for audit)
+            @param link: resource.link for linktable components
         """
 
         if not data:
@@ -985,6 +988,12 @@ class S3SQLCustomForm(S3SQLForm):
         # Update super entity links
         s3db.update_super(table, form.vars)
 
+        # Update component link
+        if link and link.postprocess is None:
+            resource = link.resource
+            master = link.master
+            resource.update_link(master, form.vars)
+        
         if accept_id:
             if record_id is None:
                 # Set record owner
@@ -2583,50 +2592,40 @@ class S3SQLInlineComponentCheckbox(S3SQLInlineComponent):
             # Render the options
             formname = self._formname()
             field_name = "%s-%s" % (formname, fieldname)
-            rows = []
-            rappend = rows.append
+            
             count = len(options)
-            mods = count % cols
             num_of_rows = count / cols
-            if mods:
+            if count % cols:
                 num_of_rows += 1
 
-            input_index = 0
-            for r in range(num_of_rows):
-                cells = []
-                cappend = cells.append
-                col = 0
-                opts_used = []
-                oappend = opts_used.append
-                for opt in options:
-                    if col == cols:
-                        break
-                    option = options[opt]
-                    oappend(opt)
-                    input_id = "id-%s-%s" % (field_name, input_index)
-                    # @ToDo: Option to Translate or not
-                    label = T(option["name"])
-                    cappend(TD(INPUT(_disabled= not option["editable"],
-                                     _id=input_id,
-                                     _name=field_name,
-                                     _type="checkbox",
-                                     _value=opt,
-                                     hideerror=True,
-                                     value=option["selected"],
-                                     ),
-                               LABEL(label,
-                                     _for=input_id,
-                                     #_title=label,
-                                     )
-                               ))
-                    col += 1
-                    input_index += 1
-                rappend(TR(cells))
-                for opt in opts_used:
-                    options.pop(opt)
+            table = [[] for row in range(num_of_rows)]
 
-            widget = TABLE(TBODY(rows),
-                           #_class="s3-checkboxes-widget",
+            row_index = 0
+            col_index = 0
+            
+            for id in options:
+                option = options[id]
+                label = T(option["name"])
+                input_id = "id-%s-%s-%s" % (field_name, row_index, col_index)
+                widget = TD(INPUT(_disabled= not option["editable"],
+                                  _id=input_id,
+                                  _name=field_name,
+                                  _type="checkbox",
+                                  _value=id,
+                                  hideerror=True,
+                                  value=option["selected"],
+                                  ),
+                            LABEL(label,
+                                  _for=input_id,
+                                  )
+                            )
+                table[row_index].append(widget)
+                row_index += 1
+                if row_index >= num_of_rows:
+                    row_index = 0
+                    col_index += 1
+
+            widget = TABLE(table,
                            _class="checkboxes-widget-s3",
                            )
 
@@ -2695,7 +2694,7 @@ class S3SQLInlineComponentCheckbox(S3SQLInlineComponent):
             vals.append(item[fieldname]["text"])
 
         vals.sort()
-        represent = ",".join(vals)
+        represent = ", ".join(vals)
         return TABLE(TBODY(TR(TD(represent),
                               #_class="read-row"
                               )),

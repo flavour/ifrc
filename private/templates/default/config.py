@@ -245,6 +245,8 @@ settings.L10n.decimal_separator = "."
 #settings.ui.cluster = True
 # Enable this to use the label 'Camp' instead of 'Shelter'
 #settings.ui.camp = True
+# Enable this to change the label for 'Attachments' tabs
+#settings.ui.label_attachments = "Attachments"
 # Enable this to change the label for 'Mobile Phone'
 #settings.ui.label_mobile_phone = "Cell Phone"
 # Enable this to change the label for 'Postcode'
@@ -682,6 +684,12 @@ settings.modules = OrderedDict([
            restricted = True,
            module_type = 10,
        )),
+    ("event", Storage(
+            name_nice = T("Events"),
+            #description = "Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities).",
+            restricted = True,
+            module_type = 10,
+        )),
     ("transport", Storage(
            name_nice = T("Transport"),
            restricted = True,
@@ -702,12 +710,6 @@ settings.modules = OrderedDict([
     #("vulnerability", Storage(
     #        name_nice = T("Vulnerability"),
     #        #description = "Manages vulnerability indicators",
-    #        restricted = True,
-    #        module_type = 10,
-    #    )),
-    #("event", Storage(
-    #        name_nice = T("Events"),
-    #        #description = "Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities).",
     #        restricted = True,
     #        module_type = 10,
     #    )),
@@ -799,6 +801,6 @@ settings.modules = OrderedDict([
     #       name_nice = T("Optical Character Recognition"),
     #       #description = "Optical Character Recognition for reading the scanned handwritten paper forms.",
     #       restricted = False,
-    #       module_type = 10
+    #       module_type = None,
     #   )),
 ])

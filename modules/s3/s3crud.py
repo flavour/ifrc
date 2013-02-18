@@ -30,14 +30,8 @@
     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
     OTHER DEALINGS IN THE SOFTWARE.
-
 """
 
-from gluon import *
-from gluon.dal import Row
-from gluon.serializers import json as jsons
-from gluon.storage import Storage
-from gluon.tools import callback
 try:
     import json # try stdlib (Python 2.6)
 except ImportError:
@@ -46,18 +40,24 @@ except ImportError:
     except:
         import gluon.contrib.simplejson as json # fallback to pure-Python module
 
-from s3rest import S3Method
-from s3export import S3Exporter
-from s3forms import S3SQLDefaultForm
-from s3widgets import S3EmbedComponentWidget
-from s3utils import s3_unicode
-
 try:
     from lxml import etree
 except ImportError:
     import sys
     print >> sys.stderr, "ERROR: lxml module needed for XML handling"
     raise
+
+from gluon import *
+from gluon.dal import Row
+from gluon.serializers import json as jsons
+from gluon.storage import Storage
+from gluon.tools import callback
+
+from s3export import S3Exporter
+from s3forms import S3SQLDefaultForm
+from s3rest import S3Method
+from s3utils import s3_unicode
+from s3widgets import S3EmbedComponentWidget
 
 # =============================================================================
 class S3CRUD(S3Method):
@@ -194,6 +194,7 @@ class S3CRUD(S3Method):
             link = None
             if r.component:
                 if resource.link is None:
+                    # No link table - direct component
                     link = self._embed_component(resource, record=r.id)
                     pkey = resource.pkey
                     fkey = resource.fkey
@@ -412,6 +413,7 @@ class S3CRUD(S3Method):
 
             # Redirect to update if user has permission unless
             # a method has been specified in the URL
+            # MH: Is this really desirable? Many users would prefer to open as read 
             if not r.method or r.method == "review":
                 authorised = self._permitted("update")
                 if authorised and representation == "html" and editable:
@@ -2367,7 +2369,7 @@ class S3CRUD(S3Method):
                                        vars=r.get_vars))
                     else:
                         return str(URL(r=r, c=c, f=f,
-                                       args=args,
+                                       args=args + ["read"],
                                        vars=r.get_vars))
                 else:
                     args = [record_id]
@@ -2377,7 +2379,7 @@ class S3CRUD(S3Method):
                                        vars=r.get_vars))
                     else:
                         return str(URL(r=r, c=c, f=f,
-                                       args=args,
+                                       args=args + ["read"],
                                        vars=r.get_vars))
         return list_linkto
 
