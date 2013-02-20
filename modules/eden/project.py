@@ -102,6 +102,7 @@ class S3ProjectModel(S3Model):
 
         T = current.T
         db = current.db
+        auth = current.auth
 
         #NONE = current.messages["NONE"]
 
@@ -179,10 +180,11 @@ class S3ProjectModel(S3Model):
                              # - although Lead Org is still cached here to avoid the need for a virtual field to lookup
                              self.org_organisation_id(
                                 label = org_label,
+                                default = auth.root_org(),
                                 requires = self.org_organisation_requires(
-                                    required=True,
+                                    required = True,
                                     # Only allowed to add Projects for Orgs that the user has write access to
-                                    updateable=True,
+                                    updateable = True,
                                     ),
                                 ),
                              Field("name", unique = True,
@@ -451,8 +453,8 @@ class S3ProjectModel(S3Model):
         project_id = S3ReusableField("project_id", table,
             sortby="name",
             requires = IS_NULL_OR(
-                            IS_ONE_OF(db(current.auth.s3_accessible_query("update",
-                                                                          table)),
+                            IS_ONE_OF(db(auth.s3_accessible_query("update",
+                                                                  table)),
                                       "project_project.id",
                                       lambda id, row:
                                         project_project_represent(id, row, show_link=False)
@@ -2263,28 +2265,24 @@ class S3ProjectLocationModel(S3Model):
             ),
             S3SearchOptionsWidget(
                 name = "project_location_search_L0",
-                #field="L0",
                 field = "location_id$L0",
                 label = COUNTRY,
                 cols = 3
             ),
             S3SearchOptionsWidget(
                 name = "project_location_search_L1",
-                #field = "L1",
                 field = "location_id$L1",
                 location_level = "L1",
                 cols = 3
             ),
             S3SearchOptionsWidget(
                 name = "project_location_search_L2",
-                #field = "L2",
                 field = "location_id$L2",
                 location_level = "L2",
                 cols = 3
             ),
             S3SearchOptionsWidget(
                 name = "project_location_search_L3",
-                #field = "L3",
                 field = "location_id$L3",
                 location_level = "L3",
                 cols = 3
@@ -2300,7 +2298,7 @@ class S3ProjectLocationModel(S3Model):
             )
             advanced_search.insert(1, sectors)
 
-        project_location_search = S3Search(
+        search_method = S3Search(
             simple = (simple),
             advanced = advanced_search,
         )
@@ -2335,7 +2333,7 @@ class S3ProjectLocationModel(S3Model):
                                   args=["[id]", "beneficiary"]),
                   deduplicate=self.project_location_deduplicate,
                   onaccept=self.project_location_onaccept,
-                  search_method=project_location_search,
+                  search_method=search_method,
                   report_options=Storage(search = advanced_search,
                                          rows=report_fields,
                                          cols=report_fields,

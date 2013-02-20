@@ -134,8 +134,8 @@ class S3HRModel(S3Model):
                                   super_link("track_id", "sit_trackable"),
                                   self.org_organisation_id(
                                     label = organisation_label,
-                                    requires = self.org_organisation_requires(updateable=True,
-                                                                              required=True),
+                                    requires = self.org_organisation_requires(required=True,
+                                                                              updateable=True),
                                     #widget = None,
                                     widget=S3OrganisationAutocompleteWidget(
                                         default_from_profile=True),
@@ -144,6 +144,7 @@ class S3HRModel(S3Model):
                                   super_link("site_id", "org_site",
                                              label=settings.get_org_site_label(),
                                              instance_types = auth.org_site_types,
+                                             orderby = "org_site.name",
                                              updateable = True,
                                              not_filterby = "obsolete",
                                              not_filter_opts = [True],
@@ -3188,14 +3189,14 @@ def hrm_human_resource_represent(id, row=None, show_link=False):
     except:
         return current.messages.UNKNOWN_OPT
 
-    repr = ""
+    suffix = ""
     if hr.organisation_id and \
        current.deployment_settings.get_hrm_show_organisation():
-        repr = ", %s" % s3db.org_OrganisationRepresent()(hr.organisation_id)
+        suffix = ", %s" % s3db.org_OrganisationRepresent()(hr.organisation_id)
     if hr.job_title_id:
-        repr = ", %s%s" % (S3Represent(lookup="hrm_job_title")(hr.job_title_id), repr)
+        suffix = ", %s%s" % (S3Represent(lookup="hrm_job_title")(hr.job_title_id), suffix)
     person = row["pr_person"]
-    repr = "%s%s" % (s3_fullname(person), repr)
+    representation = "%s%s" % (s3_unicode(s3_fullname(person)), suffix)
     if show_link:
         if hr.type == 1:
             controller = "hrm"
@@ -3204,13 +3205,13 @@ def hrm_human_resource_represent(id, row=None, show_link=False):
             controller = "vol"
             function = "volunteer"
         current.request.extension = "html"
-        return A(repr,
+        return A(representation,
                  _href = URL(c = controller,
                              f = function,
                              args = [id]
                              )
                  )
-    return repr
+    return representation
 
 # =============================================================================
 def hrm_training_event_represent(id, row=None):

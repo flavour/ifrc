@@ -1216,9 +1216,8 @@ class S3SiteModel(S3Model):
                                         length=10, # Mayon compatibility
                                         writable=False,
                                         label=T("Code")),
-                                  Field("name",
+                                  Field("name", notnull=True,
                                         length=64, # Mayon compatibility
-                                        notnull=True,
                                         #unique=True,
                                         label=T("Name")),
                                   self.gis_location_id(),
@@ -1251,7 +1250,6 @@ class S3SiteModel(S3Model):
                                   default=auth.user.site_id if auth.is_logged_in() else None,
                                   represent=org_site_represent,
                                   orderby="org_site.name",
-                                  sort=True,
                                   widget=widget,
                                   comment=comment
                                   )
@@ -2190,8 +2188,8 @@ class S3OfficeModel(S3Model):
                                    ),
                              self.org_organisation_id(
                                  #widget=S3OrganisationAutocompleteWidget(default_from_profile=True),
-                                 requires = org_organisation_requires(updateable=True,
-                                                                      required=True),
+                                 requires = org_organisation_requires(required=True,
+                                                                      updateable=True),
                                  ),
                              office_type_id(
                                             #readable = False,
@@ -2281,20 +2279,20 @@ class S3OfficeModel(S3Model):
                   onaccept=self.org_office_onaccept,
                   deduplicate=self.org_office_duplicate,
                   search_method=office_search,
-                  # Experimental: filter form (used by S3CRUD.list_div)
-                  #filter_widgets=[
-                  #      S3TextFilter(["name", "email", "comments"],
-                  #                   label=T("Search"),
-                  #                   comment=T("Search for office by text.")),
-                  #      S3OptionsFilter("organisation_id",
-                  #                      label=messages.ORGANISATION,
-                  #                      comment=T("Search for office by organization."),
-                  #                      represent="%(name)s",
-                  #                      cols=3),
-                  #      S3OptionsFilter("location_id$L1",
-                  #                      location_level="L1",
-                  #                      cols=3)
-                  #],
+                  # Experimental: filter form (used by S3CRUD.select_dl)
+                  filter_widgets=[
+                       S3TextFilter(["name", "email", "comments"],
+                                    label=T("Search"),
+                                    comment=T("Search for office by text.")),
+                       S3OptionsFilter("organisation_id",
+                                       label=messages.ORGANISATION,
+                                       comment=T("Search for office by organization."),
+                                       represent="%(name)s",
+                                       cols=3),
+                       S3OptionsFilter("location_id$L1",
+                                       location_level="L1",
+                                       cols=3)
+                  ],
                   list_fields=["id",
                                "name",
                                "organisation_id", # Filtered in Component views
