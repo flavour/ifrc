@@ -128,6 +128,9 @@ settings.ui.cluster = True
 settings.ui.hide_report_options = False
 settings.ui.hide_report_filter_options = True
 
+# Uncomment to restrict the export formats available
+settings.ui.export_formats = ["xls", "xml"]
+
 # -----------------------------------------------------------------------------
 # Formstyle
 def formstyle_row(id, label, widget, comment, hidden=False):
@@ -393,6 +396,7 @@ if($('[name=sub_drrpp_L1]').is(':checked')==false){
             "location",
             label = T("Countries"),
             fields = ["location_id"],
+            orderby = "location_id$name"
         ),
         "drrpp.L1",
         s3forms.S3SQLInlineComponentCheckbox(
