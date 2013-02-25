@@ -3007,12 +3007,12 @@ class S3ImportJob():
                     if directory is not None:
                         entry = directory.get((tablename, attr, uid), None)
                     if not entry:
-                        expr = ".//%s[@%s='%s' and @%s='%s']" % (
+                        expr = './/%s[@%s="%s" and @%s="%s"]' % (
                                     TAG.resource,
                                     ATTRIBUTE.name,
                                     tablename,
                                     attr,
-                                    xml.xml_encode(uid))
+                                    uid)
                         e = root.xpath(expr)
                         if e:
                             # Element in the source => append to relements
