@@ -2925,7 +2925,7 @@ class S3ImportJob():
         TAG = xml.TAG
         UID = xml.UID
         reference_list = []
-
+        
         root = None
         if tree is not None:
             if isinstance(tree, etree._Element):
