@@ -45,10 +45,11 @@ except ImportError:
         import gluon.contrib.simplejson as json # fallback to pure-Python module
 
 from gluon import *
-from gluon.storage import Storage
 from gluon.dal import Row
 from gluon.sqlhtml import SQLTABLE
+from gluon.storage import Storage
 from gluon.tools import Crud
+
 from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
 DEBUG = False
@@ -468,11 +469,13 @@ def s3_url_represent(url):
     return A(url, _href=url, _target="blank")
 
 # =============================================================================
-def s3_avatar_represent(id, tablename="auth_user", _class="avatar"):
+def s3_avatar_represent(id, tablename="auth_user", **attr):
     """
         Represent a User as their profile picture or Gravatar
 
-        @todo: parameter description?
+        @param tablename: either "auth_user" or "pr_person" depending on which
+                          table the 'id' refers to
+        @param attr: additional HTML attributes for the IMG(), such as _class
     """
 
     db = current.db
@@ -534,11 +537,13 @@ def s3_avatar_represent(id, tablename="auth_user", _class="avatar"):
     else:
         url = "http://www.gravatar.com/avatar/00000000000000000000000000000000?d=mm"
 
-    return IMG(_src=url,
-               _class=_class,
-               _width=size[0],
-               _height=size[1],
-              )
+    if "_class" not in attr:
+        attr["_class"] = "avatar"
+    if "_width" not in attr:
+        attr["_width"] = size[0]
+    if "_height" not in attr:
+        attr["_height"] = size[1]
+    return IMG(_src=url, **attr)
 
 # =============================================================================
 def s3_auth_user_represent(id, row=None):
@@ -562,23 +567,23 @@ def s3_auth_user_represent(id, row=None):
         return current.messages.UNKNOWN_OPT
 
 # =============================================================================
-def s3_auth_user_represent_name(id):
+def s3_auth_user_represent_name(id, row=None):
     """
         Represent users by their names
     """
 
-    if not id:
-        return current.messages["NONE"]
-
-    db = current.db
-    table = db.auth_user
-    user = db(table.id == id).select(table.first_name,
-                                     table.last_name,
-                                     limitby=(0, 1)).first()
+    if not row:
+        if not id:
+            return current.messages["NONE"]
+        db = current.db
+        table = db.auth_user
+        row = db(table.id == id).select(table.first_name,
+                                        table.last_name,
+                                        limitby=(0, 1)).first()
     try:
-        return s3_format_fullname(user.first_name.strip(),
+        return s3_format_fullname(row.first_name.strip(),
                                   None,
-                                  user.last_name.strip())
+                                  row.last_name.strip())
     except:
         return current.messages.UNKNOWN_OPT
 
