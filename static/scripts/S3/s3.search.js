@@ -318,6 +318,21 @@ S3.search.toggleMapClearButton = function(event) {
 // New search framework
 
 /*
+ * quoteValue: add quotes to values which contain commas, escape quotes
+ */
+S3.search.quoteValue = function(value) {
+    if (value) {
+        var result = value.replace(/\"/, '\\"');
+        if (result.search(/\,/) != -1) {
+            result = '"' + result + '"';
+        }
+        return result
+    } else {
+        return (value);
+    }
+}
+
+/*
  * filterURL: add all current filters to a URL
  */
 S3.search.filterURL = function(url) {
@@ -332,9 +347,10 @@ S3.search.filterURL = function(url) {
         var url_var = $('#' + id + '-data').val(),
             value = $(this).val();
         if (value) {
-            var values = value.split(' ');
+            var values = value.split(' '), v;
             for (var i=0; i<values.length; i++) {
-                queries.push(url_var + '=*' + values[i] + '*');
+                v = '*' + values[i] + '*';
+                queries.push(url_var + '=' + S3.search.quoteValue(v));
             }
         }
     });
@@ -360,7 +376,7 @@ S3.search.filterURL = function(url) {
             }
         });
         if (value !== '') {
-            queries.push(url_var + '=' + value);
+            queries.push(url_var + '=' + S3.search.quoteValue(value));
         }
     });
 
@@ -450,33 +466,35 @@ $(document).ready(function() {
 //     });
 
     $('.filter-submit').click(function() {
-        // Update Map results URL
-        Ext.iterate(map.layers, function(key, val, obj) {
-            if (key.s3_layer_id == 'search_results') {
-                var layer = map.layers[val];
-                var url = layer.protocol.url;
-                url = S3.search.filterURL(url);
-                layer.protocol.url = url;
-                // If map is showing then refresh the layer
-                if (S3.gis.mapWin.isVisible()) {
-                    // Set a new event when the layer is loaded (defined in s3.dataTable.js)
-                    layer.events.on({
-                        'loadend': s3_gis_search_layer_loadend
-                    });
-                    // Disable Clustering to get correct bounds
-                    Ext.iterate(layer.strategies, function(key, val, obj) {
-                        if (key.CLASS_NAME == 'OpenLayers.Strategy.AttributeCluster') {
-                            layer.strategies[val].deactivate();
-                        }
-                    });
-                    Ext.iterate(layer.strategies, function(key, val, obj) {
-                        if (key.CLASS_NAME == 'OpenLayers.Strategy.Refresh') {
-                            layer.strategies[val].refresh();
-                        }
-                    });
+        try {
+            // Update Map results URL
+            Ext.iterate(map.layers, function(key, val, obj) {
+                if (key.s3_layer_id == 'search_results') {
+                    var layer = map.layers[val];
+                    var url = layer.protocol.url;
+                    url = S3.search.filterURL(url);
+                    layer.protocol.url = url;
+                    // If map is showing then refresh the layer
+                    if (S3.gis.mapWin.isVisible()) {
+                        // Set a new event when the layer is loaded (defined in s3.dataTable.js)
+                        layer.events.on({
+                            'loadend': s3_gis_search_layer_loadend
+                        });
+                        // Disable Clustering to get correct bounds
+                        Ext.iterate(layer.strategies, function(key, val, obj) {
+                            if (key.CLASS_NAME == 'OpenLayers.Strategy.AttributeCluster') {
+                                layer.strategies[val].deactivate();
+                            }
+                        });
+                        Ext.iterate(layer.strategies, function(key, val, obj) {
+                            if (key.CLASS_NAME == 'OpenLayers.Strategy.Refresh') {
+                                layer.strategies[val].refresh();
+                            }
+                        });
+                    }
                 }
-            }
-        });
+            });
+        } catch(err) {}
         // Server-side page refresh
         // @ToDo: AJAX request instead
         var url = $(this).next('input[type="hidden"]').val();

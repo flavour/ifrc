@@ -48,6 +48,8 @@ def series():
             _roles_permitted = table.roles_permitted
             _roles_permitted.readable = _roles_permitted.writable = False
             _roles_permitted.default = r.record.roles_permitted
+            if not r.record.richtext:
+                table.body.widget = None
             # Titles do show up
             table.name.comment = ""
         return True
@@ -60,6 +62,8 @@ def blog():
     """
         RESTful CRUD controller for display of a series of posts as a full-page
         read-only showing last 5 items in reverse time order
+
+        @ToDo: Convert to dataList
     """
 
     # Pre-process
@@ -82,11 +86,11 @@ def blog():
 def post():
     """ RESTful CRUD controller """
 
-    tablename = "%s_%s" % (module, resourcename)
+    tablename = "cms_post"
     table = s3db[tablename]
 
-    # Filter out those posts which are parts of a series
-    s3.filter = (table.series_id == None)
+    # Filter out those posts which are part of a series
+    #s3.filter = (table.series_id == None)
 
     _module = request.get_vars.get("module", None)
     if _module:

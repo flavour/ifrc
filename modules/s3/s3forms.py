@@ -319,8 +319,9 @@ class S3SQLDefaultForm(S3SQLForm):
         if settings.submit_style:
             try:
                 form[0][-1][0][0]["_class"] = settings.submit_style
-            except TypeError:
-                # Submit button has been removed
+            except:
+                # Submit button has been removed or a different formstyle,
+                # such as Bootstrap (which is already styled anyway)
                 pass
 
         # Subheadings
