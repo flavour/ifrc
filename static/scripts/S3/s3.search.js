@@ -17,7 +17,7 @@ S3.search.saveCurrentSearch = function(event) {
                .insertAfter(btn);
 
 	// Disable the button to prevent clicking while loading
-	btn.attr('disabled', 'disabled');
+	btn.prop('disabled', true);
 
 	// POST the s3json to the saved_search REST controller
 	$.ajax({
@@ -224,7 +224,7 @@ $(document).ready(function() {
         Hide all the expanding/collapsing letter widgets that don't have
         any options selected
     */
-    $('.search_select_letter_label,.s3-grouped-checkboxes-widget-label').live('click', function(event) {
+    $(document).on('click', '.search_select_letter_label, .s3-grouped-checkboxes-widget-label', function(event) {
         /*
             Listen for click events on the expanding/collapsing letter widgets
         */
@@ -248,10 +248,10 @@ $(document).ready(function() {
 
     $('div.advanced-form').keyup(S3.search.AutocompleteTimer)
     					  .click(S3.search.AutocompleteTimer)
-    					  .keypress(S3.search.ancelEnterPress);
+    					  .keypress(S3.search.CancelEnterPress);
 
     // Select Item for Autocomplete
-    $('.search_autocomplete_result_list li span').live('click', function() {
+    $(document).on('click', '.search_autocomplete_result_list li span', function() {
         var selResultLI = $(this).parent();
         var selResultList = selResultLI.parent();
         var selSearchForm = selResultList.parent();
@@ -315,7 +315,7 @@ S3.search.toggleMapClearButton = function(event) {
 };
 
 // ============================================================================
-// New search framework
+// New search framework (S3FilterForm aka "filtered GETs")
 
 /*
  * quoteValue: add quotes to values which contain commas, escape quotes
@@ -333,10 +333,12 @@ S3.search.quoteValue = function(value) {
 }
 
 /*
- * filterURL: add all current filters to a URL
+ * getCurrentFilters: retrieve all current filters
  */
-S3.search.filterURL = function(url) {
+S3.search.getCurrentFilters = function() {
 
+    // @todo: allow form selection (=support multiple filter forms per page)
+    
     var queries = [];
 
     // Text widgets
@@ -348,7 +350,7 @@ S3.search.filterURL = function(url) {
             value = $(this).val();
         if (value) {
             var values = value.split(' '), v;
-            for (var i=0; i<values.length; i++) {
+            for (var i=0; i < values.length; i++) {
                 v = '*' + values[i] + '*';
                 queries.push(url_var + '=' + S3.search.quoteValue(v));
             }
@@ -356,25 +358,44 @@ S3.search.filterURL = function(url) {
     });
 
     // Options widgets
-    $('.options-filter:visible').each(function() {
+    $('.options-filter:visible,' +
+      '.options-filter.multiselect-filter-widget.active,' +
+      '.options-filter.multiselect-filter-bootstrap.active').each(function() {
         var id = $(this).attr('id');
         var url_var = $('#' + id + '-data').val();
         var operator = $("input:radio[name='" + id + "_filter']:checked").val();
-        var contains=/__contains$/;
-        var anyof=/__anyof$/;
+        var contains = /__contains$/;
+        var anyof = /__anyof$/;
         if (operator == 'any' && url_var.match(contains)) {
-            url_var = url_var.replace(contains,'__anyof');
+            url_var = url_var.replace(contains, '__anyof');
         } else if (operator == 'all' && url_var.match(anyof)) {
-            url_var = url_var.replace(anyof,'__contains');
+            url_var = url_var.replace(anyof, '__contains');
         }
-        var value = '';
-        $("input[name='" + id + "']:checked").each(function() {
-            if (value === '') {
-                value = S3.search.quoteValue($(this).val());
-            } else {
-                value = value + ',' + S3.search.quoteValue($(this).val());
+        if (this.tagName.toLowerCase() == 'select') {
+            // Standard SELECT
+            value = '';
+            values = $(this).val();
+            if (values) {
+                for (i=0; i < values.length; i++) {
+                    v = S3.search.quoteValue(values[i]);
+                    if (value === '') {
+                        value = v;
+                    } else {
+                        value = value + ',' + v;
+                    }
+                }
             }
-        });
+        } else {
+            // Checkboxes widget
+            var value = '';
+            $("input[name='" + id + "']:checked").each(function() {
+                if (value === '') {
+                    value = S3.search.quoteValue($(this).val());
+                } else {
+                    value = value + ',' + S3.search.quoteValue($(this).val());
+                }
+            });
+        }
         if (value !== '') {
             queries.push(url_var + '=' + value);
         }
@@ -421,16 +442,77 @@ S3.search.filterURL = function(url) {
         }
     });
 
+    // Location widgets
+    $('.location-filter:visible,' +
+      '.location-filter.multiselect-filter-widget.active,' +
+      '.location-filter.multiselect-filter-bootstrap.active').each(function() {
+        var id = $(this).attr('id');
+        var url_var = $('#' + id + '-data').val();
+        var operator = $("input:radio[name='" + id + "_filter']:checked").val();
+        if (this.tagName.toLowerCase() == 'select') {
+            // Standard SELECT
+            value = '';
+            values = $(this).val();
+            if (values) {
+                for (i=0; i < values.length; i++) {
+                    v = S3.search.quoteValue(values[i]);
+                    if (value === '') {
+                        value = v;
+                    } else {
+                        value = value + ',' + v;
+                    }
+                }
+            }
+        } else {
+            // Checkboxes widget
+            var value = '';
+            $("input[name='" + id + "']:checked").each(function() {
+                if (value === '') {
+                    value = S3.search.quoteValue($(this).val());
+                } else {
+                    value = value + ',' + S3.search.quoteValue($(this).val());
+                }
+            });
+        }
+        if (value !== '') {
+            queries.push(url_var + '=' + value);
+        }
+    });
+
     // Other widgets go here...
+
+    // return queries to caller
+    return queries;
+};
+
+/*
+ * filterURL: add filters to a URL
+ * @note: this removes+replaces all existing filters in the URL query
+ */
+S3.search.filterURL = function(url, queries) {
 
     // Construct the URL
     var url_parts = url.split('?'), url_query = queries.join('&');
     if (url_parts.length > 1) {
-        if (url_query) {
-            url_query = url_query + '&' + url_parts[1];
-        } else {
-            url_query = url_parts[1];
+        var qstr = url_parts[1], query = {};
+        var a = qstr.split('&'), v, i;
+        for (i=0; i<a.length; i++) {
+            var b = a[i].split('=');
+            if (b.length > 1 && b[0].search(/\./) == -1) {
+                query[decodeURIComponent(b[0])] = decodeURIComponent(b[1]);
+            }
         }
+        for (i=0; i<queries.length; i++) {
+            v = queries[i].split('=');
+            if (v.length > 1) {
+                query[v[0]] = v[1];
+            }
+        }
+        var url_queries = [], url_query;
+        for (v in query) {
+            url_queries.push(v + '=' + query[v]);
+        }
+        url_query = url_queries.join('&');
     }
     var filtered_url = url_parts[0];
     if (url_query) {
@@ -439,32 +521,181 @@ S3.search.filterURL = function(url) {
     return filtered_url;
 };
 
-// To be completed: New Search Framework
+/*
+ * S3FilterForm: document-ready script
+ */
 $(document).ready(function() {
 
-//     $('.filter-request').click(function() {
-//         var url = $(this).next('input[type="hidden"]').val(),
-//             loc = document.location,
-//             queries = [],
-//             url_parts = url.split('?');
-// 
-//         if (url_parts.length > 1) {
-//             queries.push(url_parts[1]);
-//         }
-//         if (loc.search) {
-//             queries.push(loc.search.slice(1));
-//         }
-//         var base_url = url_parts[0];
-// 
-//         if (queries.length > 0) {
-//             var query = queries.join('&');
-//             url = base_url + '?' + query;
-//         } else {
-//             url = base_url;
-//         }
-//         window.location.href = url;
-//     });
+    // Activate drop-down checklist widgets:
+    
+    // Mark active, otherwise submit can't find them
+    $('.multiselect-filter-widget:visible').addClass('active');
+    $('.multiselect-filter-widget').each(function() {
+        if ($(this).find('option').length > 5) {
+            $(this).multiselect({
+                selectedList: 5
+            }).multiselectfilter();
+        } else {
+            $(this).multiselect({
+                selectedList: 5
+            });
+        }
+    });
 
+    if (typeof($.fn.multiselect_bs) != 'undefined') {
+        // Alternative with bootstrap-multiselect (note the hack for the fn-name):
+        $('.multiselect-filter-bootstrap:visible').addClass('active');
+        $('.multiselect-filter-bootstrap').multiselect_bs();
+    }
+
+    // Hierarchical Location Filter
+    $('.location-filter').on('change', function() {
+        var name = this.name;
+        var values = $('#' + name).val();
+        var base = name.slice(0, -1);
+        var level = parseInt(name.slice(-1));
+        var hierarchy = S3.location_filter_hierarchy;
+        // Initialise vars in a way in which we can access them via dynamic names
+        this.options1 = [];
+        this.options2 = [];
+        this.options3 = [];
+        this.options4 = [];
+        this.options5 = [];
+        var new_level;
+        if (hierarchy.hasOwnProperty('L' + level)) {
+            // Top-level
+            var _hierarchy = hierarchy['L' + level];
+            for (opt in _hierarchy) {
+                if (_hierarchy.hasOwnProperty(opt)) {
+                    if (values === null) {
+                        // Show all Options
+                        for (option in _hierarchy[opt]) {
+                            if (_hierarchy[opt].hasOwnProperty(option)) {
+                                new_level = level + 1;
+                                this['options' + new_level].push(option);
+                                if (typeof(_hierarchy[opt][option]) === 'object') {
+                                    var __hierarchy = _hierarchy[opt][option];
+                                    for (_opt in __hierarchy) {
+                                        if (__hierarchy.hasOwnProperty(_opt)) {
+                                            new_level = level + 2;
+                                            this['options' + new_level].push(_opt);
+                                            // @ToDo: Greater recursion
+                                            //if (typeof(__hierarchy[_opt]) === 'object') {
+                                            //}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for (i in values) {
+                            if (values[i] === opt) {
+                                for (option in _hierarchy[opt]) {
+                                    if (_hierarchy[opt].hasOwnProperty(option)) {
+                                        new_level = level + 1;
+                                        this['options' + new_level].push(option);
+                                        if (typeof(_hierarchy[opt][option]) === 'object') {
+                                            var __hierarchy = _hierarchy[opt][option];
+                                            for (_opt in __hierarchy) {
+                                                if (__hierarchy.hasOwnProperty(_opt)) {
+                                                    new_level = level + 2;
+                                                    this['options' + new_level].push(_opt);
+                                                    // @ToDo: Greater recursion
+                                                    //if (typeof(__hierarchy[_opt]) === 'object') {
+                                                    //}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (hierarchy.hasOwnProperty('L' + (level - 1))) {
+            // Nested 1 in
+            var _hierarchy = hierarchy['L' + (level - 1)];
+            // Read higher level
+            var _values = $('#' + base + (level - 1)).val();
+            for (opt in _hierarchy) {
+                if (_hierarchy.hasOwnProperty(opt)) {
+                    /* Only needed if not hiding
+                    if (_values === null) {
+                    } else { */
+                    for (i in _values) {
+                        if (_values[i] === opt) {
+                            for (option in _hierarchy[opt]) {
+                                if (_hierarchy[opt].hasOwnProperty(option)) {
+                                    if (values === null) {
+                                        // Show all subsequent Options
+                                        for (option in _hierarchy[opt]) {
+                                            if (_hierarchy[opt].hasOwnProperty(option)) {
+                                                var __hierarchy = _hierarchy[opt][option];
+                                                for (_opt in __hierarchy) {
+                                                    if (__hierarchy.hasOwnProperty(_opt)) {
+                                                        new_level = level + 1;
+                                                        this['options' + new_level].push(_opt);
+                                                        // @ToDo: Greater recursion
+                                                        //if (typeof(__hierarchy[_opt]) === 'object') {
+                                                        //}
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        for (i in values) {
+                                            if (values[i] === option) {
+                                                var __hierarchy = _hierarchy[opt][option];
+                                                for (_opt in __hierarchy) {
+                                                    if (__hierarchy.hasOwnProperty(_opt)) {
+                                                        new_level = level + 1;
+                                                        this['options' + new_level].push(_opt);
+                                                        // @ToDo: Greater recursion
+                                                        //if (typeof(__hierarchy[_opt]) === 'object') {
+                                                        //}
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (hierarchy.hasOwnProperty('L' + (level - 2))) {
+            // @ToDo
+        }
+        for (l = level + 1; l <= 5; l++) {
+            var select = $('#' + base + l);
+            if (typeof(select) != 'undefined') {
+                var options = this['options' + l];
+                options.sort();
+                _options = '';
+                for (i in options) {
+                    if (options.hasOwnProperty(i)) {
+                        _options += '<option value="' + options[i] + '">' + options[i] + '</option>';
+                    }
+                }
+                select.html(_options);
+                select.multiselect('refresh');
+                if (l === (level + 1)) {
+                    if (values) {
+                        // Show next level down (if hidden)
+                        select.next('button').removeClass('hidden').show();
+                        // @ToDo: Hide subsequent levels (if configured to do so)
+                    } else {
+                        // @ToDo: Hide next levels down (if configured to do so)
+                        //select.next('button').hide();
+                    }
+                }
+            }
+        }
+    });
+
+    // Filter-form submission
     $('.filter-submit').click(function() {
         try {
             // Update Map results URL
@@ -495,11 +726,23 @@ $(document).ready(function() {
                 }
             });
         } catch(err) {}
-        // Server-side page refresh
-        // @ToDo: AJAX request instead
-        var url = $(this).next('input[type="hidden"]').val();
-        // Update URL
-        url = S3.search.filterURL(url);
-        window.location.href = url;
+        
+        var url = $(this).nextAll('input.filter-submit-url[type="hidden"]').val();
+        var queries = S3.search.getCurrentFilters();
+        
+        if ($(this).hasClass('filter-ajax')) {
+            // Ajax-refresh the target object (@todo: support multiple)
+            var target = $(this).nextAll('input.filter-submit-target[type="hidden"]').val();
+            if ($('#' + target).hasClass('dl')) {
+                dlAjaxReload(target, queries);
+            } else {
+                url = S3.search.filterURL(url, queries);
+                window.location.href = url;
+            }
+        } else {
+            // Page reload
+            url = S3.search.filterURL(url, queries);
+            window.location.href = url;
+        }
     });
 });

@@ -920,7 +920,7 @@ $('#%(dummy_input)s').autocomplete({
   %(real_input)s.accept=true
   return false
  }
-}).data('autocomplete')._renderItem=function(ul,item){
+}).data('ui-autocomplete')._renderItem=function(ul,item){
  var name=item.first
  if(item.middle){
   name+=' '+item.middle
@@ -928,7 +928,7 @@ $('#%(dummy_input)s').autocomplete({
  if(item.last){
   name+=' '+item.last
  }
- return $('<li></li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
+ return $('<li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
 }}catch(e){}
 $('#%(dummy_input)s').blur(function(){
  if(!$('#%(dummy_input)s').val()){
@@ -1103,7 +1103,7 @@ $('#%(dummy_input)s').autocomplete({
   %(real_input)s.accept=true
   return false
  }
-}).data('autocomplete')._renderItem=function(ul,item){
+}).data('ui-autocomplete')._renderItem=function(ul,item){
  var name=item.first
  if(item.middle){
   name+=' '+item.middle
@@ -1124,7 +1124,7 @@ $('#%(dummy_input)s').autocomplete({
    name+=' ('+org+')'
   }
  }
- return $('<li></li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
+ return $('<li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
 }}catch(e){}
 $('#%(dummy_input)s').blur(function(){
  if(!$('#%(dummy_input)s').val()){
@@ -1265,7 +1265,7 @@ $('#%(dummy_input)s').autocomplete({
    %(real_input)s.accept=true
    return false
   }
-}).data('autocomplete')._renderItem=function(ul,item){
+}).data('ui-autocomplete')._renderItem=function(ul,item){
  var name=''
  if(item.name!=null){
   name+=item.name
@@ -1273,7 +1273,7 @@ $('#%(dummy_input)s').autocomplete({
  if(item.instance_type!=''){
   name+=' ('+s3_site_lookup(item.instance_type)+')'
  }
- return $('<li></li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
+ return $('<li>').data('item.autocomplete',item).append('<a>'+name+'</a>').appendTo(ul)
 }}catch(e){}
 $('#%(dummy_input)s').blur(function(){
  if(!$('#%(dummy_input)s').val()){
@@ -1386,8 +1386,8 @@ $('#%(dummy_input)s').autocomplete({
   %(real_input)s.accept=true
   return false
  }
-}).data('autocomplete')._renderItem=function(ul,item){
- return $('<li></li>').data('item.autocomplete',item).append('<a>'+item.name+'</a>').appendTo(ul)
+}).data('ui-autocomplete')._renderItem=function(ul,item){
+ return $('<li>').data('item.autocomplete',item).append('<a>'+item.name+'</a>').appendTo(ul)
 }
 $('#%(dummy_input)s').blur(function(){
  if(!$('#%(dummy_input)s').val()){
@@ -1495,8 +1495,8 @@ $('#%(dummy_input)s').autocomplete({
   %(real_input)s.accept=true
   return false
  }
-}).data('autocomplete')._renderItem=function(ul,item){
- return $('<li></li>').data('item.autocomplete',item).append('<a>'+get_name(item)+'</a>').appendTo(ul)
+}).data('ui-autocomplete')._renderItem=function(ul,item){
+ return $('<li>').data('item.autocomplete',item).append('<a>'+get_name(item)+'</a>').appendTo(ul)
 }}catch(e){}''' % locals(),
 '''
 $('#%(dummy_input)s').blur(function(){
@@ -1515,6 +1515,7 @@ $('#%(dummy_input)s').blur(function(){
  }
  %(real_input)s.accept=false
 })''' % locals()))
+
 
     if value:
         try:
@@ -2650,41 +2651,55 @@ class S3CheckboxesWidget(OptionsWidget):
 class S3MultiSelectWidget(MultipleOptionsWidget):
     """
         Standard MultipleOptionsWidget, but using the jQuery UI:
-        http://www.quasipartikel.at/multiselect/
-        static/scripts/ui.multiselect.js
+        http://www.erichynds.com/jquery/jquery-ui-multiselect-widget/
+        static/scripts/jquery.ui.multiselect.js
     """
 
-    def __init__(self):
-        pass
+    def __init__(self,
+                 filter = True,
+                 header = True,
+                 selectedList = 4,
+                 noneSelectedText = "Select"
+                 ):
+        self.filter = filter
+        self.header = header
+        self.selectedList = selectedList
+        self.noneSelectedText = noneSelectedText
 
-    def __call__(self, field, value, **attributes):
+    def __call__(self, field, value, **attr):
 
         T = current.T
-        s3 = current.response.s3
 
-        selector = str(field).replace(".", "_")
+        selector = field.name.replace(".", "_")
 
-        s3.js_global.append('''
-i18n.addAll='%s'
-i18n.removeAll='%s'
-i18n.itemsCount='%s'
-i18n.search='%s'
-''' % (T("Add all"),
-       T("Remove all"),
-       T("items selected"),
-       T("search")))
+        # Options:
+        # * Show Selected List
+        if self.header is True:
+            header = '''checkAllText:'%s',uncheckAllText:"%s"''' % \
+                (T("Check all"),
+                 T("Uncheck all"))
+        elif self.header is False:
+            header = '''header:false'''
+        else:
+            header = '''header:"%s"''' % self.header
+        script = '''$('#%s').multiselect({selectedText:'%s',%s,height:300,selectedList:%s,noneSelectedText:'%s'})''' % \
+            (selector,
+             T("# selected"),
+             header,
+             self.selectedList,
+             T(self.noneSelectedText))
+        if self.filter:
+            script = '''%s.multiselectfilter()''' % script
+        current.response.s3.jquery_ready.append(script)
 
-        s3.jquery_ready.append('''
-$('#%s').removeClass('list')
-$('#%s').addClass('multiselect')
-$('#%s').multiselect({
- dividerLocation:0.5,
- sortable:false
-})''' % (selector,
-         selector,
-         selector))
+        _class = attr.get("_class", None)
+        if _class:
+            if "multiselect-widget" not in _class:
+                attr["_class"] = "%s multiselect-widget" % _class
+        else:
+            attr["_class"] = "multiselect-widget"
 
-        return TAG[""](MultipleOptionsWidget.widget(field, value, **attributes),
+        return TAG[""](MultipleOptionsWidget.widget(field, value, **attr),
                        requires = field.requires
                        )
 
@@ -3979,7 +3994,7 @@ def s3_checkboxes_widget(field,
             pass
 
     options = [(k, v) for k, v in options if k != ""]
-    options = sorted(options, key=lambda option: option[1])
+    options = sorted(options, key=lambda option: s3_unicode(option[1]))
     
     input_index = start_at_id
     rows = []

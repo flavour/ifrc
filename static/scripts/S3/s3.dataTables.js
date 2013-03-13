@@ -1017,6 +1017,8 @@ $(document).ready(function() {
             'fnDrawCallback': function(oSettings) {
                 var table = '#' + oSettings.nTable.id;
                 var t = tableIdReverse(table);
+                // If using Modals for Update forms:
+                //S3.addModals();
                 bindButtons(t);
                 if (oSettings.aiDisplay.length === 0) {
                     return;
@@ -1151,17 +1153,20 @@ function s3FormatRequest(representation, tableid, url) {
 function s3_gis_search_layer_loadend(event) {
     // Search results have Loaded
     var layer = event.object;
-    // Zoom to Bounds
+    // Read Bounds for Zoom
     var bounds = layer.getDataExtent();
-    if (bounds) {
-        map.zoomToExtent(bounds);
-    }
     // Re-enable Clustering
     Ext.iterate(layer.strategies, function(key, val, obj) {
         if (key.CLASS_NAME == 'OpenLayers.Strategy.AttributeCluster') {
             layer.strategies[val].activate();
         }
     });
+    // Zoom Out to Cluster
+    map.zoomTo(0)
+    // Zoom to Bounds
+    if (bounds) {
+        map.zoomToExtent(bounds);
+    }
     // Disable this event
     layer.events.un({
         'loadend': s3_gis_search_layer_loadend

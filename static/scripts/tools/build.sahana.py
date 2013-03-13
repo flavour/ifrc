@@ -153,6 +153,22 @@ def dojs(dogis = False, warnings = True):
     print "Moving new JS files"
     shutil.move(outputFilename, "../S3")
 
+    # Bootstrap
+    # print "Compressing Bootstrap"
+    # sourceDirectoryBootstrap = ".."
+    # configFilenameBootstrap = "sahana.js.bootstrap.cfg"
+    # outputFilenameBootstrap = "bootstrap.min.js"
+    # mergedBootstrap = mergejs.run(sourceDirectoryBootstrap,
+                                  # None,
+                                  # configFilenameBootstrap)
+    # minimizedBootstrap = minimize(mergedBootstrap)
+    # open(outputFilenameBootstrap, "w").write(minimizedBootstrap)
+    # try:
+        # os.remove("../%s" % outputFilenameBootstrap)
+    # except:
+        # pass
+    # shutil.move(outputFilenameBootstrap, "..")
+
     # dataTables
     print "Compressing dataTables"
     sourceDirectorydataTables = ".."
@@ -229,8 +245,7 @@ def dojs(dogis = False, warnings = True):
     shutil.move(outputFilenameVulnerability, "../../themes/Vulnerability/js")
 
     # Single scripts
-    for filename in [
-                     "contacts",
+    for filename in ["contacts",
                      "embed_component",
                      "gis.fullscreen",
                      "locationselector.widget",
@@ -455,6 +470,35 @@ def docss():
         pass
     print "Moving new %s." % outputFilenameCSS
     shutil.move(outputFilenameCSS, "../../themes/%s" % theme)
+
+    # Bootstrap
+    print "Bootstrap CSS"
+    listCSS = []
+    for file in ["bootstrap.css",
+                 "bootstrap-responsive.css",
+                 "font-awesome.css",
+                 "bootstrap-multiselect.css",
+                 ]:
+        listCSS.append("../../styles/bootstrap/%s" % file)
+
+    outputFilenameCSS = "bootstrap-combined.min.css"
+
+    # Merge CSS files
+    print "Merging Bootstrap styles."
+    mergedCSS = mergeCSS(listCSS, outputFilenameCSS)
+
+    # Compress CSS files
+    print "Writing to %s." % outputFilenameCSS
+    compressCSS(mergedCSS, outputFilenameCSS)
+
+    # Move files to correct locations
+    print "Deleting %s." % outputFilenameCSS
+    try:
+        os.remove("../../styles/bootstrap/%s" % outputFilenameCSS)
+    except:
+        pass
+    print "Moving new %s." % outputFilenameCSS
+    shutil.move(outputFilenameCSS, "../../styles/bootstrap")
 
 def main(argv):
     try:

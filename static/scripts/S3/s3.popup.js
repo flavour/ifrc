@@ -1,24 +1,39 @@
 /**
- * JS to handle Colorbox popups
- * moved from views/layout_popup.html
+ * JS to handle Popup Modal forms to create new resources
  */
 
-function s3_tb_call_cleanup(caller) {
-    if (self.parent.s3_tb_cleanup) {
-        // Cleanup the parent
-        self.parent.s3_tb_cleanup(caller);
-    }
-    self.parent.s3_tb_remove();
-}
-
-function s3_tb_refresh() {
+function s3_popup_refresh_main_form() {
     // The Get parameters
     var $_GET = getQueryParams(document.location.search);
 
+    // Update Form?
+    var refresh = $_GET['refresh'];
+    if (typeof refresh != 'undefined') {
+        // Update DataList/DataTable
+        var selector = self.parent.$('#' + refresh);
+        if (typeof selector.dataTable !== 'undefined') {
+            // refresh dataTable
+            selector.dataTable().fnReloadAjax();
+        } else {
+            var record = $_GET['record'];
+            if (record !== undefined) {
+                // reload a single item
+                self.parent.dlAjaxReloadItem(refresh, record);
+            } else {
+                // reload the whole list
+                self.parent.dlAjaxReload(refresh);
+            }
+        }
+        // Remove popup
+        self.parent.s3_popup_remove();
+        return;
+    }
+
+    // Create form (e.g. S3AddResourceLink)
     var level = $_GET['level'];
     if (typeof level != 'undefined') {
         // Location Selector
-        s3_tb_call_cleanup(level);
+        self.parent.s3_popup_remove();
         return;
     }
 
@@ -32,7 +47,7 @@ function s3_tb_refresh() {
             var field = self.parent.$('#' + caller);
             field.val(person_id).change();
         }
-        s3_tb_call_cleanup(person_id);
+        self.parent.s3_popup_remove();
         return;
     }
 
@@ -223,7 +238,7 @@ function s3_tb_refresh() {
         //    }, 1);
 
         // Clean-up
-        s3_tb_call_cleanup(caller);
+        self.parent.s3_popup_remove();
     });
 }
 

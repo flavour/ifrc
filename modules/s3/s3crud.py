@@ -292,6 +292,9 @@ class S3CRUD(S3Method):
 
             subheadings = _config("subheadings")
 
+            # Interim save button
+            self._interim_save_button()
+            
             # Get the form
             output["form"] = self.sqlform(request=request,
                                           resource=resource,
@@ -315,7 +318,10 @@ class S3CRUD(S3Method):
             if representation in ("popup", "iframe"):
                 self.next = None
             else:
-                if session.s3.rapid_data_entry and not r.component:
+                if r.http == "POST" and "interim_save" in r.post_vars:
+                    next_vars = self._remove_filters(r.get_vars)
+                    create_next = r.url(target="[id]", method="update", vars=next_vars)
+                elif session.s3.rapid_data_entry and not r.component:
                     create_next = r.url()
                 else:
                     create_next = _config("create_next")
@@ -651,6 +657,9 @@ class S3CRUD(S3Method):
             # Success message
             message = crud_string(self.tablename, "msg_record_modified")
 
+            # Interim save button
+            self._interim_save_button()
+
             # Get the form
             form = self.sqlform(request=self.request,
                                 resource=resource,
@@ -697,20 +706,24 @@ class S3CRUD(S3Method):
             output["deduplicate"] = S3Merge.bookmark(r, tablename, record_id)
 
             # Redirection
-            update_next = _config("update_next")
-            if representation in ("popup", "iframe", "plain"):
-                self.next = None
-            elif not update_next:
+            if r.http == "POST" and "interim_save" in r.post_vars:
                 next_vars = self._remove_filters(r.get_vars)
-                if r.component:
-                    self.next = r.url(method="", vars=next_vars)
-                else:
-                    self.next = r.url(id="[id]", method="read", vars=next_vars)
+                self.next = r.url(target="[id]", method="update", vars=next_vars)
             else:
-                try:
-                    self.next = update_next(self)
-                except TypeError:
-                    self.next = update_next
+                update_next = _config("update_next")
+                if representation in ("popup", "iframe", "plain"):
+                    self.next = None
+                elif not update_next:
+                    next_vars = self._remove_filters(r.get_vars)
+                    if r.component:
+                        self.next = r.url(method="", vars=next_vars)
+                    else:
+                        self.next = r.url(id="[id]", method="read", vars=next_vars)
+                else:
+                    try:
+                        self.next = update_next(self)
+                    except TypeError:
+                        self.next = update_next
 
         elif representation == "url":
             return self.import_url(r)
@@ -781,11 +794,6 @@ class S3CRUD(S3Method):
                 r.error(404, current.manager.error, next=r.url(method=""))
             current.response.confirmation = message
             r.http = "DELETE" # must be set for immediate redirect
-            #next = r.get_vars.get("_next", None)
-            #if next:
-                #self.next = next
-            #else:
-                #self.next = delete_next or r.url(method="")
             self.next = delete_next or r.url(method="")
 
         elif r.http == "DELETE":
@@ -1145,8 +1153,10 @@ class S3CRUD(S3Method):
             # Data
             list_type = attr.get("list_type", "datatable")
             if list_type == "datalist":
+                filter_ajax = True
                 output = self._datalist(r, **attr)
             else:
+                filter_ajax = False
                 output = self._datatable(r, **attr)
 
             if r.representation in ("aadata", "dl"):
@@ -1165,17 +1175,20 @@ class S3CRUD(S3Method):
             # Filter-form
             filter_widgets = get_config("filter_widgets", None)
             if filter_widgets:
-                from s3search import S3FilterForm
+                from s3filter import S3FilterForm
                 filter_formstyle = get_config("filter_formstyle", None)
                 filter_submit = get_config("filter_submit", True)
                 filter_form = S3FilterForm(filter_widgets,
                                            formstyle=filter_formstyle,
                                            submit=filter_submit,
+                                           ajax=filter_ajax,
                                            url=r.url(vars={}),
                                            _class="filter-form")
                 fresource = current.s3db.resource(resource.tablename)
+                target = "datalist"
                 output["list_filter_form"] = filter_form.html(fresource,
-                                                              r.get_vars)
+                                                              r.get_vars,
+                                                              target=target)
             else:
                 # Render as empty string to avoid the exception in the view
                 output["list_filter_form"] = ""
@@ -1564,17 +1577,25 @@ class S3CRUD(S3Method):
 
         # Pagination
         get_vars = self.request.get_vars
-        start = get_vars.get("start", None)
-        limit = get_vars.get("limit", None)
-        if limit is not None:
-            try:
-                start = int(start)
-                limit = int(limit)
-            except ValueError:
-                start = None
-                limit = None # use default
+        record_id = get_vars.get("record", None)
+        if record_id is not None:
+            # Ajax-reload of a single record
+            from s3resource import S3FieldSelector as FS
+            resource.add_filter(FS("id") == record_id)
+            start = 0
+            limit = 1
         else:
-            start = None
+            start = get_vars.get("start", None)
+            limit = get_vars.get("limit", None)
+            if limit is not None:
+                try:
+                    start = int(start)
+                    limit = int(limit)
+                except ValueError:
+                    start = None
+                    limit = None # use default
+            else:
+                start = None
 
         # Initialize output
         output = {}
@@ -1587,6 +1608,46 @@ class S3CRUD(S3Method):
 
         # Prepare data list
         representation = r.representation
+
+        # Ajax-delete items
+        if representation == "dl" and r.http in ("DELETE", "POST"):
+            delete = get_vars.get("delete", None)
+            if delete is not None:
+
+                dresource = current.s3db.resource(self.resource, id=delete)
+
+                # Deleting in this resource allowed at all?
+                deletable = dresource.get_config("deletable", True)
+                if not deletable:
+                    r.error(403, current.manager.ERROR.NOT_PERMITTED)
+                # Permitted to delete this record?
+                permitted = current.auth.s3_has_permission("delete",
+                                                           dresource.table,
+                                                           record_id=delete)
+                if not authorised:
+                    r.unauthorised()
+
+                # Callback
+                ondelete = dresource.get_config("ondelete")
+
+                # Delete it
+                numrows = dresource.delete(ondelete=ondelete,
+                                           format=representation)
+                if numrows > 1:
+                    message = "%s %s" % (numrows,
+                                         current.T("records deleted"))
+                elif numrows == 1:
+                    message = self.crud_string(dresource.tablename,
+                                               "msg_record_deleted")
+                else:
+                    r.error(404, current.manager.error)
+
+                # Return a JSON message
+                # @note: make sure the view doesn't get overridden afterwards!
+                output["item"] = current.xml.json_message(message=message)
+                current.response.view = "xml.html"
+                return output
+
         if representation in ("html", "dl"):
 
             # How many records per page?
@@ -1640,38 +1701,22 @@ class S3CRUD(S3Method):
                 data = msg
 
             else:
-                # Render the list
-                dl = datalist.html()
-
-                # Pagination data
-                vars = dict([(k,v) for k, v in r.get_vars.iteritems()
-                                   if k not in ("start", "limit")])
-
                 # Allow customization of the datalist Ajax-URL
                 # Note: the Ajax-URL must use the .dl representation and
                 # plain.html view for pagination to work properly!
+                vars = dict([(k,v) for k, v in r.get_vars.iteritems()
+                                   if k not in ("start", "limit")])
                 ajax_url = attr.get("list_ajaxurl", None)
                 if not ajax_url:
                     ajax_url = r.url(representation="dl", vars=vars)
-                dl_data = {
-                    "startindex": start if start else 0,
-                    "maxitems": limit if limit else numrows,
-                    #"totalitems": numrows,
-                    "pagesize": pagelength,
-                    "ajaxurl": ajax_url
-                }
-                from gluon.serializers import json as jsons
-                dl_data = jsons(dl_data)
-                dl.append(DIV(
-                            FORM(
-                                INPUT(_type="hidden",
-                                      _class="dl-pagination",
-                                      _value=dl_data)),
-                            A(current.T("more..."),
-                              _href=ajax_url,
-                              _class="dl-pagination"),
-                            _class="dl-navigation"))
-
+                    
+                # Render the list
+                dl = datalist.html(
+                        start = start if start else 0,
+                        limit = limit if limit else numrows,
+                        pagesize = pagelength,
+                        ajaxurl = ajax_url
+                     )
                 data = dl
         else:
             r.error(501, current.manager.ERROR.BAD_FORMAT)
@@ -2431,9 +2476,14 @@ class S3CRUD(S3Method):
         if editable and has_permission("update", table) and \
            not ownership_required("update", table):
             if not update_url:
-                update_url = URL(args = args + ["update"],
+                # To use modals
+                #get_vars["refresh"] = "list"
+                update_url = URL(args = args + ["update.popup"],
                                  vars = get_vars)
-            s3crud.action_button(labels.UPDATE, update_url)
+            s3crud.action_button(labels.UPDATE, update_url,
+                                 # To use modals
+                                 #_class="action-btn s3_modal"
+                                 )
         else:
             if not read_url:
                 read_url = URL(args = args,
@@ -2794,5 +2844,34 @@ class S3CRUD(S3Method):
                                        args=args + ["read"],
                                        vars=r.get_vars))
         return list_linkto
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _interim_save_button():
+        """
+            Render an additional custom submit button for interim save,
+            which overrides the default _next to returns to an update
+            form for the same record after create/update
+        """
+
+        settings = current.response.s3.crud
+        label = current.deployment_settings.get_ui_interim_save()
+        if label:
+            T = current.T
+            _class = "interim-save"
+            if isinstance(label, basestring):
+                label = T(label)
+            elif isinstance(label, (tuple, list)) and len(label) > 1:
+                label, _class = label[:2]
+            elif not isinstance(label, lazyT):
+                label = T("Save and Continue Editing")
+            item = ("interim_save", label, _class)
+        else:
+            return
+        if settings.custom_submit:
+            settings.custom_submit.insert(0, item)
+        else:
+            settings.custom_submit = [item]
+        return
 
 # END =========================================================================
