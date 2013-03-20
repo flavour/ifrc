@@ -169,14 +169,12 @@ def customize_cms_post(**attr):
         "series_id",
         "body",
         "location_id",
-        # @ToDo
-        #S3SQLInlineComponent(
-        #    "event",
-        #    name = "event_id",
-        #    label = T("Disaster(s)"),
-        #    fields = ["event_id",
-        #              ],
-        #),
+        S3SQLInlineComponent(
+            "event_post",
+            label = T("Disaster(s)"),
+            fields = ["event_id"],
+            orderby = "event_id$name"
+        ),
         S3SQLInlineComponent(
             "document",
             name = "file",
@@ -366,7 +364,7 @@ def customize_event_event(**attr):
                          type = "datalist",
                          tablename = "cms_post",
                          filter = S3FieldSelector("series_id$name") == "Alert",
-                         icon = "icon-warning-sign",
+                         icon = "icon-alert",
                          list_layout = render_profile_posts,
                          )
     map_widget = dict(label = "Location",
@@ -384,21 +382,21 @@ def customize_event_event(**attr):
                               type = "datalist",
                               tablename = "cms_post",
                               filter = S3FieldSelector("series_id$name") == "Assessment",
-                              icon = "icon-file-alt",
+                              icon = "icon-info-sign",
                               list_layout = render_profile_posts,
                               )
     activities_widget = dict(label = "Activities",
                              type = "datalist",
                              tablename = "cms_post",
                              filter = S3FieldSelector("series_id$name") == "Activity",
-                             icon = "icon-wrench",
+                             icon = "icon-activity",
                              list_layout = render_profile_posts,
                              )
     reports_widget = dict(label = "Reports",
                           type = "datalist",
                           tablename = "cms_post",
                           filter = S3FieldSelector("series_id$name") == "Report",
-                          icon = "icon-file-alt",
+                          icon = "icon-report",
                           list_layout = render_profile_posts,
                           )
     comments_widget = dict(label = "Comments",

@@ -352,6 +352,11 @@ def req_controller():
                         s3.req_inline_form(type, method)
                     s3.scripts.append("/%s/static/scripts/S3/s3.req_update.js" % appname)
 
+            # Prevent Items from being added to closed or cancelled requests
+            if r.record.closed or r.record.cancel:
+                s3db.configure("req_req_item",
+                               insertable = False)
+
         elif r.representation == "plain":
             # Map Popups
             pass
@@ -364,10 +369,36 @@ def req_controller():
         if r.component and r.component.name == "commit":
             table = r.component.table
             record = r.record
-            # Allow commitments to be added when doing so as a component
-            s3db.configure(table,
-                           listadd = True)
-
+            stable = s3db.org_site
+            commit_status = record.commit_status
+            
+            # Commits belonging to this request
+            rsites = []
+            query = (table.deleted == False)&(table.req_id == record.id)
+            req_sites = db(query).select(table.site_id)
+            for req_site in req_sites:
+                rsites += [req_site.site_id]
+            
+            # All the sites
+            commit_sites = db((stable.deleted == False)).select(stable.id,
+                                                              stable.code)
+            
+            # Sites which have not committed to this request yet
+            site_opts = {}
+            for site in commit_sites:
+                if (site.id not in site_opts) and (site.id not in rsites):
+                    site_opts[site.id] = site.code
+            
+            table.site_id.requires = IS_IN_SET(site_opts)
+            if (commit_status == 2) and settings.get_req_restrict_on_complete():
+                # Restrict from committing to completed requests                
+                s3db.configure(table,
+                               listadd=False)
+            else:    
+                # Allow commitments to be added when doing so as a component
+                s3db.configure(table,
+                               listadd = True)
+                
             if type == 1: # Items
                 # Limit site_id to facilities the user has permissions for
                 auth.permitted_facilities(table=r.table,
@@ -957,7 +988,7 @@ def req_skill():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            response.s3.actions = [
+            s3.actions = [
                 dict(url = URL(c="req", f="req",
                                args=["req_skill", "[id]"]),
                      _class = "action-btn",
@@ -1358,6 +1389,7 @@ def send_req():
 
     req_id = request.args[0]
     site_id = request.vars.get("site_id", None)
+    site_name = s3db.org_site_represent(site_id, show_link=False)
 
     ritable = s3db.req_req_item
     iitable = s3db.inv_inv_item
@@ -1437,6 +1469,9 @@ def send_req():
              (iitable.deleted == False) & \
              (iitable.item_pack_id == sip_id_field)
     orderby = ii_expiry_field | ii_purchase_field
+
+    no_match = True
+
     for ritem in req_items:
         rim = ritem.req_req_item
         rim_id = rim.id
@@ -1444,6 +1479,10 @@ def send_req():
                 (ii_item_id_field == rim.item_id)
         inv_items = db(query).select(*iifields,
                                      orderby=orderby)
+
+        if len(inv_items) == 0:
+            break;
+        no_match = False
         one_match = len(inv_items) == 1
         # Get the Quantity Needed
         quantity_shipped = max(rim.quantity_transit, rim.quantity_fulfil)
@@ -1529,10 +1568,16 @@ def send_req():
                    #comments = comment,
                    )
 
+    if no_match:
+        session.warning = \
+            T("%(site)s has no items exactly matching this request. There may still be other items in stock which can fulfill this request!") % \
+                dict(site=site_name)
+
     # Redirect to view the list of items in the Send
     redirect(URL(c = "inv",
                  f = "send",
-                 args = [send_id, "track_item"]))
+                 args = [send_id, "track_item"])
+             )
 
 # =============================================================================
 def commit_item_json():

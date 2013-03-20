@@ -432,8 +432,13 @@ div#map {
 }
 
 /* Form Popup */
+body.popup {
+    min-width: auto;
+    height: auto;
+}
 div#popup {
     background: #fff;
+    width: 725px;
 }
 .loading {
     background: url(../../img/ajax-loader.gif) center no-repeat !important;
@@ -856,7 +861,7 @@ li input + a {
 }
 
 /* Popup text for represents of Long text fields */
-.popup {
+.showall {
     display: none;
     position: absolute;
     border-style: solid;

@@ -130,6 +130,9 @@ settings.ui.hide_report_filter_options = True
 # Uncomment to restrict the export formats available
 settings.ui.export_formats = ["xls", "xml"]
 
+# Uncomment to include an Interim Save button on CRUD forms
+settings.ui.interim_save = True
+
 # -----------------------------------------------------------------------------
 # Formstyle
 def formstyle_row(id, label, widget, comment, hidden=False):
@@ -148,7 +151,7 @@ def formstyle_row(id, label, widget, comment, hidden=False):
     return row
 
 # -----------------------------------------------------------------------------
-def form_style(self, xfields):
+def formstyle(self, xfields):
     """
         Use new Web2Py formstyle to generate form using DIVs & CSS
         CSS can then be used to create MUCH more flexible form designs:
@@ -164,7 +167,7 @@ def form_style(self, xfields):
     return form
 
 settings.ui.formstyle_row = formstyle_row
-#settings.ui.formstyle = form_style # Breaks e.g. org/organisation/create
+#settings.ui.formstyle = formstyle # Breaks e.g. org/organisation/create
 settings.ui.formstyle = formstyle_row
 
 # -----------------------------------------------------------------------------
@@ -192,7 +195,7 @@ def customize_project_project(**attr):
 
     # Custom Fields
     table.name.label = T("Project Title")
-    s3db.project_project.budget.label = T("Total Funding")
+    s3db.project_project.budget.label = T("Total Funding (USD)")
     location_id = s3db.project_location.location_id
     location_id.label = ""
     # Limit to just Countries
@@ -213,7 +216,7 @@ def customize_project_project(**attr):
     s3["dataTable_sDom"] = 'ripl<"dataTable_table"t>p'
 
     # Don't show export buttons for XLS/XML    
-    s3.formats = Storage(xls= None, xml = None)
+    s3.formats = Storage(xls=None, xml=None)
     
     # Remove rheader
     attr["rheader"] = None
@@ -235,24 +238,9 @@ def customize_project_project(**attr):
                                deletable = False
                                )
 
-            # Is Cook Islands in the Locations?
-            pltable = s3db.project_location
-            ltable = s3db.gis_location
-            query = (pltable.project_id == r.id) & \
-                    (pltable.location_id == ltable.id) & \
-                    (ltable.name =="Cook Islands")
-            if current.db(query).select(pltable.id,
-                                        limitby=(0, 1)).first() is None:
-                drrpptable = s3db.project_drrpp
-                drrpptable.pifacc.readable = drrpptable.pifacc.writable = False
-                drrpptable.jnap.readable = drrpptable.jnap.writable = False
-                drrpptable.L1.readable = drrpptable.L1.writable = False
-            else:
-                # If no Cook Islands are checked, then check them all
-                script = '''
-if($('[name=sub_drrpp_L1]').is(':checked')==false){
- $('[name=sub_drrpp_L1]').attr('checked','checked')}'''
-                s3.jquery_ready.append(script)
+            # JS to show/hide Cook Island fileds
+            s3.scripts.append("/%s/static/themes/DRRPP/js/drrpp.js" % current.request.application)
+
         elif r.representation == "xls":
             # All readable Fields should be exported
             list_fields = ["id",
@@ -327,16 +315,34 @@ if($('[name=sub_drrpp_L1]').is(':checked')==false){
     #hfa_options = {None:NONE} To search NO HFA
     for key in project_hfa_opts.keys():
         hfa_options[key] = "HFA %s" % key
+
     project_rfa_opts = s3db.project_rfa_opts()
     rfa_options = {}
     #rfa_options = {None:NONE} To search NO RFA
     for key in project_rfa_opts.keys():
         rfa_options[key] = "RFA %s" % key
 
+    project_pifacc_opts = s3db.project_pifacc_opts()
+    pifacc_options = {}
+    #pifacc_options = {None:NONE} To search NO pifacc
+    for key in project_pifacc_opts.keys():
+        pifacc_options[key] = "PIFACC %s" % key
+
+    project_jnap_opts = s3db.project_jnap_opts()
+    jnap_options = {}
+    #jnap_options = {None:NONE} To search NO jnap
+    for key in project_jnap_opts.keys():
+        jnap_options[key] = "JNAP %s" % key
+
     advanced = [
         S3SearchOptionsWidget(name = "project_search_location",
                               label = T("Country"),
                               field = "location.location_id",
+                              cols = 3
+                              ),
+        S3SearchOptionsWidget(name = "project_search_L1",
+                              label = T("Cook Islands"),
+                              field = "drrpp.L1",
                               cols = 3
                               ),
         S3SearchOptionsWidget(name = "project_search_hazard",
@@ -351,7 +357,9 @@ if($('[name=sub_drrpp_L1]').is(':checked')==false){
                               field = "theme.id",
                               options = s3db.project_theme_opts,
                               help_field = s3db.project_theme_helps,
-                              cols = 4
+                              cols = 4,
+                              # Don't group
+                              size = 30
                               ),
         S3SearchOptionsWidget(name = "project_search_hfa",
                               label = T("HFA"),
@@ -365,6 +373,20 @@ if($('[name=sub_drrpp_L1]').is(':checked')==false){
                              field = "drrpp.rfa",
                              options = rfa_options,
                              help_field = project_rfa_opts,
+                             cols = 6
+                             ),
+       S3SearchOptionsWidget(name = "project_search_pifacc",
+                             label = T("PIFACC"),
+                             field = "drrpp.pifacc",
+                             options = pifacc_options,
+                             help_field = project_pifacc_opts,
+                             cols = 6
+                             ),
+       S3SearchOptionsWidget(name = "project_search_jnap",
+                             label = T("JNAP"),
+                             field = "drrpp.jnap",
+                             options = jnap_options,
+                             help_field = project_jnap_opts,
                              cols = 6
                              ),
        S3SearchOptionsWidget(name = "project_search_organisation_id",
@@ -429,7 +451,8 @@ if($('[name=sub_drrpp_L1]').is(':checked')==false){
             "location",
             label = T("Countries"),
             fields = ["location_id"],
-            orderby = "location_id$name"
+            orderby = "location_id$name",
+            render_list = True
         ),
         "drrpp.L1",
         s3forms.S3SQLInlineComponentCheckbox(
@@ -483,7 +506,8 @@ if($('[name=sub_drrpp_L1]').is(':checked')==false){
                             )
         ),
         "budget",
-        "currency",
+        "drrpp.local_budget",
+        "drrpp.local_currency",
         "drrpp.focal_person",
         "drrpp.organisation_id",
         "drrpp.email",
@@ -702,6 +726,34 @@ def customize_pr_person(**attr):
     return attr
 
 settings.ui.customize_pr_person = customize_pr_person
+
+# -----------------------------------------------------------------------------
+def customize_org_organisation(**attr):
+    """
+        Customize org_organisation controller to just show Name field
+    """
+
+    s3 = current.response.s3
+
+    # Custom PreP
+    standard_prep = s3.prep
+    def custom_prep(r):
+        # Call standard prep
+        if callable(standard_prep):
+            output = standard_prep(r)
+        else:
+            output = True
+        if r.interactive and r.method == "create":
+            table = current.s3db.org_organisation
+            for field in table:
+                if field.name != "name":
+                    field.readable = field.writable = False
+        return output
+    s3.prep = custom_prep
+
+    return attr
+
+settings.ui.customize_org_organisation = customize_org_organisation
 
 # =============================================================================
 # Enabled Modules

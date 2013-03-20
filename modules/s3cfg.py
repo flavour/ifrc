@@ -542,10 +542,18 @@ class S3Config(Storage):
         return self.L10n.get("date_format", T("%Y-%m-%d"))
     def get_L10n_time_format(self):
         T = current.T
-        return self.L10n.get("time_format", T("%H:%M:%S"))
+        return self.L10n.get("time_format", T("%H:%M"))
+    def get_L10n_datetime_separator(self):
+        return self.L10n.get("datetime_separator", " ")
     def get_L10n_datetime_format(self):
         T = current.T
-        return self.L10n.get("datetime_format", T("%Y-%m-%d %H:%M"))
+        return self.L10n.get("datetime_format",
+                             "%s%s%s" % (
+                                self.get_L10n_date_format(),
+                                self.get_L10n_datetime_separator(),
+                                self.get_L10n_time_format()
+                             ))
+                             #T("%Y-%m-%d %H:%M"))
     def get_L10n_utc_offset(self):
         return self.L10n.get("utc_offset", "UTC +0000")
     def get_L10n_firstDOW(self):
@@ -696,6 +704,10 @@ class S3Config(Storage):
         """
         return self.ui.get("hide_report_options", True)
 
+    def get_ui_interim_save(self):
+        """ Render interim-save button in CRUD forms by default """
+        return self.ui.get("interim_save", False)
+
     def get_ui_label_attachments(self):
         """
             Label for attachments tab
@@ -738,10 +750,6 @@ class S3Config(Storage):
 
     def get_ui_navigate_away_confirm(self):
         return self.ui.get("navigate_away_confirm", True)
-
-    def get_ui_interim_save(self):
-        """ Render interim-save button in CRUD forms by default """
-        return self.ui.get("interim_save", False)
 
     def get_ui_search_submit_button(self):
         """
@@ -1453,6 +1461,12 @@ class S3Config(Storage):
         return self.req.get("req_form_name", "Requisition Form")
     def get_req_shortname(self):
         return self.req.get("req_shortname", "REQ")
+    def get_req_restrict_on_complete(self):
+        """
+            To restrict adding new commits to the Completed commits.
+        """
+        return self.req.get("req_restrict_on_complete", False)
+    
 
     # -------------------------------------------------------------------------
     # Supply

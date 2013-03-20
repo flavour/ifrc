@@ -197,7 +197,7 @@ settings.L10n.decimal_separator = "."
 # lon<0 have a duplicate at lon+360
 # lon>0 have a duplicate at lon-360
 #settings.gis.duplicate_features = True
-# Mouse Position: 'normal', 'mgrs' or 'off'
+# Mouse Position: 'normal', 'mgrs' or None
 #settings.gis.mouse_position = "mgrs"
 # PoIs to export in KML/OSM feeds from Admin locations
 #settings.gis.poi_resources = ["cr_shelter", "hms_hospital", "org_office"]
@@ -259,6 +259,8 @@ settings.L10n.decimal_separator = "."
 #settings.ui.auth_user_represent = "name"
 # Uncomment to restrict the export formats available
 #settings.ui.export_formats = ["kml", "pdf", "rss", "xls", "xml"]
+# Uncomment to include an Interim Save button on CRUD forms
+#settings.ui.interim_save = True
 
 # -----------------------------------------------------------------------------
 # Persons
@@ -419,6 +421,8 @@ settings.L10n.decimal_separator = "."
 #settings.req.req_type = ["Stock"]
 # Uncomment to enable Summary 'Site Needs' tab for Offices/Facilities
 #settings.req.summary = True
+# Uncomment to restrict adding new commits to Completed commits
+#settings.req.req_restrict_on_complete = True
 
 # Custom Crud Strings for specific req_req types
 #settings.req.req_crud_strings = dict()

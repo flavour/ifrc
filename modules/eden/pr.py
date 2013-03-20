@@ -731,7 +731,7 @@ class S3PersonModel(S3Model):
                                        #"picture",
                                        "gender",
                                        "age_group",
-                                       (messages.ORGANISATION, "hrm_human_resource:organisation_id$name")
+                                       (messages.ORGANISATION, "hrm_human_resource:organisation_id$name"),
                                        ],
                         crud_form = crud_form,
                         onvalidation=self.pr_person_onvalidation,
@@ -2376,7 +2376,7 @@ class S3SavedSearch(S3Model):
             )
 
         # By default we set the name to match the friendly query string
-        if not vars.name and vars.query:
+        if (not vars.name or vars.name == "TEMP") and vars.query:
             vars.name = vars.query
 
     # -------------------------------------------------------------------------
@@ -2403,6 +2403,8 @@ class S3SavedSearch(S3Model):
         for field_filter, values in filters.items():
             field_selector, filter = field_filter.split("__")
             lf = S3FieldSelector(field_selector).resolve(resource)
+            if field_selector.endswith(".id"):
+                field_selector = field_selector[:-3]
 
             # Parse the values back out
             values = S3URLQuery.parse_value(values)

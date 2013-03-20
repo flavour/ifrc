@@ -8,7 +8,9 @@
  <div class='span6'>
   <h4 class='latest-updates'>{{=T("Latest Activity")}}</h4>
   <a href='#myModal' role='button' data-toggle='modal'><i class='icon icon-plus-sign big-add'></i></a>
+  <div class="card-holder-home">
   {{=items}}
+  </div>
  </div>
  <div class='span3'>
   <h4 class='latest-disasters'>{{=T("Disasters")}}</h4>
@@ -22,7 +24,7 @@
  </div>
  <form action="#" class="form-horizontal" enctype="multipart/form-data" method="post">
   <div class='modal-body'>
-   {{try:}}{{=form[0]}}{{except:}}{{pass}}
+  {{try:}}{{=form[0]}}{{except:}}{{pass}}
   </div>
   <div class='modal-footer'>
    <button class='btn' data-dismiss='modal' aria-hidden='true'>{{=T("Close")}}</button>

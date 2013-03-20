@@ -92,7 +92,8 @@ def homepage():
                                       #widget="multiselect-bootstrap",
                                       cols=3),
                       S3DateFilter("created_on",
-                                   label=T("Filter by Date")),
+                                   label=T("Filter by Date"),
+                                   hide_time=True),
                       ]
 
     s3db.configure("cms_post",
@@ -317,9 +318,6 @@ def render_homepage_posts(listid, resource, rfields, record, **attr):
     else:
         edit_btn = ""
     if permit("delete", table, record_id=record_id):
-        #delete_btn = A(I(" ", _class="icon icon-remove-sign"),
-                       #_href=URL(c="cms", f="post", args=[record_id, "delete"]),
-                       #)
         delete_btn = A(I(" ", _class="icon icon-remove-sign"),
                        _class="dl-item-delete",
                       )
@@ -346,7 +344,7 @@ def render_homepage_posts(listid, resource, rfields, record, **attr):
     item = DIV(DIV(I(SPAN(" %s" % current.T(series),
                           _class="card-title",
                           ),
-                     _class="icon icon-%s" % series.lower(),
+                     _class="icon icon-%s" % series.lower().replace(" ", "_"),
                      ),
                    SPAN(A(location,
                           _href=location_url,
@@ -420,8 +418,11 @@ def render_homepage_events(listid, resource, rfields, record, **attr):
         edit_bar = DIV(A(I(" ",
                            _class="icon icon-edit",
                            ),
+                         _class="s3_modal",
                          _href=URL(c="event", f="event",
-                                   args=[record_id, "profile"]),
+                                   args=[record_id, "update.popup"],
+                                   vars={"refresh": listid,
+                                         "record": record_id}),
                          ),
                        A(I(" ",
                            _class="icon icon-remove-sign",
@@ -434,10 +435,13 @@ def render_homepage_events(listid, resource, rfields, record, **attr):
 
     # Render the item
     item = DIV(edit_bar,
-               H5(name),
-               SPAN(date,
-                    _class="date-title",
-                    ),
+               A(H5(name),
+                 SPAN(date,
+                      _class="date-title",
+                      ),
+                 _href=URL(c="event", f="event",
+                           args=[record_id, "profile"]),
+                 ),
                _class=item_class,
                _id=item_id,
                )

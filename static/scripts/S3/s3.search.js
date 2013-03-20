@@ -29,14 +29,13 @@ S3.search.saveCurrentSearch = function(event) {
 			var recordId = data.created[0];
 
 			// Set the id of the new hyperlink to the id the button had
-			id = (btn.attr('id') != undefined) ? btn.attr('id') : '';
+			var id = (btn.attr('id') != undefined) ? btn.attr('id') : '';
 
 			// Create a new hyperlink pointing to the new record
 			// under the current users' profile
-			var link = $('<a/>')
-				.attr('id', id)
-				.attr('href', S3.search.saveOptions.url_detail.replace('%3Cid%3E', recordId))
-				.text(i18n.edit_saved_search);
+			var link = $('<a/>').attr('id', id)
+                                .attr('href', S3.search.saveOptions.url_detail.replace('%3Cid%3E', recordId))
+                                .text(i18n.edit_saved_search);
 
 			// replace the Save button with the hyperlink
 			btn.replaceWith(link);
@@ -413,32 +412,48 @@ S3.search.getCurrentFilters = function() {
 
     // Date(time) range widgets -- each widget has two inputs.
     $('.date-filter-input:visible').each(function() {
-        var id = $(this).attr('id');
-        var url_var = $('#' + id + '-data').val();
-        var value = $(this).val(),
-            pad = function (val, len) {
+        var id = $(this).attr('id'), value = $(this).val();
+        var url_var = $('#' + id + '-data').val(), dt, dtstr;
+        var pad = function (val, len) {
             val = String(val);
             len = len || 2;
             while (val.length < len) val = "0" + val;
             return val;
         };
+        var iso = function(dt) {
+            return dt.getFullYear() + '-' +
+                   pad(dt.getMonth()+1, 2) + '-' +
+                   pad(dt.getDate(), 2) + 'T' +
+                   pad(dt.getHours(), 2) + ':' +
+                   pad(dt.getMinutes(), 2) + ':' +
+                   pad(dt.getSeconds(), 2);
+        };
         if (value) {
-            dt = Date.parse(value);
-            if (isNaN(dt)) {
-                // Unsupported format (e.g. US MM-DD-YYYY), pass
-                // as string, and hope the server can parse this
-                dt_str = '"'+ value + '"';
+            if ($(this).hasClass('datetimepicker')) {
+                if ($(this).hasClass('hide-time')) {
+                    dt = $(this).datepicker('getDate');
+                    op = id.split('-').pop();
+                    if (op == 'le' || op == 'gt') {
+                        dt.setHours(23, 59, 59, 0);
+                    } else {
+                        dt.setHours(0, 0, 0, 0);
+                    }
+                } else {
+                    dt = $(this).datetimepicker('getDate');
+                }
+                dt_str = iso(dt);
+                queries.push(url_var + '=' + dt_str);
             } else {
-                // ISO-format is standard for URL queries
-                dt = new Date(dt);
-                dt_str = dt.getFullYear() + '-' +
-                         pad(dt.getMonth()+1, 2) + '-' +
-                         pad(dt.getDate(), 2) + '-T-' +
-                         pad(dt.getHours(), 2) + '-' +
-                         pad(dt.getMinutes(), 2) + '-' +
-                         pad(dt.getSeconds(), 2);
+                dt = Date.parse(value);
+                if (isNaN(dt)) {
+                    // Unsupported format (e.g. US MM-DD-YYYY), pass
+                    // as string, and hope the server can parse this
+                    dt_str = '"'+ value + '"';
+                } else {
+                    dt_str = iso(new Date(dt));
+                }
+                queries.push(url_var + '=' + dt_str);
             }
-            queries.push(url_var + '=' + dt_str);
         }
     });
 
@@ -762,7 +777,7 @@ $(document).ready(function() {
             }
         }
     });
-
+    
     // Filter-form submission
     $('.filter-submit').click(function() {
         try {
@@ -802,12 +817,40 @@ $(document).ready(function() {
             // Ajax-refresh the target object (@todo: support multiple)
             var target = $(this).nextAll('input.filter-submit-target[type="hidden"]').val();
             if ($('#' + target).hasClass('dl')) {
+
+                // Ajax-reload the datalist
                 dlAjaxReload(target, queries);
+                
+            } else if ($('#' + target).hasClass('dataTable')) {
+                
+                // Experimental: Ajax-reloading of the datatable
+                var ajaxurl = null;
+                var config = $('input#' + target + '_configurations');
+                if (config.length) {
+                    var settings = JSON.parse($(config).val());
+                    var ajaxurl = settings['ajaxUrl'];
+                    if (typeof ajaxurl != 'undefined') {
+                        ajaxurl = S3.search.filterURL(ajaxurl, queries);
+                    } else {
+                        ajaxurl = null;
+                    }
+                }
+                if (ajaxurl) {
+                    $('#' + target).dataTable().fnReloadAjax(ajaxurl);
+                } else {
+                    url = S3.search.filterURL(url, queries);
+                    window.location.href = url;
+                }
+                
             } else {
+
+                // All other targets
                 url = S3.search.filterURL(url, queries);
                 window.location.href = url;
+                
             }
         } else {
+            
             // Page reload
             url = S3.search.filterURL(url, queries);
             window.location.href = url;
