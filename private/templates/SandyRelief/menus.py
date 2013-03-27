@@ -64,7 +64,7 @@ class S3MainMenu(default.S3MainMenu):
         return [
             homepage(),
             homepage("project"),
-            homepage("req")(
+            homepage("req", f="req_item", m="search")(
                 MM("Request Supplies", f="req", m="create", vars={"type": 1}),
                 MM("Request People", f="req", m="create", vars={"type": 3})
             ),
@@ -84,7 +84,15 @@ class S3MainMenu(default.S3MainMenu):
                 MM("Stock Counts", c="inv", f="adj"),
                 MM("Shipments", c="inv", f="send")
             ),
-            MM("Cases", c="assess", f="building", m="search"), 
+             MM("Cases", c="assess", f="building", m="search")(
+                MM("Building Assessments", f="building", m="search"),
+                MM("Canvass", f="canvass"), 
+            ),  
+            MM("Survey", c="survey")(
+                MM("Templates", f="template"),
+                MM("Assessments", f="series"),
+                MM("Import Templates", f="question_list", m="import"),
+            ),
         ]
 
 # =============================================================================
