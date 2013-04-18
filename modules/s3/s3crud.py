@@ -109,20 +109,25 @@ class S3CRUD(S3Method):
             output = self.read(r, **attr)
         elif method == "update":
             output = self.update(r, **attr)
+            
+        # Standard list view: list-type and hide-filter set by controller
+        # (default: list_type="datatable", hide_filter=False)
         elif method == "list":
-            output = self.select(r, **attr)
-            #output = self.select_filter(r, **attr)
+            #output = self.select(r, **attr)
+            output = self.select_filter(r, **attr)
 
-        # Temporary code for testing
-        elif method == "datatable":
+        # URL Methods to explicitly choose list-type and hide-filter in the URL
+        elif method in ("datatable", "datatable_f"):
             _attr = Storage(attr)
             _attr["list_type"] = "datatable"
+            _attr["hide_filter"] = method == "datatable"
             output = self.select_filter(r, **_attr)
-        elif method == "datalist":
+        elif method in ("datalist", "datalist_f"):
             _attr = Storage(attr)
             _attr["list_type"] = "datalist"
+            _attr["hide_filter"] = method == "datalist"
             output = self.select_filter(r, **_attr)
-
+            
         elif method == "validate":
             output = self.validate(r, **attr)
         elif method == "review":
@@ -853,6 +858,8 @@ class S3CRUD(S3Method):
         report_filename = _config("report_filename")
         report_formname = _config("report_formname")
 
+        listid = "datatable"
+        
         # Check permission to read in this table
         authorised = self._permitted()
         if not authorised:
@@ -1008,7 +1015,7 @@ class S3CRUD(S3Method):
                 dtargs["dt_displayLength"] = display_length
                 datatable = dt.html(totalrows,
                                     displayrows,
-                                    id="list",
+                                    id=listid,
                                     **dtargs)
 
             # Add items to output
@@ -1058,15 +1065,15 @@ class S3CRUD(S3Method):
             if dt is not None:
                 output = dt.json(totalrows,
                                  displayrows,
-                                 "list",
+                                 listid,
                                  sEcho,
                                  **dtargs)
             else:
                 output = '{"iTotalRecords": %s, ' \
                          '"iTotalDisplayRecords": 0,' \
-                         '"dataTable_id": "list", ' \
+                         '"dataTable_id": %s, ' \
                          '"sEcho": %s, ' \
-                         '"aaData": []}' % (totalrows, sEcho)
+                         '"aaData": []}' % (totalrows, listid, sEcho)
 
         elif representation == "plain":
             if resource.count() == 1:
@@ -1175,8 +1182,9 @@ class S3CRUD(S3Method):
             output["title"] = title
 
             # Filter-form
+            hide_filter = attr.get("hide_filter", False)
             filter_widgets = get_config("filter_widgets", None)
-            if filter_widgets:
+            if filter_widgets and not hide_filter:
 
                 # Where to retrieve filtered data from:
                 filter_submit_url = attr.get("filter_submit_url",
@@ -1355,6 +1363,8 @@ class S3CRUD(S3Method):
         sortby = get_config("sortby", [[1, "asc"]])
         linkto = get_config("linkto", None)
 
+        listid = "datatable"
+        
         # List fields
         list_fields = resource.list_fields()
 
@@ -1485,7 +1495,7 @@ class S3CRUD(S3Method):
                 dtargs["dt_displayLength"] = display_length
                 datatable = dt.html(totalrows,
                                     displayrows,
-                                    id="datatable",
+                                    id=listid,
                                     **dtargs)
 
             # View + data
@@ -1529,15 +1539,15 @@ class S3CRUD(S3Method):
             if dt is not None:
                 output = dt.json(totalrows,
                                  displayrows,
-                                 "list",
+                                 listid,
                                  sEcho,
                                  **dtargs)
             else:
                 output = '{"iTotalRecords": %s, ' \
                          '"iTotalDisplayRecords": 0,' \
-                         '"dataTable_id": "list", ' \
+                         '"dataTable_id": %s, ' \
                          '"sEcho": %s, ' \
-                         '"aaData": []}' % (totalrows, sEcho)
+                         '"aaData": []}' % (totalrows, listid, sEcho)
 
         else:
             r.error(501, r.ERROR.BAD_FORMAT)
@@ -1749,6 +1759,8 @@ class S3CRUD(S3Method):
         report_filename = _config("report_filename")
         report_formname = _config("report_formname")
 
+        listid = "datatable"
+
         # Check permission to read in this table
         authorised = self._permitted()
         if not authorised:
@@ -1857,7 +1869,7 @@ class S3CRUD(S3Method):
                 datatable = current.T("No records to review")
             else:
                 dt_sDom = s3.get("dataTable_sDom", 'fril<"dataTable_table"t>pi')
-                datatable = dt.html(totalrows, displayrows, "list",
+                datatable = dt.html(totalrows, displayrows, listid,
                                     dt_pagination=dt_pagination,
                                     dt_displayLength=display_length,
                                     dt_sDom = dt_sDom)
@@ -1906,14 +1918,14 @@ class S3CRUD(S3Method):
             if dt is not None:
                 output = dt.json(totalrows,
                                  displayrows,
-                                 "list",
+                                 listid,
                                  sEcho)
             else:
                 output = '{"iTotalRecords": %s, ' \
                          '"iTotalDisplayRecords": 0,' \
-                         '"dataTable_id": "list", ' \
+                         '"dataTable_id": %s, ' \
                          '"sEcho": %s, ' \
-                         '"aaData": []}' % (totalrows, sEcho)
+                         '"aaData": []}' % (totalrows, listid, sEcho)
 
         else:
             r.error(501, r.ERROR.BAD_FORMAT)

@@ -2317,22 +2317,23 @@ class S3OfficeModel(S3Model):
                   onaccept=self.org_office_onaccept,
                   deduplicate=self.org_office_duplicate,
                   search_method=office_search,
-                  # Experimental: filter form (used by S3CRUD.select_dl)
-                  filter_widgets=[
-                       S3TextFilter(["name", "email", "comments"],
-                                    label=T("Search"),
-                                    comment=T("Search for office by text.")),
-                       S3OptionsFilter("organisation_id",
-                                       label=messages.ORGANISATION,
-                                       comment=T("Search for office by organization."),
-                                       represent="%(name)s",
-                                       cols=3,
-                                       widget="multiselect"),
-                       S3OptionsFilter("location_id$L1",
-                                       location_level="L1",
-                                       cols=3,
-                                       widget="multiselect")
-                  ],
+                  ## Experimental: filter form
+                  #filter_widgets=[
+                       #S3TextFilter(["name", "email", "comments"],
+                                    #label=T("Search"),
+                                    #comment=T("Search for office by text.")),
+                       #S3OptionsFilter("organisation_id",
+                                       #label=messages.ORGANISATION,
+                                       #comment=T("Search for office by organization."),
+                                       #represent="%(name)s",
+                                       #cols=3),
+                                       ##widget="multiselect"),
+                       #S3OptionsFilter("location_id$L1",
+                                       #location_level="L1",
+                                       #none=False,
+                                       #cols=3),
+                                       ##widget="multiselect")
+                  #],
                   list_fields=["id",
                                "name",
                                "organisation_id", # Filtered in Component views
@@ -3000,7 +3001,7 @@ def org_organisation_controller():
             gis = current.gis
             r.table.country.default = gis.get_default_country("code")
 
-            if not r.component and r.method not in ["read", "update", "delete"]:
+            if not r.component and r.method not in ["read", "update", "delete", "deduplicate"]:
                 # Filter Locations
                 lfilter = current.session.s3.location_filter
                 if lfilter:

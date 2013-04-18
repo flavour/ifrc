@@ -109,7 +109,7 @@ def homepage():
 
     if "datalist_dl_post" in request.args:
         # DataList pagination or Ajax-deletion request
-        request.args = ["datalist"]
+        request.args = ["datalist_f"]
         ajax = "list"
     elif "datalist_dl_filter" in request.args:
         # FilterForm options update request
@@ -117,7 +117,7 @@ def homepage():
         ajax = "filter"
     else:
         # Default
-        request.args = ["datalist"]
+        request.args = ["datalist_f"]
         ajax = None
 
     def prep(r):
@@ -239,10 +239,9 @@ def filter_formstyle(row_id, label, widget, comment):
     """
 
     if label:
-        return DIV(TR(label),
-                   TR(widget))
+        return DIV(label, widget)
     else:
-        return widget
+        return DIV(widget)
 
 # -----------------------------------------------------------------------------
 def render_homepage_posts(listid, resource, rfields, record, **attr):

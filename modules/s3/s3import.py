@@ -1858,6 +1858,9 @@ class S3ImportItem(object):
             Detect whether this is an update or a new record
         """
 
+        if self.id:
+            return
+
         RESOLVER = "deduplicate"
 
         METHOD = self.METHOD
@@ -1865,9 +1868,6 @@ class S3ImportItem(object):
         DELETE = METHOD["DELETE"]
 
         UID = current.xml.UID
-
-        if self.id:
-            return
 
         table = self.table
 
@@ -1892,8 +1892,8 @@ class S3ImportItem(object):
             if self.data and resolve:
                 resolve(self)
             if self.id and self.method in (UPDATE, DELETE):
-                query = (table._id == self.id)
-                self.original = current.db(query).select(limitby=(0, 1)).first()
+                self.original = current.db(table._id == self.id).select(limitby=(0, 1)
+                                                                        ).first()
                 if original and UID in original:
                     self.uid = original[UID]
                     self.data.update({UID:self.uid})
@@ -2054,6 +2054,7 @@ class S3ImportItem(object):
         # Globals
         db = current.db
         xml = current.xml
+        ATTRIBUTE = xml.ATTRIBUTE
         s3db = current.s3db
         manager = current.manager
 
@@ -2083,28 +2084,32 @@ class S3ImportItem(object):
         # Resolve references
         self._resolve_references()
 
-        # De-duplicate (auto-detect updates)
-        #self.deduplicate()
-
-        # Load the original (if not already loaded)
-        #table = self.table
-        #this = self.original
-        #method = self.method
-        #if not this and self.id and method in (UPDATE, DELETE):
-            #query = (table.id == self.id)
-            #self.original = this = db(query).select(limitby=(0, 1)).first()
-
-        # Validate
+        # Deduplicate and validate
         if not self.validate():
             _debug("Validation error: %s (%s)" %
                     (self.error,
                      xml.tostring(self.element, pretty_print=True)))
             self.skip = True
+
+            # Notify the error in the parent to have reported in the
+            # interactive (2-phase) importer
+            # Note that the parent item is already written at this point,
+            # so this notification can NOT prevent/rollback the import of
+            # the parent item if ignore_errors is True (forced commit), or
+            # if the user deliberately chose to import it despite error.
+            parent = self.parent
+            if parent is not None:
+                parent.error = self.ERROR.VALIDATION_ERROR
+                element = parent.element
+                if not element.get(ATTRIBUTE.error, False):
+                    element.set(ATTRIBUTE.error, str(parent.error))
+                    
             return ignore_errors
 
         elif self.components:
             for component in self.components:
-                if not component.validate():
+                if component.accepted is False or \
+                   component.data is None:
                     if hasattr(component, "tablename"):
                         tn = component.tablename
                     else:

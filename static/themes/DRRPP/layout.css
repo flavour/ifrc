@@ -19,7 +19,7 @@
 	padding: 0 5px;
 }
 
-/******** Content/Body **********/
+/* Content Body */
 .body-content-wrapper {
 	margin-top: 20px;
 	min-height: 550px;
@@ -82,7 +82,7 @@
 	text-align: center;
 }
 
-/***** Block *******/
+/* Block */
 .block {
 	text-align: center;
 }
