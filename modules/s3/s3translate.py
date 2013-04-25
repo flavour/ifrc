@@ -692,19 +692,28 @@ class TranslateReadFiles:
             fsappend = final_strings.append
             settings = current.deployment_settings
             for (loc, s) in strings:
-                if s[0] != '"' and s[0] != "'" and "settings." in s:
 
-                    # Convert the call to a standard form
-                    s = s.replace("current.deployment_settings", "settings")
-                    s = s.replace("()", "")
-                    l = s.split(".")
-                    obj = settings
+                if s[0] != '"' and s[0] != "'":
 
-                    # Get the actual value
-                    for atr in l[1:]:
-                        obj = getattr(obj, atr)()
-                    s = obj
-                fsappend((loc, s))
+                    # This is a variable
+                    if "settings." in s:
+                        # Convert the call to a standard form
+                        s = s.replace("current.deployment_settings", "settings")
+                        s = s.replace("()", "")
+                        l = s.split(".")
+                        obj = settings
+
+                        # Get the actual value
+                        for atr in l[1:]:
+                            obj = getattr(obj, atr)()
+                        s = obj
+                        fsappend((loc, s))
+                    else:
+                        #@ToDo : Get the value of non-settings variables
+                        pass
+
+                else:
+                    fsappend((loc, s))
 
             return final_strings
 
@@ -1048,12 +1057,15 @@ class StringsToExcel:
             """
 
             uniq = {}
+            appname = request.application
 
             for (loc, data) in Strings:
                 uniq[data] = ""
 
             for (loc, data) in Strings:
 
+                # Remove the prefix from the filename
+                loc = loc.split(appname, 1)[1]
                 if uniq[data] != "":
                     uniq[data] = uniq[data] + ";" + loc
                 else:
@@ -1178,8 +1190,6 @@ class StringsToExcel:
                 while i < lim and OldStrings[i][0] < s:
                     i += 1
 
-                # Remove the prefix from the filename
-                l = l.split(appname, 1)[1]
                 if i != lim and OldStrings[i][0] == s and \
                    OldStrings[i][1].startswith("*** ") == False:
                     Strings.append((l, s, OldStrings[i][1]))

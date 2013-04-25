@@ -14,8 +14,18 @@
 {{else:}}
  body{direction:ltr;}
 {{pass}}
-{{if request.vars.background:}}
- html>body {background:{{=request.vars.background}};}
+{{if request.get_vars.background:}}
+ html>body {background:{{=request.get_vars.background}};}
+{{pass}}
+{{if request.get_vars.header == "hide":}}
+div#header-banner {
+    background: #568AAB;
+    height: 20px;
+    border-bottom: 1px solid white;
+}
+div#header-top-menu {
+    margin-top: 0;
+}
 {{pass}}
 </style>
  <link href="/{{=appname}}/static/themes/DRRPP/font.css" rel="stylesheet" type="text/css" />
@@ -50,10 +60,9 @@
  {{include}}
 {{else:}}
 <body>
-{{if request.vars.header != "hide":}}
 <div id='header' class='container_12'>
  <div id='header-banner' class='grid_12 alpha omega'>
-  <div id='header-top-menu' class='grid_3 prefix_9 omega'>
+  <div id='header-top-menu' class='grid_5 prefix_7 omega'>
    {{if auth.user is None:}}
    <a class='header-top-menu-btn' href='{{=URL(r=request, c="default", f="index", args="login")}}'>Login</a>
    <a class='header-top-menu-btn' href='{{=URL(r=request, c="default", f="index", args="register")}}'>Register</a>
@@ -62,6 +71,8 @@
    {{if auth.s3_has_role(system_roles.ADMIN) or auth.s3_has_role(system_roles.ORG_ADMIN):}}
     <a class='header-top-menu-btn' href='{{=URL(r=request, c="default", f="index", args="admin")}}'>Admin</a>
    {{pass}}
+   <a class='header-top-menu-btn' href='{{=URL(r=request, c="default", f="user", args="profile")}}'>Profile</a>
+   <a class='header-top-menu-btn' href='{{=URL(r=request, c="default", f="user", args="change_password")}}'>Change Password</a>
    <a class='header-top-menu-btn' href='{{=URL(r=request, c="default", f="user", args="logout")}}'>Logout</a>
    {{pass}}
    <a class='header-top-menu-btn' href='{{=URL(r=request, c="default", f="index", args="contact")}}'>Contact</a>
@@ -95,7 +106,6 @@
   </ul>
  </div>
 </div>
-{{pass}}
 <div id='content-wrapper' class='container_12'>
 {{if response.error:}}<div class='error'>{{=response.error}}</div>{{pass}}
 {{if response.warning:}}<div class='warning'>{{=response.warning}}</div>{{pass}}
@@ -104,7 +114,7 @@
 {{if response.flash:}}<div class='confirmation'>{{=response.flash}}</div>{{pass}}
 {{include}}
 </div>
-{{if request.vars.footer != "hide":}}
+{{if request.get_vars.footer != "hide":}}
 <div id='footer' class='container_12'>
  {{include "../private/templates/%s/views/footer.html" % response.s3.theme}}
  {{if s3.debug:}}{{=s3.toolbar()}}{{pass}}

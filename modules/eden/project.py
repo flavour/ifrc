@@ -154,7 +154,8 @@ class S3ProjectModel(S3Model):
             msg_list_empty = T("No Statuses currently registered"))
 
         # Reusable Field
-        represent = S3Represent(lookup=tablename)
+        represent = S3Represent(lookup=tablename,
+                               ) #none = T("Unknown"))
         status_id = S3ReusableField("status_id", table,
                                     label = T("Status"),
                                     sortby = "name",
@@ -3294,6 +3295,7 @@ class S3ProjectDRRPPModel(S3Model):
                      # @ToDo: Becase RMS uses the human_resource_id field, the focal person from RMS won't be visible in DRRPP
                      Field("focal_person",
                            represent = lambda v: v or NONE,
+                           requires = IS_NOT_EMPTY(),
                            label = T("Focal Person")),
                      self.org_organisation_id(label = T("Organization")),
                      Field("email",
