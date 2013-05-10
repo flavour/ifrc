@@ -35,13 +35,6 @@ try:
 except:
     from StringIO import StringIO
 
-try:
-    from lxml import etree
-except ImportError:
-    import sys
-    print >> sys.stderr, "ERROR: lxml module needed for XML handling"
-    raise
-
 from gluon import *
 from gluon.contenttype import contenttype
 from gluon.storage import Storage
@@ -85,9 +78,25 @@ class S3XLS(S3Codec):
         """
 
         title = self.crud_string(resource.tablename, "title_list")
+        
+        vars = Storage(current.request.vars)
+        vars["iColumns"] = len(list_fields)
+        filter, orderby, left = resource.datatable_filter(list_fields, vars)
+        resource.add_filter(filter)
+        
+        result = resource.fast_select(list_fields,
+                                      left=left,
+                                      start=None,
+                                      limit=None,
+                                      count=True,
+                                      getids=True,
+                                      orderby=orderby,
+                                      represent=True,
+                                      show_links=False)
 
-        rfields = resource.resolve_selectors(list_fields)[0]
-
+        rfields = result["rfields"]
+        items = result["data"]
+        
         types = []
         lfields = []
         heading = {}
@@ -99,22 +108,6 @@ class S3XLS(S3Codec):
                     types.append("string")
                 else:
                     types.append(rfield.ftype)
-
-        vars = Storage(current.request.vars)
-        vars["iColumns"] = len(rfields)
-        filter, orderby, left = resource.datatable_filter(list_fields, vars)
-        resource.add_filter(filter)
-
-        rows, count, ids = resource.select(list_fields,
-                                           left=left,
-                                           start=None,
-                                           limit=None,
-                                           count=True,
-                                           getids=True,
-                                           orderby=orderby)
-
-        items = resource.extract(rows, list_fields,
-                                 represent=True, show_links=False)
 
         return (title, types, lfields, heading, items)
 
@@ -166,6 +159,7 @@ class S3XLS(S3Codec):
             list_fields = data_source.list_fields()
         group = attr.get("dt_group")
         use_colour = attr.get("use_colour", False)
+
         # Extract the data from the data_source
         if isinstance(data_source, (list, tuple)):
             headers = data_source[0]

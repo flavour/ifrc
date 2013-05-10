@@ -1071,7 +1071,7 @@ class S3CRUD(S3Method):
             else:
                 output = '{"iTotalRecords": %s, ' \
                          '"iTotalDisplayRecords": 0,' \
-                         '"dataTable_id": %s, ' \
+                         '"dataTable_id": "%s", ' \
                          '"sEcho": %s, ' \
                          '"aaData": []}' % (totalrows, listid, sEcho)
 
@@ -1108,6 +1108,14 @@ class S3CRUD(S3Method):
             exporter = S3Exporter().csv
             return exporter(resource)
 
+        elif representation == "json":
+            exporter = S3Exporter().json
+            return exporter(resource,
+                            start=start,
+                            limit=limit,
+                            fields=fields,
+                            orderby=orderby)
+
         elif representation == "pdf":
             exporter = S3Exporter().pdf
             return exporter(resource,
@@ -1118,20 +1126,18 @@ class S3CRUD(S3Method):
                             report_formname = report_formname,
                             **attr)
 
+        elif representation == "shp":
+            exporter = S3Exporter().shp
+            return exporter(resource,
+                            list_fields=list_fields,
+                            **attr)
+
         elif representation == "xls":
             exporter = S3Exporter().xls
             return exporter(resource,
                             list_fields=list_fields,
                             report_groupby=report_groupby,
                             **attr)
-
-        elif representation == "json":
-            exporter = S3Exporter().json
-            return exporter(resource,
-                            start=start,
-                            limit=limit,
-                            fields=fields,
-                            orderby=orderby)
 
         else:
             r.error(501, r.ERROR.BAD_FORMAT)
@@ -1141,7 +1147,7 @@ class S3CRUD(S3Method):
     # -------------------------------------------------------------------------
     def select_filter(self, r, **attr):
         """
-            Filtered datatable/datalist (intended as replacement for select())
+            Filtered datatable/datalist (a replacement for select())
         
             @param r: the S3Request
             @param attr: dictionary of parameters for the method handler
@@ -1287,31 +1293,6 @@ class S3CRUD(S3Method):
             exporter = S3Exporter().csv
             return exporter(resource)
 
-        elif representation == "pdf":
-
-            report_hide_comments = get_config("report_hide_comments", None)
-            report_filename = get_config("report_filename", None)
-            report_formname = get_config("report_formname", None)
-
-            exporter = S3Exporter().pdf
-            return exporter(resource,
-                            request=r,
-                            list_fields=list_fields,
-                            report_hide_comments = report_hide_comments,
-                            report_filename = report_filename,
-                            report_formname = report_formname,
-                            **attr)
-
-        elif representation == "xls":
-
-            report_groupby = get_config("report_groupby", None)
-
-            exporter = S3Exporter().xls
-            return exporter(resource,
-                            list_fields=list_fields,
-                            report_groupby=report_groupby,
-                            **attr)
-
         elif representation == "json":
 
             get_vars = self.request.get_vars
@@ -1338,6 +1319,38 @@ class S3CRUD(S3Method):
                             limit=limit,
                             fields=fields,
                             orderby=orderby)
+
+        elif representation == "pdf":
+
+            report_hide_comments = get_config("report_hide_comments", None)
+            report_filename = get_config("report_filename", None)
+            report_formname = get_config("report_formname", None)
+
+            exporter = S3Exporter().pdf
+            return exporter(resource,
+                            request=r,
+                            list_fields=list_fields,
+                            report_hide_comments = report_hide_comments,
+                            report_filename = report_filename,
+                            report_formname = report_formname,
+                            **attr)
+
+        elif representation == "shp":
+
+            exporter = S3Exporter().shp
+            return exporter(resource,
+                            list_fields=list_fields,
+                            **attr)
+
+        elif representation == "xls":
+
+            report_groupby = get_config("report_groupby", None)
+
+            exporter = S3Exporter().xls
+            return exporter(resource,
+                            list_fields=list_fields,
+                            report_groupby=report_groupby,
+                            **attr)
 
         else:
             r.error(501, r.ERROR.BAD_FORMAT)
@@ -1545,7 +1558,7 @@ class S3CRUD(S3Method):
             else:
                 output = '{"iTotalRecords": %s, ' \
                          '"iTotalDisplayRecords": 0,' \
-                         '"dataTable_id": %s, ' \
+                         '"dataTable_id": "%s", ' \
                          '"sEcho": %s, ' \
                          '"aaData": []}' % (totalrows, listid, sEcho)
 
@@ -1923,7 +1936,7 @@ class S3CRUD(S3Method):
             else:
                 output = '{"iTotalRecords": %s, ' \
                          '"iTotalDisplayRecords": 0,' \
-                         '"dataTable_id": %s, ' \
+                         '"dataTable_id": "%s", ' \
                          '"sEcho": %s, ' \
                          '"aaData": []}' % (totalrows, listid, sEcho)
 
@@ -2230,7 +2243,7 @@ class S3CRUD(S3Method):
                     name=None,
                     _href=None,
                     _id=None,
-                    _class="action-btn"):
+                    _class=None):
         """
             Generate a CRUD action button
 
@@ -2242,6 +2255,11 @@ class S3CRUD(S3Method):
             @param _class: the HTML-class of the link
         """
 
+        if _class is None:
+            if current.response.s3.crud.formstyle == "bootstrap":
+                _class="btn btn-primary"
+            else:
+                _class="action-btn"
         if name:
             labelstr = S3CRUD.crud_string(tablename, name)
         else:
@@ -2380,9 +2398,13 @@ class S3CRUD(S3Method):
         if "delete" in buttons:
             authorised = self._permitted(method="delete")
             if authorised and href_delete and deletable:
+                if current.response.s3.crud.formstyle == "bootstrap":
+                    _class="btn btn-primary delete-btn"
+                else:
+                    _class="delete-btn"
                 delete_btn = self.crud_button(DELETE, _href=href_delete,
                                               _id="delete-btn",
-                                              _class="delete-btn")
+                                              _class=_class)
                 output["delete_btn"] = delete_btn
 
         return output

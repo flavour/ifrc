@@ -141,14 +141,15 @@ def formstyle_row(id, label, widget, comment, hidden=False):
         hide = ""
     row = DIV(DIV(label,
                   _id=id + "_label",
-                  _class="w2p_fl %s" % hide),
+                  _class="w2p_fl"),
               DIV(widget,
                   _id=id + "_widget",
-                  _class="w2p_fw %s" % hide),
+                  _class="w2p_fw"),
               DIV(comment,
                   _id=id + "_comment",
-                  _class="w2p_fc %s" % hide),
-              _class = "w2p_r",
+                  _class="w2p_fc"),
+              _id=id,
+              _class = "w2p_r %s" % hide,
               )
     return row
 
@@ -243,6 +244,20 @@ def customize_project_project(**attr):
             if not result:
                 return False
 
+        if r.method == "review":
+            list_fields = ["id",
+                           "created_on",
+                           "modified_on",
+                           "name",
+                           "start_date",
+                           (T("Countries"), "location.location_id"),
+                           (T("Hazards"), "hazard.name"),
+                           (T("Lead Organization"), "organisation_id"),
+                           (T("Donors"), "donor.organisation_id"),
+                           ]
+            s3db.configure(tablename,
+                           list_fields = list_fields)
+
         if r.interactive:
             # Don't show Update/Delete button on Search table 
             if r.method == "search":
@@ -266,20 +281,6 @@ def customize_project_project(**attr):
                     s3db.project_drrpp.L1.readable = False
                     s3db.project_drrpp.pifacc.readable = False
                     s3db.project_drrpp.jnap.readable = False
-
-            if r.method == "review":
-                list_fields = ["id",
-                               "created_on",
-                               "modified_on",
-                               "name",
-                               "start_date",
-                               (T("Countries"), "location.location_id"),
-                               (T("Hazards"), "hazard.name"),
-                               (T("Lead Organization"), "organisation_id"),
-                               (T("Donors"), "donor.organisation_id"),
-                               ]
-                s3db.configure(tablename,
-                               list_fields = list_fields)
 
         elif r.representation == "xls":
             # All readable Fields should be exported

@@ -182,6 +182,7 @@ class S3Profile(S3CRUD):
             @param attr: controller attributes for the request
         """
 
+        T = current.T
         context = widget.get("context", None)
         if context:
             context = "(%s)" % context
@@ -223,9 +224,15 @@ class S3Profile(S3CRUD):
             vars.refresh = listid
             if context:
                 vars[context] = r.id
+            title_create = widget.get("title_create", None)
+            if title_create:
+                title_create = T(title_create)
+            else:
+                title_create = S3CRUD.crud_string(tablename, "title_create")
             create = A(I(_class="icon icon-plus-sign small-add"),
                        _href=URL(c=c, f=f, args=["create.popup"], vars=vars),
                        _class="s3_modal",
+                       _title=title_create,
                        )
         else:
             create = "" 
@@ -278,7 +285,7 @@ class S3Profile(S3CRUD):
         if numrows == 0:
             msg = P(I(_class="icon-folder-open-alt"),
                     BR(),
-                    S3CRUD.crud_string(resource.tablename,
+                    S3CRUD.crud_string(tablename,
                                        "msg_no_match"),
                     _class="empty_card-holder")
             data.insert(1, msg)
@@ -290,7 +297,7 @@ class S3Profile(S3CRUD):
 
         label = widget.get("label", "")
         if label:
-            label = current.T(label)
+            label = T(label)
         icon = widget.get("icon", "")
         if icon:
             icon = TAG[""](I(_class=icon), " ")
@@ -317,6 +324,7 @@ class S3Profile(S3CRUD):
         """
 
         T = current.T
+        db = current.db
         s3db = current.s3db
 
         label = widget.get("label", "")
@@ -333,6 +341,8 @@ class S3Profile(S3CRUD):
         feature_resources = []
         fappend = feature_resources.append
         widgets = s3db.get_config(r.tablename, "profile_widgets")
+        s3dbresource = s3db.resource
+        mtable = s3db.gis_marker
         for widget in widgets:
             if widget["type"] != "datalist":
                 continue
@@ -340,7 +350,7 @@ class S3Profile(S3CRUD):
             if not show_on_map:
                 continue
             tablename = widget["tablename"]
-            resource = s3db.resource(tablename)
+            resource = s3dbresource(tablename)
             filter = widget.get("filter", None)
             map_url = widget.get("map_url", None)
             if not map_url:
@@ -357,20 +367,27 @@ class S3Profile(S3CRUD):
                 elif context:
                     map_url = "%s?%s" % (map_url, context)
 
+            marker = widget.get("marker", None)
+            if marker:
+                marker = db(mtable.name == marker).select(mtable.image,
+                                                          mtable.height,
+                                                          mtable.width,
+                                                          limitby=(0, 1)).first()
+
             listid = "profile-list-%s-%s" % (tablename, widget["index"])
             fappend({"name"      : T(widget["label"]),
                      "id"        : listid,
                      "tablename" : tablename,
                      "url"       : map_url,
                      "active"    : True,          # Is the feed displayed upon load or needs ticking to load afterwards?
-                     #"marker"    : None,         # Optional: A per-Layer marker dict for the icon used to display the feature
+                     "marker"    : marker,        # Optional: A per-Layer marker dict for the icon used to display the feature
                      #"opacity"   : 1,            # Optional
                      "cluster_distance" : 150,
                      #"cluster_threshold"         # Optional
                      })
 
         height = widget.get("height", 383)
-        width = widget.get("width", 460)
+        width = widget.get("width", 568) # span6 * 99.7%
         map = current.gis.show_map(height=height,
                                    width=width,
                                    collapsed=True,

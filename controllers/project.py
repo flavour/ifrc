@@ -77,7 +77,7 @@ def project():
         # Location Filter
         s3db.gis_location_filter(r)
         
-        if r.component and r.component.name == "project_taks":
+        if r.component and r.component.name == "project_task":
             list_fields = s3db.get_config("project_task",
                                           "list_fields")
             list_fields.insert(3, (T("Activity"), "activity.name"))
@@ -899,5 +899,37 @@ $('#submit_record__row input').click(function(){
                  SCRIPT(script))
 
     return XML(output)
+
+# =============================================================================
+# Campaigns
+# =============================================================================
+def campaign():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def campaign_keyword():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def campaign_message():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def campaign_response():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def campaign_response_summary():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
 
 # END =========================================================================

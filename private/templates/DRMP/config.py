@@ -8,9 +8,10 @@ from gluon.validators import IS_NULL_OR
 from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
 from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent
+from s3.s3fields import S3Represent
 from s3.s3resource import S3FieldSelector
 from s3.s3utils import s3_auth_user_represent_name, s3_avatar_represent, s3_unicode
-from s3.s3validators import IS_LOCATION
+from s3.s3validators import IS_LOCATION_SELECTOR2, IS_ONE_OF
 from s3.s3widgets import S3LocationAutocompleteWidget, S3LocationSelectorWidget2
 
 T = current.T
@@ -19,6 +20,7 @@ settings = current.deployment_settings
 """
     Template settings for DRM Portal
 """
+
 # =============================================================================
 # System Settings
 # -----------------------------------------------------------------------------
@@ -32,10 +34,6 @@ settings.auth.registration_requests_site = False
 settings.auth.registration_link_user_to = {"staff": T("Staff")}
 
 settings.auth.record_approval = False
-
-settings.auth.registration_roles = {"site_id": ["reader",
-                                                ],
-                                    }
 
 # -----------------------------------------------------------------------------
 # Security Policy
@@ -55,6 +53,8 @@ settings.base.system_name_short = T("DRMP")
 # -----------------------------------------------------------------------------
 # Theme (folder to use for views/layout.html)
 settings.base.theme = "DRMP"
+settings.ui.formstyle_row = "bootstrap"
+settings.ui.formstyle = "bootstrap"
 #settings.gis.map_height = 600
 #settings.gis.map_width = 854
 
@@ -79,6 +79,9 @@ settings.L10n.thousands_separator = ","
 # e.g. Activities filtered to those of parent Project
 settings.gis.countries = ["TL"]
 
+# Until Validation Errors fixed in LocationSelector2
+settings.gis.check_within_parent_boundaries = False
+
 # -----------------------------------------------------------------------------
 # Finance settings
 settings.fin.currencies = {
@@ -98,11 +101,17 @@ settings.ui.camp = True
 # Save Search Widget
 settings.save_search.widget = False
 
+# Uncomment to restrict the export formats available
+settings.ui.export_formats = ["xls"]
+
+settings.ui.update_label = "Edit"
+
 # =============================================================================
 # Module Settings
 
 # -----------------------------------------------------------------------------
 # Human Resource Management
+settings.hrm.staff_label = "Contacts"
 # Uncomment to allow Staff & Volunteers to be registered without an email address
 settings.hrm.email_required = False
 # Uncomment to show the Organisation name in HR represents
@@ -115,6 +124,15 @@ settings.hrm.use_credentials = False
 settings.hrm.use_skills = False
 # Uncomment to disable the use of HR Teams
 settings.hrm.use_teams = False
+
+# -----------------------------------------------------------------------------
+# Org
+settings.org.site_label = "Office"
+
+# -----------------------------------------------------------------------------
+# Project
+# Uncomment this to use multiple Organisations per project
+settings.project.multiple_organisations = True
 
 # -----------------------------------------------------------------------------
 def location_represent(id, row=None):
@@ -167,11 +185,12 @@ def customize_cms_post(**attr):
             field.default = False
             #field.readable = field.writable = False
             field = table.location_id
+            field.label = ""
             field.represent = location_represent
-            #field.requires = IS_NULL_OR(IS_LOCATION(level="L3"))
-            #field.widget = S3LocationAutocompleteWidget(level="L3")
-            field.requires = IS_NULL_OR(IS_LOCATION())
-            field.widget = S3LocationSelectorWidget2()
+            field.requires = IS_NULL_OR(
+                                IS_LOCATION_SELECTOR2(levels=["L1", "L2", "L3"])
+                             )
+            field.widget = S3LocationSelectorWidget2(levels=["L1", "L2", "L3"])
             table.created_by.represent = s3_auth_user_represent_name
             field = table.body
             field.label = T("Text")
@@ -209,6 +228,7 @@ def customize_cms_post(**attr):
                     S3SQLInlineComponent(
                         "event_post",
                         label = T("Disaster(s)"),
+                        multiple = False,
                         fields = ["event_id"],
                         orderby = "event_id$name",
                     ),
@@ -223,7 +243,7 @@ def customize_cms_post(**attr):
                 )
 
             # Return to List view after create/update/delete
-            url_next = URL(c="default", f="index", args=None)
+            url_next = URL(c="default", f="index", args="updates")
 
             list_fields = ["series_id",
                            "location_id",
@@ -243,11 +263,13 @@ def customize_cms_post(**attr):
                            list_fields = list_fields,
                            )
 
-            crud_settings = current.response.s3.crud
-            crud_settings.formstyle = "bootstrap"
-            crud_settings.submit_button = T("Save changes")
+            #crud_settings = current.response.s3.crud
+            #crud_settings.formstyle = "bootstrap"
+            #crud_settings.submit_button = T("Save changes")
             # Done already within Bootstrap formstyle (& anyway fails with this formstyle)
             #crud_settings.submit_style = "btn btn-primary"
+
+            s3.cancel = True
 
         # Call standard prep
         # (Done afterwards to ensure type field gets hidden)
@@ -287,43 +309,61 @@ def render_events(listid, resource, rfields, record, **attr):
 
     item_class = "thumbnail"
 
-    #raw = record._row
+    raw = record._row
     name = record["event_event.name"]
     date = record["event_event.zero_hour"]
+    closed = raw["event_event.closed"]
+    event_type = record["event_event_type.name"]
 
-    permit = current.auth.s3_has_permission
-    table = current.db.event_event
-    if permit("update", table, record_id=record_id):
-        edit_btn = A(I(" ", _class="icon icon-edit"),
-                     _href=URL(c="event", f="event",
-                               args=[record_id, "update.popup"],
-                               vars={"refresh": listid,
-                                     "record": record_id}),
-                     _class="s3_modal",
-                     _title=current.response.s3.crud_strings.event_event.title_update,
-                     )
+    if closed:
+        edit_bar = DIV()
     else:
-        edit_btn = ""
-    if permit("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
-                       _class="dl-item-delete",
-                      )
-    else:
-        delete_btn = ""
-    edit_bar = DIV(edit_btn,
-                   delete_btn,
-                   _class="edit-bar fright",
-                   )
+        item_class = "%s disaster" % item_class
+
+        permit = current.auth.s3_has_permission
+        table = resource.table
+        if permit("update", table, record_id=record_id):
+            edit_btn = A(I(" ", _class="icon icon-edit"),
+                         _href=URL(c="event", f="event",
+                                   args=[record_id, "update.popup"],
+                                   vars={"refresh": listid,
+                                         "record": record_id}),
+                         _class="s3_modal",
+                         _title=current.response.s3.crud_strings.event_event.title_update,
+                         )
+        else:
+            edit_btn = ""
+        if permit("delete", table, record_id=record_id):
+            delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+                           _class="dl-item-delete",
+                          )
+        else:
+            delete_btn = ""
+        edit_bar = DIV(edit_btn,
+                       delete_btn,
+                       _class="edit-bar fright",
+                       )
 
     # Render the item
-    item = DIV(DIV(A(name,
-                     _href=URL(c="event", f="event",
-                               args=[record_id, "profile"]),
+    item = DIV(DIV(A(IMG(_class="media-object",
+                         _src=URL(c="static",
+                                  f="themes",
+                                  args=["DRMP", "img", "%s.png" % event_type]),
+                         ),
+                     _class="pull-left",
+                     _href="#",
                      ),
-                   " ",
-                   SPAN(date,
-                        _class="date-title",
-                        ),
+  		           edit_bar,
+                   DIV(A(H5(name,
+                            _class="media-heading"),
+                         SPAN(date,
+                              _class="date-title",
+                              ),
+                         _href=URL(c="event", f="event",
+                                   args=[record_id, "profile"]),
+                         ),
+                       _class="media-body",
+                       ),
                    _class="media",
                    ),
                _class=item_class,
@@ -392,6 +432,8 @@ def render_profile_posts(listid, resource, rfields, record, **attr):
                _href=person_url,
                _class="pull-left",
                )
+
+    # Edit Bar
     permit = current.auth.s3_has_permission
     table = db.cms_post
     if permit("update", table, record_id=record_id):
@@ -423,15 +465,42 @@ def render_profile_posts(listid, resource, rfields, record, **attr):
                    delete_btn,
                    _class="edit-bar fright",
                    )
-    document = raw["doc_document.file"]
-    if document:
-        doc_url = URL(c="default", f="download",
-                      args=[document]
+
+    # Dropdown of available documents
+    documents = raw["doc_document.file"]
+    if documents:
+        if not isinstance(documents, list):
+            documents = [documents]
+        doc_list = UL(_class="dropdown-menu",
+                      _role="menu",
                       )
-        doc_link = A(I(_class="icon icon-paper-clip fright"),
-                     _href=doc_url)
+        retrieve = db.doc_document.file.retrieve
+        for doc in documents:
+            try:
+                doc_name = retrieve(doc)[0]
+            except IOError:
+                doc_name = current.messages["NONE"]
+            doc_url = URL(c="default", f="download",
+                          args=[doc])
+            doc_item = LI(A(I(_class="icon-file"),
+                            " ",
+                            doc_name,
+                            _href=doc_url,
+                            ),
+                          _role="menuitem",
+                          )
+            doc_list.append(doc_item)
+        docs = DIV(A(I(_class="icon-paper-clip"),
+                     SPAN(_class="caret"),
+                     _class="btn dropdown-toggle",
+                     _href="#",
+                     **{"_data-toggle": "dropdown"}
+                     ),
+                   doc_list,
+                   _class="btn-group attachments dropdown pull-right",
+                   )
     else:
-        doc_link = ""
+        docs = ""
 
     # Render the item
     class SMALL(DIV):
@@ -456,7 +525,7 @@ def render_profile_posts(listid, resource, rfields, record, **attr):
                         edit_bar,
                         P(body,
                           _class="card_comments"),
-                        doc_link,
+                        docs,
                        _class="span5 card-details"),
                    _class="row",
                    ),
@@ -486,48 +555,60 @@ def customize_event_event(**attr):
     table = s3db.event_event
 
     alerts_widget = dict(label = "Alerts",
+                         title_create = "Add New Alert",
                          type = "datalist",
                          tablename = "cms_post",
                          context = "event",
                          filter = S3FieldSelector("series_id$name") == "Alert",
                          icon = "icon-alert",
+                         marker = "alert",
                          list_layout = render_profile_posts,
                          )
     map_widget = dict(label = "Location",
                       type = "map",
                       context = "event",
                       icon = "icon-map-marker",
+                      height = 383,
+                      width = 568,
                       )
     incidents_widget = dict(label = "Incidents",
+                            title_create = "Add New Incident",
                             type = "datalist",
                             tablename = "cms_post",
                             context = "event",
                             filter = S3FieldSelector("series_id$name") == "Incident",
                             icon = "icon-warning-sign",
+                            marker = "incident",
                             list_layout = render_profile_posts,
                             )
     assessments_widget = dict(label = "Assessments",
+                              title_create = "Add New Assessment",
                               type = "datalist",
                               tablename = "cms_post",
                               context = "event",
                               filter = S3FieldSelector("series_id$name") == "Assessment",
                               icon = "icon-info-sign",
+                              marker = "assessment",
                               list_layout = render_profile_posts,
                               )
     activities_widget = dict(label = "Activities",
+                             title_create = "Add New Activity",
                              type = "datalist",
                              tablename = "cms_post",
                              context = "event",
                              filter = S3FieldSelector("series_id$name") == "Activity",
                              icon = "icon-activity",
+                             marker = "activity",
                              list_layout = render_profile_posts,
                              )
     reports_widget = dict(label = "Reports",
+                          title_create = "Add New Report",
                           type = "datalist",
                           tablename = "cms_post",
                           context = "event",
                           filter = S3FieldSelector("series_id$name") == "Report",
                           icon = "icon-report",
+                          marker = "report",
                           list_layout = render_profile_posts,
                           )
     comments_widget = dict(label = "Comments",
@@ -536,6 +617,10 @@ def customize_event_event(**attr):
                            colspan = 2,
                            )
     s3db.configure("event_event",
+                   create_next = URL(c="event", f="event",
+                                     args=["[id]", "profile"]),
+                   # We want the Create form to be in a modal, not inline, for consistency
+                   listadd = False,
                    list_layout = render_events,
                    profile_widgets=[alerts_widget,
                                     map_widget,
@@ -563,11 +648,33 @@ def customize_event_event(**attr):
         msg_record_deleted = T("Disaster deleted"),
         msg_list_empty = T("No Disasters currently registered"))
 
-    crud_settings = s3.crud
-    crud_settings.formstyle = "bootstrap"
-    crud_settings.submit_button = T("Save changes")
+    #crud_settings = s3.crud
+    #crud_settings.formstyle = "bootstrap"
+    #crud_settings.submit_button = T("Save changes")
     # Done already within Bootstrap formstyle (& anyway fails with this formstyle)
     #crud_settings.submit_style = "btn btn-primary"
+
+    # Custom postp
+    standard_postp = s3.postp
+    def custom_postp(r, output):
+        if r.interactive and \
+           current.auth.s3_has_permission("create", r.table):
+            # Insert a Button to Create New in Modal
+            output["showadd_btn"] = A(I(_class="icon icon-plus-sign big-add"),
+                                      _href=URL(c="event", f="event",
+                                                args=["create.popup"],
+                                                vars={"refresh":"datalist"}),
+                                      _class="btn btn-primary s3_modal",
+                                      _role="button",
+                                      _title=T("Add New Disaster"),
+                                      )
+
+        # Call standard postp
+        if callable(standard_postp):
+            output = standard_postp(r, output)
+
+        return output
+    s3.postp = custom_postp
 
     return attr
 
@@ -668,48 +775,60 @@ def customize_gis_location(**attr):
     table = s3db.gis_location
 
     alerts_widget = dict(label = "Alerts",
+                         title_create = "Add New Alert",
                          type = "datalist",
                          tablename = "cms_post",
                          context = "location",
                          filter = S3FieldSelector("series_id$name") == "Alert",
                          icon = "icon-alert",
+                         marker = "alert",
                          list_layout = render_profile_posts,
                          )
     map_widget = dict(label = "Location",
                       type = "map",
                       context = "location",
                       icon = "icon-map-marker",
+                      height = 383,
+                      width = 568,
                       )
     incidents_widget = dict(label = "Incidents",
+                            title_create = "Add New Incident",
                             type = "datalist",
                             tablename = "cms_post",
                             context = "location",
                             filter = S3FieldSelector("series_id$name") == "Incident",
                             icon = "icon-warning-sign",
+                            marker = "incident",
                             list_layout = render_profile_posts,
                             )
     assessments_widget = dict(label = "Assessments",
+                              title_create = "Add New Assessment",
                               type = "datalist",
                               tablename = "cms_post",
                               context = "location",
                               filter = S3FieldSelector("series_id$name") == "Assessment",
                               icon = "icon-info-sign",
+                              marker = "assessment",
                               list_layout = render_profile_posts,
                               )
     activities_widget = dict(label = "Activities",
+                             title_create = "Add New Activity",
                              type = "datalist",
                              tablename = "cms_post",
                              context = "location",
                              filter = S3FieldSelector("series_id$name") == "Activity",
                              icon = "icon-activity",
+                             marker = "activity",
                              list_layout = render_profile_posts,
                              )
     reports_widget = dict(label = "Reports",
+                          title_create = "Add New Report",
                           type = "datalist",
                           tablename = "cms_post",
                           context = "location",
                           filter = S3FieldSelector("series_id$name") == "Report",
                           icon = "icon-report",
+                          marker = "report",
                           list_layout = render_profile_posts,
                           )
     comments_widget = dict(label = "Comments",
@@ -729,9 +848,9 @@ def customize_gis_location(**attr):
                                     ],
                    )
 
-    crud_settings = s3.crud
-    crud_settings.formstyle = "bootstrap"
-    crud_settings.submit_button = T("Save changes")
+    #crud_settings = s3.crud
+    #crud_settings.formstyle = "bootstrap"
+    #crud_settings.submit_button = T("Save changes")
     # Done already within Bootstrap formstyle (& anyway fails with this formstyle)
     #crud_settings.submit_style = "btn btn-primary"
 
@@ -840,48 +959,60 @@ def customize_org_organisation(**attr):
     table = s3db.org_organisation
 
     alerts_widget = dict(label = "Alerts",
+                         title_create = "Add New Alert",
                          type = "datalist",
                          tablename = "cms_post",
                          context = "organisation",
                          filter = S3FieldSelector("series_id$name") == "Alert",
                          icon = "icon-alert",
+                         marker = "alert",
                          list_layout = render_profile_posts,
                          )
     map_widget = dict(label = "Location",
                       type = "map",
                       context = "organisation",
                       icon = "icon-map-marker",
+                      height = 383,
+                      width = 568,
                       )
     incidents_widget = dict(label = "Incidents",
+                            title_create = "Add New Incident",
                             type = "datalist",
                             tablename = "cms_post",
                             context = "organisation",
                             filter = S3FieldSelector("series_id$name") == "Incident",
                             icon = "icon-warning-sign",
+                            marker = "incident",
                             list_layout = render_profile_posts,
                             )
     assessments_widget = dict(label = "Assessments",
+                              title_create = "Add New Assessment",
                               type = "datalist",
                               tablename = "cms_post",
                               context = "organisation",
                               filter = S3FieldSelector("series_id$name") == "Assessment",
                               icon = "icon-info-sign",
+                              marker = "assessment",
                               list_layout = render_profile_posts,
                               )
     activities_widget = dict(label = "Activities",
+                             title_create = "Add New Activity",
                              type = "datalist",
                              tablename = "cms_post",
                              context = "organisation",
                              filter = S3FieldSelector("series_id$name") == "Activity",
                              icon = "icon-activity",
+                             marker = "activity",
                              list_layout = render_profile_posts,
                              )
     reports_widget = dict(label = "Reports",
+                          title_create = "Add New Report",
                           type = "datalist",
                           tablename = "cms_post",
                           context = "organisation",
                           filter = S3FieldSelector("series_id$name") == "Report",
                           icon = "icon-report",
+                          marker = "report",
                           list_layout = render_profile_posts,
                           )
     comments_widget = dict(label = "Comments",
@@ -921,15 +1052,312 @@ def customize_org_organisation(**attr):
         msg_record_deleted = T("Stakeholder deleted"),
         msg_list_empty = T("No Stakeholders currently registered"))
 
-    crud_settings = s3.crud
-    crud_settings.formstyle = "bootstrap"
-    crud_settings.submit_button = T("Save changes")
+    #crud_settings = s3.crud
+    #crud_settings.formstyle = "bootstrap"
+    #crud_settings.submit_button = T("Save changes")
     # Done already within Bootstrap formstyle (& anyway fails with this formstyle)
     #crud_settings.submit_style = "btn btn-primary"
 
     return attr
 
 settings.ui.customize_org_organisation = customize_org_organisation
+
+# -----------------------------------------------------------------------------
+def customize_project_project(**attr):
+    """
+        Customize project_project controller
+    """
+
+    s3 = current.response.s3
+    s3db = current.s3db
+    db = current.db
+
+    tablename = "project_project"
+    table = s3db.project_project
+    
+    # Remove rheader
+    attr["rheader"] = None
+    
+    # Configure fields 
+    table.human_resource_id.label = T("Focal Person")
+
+    # Project Locations must be districts
+    ltable = s3db.project_location
+    ltable.location_id.requires = IS_ONE_OF(db, "gis_location.id",
+                                            S3Represent(lookup="gis_location"),
+                                            sort = True,
+                                            filterby = "level",
+                                            filter_opts = ["L1"]
+                                            )
+    ltable.location_id.widget = None
+
+    crud_form = S3SQLCustomForm(
+        "name",
+        "organisation_id",
+        S3SQLInlineComponent(
+            "location",
+            label = T("Locations"),
+            fields = ["location_id"],
+            orderby = "location_id$name",
+            render_list = True
+        ),
+        "human_resource_id",
+        "start_date",
+        "end_date",
+        # Partner Orgs
+        S3SQLInlineComponent(
+            "organisation",
+            name = "partner",
+            label = T("Partner Organisations"),
+            fields = ["organisation_id",
+                      ],
+            filterby = dict(field = "role",
+                            options = "5"
+                            )
+        ),
+        # Donors
+        S3SQLInlineComponent(
+            "organisation",
+            name = "donor",
+            label = T("Donor(s)"),
+            fields = ["organisation_id", "amount", "currency"],
+            filterby = dict(field = "role",
+                            options = "3"
+                            )
+        ),
+        "budget",
+        "comments",
+    )
+
+    list_fields = ["name",
+                   "organisation_id",
+                   "human_resource_id",
+                   "start_date",
+                   "end_date",
+                   "budget",
+                   ]
+
+    s3db.configure(tablename,
+                   crud_form = crud_form,
+                   list_fields = list_fields)
+
+    # Custom postp
+    standard_postp = s3.postp
+    def custom_postp(r, output):
+        if r.interactive:
+            actions = [dict(label=str(T("Open")),
+                            _class="action-btn",
+                            url=URL(c="project", f="project",
+                                    args=["[id]", "read"]))
+                       ]
+            has_permission = current.auth.s3_has_permission
+            if has_permission("update", table):
+                actions.append(dict(label=str(T("Edit")),
+                                    _class="action-btn",
+                                    url=URL(c="project", f="project",
+                                            args=["[id]", "update"])))
+            if has_permission("delete", table):
+                actions.append(dict(label=str(T("Delete")),
+                                    _class="action-btn",
+                                    url=URL(c="project", f="project",
+                                            args=["[id]", "delete"])))
+            s3.actions = actions
+            if "form" in output:
+                output["form"].add_class("project_project")
+
+        # Call standard postp
+        if callable(standard_postp):
+            output = standard_postp(r, output)
+
+        return output
+    s3.postp = custom_postp
+
+    return attr
+
+settings.ui.customize_project_project = customize_project_project
+
+# -----------------------------------------------------------------------------
+def customize_org_resource(**attr):
+    """
+        Customize org_resource controller
+    """
+
+    s3 = current.response.s3
+
+    table = current.s3db.org_resource
+    
+    # Configure fields
+    #table.site_id.readable = table.site_id.readable = False
+    table.location_id.requires = IS_ONE_OF(current.db, "gis_location.id",
+                                           S3Represent(lookup="gis_location"),
+                                           sort = True,
+                                           filterby = "level",
+                                           filter_opts = ["L1"]
+                                           )
+    table.location_id.widget = None
+    
+    # Custom postp
+    standard_postp = s3.postp
+    def custom_postp(r, output):
+        if r.interactive:
+            actions = [dict(label=str(T("Open")),
+                            _class="action-btn",
+                            url=URL(c="org", f="resource",
+                                    args=["[id]", "read"]))
+                       ]
+            has_permission = current.auth.s3_has_permission
+            if has_permission("update", table):
+                actions.append(dict(label=str(T("Edit")),
+                                    _class="action-btn",
+                                    url=URL(c="org", f="resource",
+                                            args=["[id]", "update"])))
+            if has_permission("delete", table):
+                actions.append(dict(label=str(T("Delete")),
+                                    _class="action-btn",
+                                    url=URL(c="org", f="resource",
+                                            args=["[id]", "delete"])))
+            s3.actions = actions
+            if "form" in output:
+                output["form"].add_class("org_resource")
+
+        # Call standard postp
+        if callable(standard_postp):
+            output = standard_postp(r, output)
+
+        return output
+    s3.postp = custom_postp
+
+    return attr
+
+settings.ui.customize_org_resource = customize_org_resource
+
+# -----------------------------------------------------------------------------
+def customize_pr_person(**attr):
+    """
+        Customize pr_person controller
+    """
+
+    s3db = current.s3db
+    s3 = current.response.s3
+
+    tablename = "pr_person"
+    table = s3db.pr_person
+    
+    # CRUD Strings
+    ADD_CONTACT = T("Add New Contact")
+    s3.crud_strings[tablename] = Storage(
+        title_create = T("Add Contact"),
+        title_display = T("Contact Details"),
+        title_list = T("Contacts"),
+        title_update = T("Edit Contact Details"),
+        title_search = T("Search Contacts"),
+        subtitle_create = ADD_CONTACT,
+        label_list_button = T("List Contacts"),
+        label_create_button = ADD_CONTACT,
+        label_delete_button = T("Delete Contact"),
+        msg_record_created = T("Contact added"),
+        msg_record_modified = T("Contact details updated"),
+        msg_record_deleted = T("Contact deleted"),
+        msg_list_empty = T("No Contacts currently registered"))
+
+    MOBILE = settings.get_ui_label_mobile_phone()
+    EMAIL = T("Email")
+
+    s3db.hrm_human_resource.organisation_id.widget = None
+    s3db.pr_contact.value.label = ""
+
+    crud_form = S3SQLCustomForm(
+            "first_name",
+            "middle_name",
+            "last_name",
+            S3SQLInlineComponent(
+                "human_resource",
+                name = "human_resource",
+                label = "",
+                multiple = False,
+                fields = ["organisation_id",
+                          "job_title_id",
+                          "site_id",
+                          ],
+                filterby = dict(field = "contact_method",
+                                options = "SMS"
+                                )
+            ),
+            S3SQLInlineComponent(
+                "contact",
+                name = "phone",
+                label = MOBILE,
+                multiple = False,
+                fields = ["value",
+                          ],
+                filterby = dict(field = "contact_method",
+                                options = "SMS"
+                                )
+            ),
+            S3SQLInlineComponent(
+                "contact",
+                name = "email",
+                label = EMAIL,
+                multiple = False,
+                fields = ["value",
+                          ],
+                filterby = dict(field = "contact_method",
+                                options = "EMAIL"
+                                )
+            ),
+        )
+
+    list_fields = ["first_name",
+                   "middle_name",
+                   "last_name",
+                   (current.messages.ORGANISATION, "human_resource.organisation_id"),
+                   (T("Job Title"), "human_resource.job_title_id"),
+                   (T("Office"), "human_resource.site_id"),
+                   (EMAIL, "email.value"),
+                   (MOBILE, "phone.value"),
+                   ]
+
+    s3db.configure(tablename,
+                   crud_form = crud_form,
+                   list_fields = list_fields,
+                   listadd = True,
+                   )
+
+    # Custom postp
+    standard_postp = s3.postp
+    def custom_postp(r, output):
+        # Call standard postp
+        if callable(standard_postp):
+            output = standard_postp(r, output)
+
+        if r.interactive:
+            output["rheader"] = None
+            actions = [dict(label=str(T("Open")),
+                            _class="action-btn",
+                            url=URL(c="pr", f="person",
+                                    args=["[id]", "read"]))
+                       ]
+            has_permission = current.auth.s3_has_permission
+            if has_permission("update", table):
+                actions.append(dict(label=str(T("Edit")),
+                                    _class="action-btn",
+                                    url=URL(c="pr", f="person",
+                                            args=["[id]", "update"])))
+            if has_permission("delete", table):
+                actions.append(dict(label=str(T("Delete")),
+                                    _class="action-btn",
+                                    url=URL(c="pr", f="person",
+                                            args=["[id]", "delete"])))
+            s3.actions = actions
+            if "form" in output:
+                output["form"].add_class("pr_person")
+
+        return output
+    s3.postp = custom_postp
+
+    return attr
+
+settings.ui.customize_pr_person = customize_pr_person
 
 # =============================================================================
 # Template Modules
