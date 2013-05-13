@@ -935,7 +935,7 @@ class S3Resource(object):
 
         # Virtual fields and extra fields required by filter
         virtual_fields = rfilter.get_fields()
-        vfields, vjoins, l, d = resolve(virtual_fields)
+        vfields, vjoins, l, d = resolve(virtual_fields, show=False)
         joins.update(vjoins)
         vtables = left_joins.extend(l)
         distinct |= d
@@ -1024,16 +1024,15 @@ class S3Resource(object):
                         # No join found for this field => skip
                         continue
                     
-                orderby.append(item)
                 orderby_fields.append(f)
-
                 if expression is None:
-                    fname = str(f)
+                    expression = f if direction == "asc" else ~f
+                    orderby.append(expression)
                     direction = direction.strip().lower()[:3]
-                    if fname == pkey:
-                        expression = f if direction == "asc" else ~f
-                    else:
+                    if fname != pkey:
                         expression = f.min() if direction == "asc" else ~(f.max())
+                else:
+                    orderby.append(expression)
                 orderby_aggregate.append(expression)
 
         # Initialize master query
@@ -1207,7 +1206,7 @@ class S3Resource(object):
 
             if count:
                 rows = rfilter(rows)
-                numrows = len(rows)
+                totalrows = len(rows)
                 
                 if limit and start is None:
                     start = 0
@@ -1221,7 +1220,7 @@ class S3Resource(object):
 
             if (getids or left_joins) and has_id:
                 ids = list(set([row[pkey] for row in rows]))
-                numrows = len(ids)
+                totalrows = len(ids)
 
         # With GROUPBY, return the grouped rows here:
         if groupby:
@@ -1261,28 +1260,32 @@ class S3Resource(object):
                 continue
             tname = dfield.tname
             if tname not in stables:
-                sfields = stables[tname] = {}
+                sfields = stables[tname] = {"_left": {}}
             else:
                 sfields = stables[tname]
             if colname not in sfields:
                 sfields[colname] = dfield.field
+                if dfield.left:
+                    sfields["_left"].update(dfield.left)
 
         # Retrieve + extract into records
         for tname in stables:
+
+            stable = stables[tname]
 
             # Get the extra fields for subtable
             sresource = s3db.resource(tname)
             efields, ejoins, l, d = sresource.resolve_selectors([])
 
             # Get all left joins for subtable
-            tnames = left_joins.extend(l)
-            sjoins = left_joins.as_list(tablenames=[tname] + tnames,
+            tnames = left_joins.extend(l) + stable["_left"].keys()
+            sjoins = left_joins.as_list(tablenames=tnames,
                                         aqueries=aqueries)
             if not sjoins:
                 continue
+            del stable["_left"]
 
             # Get all fields for subtable query
-            stable = stables[tname]
             extract = stable.keys()
             for efield in efields:
                 stable[efield.colname] = efield.field
@@ -1296,7 +1299,6 @@ class S3Resource(object):
                                      distinct=True,
                                      cacheable=True,
                                      *sfields)
-
             # Extract and merge the data
             records = self.__extract(rows,
                                      pkey,
@@ -4157,7 +4159,8 @@ class S3Resource(object):
     # -------------------------------------------------------------------------
     def resolve_selectors(self, selectors,
                           skip_components=False,
-                          extra_fields=True):
+                          extra_fields=True,
+                          show=True):
         """
             Resolve a list of field selectors against this resource
 
@@ -4166,6 +4169,7 @@ class S3Resource(object):
                                     are currently not supported by list_fields)
             @param extra_fields: automatically add extra_fields of all virtual
                                  fields in this table
+            @param show: default for S3ResourceField.show
 
             @return: tuple of (fields, joins, left, distinct)
         """
@@ -4263,7 +4267,7 @@ class S3Resource(object):
             elif rfield.join:
                 joins.update(rfield.join)
 
-            rfield.show = rfield.selector in display_fields
+            rfield.show = show and rfield.selector in display_fields
             append(rfield)
 
         return (rfields, joins, left, distinct)
