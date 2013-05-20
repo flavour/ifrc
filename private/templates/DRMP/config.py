@@ -896,6 +896,24 @@ def customize_gis_location(**attr):
     # Done already within Bootstrap formstyle (& anyway fails with this formstyle)
     #crud_settings.submit_style = "btn btn-primary"
 
+    # Custom PreP
+    standard_prep = s3.prep
+    def custom_prep(r):
+        if r.method == "datalist":
+            # Just show L1s (Districts)
+            s3.filter = (table.level == "L1")
+            # Default 5 triggers an AJAX call, we should load all by default
+            s3.dl_pagelength = 13
+
+        # Call standard prep
+        if callable(standard_prep):
+            result = standard_prep(r)
+            if not result:
+                return False
+
+        return True
+    s3.prep = custom_prep
+
     return attr
 
 settings.ui.customize_gis_location = customize_gis_location
@@ -1000,6 +1018,15 @@ def customize_org_organisation(**attr):
     # Load normal Model
     table = s3db.org_organisation
 
+    # Hide fields
+    table.organisation_type_id.readable = table.organisation_type_id.writable = False
+    table.multi_sector_id.readable = table.multi_sector_id.writable = False
+    table.region.readable = table.region.writable = False
+    table.country.readable = table.country.writable = False
+    table.year.readable = table.year.writable = False
+    table.twitter.readable = table.twitter.writable = False
+    table.donation_phone.readable = table.donation_phone.writable = False
+    
     alerts_widget = dict(label = "Alerts",
                          title_create = "Add New Alert",
                          type = "datalist",
@@ -1471,7 +1498,7 @@ def customize_pr_person(**attr):
             output = standard_postp(r, output)
 
         if r.interactive:
-            output["rheader"] = None
+            output["rheader"] = ""
             actions = [dict(label=str(T("Open")),
                             _class="action-btn",
                             url=URL(c="pr", f="person",

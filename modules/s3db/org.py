@@ -564,6 +564,7 @@ class S3OrganisationModel(S3Model):
                   referenced_by=[(utablename, "organisation_id")],
                   search_method=organisation_search,
                   xml_post_parse=self.org_organisation_xml_post_parse,
+                  list_orderby=table.name,
                   list_fields=["id",
                                "name",
                                "acronym",
@@ -3256,7 +3257,7 @@ def org_organisation_controller():
                     # Hide/show host role after project selection in embed-widget
                     tn = r.link.tablename
                     s3db.configure(tn,
-                                   post_process='''hide_host_role($('#%s').val())''')
+                                   post_process='''S3.hide_host_role($('#%s').val())''')
                     s3.scripts.append("/%s/static/scripts/S3/s3.hide_host_role.js" % \
                         request.application)
 
