@@ -1293,10 +1293,10 @@ def customize_cms_post(**attr):
         if callable(standard_postp):
             output = standard_postp(r, output)
 
-        if r.interactive:
+        if r.interactive and isinstance(output, dict):
             if "form" in output:
                 output["form"].add_class("cms_post")
-            elif "item" in output:
+            elif "item" in output and hasattr(output["item"], "add_class"):
                 output["item"].add_class("cms_post")
 
         return output
@@ -1336,7 +1336,9 @@ def customize_event_event(**attr):
                                  context = "event",
                                  filter = S3FieldSelector("series_id$name") == "Alert",
                                  icon = "icon-alert",
-                                 marker = "alert",
+                                 layer = "Alerts",
+                                 # provided by Catalogue Layer
+                                 #marker = "alert",
                                  list_layout = render_profile_posts,
                                  )
             map_widget = dict(label = "Location",
@@ -1353,7 +1355,9 @@ def customize_event_event(**attr):
                                     context = "event",
                                     filter = S3FieldSelector("series_id$name") == "Incident",
                                     icon = "icon-incident",
-                                    marker = "incident",
+                                    layer = "Incidents",
+                                    # provided by Catalogue Layer
+                                    #marker = "incident",
                                     list_layout = render_profile_posts,
                                     )
             assessments_widget = dict(label = "Assessments",
@@ -1363,7 +1367,9 @@ def customize_event_event(**attr):
                                       context = "event",
                                       filter = S3FieldSelector("series_id$name") == "Assessment",
                                       icon = "icon-info-sign",
-                                      marker = "assessment",
+                                      layer = "Assessments",
+                                      # provided by Catalogue Layer
+                                      #marker = "assessment",
                                       list_layout = render_profile_posts,
                                       )
             activities_widget = dict(label = "Activities",
@@ -1373,7 +1379,9 @@ def customize_event_event(**attr):
                                      context = "event",
                                      filter = S3FieldSelector("series_id$name") == "Activity",
                                      icon = "icon-activity",
-                                     marker = "activity",
+                                     layer = "Activities",
+                                     # provided by Catalogue Layer
+                                     #marker = "activity",
                                      list_layout = render_profile_posts,
                                      )
             reports_widget = dict(label = "Reports",
@@ -1383,7 +1391,9 @@ def customize_event_event(**attr):
                                   context = "event",
                                   filter = S3FieldSelector("series_id$name") == "Report",
                                   icon = "icon-report",
-                                  marker = "report",
+                                  layer = "Reports",
+                                  # provided by Catalogue Layer
+                                  #marker = "report",
                                   list_layout = render_profile_posts,
                                   )
             #comments_widget = dict(label = "Comments",
@@ -1545,9 +1555,11 @@ def customize_gis_location(**attr):
                                         type = "datalist",
                                         tablename = "cms_post",
                                         context = "location",
-                                        filter = S3FieldSelector("series_id$name") == "Incident",
+                                        filter = (S3FieldSelector("series_id$name") == "Incident") & (S3FieldSelector("expired") == False),
                                         icon = "icon-incident",
-                                        marker = "incident",
+                                        layer = "Incidents",
+                                        # provided by Catalogue Layer
+                                        #marker = "incident",
                                         list_layout = render_profile_posts,
                                         )
                 reports_widget = dict(label = "Reports",
@@ -1557,7 +1569,9 @@ def customize_gis_location(**attr):
                                       context = "location",
                                       filter = S3FieldSelector("series_id$name") == "Report",
                                       icon = "icon-report",
-                                      marker = "report",
+                                      layer = "Reports",
+                                      # provided by Catalogue Layer
+                                      #marker = "report",
                                       list_layout = render_profile_posts,
                                       )
                 projects_widget = dict(label = "Projects",
@@ -1576,7 +1590,9 @@ def customize_gis_location(**attr):
                                          context = "location",
                                          filter = S3FieldSelector("series_id$name") == "Activity",
                                          icon = "icon-activity",
-                                         marker = "activity",
+                                         layer = "Activities",
+                                         # provided by Catalogue Layer
+                                         #marker = "activity",
                                          list_layout = render_profile_posts,
                                          )
                 s3db.configure("gis_location",
@@ -1640,10 +1656,11 @@ def customize_hrm_job_title(**attr):
                                     url=URL(c="hrm", f="job_title",
                                             args=["[id]", "delete"])))
             s3.actions = actions
-            if "form" in output:
-                output["form"].add_class("hrm_job_title")
-            elif "item" in output:
-                output["item"].add_class("hrm_job_title")
+            if isinstance(output, dict):
+                if "form" in output:
+                    output["form"].add_class("hrm_job_title")
+                elif "item" in output and hasattr(output["item"], "add_class"):
+                    output["item"].add_class("hrm_job_title")
 
         # Call standard postp
         if callable(standard_postp):
@@ -1675,6 +1692,11 @@ def customize_org_organisation(**attr):
                 return False
 
         if r.interactive:
+
+            # 2-column datalist, 6 rows per page
+            s3.dl_pagelength = 12
+            s3.dl_rowsize = 2
+
             s3db = current.s3db
             # Customise tables used by widgets
             customize_cms_post_fields()
@@ -1751,7 +1773,9 @@ def customize_org_organisation(**attr):
                                   tablename = "org_office",
                                   context = "organisation",
                                   icon = "icon-home",
-                                  marker = "office",
+                                  layer = "Offices",
+                                  # provided by Catalogue Layer
+                                  #marker = "office",
                                   list_layout = render_offices,
                                   )
             resources_widget = dict(label = "Resources",
@@ -1779,7 +1803,9 @@ def customize_org_organisation(**attr):
                                      context = "organisation",
                                      filter = S3FieldSelector("series_id$name") == "Activity",
                                      icon = "icon-activity",
-                                     marker = "activity",
+                                     layer = "Activities",
+                                     # provided by Catalogue Layer
+                                     #marker = "activity",
                                      list_layout = render_profile_posts,
                                      )
             reports_widget = dict(label = "Reports",
@@ -1789,7 +1815,9 @@ def customize_org_organisation(**attr):
                                   context = "organisation",
                                   filter = S3FieldSelector("series_id$name") == "Report",
                                   icon = "icon-report",
-                                  marker = "report",
+                                  layer = "Reports",
+                                  # provided by Catalogue Layer
+                                  #marker = "report",
                                   list_layout = render_profile_posts,
                                   )
             assessments_widget = dict(label = "Assessments",
@@ -1799,7 +1827,9 @@ def customize_org_organisation(**attr):
                                       context = "organisation",
                                       filter = S3FieldSelector("series_id$name") == "Assessment",
                                       icon = "icon-info-sign",
-                                      marker = "assessment",
+                                      layer = "Assessments",
+                                      # provided by Catalogue Layer
+                                      #marker = "assessment",
                                       list_layout = render_profile_posts,
                                       )
             s3db.configure("org_organisation",
@@ -1888,10 +1918,11 @@ def customize_org_office(**attr):
                                     url=URL(c="org", f="office",
                                             args=["[id]", "delete"])))
             s3.actions = actions
-            if "form" in output:
-                output["form"].add_class("org_office")
-            elif "item" in output:
-                output["item"].add_class("org_office")
+            if isinstance(output, dict):
+                if "form" in output:
+                    output["form"].add_class("org_office")
+                elif "item" in output and hasattr(output["item"], "add_class"):
+                    output["item"].add_class("org_office")
 
         # Call standard postp
         if callable(standard_postp):
@@ -1966,10 +1997,11 @@ def customize_org_resource(**attr):
                                     url=URL(c="org", f="resource",
                                             args=["[id]", "delete"])))
             s3.actions = actions
-            if "form" in output:
-                output["form"].add_class("org_resource")
-            elif "item" in output:
-                output["item"].add_class("org_resource")
+            if isinstance(output, dict):
+                if "form" in output:
+                    output["form"].add_class("org_resource")
+                elif "item" in output and hasattr(output["item"], "add_class"):
+                    output["item"].add_class("org_resource")
 
         # Call standard postp
         if callable(standard_postp):
@@ -2147,10 +2179,11 @@ def customize_pr_person(**attr):
                                     url=URL(c="pr", f="person",
                                             args=["[id]", "delete"])))
             s3.actions = actions
-            if "form" in output:
-                output["form"].add_class("pr_person")
-            elif "item" in output:
-                output["item"].add_class("pr_person")
+            if isinstance(output, dict):
+                if "form" in output:
+                    output["form"].add_class("pr_person")
+                elif "item" in output and hasattr(output["item"], "add_class"):
+                    output["item"].add_class("pr_person")
 
         return output
     s3.postp = custom_postp
@@ -2291,10 +2324,11 @@ def customize_project_project(**attr):
                                     url=URL(c="project", f="project",
                                             args=["[id]", "delete"])))
             s3.actions = actions
-            if "form" in output:
-                output["form"].add_class("project_project")
-            elif "item" in output:
-                output["item"].add_class("project_project")
+            if isinstance(output, dict):
+                if "form" in output:
+                    output["form"].add_class("project_project")
+                elif "item" in output and hasattr(output["item"], "add_class"):
+                    output["item"].add_class("project_project")
 
         # Call standard postp
         if callable(standard_postp):

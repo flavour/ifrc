@@ -118,7 +118,7 @@ textarea.richtext {
 /* Used to diplay the list-add with the list-add-btn */
 #list-btn-add {
     margin-bottom: 10px;
-    float: left;
+/*     float: left; */
 }
 /*#list-btn-add + h3 {
     clear: both;
@@ -223,7 +223,7 @@ div .dataTable_table {
 
 .dataTables_filter {
     width: auto;
-    float: left;
+    float: left !important;
     margin-bottom: 4px;
 }
 .dataTables_processing {
@@ -232,12 +232,12 @@ div .dataTable_table {
 }
 .dataTables_info  {
 	width: auto;
-    float: right;
-    clear: none;
+    float: right !important;
+    clear: none !important;
     margin: 7px 0 4px 10px;
 }
 .dataTables_length {
-    float: right;
+    float: right !important;
     margin-bottom:4px;
 }
 .dataTables_paginate {
@@ -347,17 +347,31 @@ div.dl {
     float: right;
     padding: 3px;
 }
-.dl-item {
+.dl-row {
     clear: both;
-    padding: 3px 5px 3px 5px;
+    padding: 0;
     border-top: 1px solid #aaa;
 }
-.dl-item.even {
+.dl-item {
+    float: left;
+    padding: 3px 5px 3px 5px;
+}
+.dl-row.even,
+.dl-row.even .dl-item {
     background-color: white;
 }
-
-.dl-item.odd {
+.dl-row.odd,
+.dl-row.odd .dl-item {
     background-color: #E2E4FF;
+}
+.dl-1-cols {
+    width: 90%;
+}
+.dl-2-cols {
+    width: 45%;
+}
+.dl-3-cols {
+    width: 30%;
 }
 
 .dl-field {
@@ -368,6 +382,10 @@ div.dl {
     font-weight: bold;
 }
 .dl-field-value {
+}
+.infscr-loading {
+    float: left;
+    clear: left;
 }
 
 /* Display view */
@@ -1003,7 +1021,7 @@ ul.x-tree-root-ct {
 .filter-form tr:first-child > td,
 .search_form tr:first-child > td,
 #filter_options tr:first-child > td {
-    border-top: 0px;
+    border-top: 0;
 }
 .filter-form table.s3-checkboxes-widget td,
 .filter-form table.s3-groupopts-widget td,
@@ -1011,7 +1029,7 @@ ul.x-tree-root-ct {
 .search_form table.s3searchminmaxwidget td,
 #filter_options table.s3-checkboxes-widget td,
 #filter_options table.s3searchminmaxwidget td {
-    border-top: 0px;
+    border-top: 0;
 }
 
 .widget-org-hierarchy-menu {

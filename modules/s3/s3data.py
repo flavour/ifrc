@@ -35,7 +35,7 @@ import datetime
 import sys
 import time
 
-from itertools import product
+from itertools import product, islice
 
 try:
     import json # try stdlib (Python 2.6)
@@ -416,7 +416,7 @@ class S3DataTable(object):
         application = request.application
 
         # @todo: this needs rework
-        #        - s3FormatRequest must remove the "search" method
+        #        - formatRequest must remove the "search" method
         #        - other data formats could have other list_fields,
         #          hence applying the datatable sorting/filters is
         #          not transparent
@@ -439,28 +439,28 @@ class S3DataTable(object):
         if "pdf" in export_formats:
             url = formats.pdf if formats.pdf else default_url
             iconList.append(IMG(_src="/%s/static/img/pdficon_small.gif" % application,
-                                _onclick="s3FormatRequest('pdf','%s','%s');" % (id, url),
+                                _onclick="S3.dataTables.formatRequest('pdf','%s','%s');" % (id, url),
                                 _alt=T("Export in PDF format"),
                                 _title=T("Export in PDF format"),
                                 ))
         if "xls" in export_formats:
             url = formats.xls if formats.xls else default_url
             iconList.append(IMG(_src="/%s/static/img/icon-xls.png" % application,
-                                _onclick="s3FormatRequest('xls','%s','%s');" % (id, url),
+                                _onclick="S3.dataTables.formatRequest('xls','%s','%s');" % (id, url),
                                 _alt=T("Export in XLS format"),
                                 _title=T("Export in XLS format"),
                                 ))
         if "rss" in export_formats:
             url = formats.rss if formats.rss else default_url
             iconList.append(IMG(_src="/%s/static/img/RSS_16.png" % application,
-                                _onclick="s3FormatRequest('rss','%s','%s');" % (id, url),
+                                _onclick="S3.dataTables.formatRequest('rss','%s','%s');" % (id, url),
                                 _alt=T("Export in RSS format"),
                                 _title=T("Export in RSS format"),
                                 ))
         if "xml" in export_formats:
             url = formats.xml if formats.xml else default_url
             iconList.append(IMG(_src="/%s/static/img/icon-xml.png" % application,
-                                _onclick="s3FormatRequest('xml','%s','%s');" % (id, url),
+                                _onclick="S3.dataTables.formatRequest('xml','%s','%s');" % (id, url),
                                 _alt=T("Export in XML format"),
                                 _title=T("Export in XML format"),
                                 ))
@@ -476,14 +476,14 @@ class S3DataTable(object):
         div.append(current.T("Export to:"))
         if "have" in formats and "have" in export_formats:
             iconList.append(IMG(_src="/%s/static/img/have_16.png" % application,
-                                _onclick="s3FormatRequest('have','%s','%s');" % (id, formats.have),
+                                _onclick="S3.dataTables.formatRequest('have','%s','%s');" % (id, formats.have),
                                 _alt=T("Export in HAVE format"),
                                 _title=T("Export in HAVE format"),
                                 ))
         if "kml" in export_formats:
             if "kml" in formats:
                 iconList.append(IMG(_src="/%s/static/img/kml_icon.png" % application,
-                                    _onclick="s3FormatRequest('kml','%s','%s');" % (id, formats.kml),
+                                    _onclick="S3.dataTables.formatRequest('kml','%s','%s');" % (id, formats.kml),
                                     _alt=T("Export in KML format"),
                                     _title=T("Export in KML format"),
                                     ))
@@ -494,14 +494,14 @@ class S3DataTable(object):
                 for r in rfields:
                     if r.fname in kml_list:
                         iconList.append(IMG(_src="/%s/static/img/kml_icon.png" % application,
-                                            _onclick="s3FormatRequest('kml','%s','%s');" % (id, default_url),
+                                            _onclick="S3.dataTables.formatRequest('kml','%s','%s');" % (id, default_url),
                                             _alt=T("Export in KML format"),
                                             _title=T("Export in KML format"),
                                             ))
                         break
         if "map" in formats and "map" in export_formats:
             iconList.append(IMG(_src="/%s/static/img/map_icon.png" % application,
-                                _onclick="s3FormatRequest('map','%s','%s');" % (id, formats.map),
+                                _onclick="S3.dataTables.formatRequest('map','%s','%s');" % (id, formats.map),
                                 _alt=T("Show on map"),
                                 _title=T("Show on map"),
                                 ))
@@ -874,14 +874,22 @@ class S3DataList(object):
                  limit=None,
                  total=None,
                  listid=None,
-                 layout=None):
+                 layout=None,
+                 row_layout=None):
         """
             Constructor
 
             @param resource: the S3Resource
             @param list_fields: the list fields (list of field selector strings)
             @param records: the records
+            @param start: index of the first item
+            @param limit: maximum number of items
+            @param total: total number of available items
             @param listid: the HTML ID for this list
+            @param layout: item renderer (optional) as
+                           function(listid, resource, rfields, record)
+            @param row_layout: row renderer (optional) as
+                               function(listid, resource, rowsize, items)
         """
 
         self.resource = resource
@@ -897,6 +905,7 @@ class S3DataList(object):
             self.layout = layout
         else:
             self.layout = self.render
+        self.row_layout = row_layout
 
         self.start = start if start else 0
         self.limit = limit if limit else 0
@@ -907,6 +916,7 @@ class S3DataList(object):
              start=None,
              limit=None,
              pagesize=None,
+             rowsize=None,
              ajaxurl=None):
         """
             Render list data as HTML (nested DIVs)
@@ -914,6 +924,7 @@ class S3DataList(object):
             @param start: index of the first item (in this page)
             @param limit: (actual) number of items (in this page)
             @param pagesize: maximum number of items per page
+            @param rowsize: number of items per row
             @param ajaxurl: the URL to Ajax-update the datalist
         """
 
@@ -924,6 +935,10 @@ class S3DataList(object):
 
         listid = self.listid
         render = self.layout
+        render_row = self.row_layout
+
+        if not rowsize:
+            rowsize = 1
         
         records = self.records
         if records is not None:
@@ -932,14 +947,35 @@ class S3DataList(object):
                     _class="dl-header",
                     _id="%s-header" % listid)
             ]
-            _start = self.start
-            for i in xrange(len(records)):
-                _class = (i + _start) % 2 and "even" or "odd"
-                item = render(listid, resource, rfields, records[i], _class=_class)
-                # Class "dl-item" is required for pagination:
-                if hasattr(item, "add_class"):
-                    item.add_class("dl-item")
-                items.append(item)
+            
+            row_idx = int(self.start / rowsize) + 1
+            for group in self.groups(records, rowsize):
+                row = []
+                col_idx = 0
+                for record in group:
+                    item = render(listid,
+                                  resource,
+                                  rfields,
+                                  record)
+                    if hasattr(item, "add_class"):
+                        _class = "dl-item dl-%s-cols dl-col-%s" % (rowsize, col_idx)
+                        item.add_class(_class)
+                    row.append(item)
+                    col_idx += 1
+
+                _class = "dl-row %s" % ((row_idx % 2) and "even" or "odd")
+                if render_row:
+                    row = render_row(listid,
+                                     resource,
+                                     rowsize,
+                                     row)
+                    if hasattr(row, "add_class"):
+                        row.add_class(_class)
+                else:
+                    row = DIV(row, _class=_class)
+
+                items.append(row)
+                row_idx += 1
         else:
             # template
             raise NotImplementedError
@@ -950,6 +986,7 @@ class S3DataList(object):
                    "maxitems": limit,
                    "totalitems": self.total,
                    "pagesize": pagesize,
+                   "rowsize": rowsize,
                    "ajaxurl": ajaxurl
                    }
         from gluon.serializers import json as jsons
@@ -966,6 +1003,23 @@ class S3DataList(object):
 
         return dl
 
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def groups(iterable, length):
+        """
+            Iterator to group data list items into rows
+
+            @param iterable: the items iterable
+            @param length: the number of items per row
+        """
+
+        iterable = iter(iterable)
+        group = list(islice(iterable, length))
+        while group:
+            yield group
+            group = list(islice(iterable, length))
+        raise StopIteration
+            
     # ---------------------------------------------------------------------
     @staticmethod
     def render(listid, resource, rfields, record, **attr):
