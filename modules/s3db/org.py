@@ -28,7 +28,6 @@
 """
 
 __all__ = ["S3OrganisationModel",
-           "S3OrganisationVirtualFields",
            "S3OrganisationResourceModel",
            "S3OrganisationSummaryModel",
            "S3OrganisationTypeTagModel",
@@ -41,6 +40,7 @@ __all__ = ["S3OrganisationModel",
            "S3OfficeSummaryModel",
            "S3OfficeTypeTagModel",
            "org_organisation_logo",
+           "org_organisation_address",
            "org_root_organisation",
            "org_organisation_requires",
            "org_site_represent",
@@ -83,7 +83,6 @@ class S3OrganisationModel(S3Model):
              "org_organisation_branch",
              "org_organisation_user",
              "org_organisation_represent",
-             "org_organisation_address_virtual_field",
              ]
 
     def model(self):
@@ -415,8 +414,8 @@ class S3OrganisationModel(S3Model):
                                                                  T("Twitter ID or #hashtag")))),
                              Field("donation_phone",
                                    label=T("Donation Phone #"),
-                                   #readable = False,
-                                   #writable = False,
+                                   readable = False,
+                                   writable = False,
                                    requires=IS_NULL_OR(s3_phone_requires),
                                    represent=lambda v: v or NONE,
                                    comment=DIV(_class="tooltip",
@@ -435,9 +434,6 @@ class S3OrganisationModel(S3Model):
                              s3_comments(),
                              #document_id(), # Better to have multiple Documents on a Tab
                              * s3_meta_fields())
-
-        # Best not to have this globally
-        #table.virtualfields.append(S3OrganisationVirtualFields())
 
         # CRUD strings
         ADD_ORGANIZATION = T("Add New Organization")
@@ -748,8 +744,7 @@ class S3OrganisationModel(S3Model):
                     org_sector_opts=self.org_sector_opts,
                     org_organisation_type_id=organisation_type_id,
                     org_organisation_id=organisation_id,
-                    org_organisation_represent=org_organisation_represent,
-                    org_organisation_address_virtual_field = S3OrganisationVirtualFields,
+                    org_organisation_represent=org_organisation_represent
                 )
 
     # -------------------------------------------------------------------------
@@ -1163,31 +1158,6 @@ class S3OrganisationModel(S3Model):
         if record:
             current.s3db.pr_update_affiliations(table, record)
         return
-
-# =============================================================================
-class S3OrganisationVirtualFields:
-    """
-        Virtual fields for the org_organisation table
-        - used by DRRPP Committees/Mechanisms/Forums
-    """
-
-    def address(self):
-        """ Return the address of the first office """
-
-        db = current.db
-        s3db = current.s3db
-        otable = s3db.org_office
-        gtable = db.gis_location
-        query = (otable.deleted != True) & \
-                (otable.organisation_id == self.org_organisation.id) & \
-                (otable.location_id == gtable.id)
-        row = db(query).select(gtable.id,
-                               limitby=(0, 1)).first()
-
-        if row:
-            return s3db.gis_location_represent(row.id)
-        else:
-            return current.messages["NONE"]
 
 # =============================================================================
 class S3OrganisationResourceModel(S3Model):
@@ -2518,12 +2488,12 @@ class S3OfficeModel(S3Model):
                                "name",
                                "organisation_id", # Filtered in Component views
                                "office_type_id",
-                               #(T("Address"), "location_id$addr_street"),
                                (messages.COUNTRY, "location_id$L0"),
                                "location_id$L1",
                                "location_id$L2",
                                "location_id$L3",
                                #"location_id$L4",
+                               (T("Address"), "location_id$addr_street"),
                                "phone1",
                                "email"
                                ],
@@ -2624,7 +2594,7 @@ class S3OfficeModel(S3Model):
     @staticmethod
     def org_office_duplicate(item):
         """
-            Import item deduplication, match by name
+            Import item deduplication: simple match by name
                 (Adding location_id doesn't seem to be a good idea)
 
             @param item: the S3ImportItem instance
@@ -2729,6 +2699,35 @@ class S3OfficeTypeTagModel(S3Model):
         #
         return Storage(
                 )
+
+# =============================================================================
+def org_organisation_address(row):
+    """ The address of the first office """
+
+    default = current.messages["NONE"]
+
+    if hasattr(row, "org_organisation"):
+        row = row.org_organisation
+    try:
+        organisation_id = row.id
+    except:
+        # not available
+        return default
+
+    db = current.db
+    s3db = current.s3db
+
+    otable = s3db.org_office
+    gtable = s3db.gis_location
+    query = (otable.deleted != True) & \
+            (otable.organisation_id == organisation_id) & \
+            (otable.location_id == gtable.id)
+    row = db(query).select(gtable.id, limitby=(0, 1)).first()
+
+    if row:
+        return s3db.gis_location_represent(row.id)
+    else:
+        return default
 
 # =============================================================================
 def org_organisation_logo(id, type="png"):

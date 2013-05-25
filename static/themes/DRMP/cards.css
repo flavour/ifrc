@@ -26,6 +26,12 @@
     cursor: auto;
 }
 
+.media-body a span.date-title {
+    border-left: none;
+    margin-left: 0;
+    padding-left: 1px;
+}
+
 .date-title {
     font: 400 10px "Helvetica Neue",Arial,sans-serif;
     list-style: none outside none;
@@ -63,8 +69,11 @@
 
 img.media-object {
     border-radius: 8px;
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
+    padding-bottom: 3px;
+    padding-left: 2px;
+    margin-top: 0;
 }
 
 /* Edit Toolbar */
@@ -74,10 +83,6 @@ img.media-object {
     position: relative;
     top: 4px;
     float: right;
-}
-
-.icon.icon-edit {
-    padding-right: 3px;
 }
 
 .icon.icon-edit,

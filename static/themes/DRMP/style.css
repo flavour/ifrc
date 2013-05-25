@@ -36,6 +36,12 @@ form {
     margin-left: 20px;
 }
 
+.input-xlarge {
+    -moz-box-sizing: inherit;
+    min-height: inherit;
+    width: 206px;
+}
+
 .tooltip {
     opacity: 1;
 }
@@ -52,9 +58,6 @@ div.dl {
 .dl-item {
     border-top: 0;
     clear: none;
-}
-.dl-1-cols {
-    width: 98%;
 }
 .dl-row.odd,
 .dl-row.odd .dl-item {
@@ -103,52 +106,6 @@ a.btn.btn-primary.main-add {
 /* Add button on Updates page & Disaster selection screen */
 a i.icon.icon-plus-sign.big-add:hover {
     text-decoration: none;
-}
-
-/* Activity */
-/*.icon-:*/
-.icon-activity:before  {
-    content: "\f085";
-}
-/* Alert */
-/*.icon-bullhorn*/
-.icon-alert:before {
-    content: "\f0a1";
-}
-/* Assessment */
-/*icon-info-sign*/
-.icon-assessment:before{
-    content: "\f05a";
-}
-/* Contact */
-/*.icon-group*/
-.icon-contact:before {
-    content: "\f0c0";
-}
-/* Incident */
-/*icon-warning-sign*/
-.icon-incident:before {
-    content: "\f071";
-}
-/* Project */
-/*.icon-retweet*/
-.icon-project:before {
-    content: "\f079";
-}
-/* Report */
-/*.icon-file-alt*/
-.icon-report:before {
-    content: "\f0f6";
-}
-/* Resource */
-/*.icon-truck*/
-.icon-resource:before {
-    content: "\f0d1";
-}
-/* Training Material */
-/*icon-book*/
-.icon-training_material:before {
-    content: "\f02d";
 }
 
 /* Modals */
@@ -463,7 +420,7 @@ b.red {
     display: none;
 }
 
-/*Add new project form styling*/
+/* Add new Project form styling */
 
 #sub-partnerorganisation table.embeddedComponent thead,
 #sub-defaultlocation table.embeddedComponent thead tr.label-row td {
@@ -495,6 +452,13 @@ b.red {
 #sub_donororganisation_donororganisation_i_amount_edit_none {
     position: relative;
     top: -5px;
+}
+
+#sub_donororganisation_donororganisation_i_amount_edit_none {
+    width: 200px;
+}
+#sub_donororganisation_donororganisation_i_currency_edit_none {
+    width: 70px;
 }
 
 #sub_donororganisation_donororganisation_i_organisation_id_edit_none {

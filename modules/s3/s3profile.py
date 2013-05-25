@@ -145,6 +145,31 @@ class S3Profile(S3CRUD):
         return output
 
     # -------------------------------------------------------------------------
+    @staticmethod
+    def _resolve_context(context, id):
+        """
+            Resolve a context filter
+
+            @param context: the context (as a string)
+            @param id: the record_id
+        """
+
+        s = "(%s)" % context
+        if context == "location":
+            # Show records linked to this Location & all it's Child Locations
+            m = ("%(id)s/*,*/%(id)s/*" % dict(id=id)).split(",")
+            filter = S3FieldSelector(s).like(m) | S3FieldSelector(s) == id
+        # @ToDo:
+        #elif context == "organisation":
+        #    # Show records linked to this Organisation and all it's Branches
+        #    filter = S3FieldSelector(s) == id
+        else:
+            # Normal: show just records linked directly to this master resource
+            filter = S3FieldSelector(s) == id
+
+        return filter
+
+    # -------------------------------------------------------------------------
     def _comments(self, r, widget, **attr):
         """
             Generate a Comments widget
@@ -183,13 +208,15 @@ class S3Profile(S3CRUD):
         """
 
         T = current.T
+        s3db = current.s3db
+        id = r.id
         context = widget.get("context", None)
         if context:
-            context = "(%s)" % context
-            current.s3db.context = S3FieldSelector(context) == r.id
+            context = self._resolve_context(context, id)
+        s3db.context = context
 
         tablename = widget.get("tablename", None)
-        resource = current.s3db.resource(tablename, context=True)
+        resource = s3db.resource(tablename, context=True)
         table = resource.table
 
         # Config Options:
@@ -222,7 +249,9 @@ class S3Profile(S3CRUD):
                 vars = Storage()
             vars.refresh = listid
             if context:
-                vars[context] = r.id
+                filters = context.serialize_url(resource)
+                for f in filters:
+                    vars[f] = filters[f]
             title_create = widget.get("title_create", None)
             if title_create:
                 title_create = T(title_create)
@@ -259,12 +288,12 @@ class S3Profile(S3CRUD):
                         start = int(start)
                         limit = int(limit)
                     except ValueError:
-                        start, limit = 0, 4
+                        start, limit = 0, pagesize
                 else:
                     start = None
         else:
             # Page-load
-            start, limit = 0, 4
+            start, limit = 0, pagesize
 
         # Ajax-delete items?
         if representation == "dl" and r.http in ("DELETE", "POST"):
@@ -304,12 +333,41 @@ class S3Profile(S3CRUD):
         if icon:
             icon = TAG[""](I(_class=icon), " ")
 
+        total = resource.count()
+        if total > pagesize:
+            # Button to display the rest of the records in a Modal
+            more = total - pagesize
+            vars = {}
+            if context:
+                filters = context.serialize_url(resource)
+                for f in filters:
+                    vars[f] = filters[f]
+            if filter:
+                filters = filter.serialize_url(resource)
+                for f in filters:
+                    vars[f] = filters[f]
+            c, f = tablename.split("_", 1)
+            url = URL(c=c, f=f, args=["datalist.popup"],
+                      vars=vars)
+            more = DIV(A(BUTTON("%s (%s)" % (T("see more"), more),
+                                _class="btn btn-mini",
+                                _type="button",
+                                ),
+                         _class="s3_modal",
+                         _href=url,
+                         _title=label,
+                         ),
+                       _class="more_profile")
+        else:
+            more = ""
+
         # Render the widget
         output = DIV(create,
                      H4(icon,
                         label,
                         _class="profile-sub-header"),
                      DIV(data,
+                         more,
                          _class="card-holder"),
                      _class="span6")
 
@@ -339,7 +397,8 @@ class S3Profile(S3CRUD):
             icon = TAG[""](I(_class=icon), " ")
         context = widget.get("context", None)
         if context:
-            context = "(%s)=%s" % (context, r.id)
+            context = self._resolve_context(context, r.id)
+            cserialize_url = context.serialize_url
 
         height = widget.get("height", 383)
         width = widget.get("width", 568) # span6 * 99.7%
@@ -382,12 +441,13 @@ class S3Profile(S3CRUD):
                 layer["layer_id"] = layer_id
                 if not marker:
                     marker = Marker(layer_id=layer_id).as_dict()
+                resource = s3dbresource(tablename)
+                filter_url = ""
                 if context:
-                    filter_url = context
-                else:
-                    filter_url = ""
+                    filters = cserialize_url(resource)
+                    for f in filters:
+                        filter_url = "%s&%s=%s" % (filter_url, f, filters[f])
                 if filter:
-                    resource = s3dbresource(tablename)
                     filters = filter.serialize_url(resource)
                     for f in filters:
                         filter_url = "%s&%s=%s" % (filter_url, f, filters[f])
@@ -400,16 +460,20 @@ class S3Profile(S3CRUD):
                     # Build one
                     c, f = tablename.split("_", 1)
                     map_url = URL(c=c, f=f, extension="geojson")
+                    resource = s3dbresource(tablename)
+                    first = True
+                    if context:
+                        filters = cserialize_url(resource)
+                        for f in filters:
+                            sep = "?" if first else "&"
+                            map_url = "%s%s%s=%s" % (map_url, sep, f, filters[f])
+                            first = False
                     if filter:
-                        map_url = "%s?" % map_url
-                        resource = s3dbresource(tablename)
                         filters = filter.serialize_url(resource)
                         for f in filters:
-                            map_url = "%s%s=%s" % (map_url, f, filters[f])
-                        if context:
-                            map_url = "%s&%s" % (map_url, context)
-                    elif context:
-                        map_url = "%s?%s" % (map_url, context)
+                            sep = "?" if first else "&"
+                            map_url = "%s%s%s=%s" % (map_url, sep, f, filters[f])
+                            first = False
                 layer["url"] = map_url
 
             if marker:
