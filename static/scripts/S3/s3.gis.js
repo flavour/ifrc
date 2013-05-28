@@ -451,7 +451,7 @@ S3.gis.cluster_threshold = 2;   // minimum # of features to form a cluster
                 } else {
                     var active = false;
                 }
-                addPointControl(null, active);
+                addPointControl(map, null, active);
             }
         }
 
@@ -1546,7 +1546,7 @@ S3.gis.cluster_threshold = 2;   // minimum # of features to form a cluster
                 }
                 if (undefined != elem.cat) {
                     // Category-based style
-                    title = elem.cat;
+                    title = elem.label || elem.cat;
                     filter = new OpenLayers.Filter.Comparison({
                         type: OpenLayers.Filter.Comparison.EQUAL_TO,
                         property: attrib,
@@ -1554,7 +1554,7 @@ S3.gis.cluster_threshold = 2;   // minimum # of features to form a cluster
                     });
                 } else {
                     // Range-based Style
-                    title = elem.low + '-' + elem.high; 
+                    title = elem.label || (elem.low + '-' + elem.high);
                     filter = new OpenLayers.Filter.Comparison({
                         type: OpenLayers.Filter.Comparison.BETWEEN,
                         property: attrib,
@@ -3497,7 +3497,7 @@ S3.gis.cluster_threshold = 2;   // minimum # of features to form a cluster
             toolbar.addSeparator();
             //toolbar.add(selectButton);
             if (options.draw_feature) {
-                addPointControl(toolbar, point_pressed);
+                addPointControl(map, toolbar, point_pressed);
             }
             //toolbar.add(lineButton);
             if (options.draw_polygon) {
@@ -3916,8 +3916,7 @@ S3.gis.cluster_threshold = 2;   // minimum # of features to form a cluster
     }
 
     // Point Control to add new Markers to the Map
-    var addPointControl = function(toolbar, active) {
-        var map = toolbar.map;
+    var addPointControl = function(map, toolbar, active) {
         OpenLayers.Handler.PointS3 = OpenLayers.Class(OpenLayers.Handler.Point, {
             // Ensure that we propagate Double Clicks (so we can still Zoom)
             dblclick: function(evt) {
@@ -4065,7 +4064,8 @@ S3.gis.cluster_threshold = 2;   // minimum # of features to form a cluster
 
     // Save button to save the Viewport settings
     var addSaveButton = function(toolbar) {
-        var config_id = toolbar.map.s3.options.config_id;
+        var map = toolbar.map;
+        var config_id = map.s3.options.config_id;
         // Toolbar Button
         var saveButton = new Ext.Toolbar.Button({
             iconCls: 'save',
