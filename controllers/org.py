@@ -540,6 +540,12 @@ def resource_type():
     return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
+def service():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
 def req_match():
     """ Match Requests for Sites """
 
