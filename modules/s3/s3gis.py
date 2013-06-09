@@ -533,7 +533,8 @@ class GIS(object):
         if parent:
             table = current.s3db.gis_location
             db = current.db
-            parent = db(table.id == parent).select(table.level,
+            parent = db(table.id == parent).select(table.id,
+                                                   table.level,
                                                    table.name,
                                                    table.parent,
                                                    table.path,
@@ -564,7 +565,7 @@ class GIS(object):
                 if parent.path:
                     path = parent.path
                 else:
-                    path = GIS.update_location_tree(dict(id=parent))
+                    path = GIS.update_location_tree(dict(id=parent.id))
                 path_list = map(int, path.split("/"))
                 rows = db(table.id.belongs(path_list)).select(table.level,
                                                               table.name,
@@ -3874,7 +3875,7 @@ class GIS(object):
             return
 
         # Single Feature
-        id = "id" in feature and str(feature["id"])
+        id = str(feature["id"]) if "id" in feature else None
         if not id:
             # Nothing we can do
             raise ValueError
@@ -5229,7 +5230,7 @@ class GIS(object):
                  catalogue_layers = False,
                  legend = False,
                  toolbar = False,
-                 nav = True,
+                 nav = None,
                  area = False,
                  save = True,
                  search = False,
@@ -5629,7 +5630,10 @@ class MAP(DIV):
 
             # Show NAV controls?
             # e.g. removed within S3LocationSelectorWidget[2]
-            if opts.get("nav", True):
+            nav = opts.get("nav", None)
+            if nav is None:
+                nav = settings.get_gis_nav_controls()
+            if nav:
                 i18n["gis_pan"] = T("Pan Map: keep the left mouse button pressed and drag the map")
                 i18n["gis_navPrevious"] = T("Previous View")
                 i18n["gis_navNext"] = T("Next View")

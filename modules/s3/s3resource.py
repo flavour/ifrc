@@ -4683,7 +4683,7 @@ class S3Resource(object):
                     # Otherwise, we search through the field itself
                     else:
                         flist.append(field)
-
+                        
             # Build search query
             # @todo: migrate this to S3ResourceQuery?
             opts = Storage()
@@ -6531,8 +6531,14 @@ class S3AxisFilter(object):
         self.tablename = None
         self.fieldname = None
 
+        if not qdict:
+            return
+
         l = qdict["first"]
-        r = qdict["second"]
+        if "second" in qdict:
+            r = qdict["second"]
+        else:
+            r = None
 
         op = qdict["op"]
         
