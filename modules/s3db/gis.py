@@ -1901,13 +1901,6 @@ class S3LayerEntityModel(S3Model):
     def model(self):
 
         T = current.T
-        db = current.db
-
-        config_id = self.gis_config_id
-        marker_id = self.gis_marker_id
-        symbology_id = self.gis_symbology_id
-
-        NONE = current.messages["NONE"]
 
         # Shortcuts
         add_component = self.add_component
@@ -1966,17 +1959,6 @@ class S3LayerEntityModel(S3Model):
 
         layer_id = self.super_link("layer_id", "gis_layer_entity",
                                    label = T("Layer"),
-                                   # SuperLinks don't support requires
-                                   #requires = IS_ONE_OF(db,
-                                   #                     "gis_layer_entity.layer_id",
-                                   #                     "%(name)s",
-                                   # This filter is applied in the symbology controller to restrict to just those layer types with Markers
-                                   #                     filterby="instance_type",
-                                   #                     filter_opts=("gis_layer_feature",
-                                   #                                  "gis_layer_georss",
-                                   #                                  "gis_layer_geojson",
-                                   #                                  "gis_layer_kml")
-                                   #                     ),
                                    represent = gis_layer_represent,
                                    readable=True, writable=True)
 
@@ -2006,32 +1988,32 @@ class S3LayerEntityModel(S3Model):
 
         # Style is a JSON object with the following structure
         # (only the starred elements are currently parsed)
-        # @ToDo: Support elements in a common section (such as attrib, graphic)
+        # @ToDo: Support elements in a common section (such as prop, graphic)
         # @ToDo: Popup style
         # @ToDo: Import/Export SLD
         # @ToDo: Be able to reuse Styles across Layers/Configs (separate gis_style table)
         #Style = [{
-        #   attrib: string, //* Attribute used to colour the element
-        #   cat: string,    //* Value used to colour the element
-        #   low: float,     //* Low value of the range of values used for this colour rule
-        #   high: float,    //* High value of the range of values used for this colour rule
-        #   label: string,  //* Optional label for the Category/Range (fallas back to cat or 'low - high')
+        #   prop: string,       //* Attribute used to activate this style rule
+        #   cat: string,        //* Absolute Value used to style the element
+        #   low: float,         //* Low value of the range of values used for this style rule
+        #   high: float,        //* High value of the range of values used for this style rule
+        #   label: string,      //* Optional label for the Category/Range (falls back to cat or 'low - high')
         #   externalGraphic: string, //* Marker to load from /static/path/to/marker.png
-        #   fill: string,   //*
+        #   fill: string,       //*
         #   fillOpacity: float, //*
-        #   stroke: string, //* (will default to fill, if not set)
+        #   stroke: string,     //* (will default to fill, if not set)
         #   strokeOpacity: float,
         #   strokeWidth: float or int, //* OpenLayers wants int, SLD wants float
-        #   label: string,  //* Attribute used to label the element
-        #   graphic: string, //* Shape: "circle", "square", "star", "x", "cross", "triangle"
-        #   size: integer,, //* Radius of the Shape
+        #   label: string,      //* Attribute used to label the element
+        #   graphic: string,    //* Shape: "circle", "square", "star", "x", "cross", "triangle"
+        #   size: integer,,     //* Radius of the Shape
         #   popup: {},
         #}]
 
         tablename = "gis_layer_config"
         table = define_table(tablename,
                              layer_id,
-                             config_id(),
+                             self.gis_config_id(),
                              Field("enabled", "boolean", default=True,
                                    represent = s3_yes_no_represent,
                                    label=T("Available in Viewer?")),
@@ -2043,7 +2025,7 @@ class S3LayerEntityModel(S3Model):
                                    label=T("Default Base layer?")),
                              # @ToDo: Move to style_id
                              Field("style", "text",
-                                   # Used by Layers: Shapefile & Theme (@ToDo: Features should move here)
+                                   # Used by Layers: Feature, GeoJSON, KML, Shapefile, Theme & WFS
                                    readable=False, writable=False,
                                    comment = DIV(_class="tooltip",
                                                  _title="%s|%s" % (T("Style"),
@@ -2079,8 +2061,8 @@ class S3LayerEntityModel(S3Model):
         tablename = "gis_layer_symbology"
         table = define_table(tablename,
                              layer_id,
-                             symbology_id(),
-                             marker_id(),
+                             self.gis_symbology_id(),
+                             self.gis_marker_id(),
                              Field("gps_marker",
                                    label = T("GPS Marker"),
                                    comment = DIV(_class="tooltip",
@@ -2114,6 +2096,7 @@ class S3LayerEntityModel(S3Model):
         # ---------------------------------------------------------------------
         return Storage(
                 gis_layer_types = layer_types,
+                # Run from config() controller when saving state
                 gis_layer_config_onaccept = self.gis_layer_config_onaccept
             )
 
@@ -2124,9 +2107,14 @@ class S3LayerEntityModel(S3Model):
             Ensure that Style JSON can be loaded by json.loads()
         """
 
-        vars = form.vars
-        if "style" in vars and vars.style:
-            vars.style = vars.style.replace("'", "\"")
+        style = form.vars.get("style", None)
+        if style:
+            style = style.replace("'", "\"")
+            try:
+                json.loads(style)
+            except ValueError, e: 
+                form.errors.style = "%s: %s" % (current.T("Style invalid"), e)
+            form.vars.style = style
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2146,8 +2134,7 @@ class S3LayerEntityModel(S3Model):
 
         if base and enabled:
             db = current.db
-            s3db = current.s3db
-            ctable = s3db.gis_config
+            ctable = db.gis_config
             ltable = db.gis_layer_config
             query = (ltable.id == vars.id) & \
                     (ltable.config_id == ctable.id)
@@ -2218,17 +2205,6 @@ class S3FeatureLayerModel(S3Model):
                                                                         "%s: <a href='http://eden.sahanafoundation.org/wiki/S3XRC/RESTfulAPI/URLFormat#BasicQueryFormat' target='_blank'>Trac</a>" % \
                                                                           T("Uses the REST Query Format defined in"))),
                                         ),
-                                  # SQL Query to determine icon for feed export (e.g. type=1)
-                                  # - currently unused
-                                  # @ToDo: Have both be REST-style with this being used for both & optional additional params available for main map (e.g. obsolete=False&time_between...)
-                                  Field("filter_field",
-                                        label = T("Filter Field")),
-                                  Field("filter_value",
-                                        label = T("Filter Value"),
-                                        comment = DIV(_class="tooltip",
-                                                      _title="%s|%s /" % (T("Filter Value"),
-                                                                          T("If you want several values, then separate with"))),
-                                        ),
                                   # @ToDo: Replace with s3.crud_strings[tablename]?
                                   Field("popup_label",
                                         label = T("Popup Label"),
@@ -2243,7 +2219,7 @@ class S3FeatureLayerModel(S3Model):
                                                       _title="%s|%s" % (T("Popup Fields"),
                                                                         T("Used to build onHover Tooltip & 1st field also used in Cluster Popups to differentiate between records."))),
                                         ),
-                                  Field("use_site",
+                                  Field("use_site", "boolean",
                                         default = False,
                                         label = T("Use Site?"),
                                         comment = DIV(_class="tooltip",
@@ -2254,16 +2230,7 @@ class S3FeatureLayerModel(S3Model):
                                   Field("polygons", "boolean", default=False,
                                         represent = s3_yes_no_represent,
                                         label=T("Display Polygons?")),
-                                  # @ToDo: Move this to the layer_config link table
-                                  Field("style",
-                                        label=T("Style"),
-                                        comment = DIV(_class="tooltip",
-                                                      _title="%s|%s" % (T("Style"),
-                                                                        #T("Either a JSON style to apply to all features or a field to lookup the style from."))),
-                                                                        T("A JSON style to apply to features (normally used for Polygons)."))),
-                                        ),
                                   gis_opacity()(),
-                                  # @ToDo: Expose the Graphic options
                                   gis_refresh()(),
                                   cluster_attribute()(),
                                   cluster_distance()(),
@@ -2291,7 +2258,6 @@ class S3FeatureLayerModel(S3Model):
 
         self.configure(tablename,
                         onaccept=gis_layer_onaccept,
-                        onvalidation=self.gis_layer_feature_onvalidation,
                         super_entity="gis_layer_entity",
                         deduplicate=self.gis_layer_feature_deduplicate,
                         list_fields=["id",
@@ -2300,8 +2266,6 @@ class S3FeatureLayerModel(S3Model):
                                      "controller",
                                      "function",
                                      "filter",
-                                     #"filter_field",
-                                     #"filter_value",
                                      "popup_label",
                                      "popup_fields",
                                      "dir",
@@ -2333,17 +2297,6 @@ class S3FeatureLayerModel(S3Model):
         # ---------------------------------------------------------------------
         return Storage(
             )
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_layer_feature_onvalidation(form):
-        """
-            Ensure that Style JSON can be loaded by json.loads()
-        """
-
-        vars = form.vars
-        if "style" in vars and vars.style:
-            vars.style = vars.style.replace("'", "\"")
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3237,18 +3190,6 @@ class S3MapModel(S3Model):
                                    comment=DIV(_class="tooltip",
                                                _title="%s|%s" % (T("Password"),
                                                                  T("Optional password for HTTP Basic Authentication.")))),
-                             # @ToDo: Replace with Style JSON
-                             Field("style_field",
-                                   label=T("Style Field"),
-                                   comment=DIV(_class="tooltip",
-                                               _title="%s|%s" % (T("Style Field"),
-                                                                 T("Optional. If you wish to style the features based on values of an attribute, select the attribute to use here.")))),
-                             Field("style_values",
-                                   label=T("Style Values"),
-                                   default="{}",
-                                   comment=DIV(_class="stickytip",
-                                               _title="%s|%s" % (T("Style Values"),
-                                                                 T("Format the list of attribute values & the RGB value to use for these as a JSON object, e.g.: {Red: '#FF0000', Green: '#00FF00', Yellow: '#FFFF00'}")))),
                              Field("geometryName",
                                    label=T("Geometry Name"),
                                    default="the_geom",
@@ -3351,6 +3292,7 @@ class S3MapModel(S3Model):
                                    label=FORMAT,
                                    requires=IS_NULL_OR(IS_IN_SET(wms_img_formats)),
                                    default="image/png"),
+                             # NB This is a WMS-server-side style NOT an internal JSON style
                              Field("style", length=32,
                                    label=T("Style"),
                                    comment=DIV(_class="tooltip",
@@ -3728,6 +3670,10 @@ class S3MapModel(S3Model):
                 fname = field_defn.GetName()
                 if fname.lower() == "id":
                     fname = "id_orig"
+                elif fname.lower() == "lat":
+                    fname = "lat_orig"
+                elif fname.lower() == "lon":
+                    fname = "lon_orig"
                 else:
                     try:
                         db.check_reserved_keyword(fname)
@@ -3766,20 +3712,23 @@ class S3MapModel(S3Model):
 
                 # Get the Geometry
                 geom = feature.GetGeometryRef()
-                if reproject:
-                    geom.Transform(coordTransform)
                 if geom is None:
                     lat = lon = wkt = None
-                if geom_type == wkbPoint:
-                    lon = geom.GetX()
-                    lat = geom.GetY()
-                    wkt = "POINT(%f %f)" % (lon, lat)
                 else:
-                    wkt = geom.ExportToWkt()
-                    # @ToDo: Centroids?
-                    #lat = 
-                    #lon = 
-                    # @ToDo: Bounds?
+                    if reproject:
+                        geom.Transform(coordTransform)
+                    if geom_type == wkbPoint:
+                        lon = geom.GetX()
+                        lat = geom.GetY()
+                        wkt = "POINT(%f %f)" % (lon, lat)
+                    else:
+                        wkt = geom.ExportToWkt()
+                        centroid = geom.Centroid()
+                        lon = centroid.GetX()
+                        lat = centroid.GetY()
+                        # @ToDo: Bounds?
+                f["lat"] = lat
+                f["lon"] = lon
                 f["wkt"] = wkt
                 if spatialdb:
                     f["the_geom"] = wkt
@@ -3799,7 +3748,9 @@ class S3MapModel(S3Model):
                                       data = data)
 
             # Create Database table to store these features in
-            Fields = [Field("wkt", "text"),
+            Fields = [Field("lat", "float"),
+                      Field("lon", "float"),
+                      Field("wkt", "text"),
                       Field("layer_id", table),
                       ]
             append = Fields.append
@@ -3814,7 +3765,6 @@ class S3MapModel(S3Model):
             # Clear old data if-any
             dtable.truncate()
             # Populate table with data
-            # @ToDo: PostGIS when-available
             for feature in features:
                 dtable.insert(**feature)
 
@@ -4015,8 +3965,8 @@ def gis_opacity():
 # =============================================================================
 def gis_refresh():
     T = current.T
-    return S3ReusableField("refresh", "integer", default=900,        # 15 minutes
-                           requires = IS_INT_IN_RANGE(10, 86400),    # 10 seconds - 24 hours
+    return S3ReusableField("refresh", "integer", default=900,       # 15 minutes
+                           requires = IS_INT_IN_RANGE(0, 86400),    # 0 seconds - 24 hours
                            label = T("Refresh Rate (seconds)"))
 
 # =============================================================================
