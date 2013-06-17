@@ -148,6 +148,7 @@ def currency_represent(v):
     """
         Custom Representation of Currencies
     """
+
     if v == "USD":
         return "$"
     elif v == "AUD":
@@ -174,17 +175,20 @@ def location_represent(id, row=None):
                                                 table.L3,
                                                 limitby=(0, 1)).first()
 
-    if row.L3:
-        represent = "%s | %s | %s" % (s3_unicode(row.L1) if row.L1 else "",
-                                      s3_unicode(row.L2) if row.L2 else "",
-                                      s3_unicode(row.L3) if row.L3 else "",
+    L1 = row.L2
+    L2 = row.L2
+    L3 = row.L3
+    if L3:
+        represent = "%s | %s | %s" % (s3_unicode(L1) if L1 else "",
+                                      s3_unicode(L2) if L2 else "",
+                                      s3_unicode(L3) if L3 else "",
                                       )
-    elif row.L2:
-        represent = "%s | %s" % (s3_unicode(row.L1) if row.L1 else "",
-                                 s3_unicode(row.L2) if row.L2 else "",
+    elif L2:
+        represent = "%s | %s" % (s3_unicode(L1) if L1 else "",
+                                 s3_unicode(L2) if L2 else "",
                                  )
-    elif row.L1:
-        represent = row.L1
+    elif L1:
+        represent = s3_unicode(L1)
     else:
         represent = current.messages["NONE"]
 
@@ -500,6 +504,21 @@ def render_events(listid, resource, rfields, record, **attr):
     return item
 
 # -----------------------------------------------------------------------------
+def quote_unicode(s):
+    """
+        Quote unicode strings for URLs for Rocket
+    """
+
+    chars = []
+    for char in s:
+        o = ord(char)
+        if o < 128:
+            chars.append(char)
+        else:
+            chars.append(hex(o).replace("0x", "%").upper())
+    return "".join(chars)
+
+# -----------------------------------------------------------------------------
 def render_locations(listid, resource, rfields, record, **attr):
     """
         Custom dataList item renderer for Locations on the Selection Page
@@ -602,12 +621,22 @@ def render_locations(listid, resource, rfields, record, **attr):
             tally_activities += 1
         elif series == "Report":
             tally_reports += 1
-    
+
+    # https://code.google.com/p/web2py/issues/detail?id=1533
+    public_url = current.deployment_settings.get_base_public_url()
+    if public_url.startswith("http://127.0.0.1"):
+        # Assume Rocket
+        image = quote_unicode(s3_unicode(name))
+    else:
+        # Assume Apache or Cherokee
+        image = s3_unicode(name)
+
     # Render the item
     item = DIV(DIV(A(IMG(_class="media-object",
-                         _src=URL(c="static",
-                                  f="themes",
-                                  args=["DRMP", "img", "%s.png" % s3_unicode(name)]),
+                         _src="%s/%s.png" % (URL(c="static",
+                                                 f="themes",
+                                                 args=["DRMP", "img"]),
+                                             image),
                          ),
                      _class="pull-left",
                      _href=location_url,
@@ -1656,7 +1685,9 @@ def customize_cms_post_fields():
 # -----------------------------------------------------------------------------
 def cms_post_popup(r):
     """
-        Customized popup for cms_post resource
+        Customized Map popup for cms_post resource
+        - style like the cards
+        - currently unused
     """
 
     T = current.T
@@ -1956,9 +1987,20 @@ def customize_cms_post(**attr):
              r.method != "search":
             # Map Popups
             table = r.table
-            table.created_by.represent = s3_auth_user_represent_name
-            table.created_on.represent = datetime_represent
             table.location_id.represent = location_represent
+            table.created_by.represent = s3_auth_user_represent_name
+            # Used by default popups
+            series = T(table.series_id.represent(r.record.series_id))
+            s3.crud_strings["cms_post"].title_display = "%(series)s Details" % dict(series=series)
+            current.s3db.configure("cms_post", popup_url="")
+            table.avatar.readable = False
+            table.body.label = ""
+            table.expired.readable = False
+            table.replies.readable = False
+            table.created_by.readable = True
+            table.created_by.label = T("Author")
+            # Used by cms_post_popup
+            #table.created_on.represent = datetime_represent
 
         return True
     s3.prep = custom_prep
@@ -1978,7 +2020,8 @@ def customize_cms_post(**attr):
         elif r.representation == "plain" and \
              r.method != "search":
             # Map Popups
-            output = cms_post_popup(r)
+            #output = cms_post_popup(r)
+            pass
 
         return output
     s3.postp = custom_postp
