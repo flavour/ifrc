@@ -318,6 +318,9 @@ class S3OrganisationModel(S3Model):
                                                joinby="organisation_id",
                                                key="group_id",
                                                actuate="hide"))
+        # Format for filter_widget
+        add_component("org_group_membership",
+                      org_organisation="organisation_id")
 
         # Sites
         add_component("org_site",
@@ -349,6 +352,9 @@ class S3OrganisationModel(S3Model):
                                                joinby="organisation_id",
                                                key="location_id",
                                                actuate="hide"))
+        # Format for filter_widget
+        add_component("org_organisation_location",
+                      org_organisation="organisation_id")
 
         # Catalogs
         add_component("supply_catalog",
@@ -364,6 +370,9 @@ class S3OrganisationModel(S3Model):
                                                joinby="organisation_id",
                                                key="sector_id",
                                                actuate="hide"))
+        # Format for filter_widget
+        add_component("org_sector_organisation",
+                      org_organisation="organisation_id")
 
         # Services
         add_component("org_service",
@@ -371,6 +380,9 @@ class S3OrganisationModel(S3Model):
                                                joinby="organisation_id",
                                                key="service_id",
                                                actuate="hide"))
+        # Format for filter_widget
+        add_component("org_service_organisation",
+                      org_organisation="organisation_id")
 
         # Assets
         add_component("asset_asset",
@@ -1079,7 +1091,7 @@ class S3OrganisationResourceModel(S3Model):
 # =============================================================================
 class S3OrganisationSectorModel(S3Model):
     """
-        Organisation Service Model
+        Organisation Sector Model
     """
 
     names = ["org_sector",
@@ -1904,6 +1916,7 @@ class S3FacilityModel(S3Model):
         T = current.T
         db = current.db
 
+        add_component = self.add_component
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
@@ -2189,11 +2202,14 @@ class S3FacilityModel(S3Model):
                   )
 
         # Groups
-        self.add_component("org_group",
-                           org_facility=Storage(link="org_facility_group",
-                                                joinby="facility_id",
-                                                key="group_id",
-                                                actuate="hide"))
+        add_component("org_group",
+                      org_facility=Storage(link="org_facility_group",
+                                           joinby="facility_id",
+                                           key="group_id",
+                                           actuate="hide"))
+        # Format for filter_widgets
+        add_component("org_facility_group",
+                      org_facility="facility_id")
 
         # ---------------------------------------------------------------------
         # Facilities <> Organisation Groups Link Table
@@ -3852,6 +3868,7 @@ def org_organisation_controller():
     s3.postp = postp
 
     output = current.rest_controller("org", "organisation",
+                                     hide_filter = False,
                                      # Don't allow components with components (such as document) to breakout from tabs
                                      native=False,
                                      rheader=org_rheader,
