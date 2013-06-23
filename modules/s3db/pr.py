@@ -32,7 +32,7 @@ __all__ = ["S3PersonEntity",
            "S3PersonModel",
            "S3GroupModel",
            "S3ContactModel",
-           "S3PersonAddressModel",
+           "S3AddressModel",
            "S3PersonImageModel",
            "S3PersonIdentityModel",
            "S3PersonEducationModel",
@@ -754,23 +754,6 @@ class S3PersonModel(S3Model):
 
         add_component("member_membership", pr_person="person_id")
 
-        # Email
-        add_component("pr_contact",
-                      pr_person=dict(name="email",
-                                    joinby="pe_id",
-                                    pkey="pe_id",
-                                    filterby="contact_method",
-                                    filterfor=["EMAIL"],
-                                    ))
-        # Mobile Phone
-        add_component("pr_contact",
-                      pr_person=dict(name="phone",
-                                     joinby="pe_id",
-                                     pkey="pe_id",
-                                     filterby="contact_method",
-                                     filterfor=["SMS"],
-                                     ))
-
         # HR Record
         add_component("hrm_human_resource", pr_person="person_id")
 
@@ -1132,7 +1115,8 @@ class S3GroupModel(S3Model):
                   )
 
         # Reusable field
-        if current.request.controller in ("hrm", "vol"):
+        if current.request.controller in ("hrm", "vol") and \
+           current.deployment_settings.get_hrm_teams() == "Team":
             label = T("Add Team")
             title = T("Create Team")
             tooltip = T("Create a new Team.")
@@ -1323,7 +1307,7 @@ class S3GroupModel(S3Model):
 
 # =============================================================================
 class S3ContactModel(S3Model):
-    """ Person Contacts """
+    """ Person Entity Contacts - for Persons & Organisations """
 
     names = ["pr_contact",
              "pr_contact_emergency"
@@ -1376,8 +1360,9 @@ class S3ContactModel(S3Model):
         table.pe_id.requires = IS_ONE_OF(current.db, "pr_pentity.pe_id",
                                          pr_pentity_represent,
                                          orderby="instance_type",
-                                         filterby="instance_type",
-                                         filter_opts=("pr_person", "pr_group"))
+                                         #filterby="instance_type",
+                                         #filter_opts=("pr_person", "pr_group"),
+                                         )
 
         # CRUD Strings
         current.response.s3.crud_strings[tablename] = Storage(
@@ -1435,20 +1420,24 @@ class S3ContactModel(S3Model):
     def pr_contact_onvalidation(form):
         """ Contact form validation """
 
-        contact_method = form.vars.contact_method
-        if not contact_method and "id" in form.vars:
+        vars = form.vars
+        contact_method = vars.contact_method
+        if not contact_method and "id" in vars:
             ctable = current.s3db.pr_contact
-            record = current.db(ctable._id == form.vars.id).select(
+            record = current.db(ctable._id == vars.id).select(
                                 ctable.contact_method,
                                 limitby=(0, 1)).first()
             if record:
                 contact_method = record.contact_method
 
         if contact_method == "EMAIL":
-            email, error = IS_EMAIL()(form.vars.value)
+            email, error = IS_EMAIL()(vars.value)
             if error:
                 form.errors.value = current.T("Enter a valid email")
-        return False
+        elif contact_method in ("SMS", "HOME_PHONE", "WORK_PHONE"):
+            phone, error = IS_MATCH(multi_phone_number_pattern)(vars.value)
+            if error:
+                form.errors.value = current.T("Enter a valid phone number")
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1499,8 +1488,8 @@ class S3ContactModel(S3Model):
                 item.method = item.METHOD.UPDATE
 
 # =============================================================================
-class S3PersonAddressModel(S3Model):
-    """ Addresses for Persons """
+class S3AddressModel(S3Model):
+    """ Addresses for Person Entities: Persons and Organisations """
 
     names = ["pr_address",
              "pr_address_type_opts"
@@ -1541,8 +1530,9 @@ class S3PersonAddressModel(S3Model):
         table.pe_id.requires = IS_ONE_OF(current.db, "pr_pentity.pe_id",
                                          pr_pentity_represent,
                                          orderby="instance_type",
-                                         filterby="instance_type",
-                                         filter_opts=("pr_person", "pr_group"))
+                                         #filterby="instance_type",
+                                         #filter_opts=("pr_person", "pr_group"),
+                                         )
 
         # CRUD Strings
         ADD_ADDRESS = T("Add Address")
@@ -3547,39 +3537,6 @@ def pr_pentity_represent(id, row=None, show_label=True,
         pe_str = "[%s] (%s)" % (label,
                                 instance_type_nice)
     return pe_str
-
-# =============================================================================
-#def pr_person_represent(id, row=None, show_link=False):
-#    """
-#        Represent a Person in option fields or list views
-#
-#        @param show_link: whether to make the output into a hyperlink
-#    """
-#
-#    if row:
-#        name = s3_fullname(row)
-#        id = row.id
-#    elif not id:
-#        return current.messages["NONE"]
-#    else:
-#        name = current.cache.ram("pr_person_%s" % id,
-#                                 lambda: s3_fullname(id),
-#                                 time_expire=60)
-#    if show_link:
-#        request = current.request
-#        group = request.get_vars.get("group", None)
-#        c = request.controller
-#        if group == "staff" or \
-#           c == "hrm":
-#            controller = "hrm"
-#        elif group == "volunteer" or \
-#             c == "vol":
-#            controller = "vol"
-#        else:
-#            controller = "pr"
-#        name = A(name,
-#                 _href = URL(c=controller, f="person", args=[id]))
-#    return name
 
 # =============================================================================
 class pr_PersonRepresent(S3Represent):

@@ -364,31 +364,31 @@ class S3XML(S3Codec):
             root = etree.Element(self.TAG.root)
         if elements is not None or len(root):
             success = True
-        set = root.set
-        set(ATTRIBUTE.success, json.dumps(success))
+        set_attribute = root.set
+        set_attribute(ATTRIBUTE.success, json.dumps(success))
         if start is not None:
-            set(ATTRIBUTE.start, str(start))
+            set_attribute(ATTRIBUTE.start, str(start))
         if limit is not None:
-            set(ATTRIBUTE.limit, str(limit))
+            set_attribute(ATTRIBUTE.limit, str(limit))
         if results is not None:
-            set(ATTRIBUTE.results, str(results))
+            set_attribute(ATTRIBUTE.results, str(results))
         if elements is not None:
             root.extend(elements)
         if domain:
-            set(ATTRIBUTE.domain, self.domain)
+            set_attribute(ATTRIBUTE.domain, self.domain)
         if url:
-            set(ATTRIBUTE.url, current.response.s3.base_url)
+            set_attribute(ATTRIBUTE.url, current.response.s3.base_url)
         if maxbounds:
             # @ToDo: This should be done based on the features, not just the config
             bounds = current.gis.get_bounds()
-            set(ATTRIBUTE.latmin,
-                str(bounds["lat_min"]))
-            set(ATTRIBUTE.latmax,
-                str(bounds["lat_max"]))
-            set(ATTRIBUTE.lonmin,
-                str(bounds["lon_min"]))
-            set(ATTRIBUTE.lonmax,
-                str(bounds["lon_max"]))
+            set_attribute(ATTRIBUTE.latmin,
+                          str(bounds["lat_min"]))
+            set_attribute(ATTRIBUTE.latmax,
+                          str(bounds["lat_max"]))
+            set_attribute(ATTRIBUTE.lonmin,
+                          str(bounds["lon_min"]))
+            set_attribute(ATTRIBUTE.lonmax,
+                          str(bounds["lon_max"]))
         return etree.ElementTree(root)
 
     # -------------------------------------------------------------------------
@@ -725,7 +725,6 @@ class S3XML(S3Codec):
                    record,
                    element,
                    rmap,
-                   marker=None,
                    locations=None,
                    master=True,
                    ):
@@ -736,8 +735,7 @@ class S3XML(S3Codec):
             @param record: the particular record
             @param element: the XML element
             @param rmap: list of references to encode
-            @param marker: marker dict
-            @param locations: locations dict
+            @param locations: dictionary of location data from gis.get_location_data()
             @param master: True if this is the master resource
         """
 
@@ -756,9 +754,7 @@ class S3XML(S3Codec):
 
         ATTRIBUTE = self.ATTRIBUTE
 
-        marker_url = None
-        symbol = None
-        # Retrieve data prepared earlier in gis.get_locations_and_popups()
+        # Retrieve data prepared earlier in gis.get_location_data()
         if locations:
             latlons = locations.get("latlons", None)
             geojsons = locations.get("geojsons", None)
@@ -775,21 +771,6 @@ class S3XML(S3Codec):
             markers = None
             tooltips = None
             attributes = None
-        if marker and format == "kml":
-            _marker = marker.get("image", None)
-            if _marker:
-                # Quicker to download Icons from Static
-                # also doesn't require authentication so KML files can work in
-                # Google Earth
-                download_url = "%s/%s/static/img/markers" % \
-                    (settings.get_base_public_url(),
-                     request.application)
-                marker_url = "%s/%s" % (download_url, _marker)
-        if format == "gpx":
-            if marker:
-                symbol = marker.get("gps_marker", gis.DEFAULT_SYMBOL)
-            else:
-                symbol = gis.DEFAULT_SYMBOL
 
         table = resource.table
         tablename = resource.tablename
@@ -979,10 +960,34 @@ class S3XML(S3Codec):
                     continue
                 attr[ATTRIBUTE.lat] = "%.4f" % lat
                 attr[ATTRIBUTE.lon] = "%.4f" % lon
-                if marker_url:
-                    attr[ATTRIBUTE.marker] = marker_url
-                if symbol:
-                    attr[ATTRIBUTE.sym] = symbol
+
+                if markers and tablename in markers:
+                    _markers = markers[tablename]
+                    if _markers.get("image", None):
+                        # Single Marker here
+                        m = _markers
+                    else:
+                        # We have a separate Marker per-Feature
+                        m = _markers[id]
+                    if m:
+                        if format == "gpx":
+                            attr[ATTRIBUTE.sym] = m.get("gps_marker",
+                                                        gis.DEFAULT_SYMBOL)
+                        else:
+                            if format == "geojson":
+                                # Assume being used within the Sahana Mapping client
+                                # so use local URLs to keep filesize down
+                                download_url = "/%s/static/img/markers" % \
+                                    request.application
+                            else:
+                                # Assume being used outside the Sahana Mapping client
+                                # so use public URLs
+                                download_url = "%s/%s/static/img/markers" % \
+                                    (settings.get_base_public_url(), request.application)
+                            attr[ATTRIBUTE.marker_url] = "%s/%s" % (download_url,
+                                                                    m["image"])
+                            attr[ATTRIBUTE.marker_height] = str(m["height"])
+                            attr[ATTRIBUTE.marker_width] = str(m["width"])
 
             if LatLon or polygon:
                 # Build the URL for the onClick Popup contents => only for
@@ -1003,23 +1008,16 @@ class S3XML(S3Codec):
                                            url, id)
                     attr[ATTRIBUTE.popup_url] = url
 
-                if markers and tablename in markers:
-                    marker = markers[tablename][id]
-                    attr[ATTRIBUTE.marker_url] = URL(c="static", f="img",
-                                                     args=["markers",
-                                                           marker["image"]])
-                    attr[ATTRIBUTE.marker_height] = str(marker["height"])
-                    attr[ATTRIBUTE.marker_width] = str(marker["width"])
-
                 if tooltips and tablename in tooltips:
                     # Feature Layer / Resource
                     # Retrieve the HTML for the onHover Tooltip
                     tooltip = tooltips[tablename][id]
-                    try:
-                        # encode suitable for use as XML attribute
-                        tooltip = tooltip.decode("utf-8")
-                    except:
-                        pass
+                    if type(tooltip) is not unicode:
+                        try:
+                            # encode suitable for use as XML attribute
+                            tooltip = tooltip.decode("utf-8")
+                        except:
+                            pass
                     else:
                         attr[ATTRIBUTE.popup] = tooltip
 
@@ -1385,7 +1383,7 @@ class S3XML(S3Codec):
                         record[f] = role.id
                 continue
             
-            if hasattr(table, f): #f in table.fields:
+            if hasattr(table, f): # f in table.fields:
                 v = value = element.get(f, None)
                 if value is not None:
                     field_type = str(table[f].type)
@@ -1410,8 +1408,9 @@ class S3XML(S3Codec):
         # Fields
         xml_decode = cls.xml_decode
         for child in element.findall("data"):
+            error = None
             f = child.get(FIELD, None)
-            if not f or not hasattr(table, f): #f not in table.fields:
+            if not f or not hasattr(table, f): # f not in table.fields:
                 continue
             if f in IGNORE_FIELDS or f in skip:
                 continue
@@ -1419,8 +1418,8 @@ class S3XML(S3Codec):
             if field_type in ("id", "blob"):
                 continue
             elif field_type == "upload":
-                download_url = child.get(cls.ATTRIBUTE["url"], None)
-                filename = child.get(cls.ATTRIBUTE["filename"], None)
+                download_url = child.get(ATTRIBUTE["url"], None)
+                filename = child.get(ATTRIBUTE["filename"], None)
                 upload = None
                 if filename and filename in files:
                     # We already have the file cached
@@ -1458,21 +1457,24 @@ class S3XML(S3Codec):
             else:
                 value = child.get(VALUE, None)
 
-            error = None
             skip_validation = False
+            is_text = field_type in ("string", "text")
 
             if value is None:
+                decode_value = not is_text
                 if field_type == "password":
                     value = child.text
-                    # Do not encrypt the password if it already
+                    # Do not re-encrypt the password if it already
                     # comes encrypted:
                     skip_validation = True
                 else:
                     value = xml_decode(child.text)
+            else:
+                decode_value = True
 
-            if value is None and field_type in ("string", "text"):
+            if value is None and is_text:
                 value = ""
-            elif value == "" and not field_type in ("string", "text"):
+            elif value == "" and not is_text:
                 value = None
 
             if value is not None:
@@ -1481,14 +1483,18 @@ class S3XML(S3Codec):
                                                   field_type=field_type)
                     skip_validation = True
                     v = value
-                elif isinstance(value, basestring) and len(value):
+                elif field_type == "upload":
+                    pass
+                elif isinstance(value, basestring) \
+                     and len(value) \
+                     and decode_value:
                     try:
                         _value = json.loads(value)
                         if _value != float("inf"):
                             # e.g. an HTML_COLOUR of 98E600
                             value = _value
                     except:
-                        pass
+                        error = sys.exc_info()[1]
 
                 if validate is not None and not skip_validation:
                     if not isinstance(value, (basestring, list, tuple)):
@@ -1571,12 +1577,15 @@ class S3XML(S3Codec):
                     pass
 
         if options:
+            ATTRIBUTE = cls.ATTRIBUTE
+            TAG = cls.TAG
+            SubElement = etree.SubElement
             if parent is not None:
-                select = etree.SubElement(parent, cls.TAG.select)
+                select = SubElement(parent, TAG.select)
             else:
-                select = etree.Element(cls.TAG.select)
-            select.set(cls.ATTRIBUTE.name, fieldname)
-            select.set(cls.ATTRIBUTE.id,
+                select = etree.Element(TAG.select)
+            select.set(ATTRIBUTE.name, fieldname)
+            select.set(ATTRIBUTE.id,
                        "%s_%s" % (table._tablename, fieldname))
 
             uids = Storage()
@@ -1596,6 +1605,9 @@ class S3XML(S3Codec):
                             uids = Storage((str(r[ktable._id.name]), r[cls.UID])
                                         for r in rows)
 
+            _XML = etree.XML
+            OPTION = TAG.option
+            VALUE = ATTRIBUTE.value
             for (value, text) in options:
                 if show_uids and str(value) in uids:
                     uid = uids[str(value)]
@@ -1603,7 +1615,7 @@ class S3XML(S3Codec):
                     uid = None
                 value = s3_unicode(value)
                 try:
-                    markup = etree.XML(s3_unicode(text))
+                    markup = _XML(s3_unicode(text))
                     text = markup.xpath(".//text()")
                     if text:
                         text = " ".join(text)
@@ -1612,15 +1624,15 @@ class S3XML(S3Codec):
                 except:
                     pass
                 text = s3_unicode(text)
-                option = etree.SubElement(select, cls.TAG.option)
-                option.set(cls.ATTRIBUTE.value, value)
+                option = SubElement(select, OPTION)
+                option.set(VALUE, value)
                 if uid:
                     option.set(cls.UID, uid)
                 option.text = text
         elif parent is not None:
             return None
         else:
-            return etree.Element(cls.TAG.select)
+            return etree.Element(TAG.select)
 
         return select
 
@@ -1649,12 +1661,13 @@ class S3XML(S3Codec):
 
         if table:
             options.set(self.ATTRIBUTE.resource, tablename)
+            get_field_options = self.get_field_options
             for f in table.fields:
                 if fields and f not in fields:
                     continue
-                select = self.get_field_options(table, f,
-                                                parent=options,
-                                                show_uids=show_uids)
+                select = get_field_options(table, f,
+                                           parent=options,
+                                           show_uids=show_uids)
 
         return options
 
@@ -1684,8 +1697,9 @@ class S3XML(S3Codec):
         else:
             fields = etree.Element(self.TAG.fields)
         if table:
+            ATTRIBUTE = self.ATTRIBUTE
             if parent is None:
-                fields.set(self.ATTRIBUTE.resource, tablename)
+                fields.set(ATTRIBUTE.resource, tablename)
             for f in table.fields:
                 ftype = str(table[f].type)
                 # Skip own super links
@@ -1715,16 +1729,17 @@ class S3XML(S3Codec):
                 else:
                     p = None
                 opts = self.get_field_options(table, f, parent=p)
-                field.set(self.ATTRIBUTE.name, f)
-                field.set(self.ATTRIBUTE.type, ftype)
-                field.set(self.ATTRIBUTE.readable, str(readable))
-                field.set(self.ATTRIBUTE.writable, str(writable))
+                set_attribute = field.set
+                set_attribute(ATTRIBUTE.name, f)
+                set_attribute(ATTRIBUTE.type, ftype)
+                set_attribute(ATTRIBUTE.readable, str(readable))
+                set_attribute(ATTRIBUTE.writable, str(writable))
                 has_options = str(opts is not None and
                                   len(opts) and True or False)
-                field.set(self.ATTRIBUTE.has_options, has_options)
+                set_attribute(ATTRIBUTE.has_options, has_options)
                 if labels:
                     label = s3_unicode(table[f].label)
-                    field.set(self.ATTRIBUTE.label, label)
+                    set_attribute(ATTRIBUTE.label, label)
                     comment = table[f].comment
                     if comment:
                         comment = s3_unicode(comment)
@@ -1737,7 +1752,7 @@ class S3XML(S3Codec):
                             from s3utils import s3_debug
                             s3_debug("S3XML.get_fields()", e)
                     if comment:
-                        field.set(self.ATTRIBUTE.comment, comment)
+                        set_attribute(ATTRIBUTE.comment, comment)
         return fields
 
     # -------------------------------------------------------------------------
@@ -2075,21 +2090,22 @@ class S3XML(S3Codec):
 
         elements = error_tree.xpath(".//*[@error]")
         for element in elements:
+            get = element.get
             if element.tag in ("data", "reference"):
                 resource = element.getparent()
-                value = element.get("value")
+                value = get("value")
                 if not value:
                     value = element.text
                 error = "%s, %s: '%s' (value='%s')" % (
                             resource.get("name", None),
-                            element.get("field", None),
-                            element.get("error", None),
+                            get("field", None),
+                            get("error", None),
                             value)
             elif element.tag == "resource":
-                error = "%s: %s" % (element.get("name", None),
-                                    element.get("error", None))
+                error = "%s: %s" % (get("name", None),
+                                    get("error", None))
             else:
-                error = "%s" % element.get("error", None)
+                error = "%s" % get("error", None)
             errors.append(error)
         return errors
 
@@ -2115,16 +2131,23 @@ class S3XML(S3Codec):
 
         import csv
 
-        # Increase field sixe to ne able to import WKTs
+        # Increase field sixe to be able to import WKTs
         csv.field_size_limit(2**20 * 100)  # 100 megs
 
-        root = etree.Element(cls.TAG.table)
+        # Shortcuts
+        ATTRIBUTE = cls.ATTRIBUTE
+        FIELD = ATTRIBUTE.field
+        TAG = cls.TAG
+        COL = TAG.col
+        SubElement = etree.SubElement
+
+        root = etree.Element(TAG.table)
         if resourcename is not None:
-            root.set(cls.ATTRIBUTE.name, resourcename)
+            root.set(ATTRIBUTE.name, resourcename)
 
         def add_col(row, key, value):
-            col = etree.SubElement(row, cls.TAG.col)
-            col.set(cls.ATTRIBUTE.field, s3_unicode(key))
+            col = SubElement(row, COL)
+            col.set(FIELD, s3_unicode(key))
             if value:
                 text = s3_unicode(value).strip()
                 if text.lower() not in ("null", "<null>"):
@@ -2165,8 +2188,9 @@ class S3XML(S3Codec):
             reader = csv.DictReader(source,
                                     delimiter=delimiter,
                                     quotechar=quotechar)
+            ROW = TAG.row
             for r in reader:
-                row = etree.SubElement(root, cls.TAG.row)
+                row = SubElement(root, ROW)
                 for k in r:
                     add_col(row, k, r[k])
                 if extra_data:
