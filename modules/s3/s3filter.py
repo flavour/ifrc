@@ -753,10 +753,11 @@ class S3LocationFilter(S3FilterWidget):
         fields = [field_name] + ["%s$%s" % (field_name, l) for l in levels]
 
         # Find the options
-        rows = resource.select(fields=fields,
-                               start=None,
-                               limit=None,
-                               virtual=False)
+        rows = resource.fast_select(fields=fields,
+                                    start=None,
+                                    limit=None,
+                                    virtual=False,
+                                    as_rows=True)
         # No options?
         if not rows:
             return default
@@ -1052,12 +1053,13 @@ class S3OptionsFilter(S3FilterWidget):
                 multiple = ftype[:5] == "list:"
                 groupby = field if field and not multiple else None
                 virtual = field is None
-                rows = resource.select(fields=[selector],
-                                       start=None,
-                                       limit=None,
-                                       orderby=field,
-                                       groupby=groupby,
-                                       virtual=virtual)
+                rows = resource.fast_select([selector],
+                                            start=None,
+                                            limit=None,
+                                            orderby=field,
+                                            groupby=groupby,
+                                            virtual=virtual,
+                                            as_rows=True)
                 opt_keys = []
                 if rows:
                     if multiple:
@@ -1212,9 +1214,25 @@ class S3FilterForm(object):
             formstyle = self._formstyle
 
         rows = self._render_widgets(resource,
-                                    get_vars=get_vars,
+                                    get_vars=get_vars or {},
                                     alias=alias,
                                     formstyle=formstyle)
+
+        advanced = self.opts.get("advanced", False)
+        if advanced:
+            _class = "filter-advanced"
+            if advanced is True:
+                label = current.T("More Options")
+            elif isinstance(advanced, (list, tuple)):
+                label = advanced[0]
+                _class = "%s %s" % (advanced[1], _class)
+            else:
+                label = advanced
+            advanced = INPUT(_type="button",
+                             _value=label,
+                             _class=_class)
+
+            rows.append(formstyle(None, "", advanced, ""))
 
         submit = self.opts.get("submit", False)
         if submit:
@@ -1251,7 +1269,7 @@ class S3FilterForm(object):
 
             rows.append(formstyle(None, "", submit, ""))
 
-        # Adapt to formstyle: only render a TABLE if formstyle returns TRs
+        # Adapt to formstyle: render a TABLE only if formstyle returns TRs
         if rows:
             elements = rows[0]
             if not isinstance(elements, (list, tuple)):
@@ -1263,6 +1281,8 @@ class S3FilterForm(object):
             else:
                 form = FORM(DIV(rows), **self.attr)
 
+        # Put a copy of formstyle into the form for access by the view
+        form.formstyle = formstyle
         return form
 
     # -------------------------------------------------------------------------

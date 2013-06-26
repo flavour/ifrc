@@ -567,6 +567,9 @@ class S3ProjectModel(S3Model):
                                               joinby="project_id",
                                               key="sector_id",
                                               actuate="hide"))
+        # Format needed by S3Filter
+        add_component("project_sector_project",
+                      project_project="project_id")
 
         # Themes
         add_component("project_theme",
@@ -574,6 +577,9 @@ class S3ProjectModel(S3Model):
                                               joinby="project_id",
                                               key="theme_id",
                                               actuate="hide"))
+        # Format needed by S3Filter
+        add_component("project_theme_project",
+                      project_project="project_id")
 
         # DRR
         if mode_drr:
@@ -5326,14 +5332,11 @@ class project_LocationRepresent(S3Represent):
         else:
             # Location is just a way to display Projects on a map
             self.community = False
-        if settings.get_project_codes():
-            self.use_codes = True
-        else:
-            self.use_codes = False
         if settings.get_gis_countries() == 1:
             self.multi_country = False
         else:
             self.multi_country = True
+        self.use_codes = settings.get_project_codes()
 
         self.lookup_rows = self.custom_lookup_rows
 
@@ -5405,58 +5408,59 @@ class project_LocationRepresent(S3Represent):
         name = row.name
         level = row.level
         if level == "L0":
-            return name
-        locations = [name]
-        lappend = locations.append
-        matched = False
-        L5 = row.L5
-        if L5:
-            if L5 == name:
-                matched = True
-            else:
-                lappend(L5)
-        L4 = row.L4
-        if L4:
-            if L4 == name:
-                if matched:
-                    lappend(L4)
-                matched = True
-            else:
-                lappend(L4)
-        L3 = row.L3
-        if L3:
-            if L3 == name:
-                if matched:
-                    lappend(L3)
-                matched = True
-            else:
-                lappend(L3)
-        L2 = row.L2
-        if L2:
-            if L2 == name:
-                if matched:
-                    lappend(L2)
-                matched = True
-            else:
-                lappend(L2)
-        L1 = row.L1
-        if L1:
-            if L1 == name:
-                if matched:
-                    lappend(L1)
-                matched = True
-            else:
-                lappend(L1)
-        if self.multi_country:
-            L0 = row.L0
-            if L0:
-                if L0 == name:
-                    if matched:
-                        lappend(L0)
+            location = name
+        else:
+            locations = [name]
+            lappend = locations.append
+            matched = False
+            L5 = row.L5
+            if L5:
+                if L5 == name:
                     matched = True
                 else:
-                    lappend(L0)
-        location = ", ".join(locations)
+                    lappend(L5)
+            L4 = row.L4
+            if L4:
+                if L4 == name:
+                    if matched:
+                        lappend(L4)
+                    matched = True
+                else:
+                    lappend(L4)
+            L3 = row.L3
+            if L3:
+                if L3 == name:
+                    if matched:
+                        lappend(L3)
+                    matched = True
+                else:
+                    lappend(L3)
+            L2 = row.L2
+            if L2:
+                if L2 == name:
+                    if matched:
+                        lappend(L2)
+                    matched = True
+                else:
+                    lappend(L2)
+            L1 = row.L1
+            if L1:
+                if L1 == name:
+                    if matched:
+                        lappend(L1)
+                    matched = True
+                else:
+                    lappend(L1)
+            if self.multi_country:
+                L0 = row.L0
+                if L0:
+                    if L0 == name:
+                        if matched:
+                            lappend(L0)
+                        matched = True
+                    else:
+                        lappend(L0)
+            location = ", ".join(locations)
 
         if community:
             return s3_unicode(location)

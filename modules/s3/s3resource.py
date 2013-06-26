@@ -698,12 +698,12 @@ class S3Resource(object):
                         # Already an aggregation
                         orderby.append(orderby_field)
                         continue
-                    elif type(f) is Field and op == db._adapter.INVERT:
+                    elif isinstance(f, Field) and op == db._adapter.INVERT:
                         direction = "desc"
                     else:
                         # Other expression - not supported
                         continue
-                elif type(orderby_field) is Field:
+                elif isinstance(orderby_field, Field):
                     direction = "asc"
                     f = orderby_field
                 elif isinstance(orderby_field, str):
@@ -1001,12 +1001,12 @@ class S3Resource(object):
                     if op == db._adapter.AGGREGATE:
                         # Already an aggregation
                         expression = item
-                    elif type(f) is Field and op == db._adapter.INVERT:
+                    elif isinstance(f, Field) and op == db._adapter.INVERT:
                         direction = "desc"
                     else:
                         # Other expression - not supported
                         continue
-                elif type(item) is Field:
+                elif isinstance(item, Field):
                     direction = "asc"
                     f = item
                 elif isinstance(item, str):
@@ -1130,7 +1130,7 @@ class S3Resource(object):
             gappend = groupby.append
             for item in items:
                 tname = None
-                if type(item) is Field:
+                if isinstance(item, Field):
                     f = item
                 elif isinstance(item, str):
                     fn = item.strip()
@@ -1248,7 +1248,7 @@ class S3Resource(object):
         output = {"rfields": dfields, "numrows": totalrows, "ids": ids}
 
         if not rows:
-            output["data"] = []
+            output["rows"] = []
             return output
 
         # Extract master rows
@@ -1454,7 +1454,7 @@ class S3Resource(object):
         #    _debug("Representation complete after %s seconds" % duration)
         #_debug("fast_select DONE")
 
-        output["data"] = [results[record_id] for record_id in page]
+        output["rows"] = [results[record_id] for record_id in page]
         return output
         
     # -------------------------------------------------------------------------
@@ -1843,7 +1843,7 @@ class S3Resource(object):
         table = self.table
 
         records = self.fast_select([self._id.name])
-        for record in records["data"]:
+        for record in records["rows"]:
 
             record_id = record[str(self._id)]
 
@@ -2097,9 +2097,9 @@ class S3Resource(object):
                                 represent=True)
 
         # Generate the data table
-        if data["data"]:
+        if data["rows"]:
             rfields = data["rfields"]
-            dt = S3DataTable(rfields, data["data"], orderby=orderby)
+            dt = S3DataTable(rfields, data["rows"], orderby=orderby)
         else:
             dt = None
         return dt, data["numrows"], data["ids"]
@@ -2161,7 +2161,7 @@ class S3Resource(object):
         numrows = data["numrows"]
         dl = S3DataList(self,
                         fields,
-                        data["data"],
+                        data["rows"],
                         listid=listid,
                         start=start,
                         limit=limit,
@@ -2216,7 +2216,7 @@ class S3Resource(object):
                                 limit=limit,
                                 orderby=orderby,
                                 left=left,
-                                distinct=distinct)["data"]
+                                distinct=distinct)["rows"]
 
         return json.dumps(data)
 
@@ -2551,7 +2551,7 @@ class S3Resource(object):
 
         rows = self.fast_select(fields,
                                 start=start,
-                                limit=limit)["data"]
+                                limit=limit)["rows"]
 
         if rows:
             ID = str(table._id)
@@ -5248,7 +5248,7 @@ class S3FieldSelector(object):
 
         t = type(field)
         
-        if t is Field:
+        if isinstance(field, Field):
             f = field
             colname = str(field)
             tname, fname = colname.split(".", 1)
@@ -6820,7 +6820,7 @@ class S3URLQuery(object):
             Parse a URL query value
 
             @param value: the value
-            @returns: the parsed value
+            @return: the parsed value
         """
 
         uquote = lambda w: w.replace('\\"', '\\"\\') \

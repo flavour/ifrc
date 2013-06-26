@@ -265,6 +265,8 @@ def s3_rest_controller(prefix=None, resourcename=None, **attr):
     # Configure standard method handlers
     set_handler = r.set_handler
     set_handler("barchart", s3_barchart)
+    from s3db.cms import S3CMS
+    set_handler("cms", S3CMS)
     set_handler("compose", s3base.S3Compose)
     # @ToDo: Make work in Component Tabs:
     set_handler("copy", lambda r, **attr: \
@@ -277,6 +279,7 @@ def s3_rest_controller(prefix=None, resourcename=None, **attr):
     set_handler("profile", s3base.S3Profile)
     set_handler("report", s3base.S3Report)
     set_handler("report2", s3base.S3Report2) # temporary setting for testing
+    set_handler("search_ac", s3base.search_ac)
     set_handler("summary", s3base.S3Summary)
     
     # Don't load S3PDF unless needed (very slow import with Reportlab)
@@ -303,7 +306,13 @@ def s3_rest_controller(prefix=None, resourcename=None, **attr):
     output = r(**attr)
 
     if isinstance(output, dict) and \
-       (not method or method in ("report", "search", "datatable", "summary")):
+       method in (None,
+                  "report",
+                  "search",
+                  "datatable",
+                  "datatable_f",
+                  "summary"):
+                      
         if s3.actions is None:
 
             # Add default action buttons
@@ -356,7 +365,11 @@ def s3_rest_controller(prefix=None, resourcename=None, **attr):
                 add_btn = A(label, _href=url, _class="action-btn")
                 output.update(add_btn=add_btn)
 
-    elif method not in ("import", "review", "approve", "reject", "deduplicate"):
+    elif method not in ("import",
+                        "review",
+                        "approve",
+                        "reject",
+                        "deduplicate"):
         s3.actions = None
 
     return output

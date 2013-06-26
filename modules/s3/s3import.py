@@ -94,7 +94,7 @@ class S3Importer(S3CRUD):
             @param r: the S3Request
             @param attr: dictionary of parameters for the method handler
 
-            @returns: output object to send to the view
+            @return: output object to send to the view
 
             Known means of communicating with this module:
 
@@ -880,10 +880,10 @@ class S3Importer(S3CRUD):
         if self.ajax:
             resource = self.resource
             resource.add_filter(s3.filter)
-            data = resource.fast_select(["id", "element", "error"],
+            rows = resource.fast_select(["id", "element", "error"],
                                         start=None,
-                                        limit=None)["data"]
-            return (upload_id, select_list, data)
+                                        limit=None)["rows"]
+            return (upload_id, select_list, rows)
 
         s3.actions = [dict(label=str(self.messages.item_show_details),
                            _class="action-btn",
@@ -1282,21 +1282,21 @@ class S3Importer(S3CRUD):
         if not orderby:
             orderby = ~(resource.table.error)
 
-        rows = resource.fast_select(list_fields,
+        data = resource.fast_select(list_fields,
                                     start=start,
                                     limit=limit,
                                     count=True,
                                     orderby=orderby,
                                     left=left)
-        data = rows["data"]
+        rows = data["rows"]
         
-        displayrows = rows["numrows"]
+        displayrows = data["numrows"]
         if totalrows is None:
             totalrows = displayrows
 
         # Represent the data
         _represent = represent.items()
-        for row in data:
+        for row in rows:
             record_id = row["s3_import_item.id"]
             for column, method in _represent:
                 if column in row:
@@ -1304,7 +1304,7 @@ class S3Importer(S3CRUD):
 
         # Build the datatable
         rfields = resource.resolve_selectors(list_fields)[0]
-        dt = S3DataTable(rfields, data, orderby=orderby)
+        dt = S3DataTable(rfields, rows, orderby=orderby)
         datatable_id = "s3import_1"
         if representation == "aadata":
             # Ajax callback
@@ -1796,7 +1796,7 @@ class S3ImportItem(object):
             @param tree: the import tree
             @param files: uploaded files
 
-            @returns: True if successful, False if not (sets self.error)
+            @return: True if successful, False if not (sets self.error)
         """
 
         s3db = current.s3db
@@ -2884,7 +2884,7 @@ class S3ImportJob():
             @param parent: the parent item (if this is a component)
             @param joinby: the component join key(s) (if this is a component)
 
-            @returns: a unique identifier for the new item, or None if there
+            @return: a unique identifier for the new item, or None if there
                       was an error. self.error contains the last error, and
                       self.error_tree an element tree with all failing elements
                       including error attributes.

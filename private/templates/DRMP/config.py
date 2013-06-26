@@ -103,9 +103,6 @@ settings.fin.currencies = {
 settings.ui.camp = True
 
 # -----------------------------------------------------------------------------
-# Save Search Widget
-settings.save_search.widget = False
-
 # Uncomment to restrict the export formats available
 settings.ui.export_formats = ["xls"]
 
@@ -2250,7 +2247,7 @@ def customize_event_event(**attr):
             output["showadd_btn"] = A(I(_class="icon icon-plus-sign big-add"),
                                       _href=URL(c="event", f="event",
                                                 args=["create.popup"],
-                                                vars={"refresh":"datalist"}),
+                                                vars={"refresh": "datalist"}),
                                       _class="btn btn-primary s3_modal",
                                       _role="button",
                                       _title=T("Add New Disaster"),
@@ -2892,7 +2889,7 @@ def customize_org_organisation(**attr):
             output["showadd_btn"] = A(I(_class="icon icon-plus-sign big-add"),
                                       _href=URL(c="org", f="organisation",
                                                 args=["create.popup"],
-                                                vars={"refresh":"datalist"}),
+                                                vars={"refresh": "datalist"}),
                                       _class="btn btn-primary s3_modal",
                                       _role="button",
                                       _title=T("Add New Organization"),

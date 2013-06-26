@@ -46,7 +46,7 @@ except ImportError:
         import gluon.contrib.simplejson as json # fallback to pure-Python module
 
 from gluon import *
-from gluon.dal import Row
+from gluon.dal import Expression, Field, Row
 from gluon.storage import Storage
 from gluon.languages import lazyT
 
@@ -132,7 +132,7 @@ def s3_mark_required(fields,
         @param fields: list of fields (or a table)
         @param mark_required: list of field names which are always required
 
-        @returns: dict of labels
+        @return: dict of labels
 
         @todo: complete parameter description?
     """
@@ -988,7 +988,7 @@ def s3_get_foreign_key(field, m2m=True):
         @param field: the field (Field instance)
         @param m2m: also detect many-to-many references
 
-        @returns: tuple (tablename, key, multiple), where tablename is
+        @return: tuple (tablename, key, multiple), where tablename is
                   the name of the referenced table (or None if this field
                   has no foreign key constraint), key is the field name of
                   the referenced key, and multiple indicates whether this is
@@ -1063,6 +1063,58 @@ def s3_flatlist(nested):
             yield item
 
 # =============================================================================
+def s3_orderby_fields(table, orderby):
+    """
+        Introspect and yield all fields involved in a DAL orderby
+        expression.
+
+        @param orderby: the orderby expression
+    """
+
+    if not orderby:
+        return
+
+    db = current.db
+    
+    if isinstance(orderby, str):
+        items = orderby.split(",")
+    elif type(orderby) is Expression:
+        def expand(e):
+            f = e.first
+            if e.op == db._adapter.COMMA:
+                if isinstance(f, Field):
+                    return [f] + expand(e.second)
+                elif type(f) is Expression:
+                    return expand(f) + expand(e.second)
+            elif e.op == db._adapter.INVERT:
+                return [e.first]
+            return []
+        items = expand(orderby)
+    elif not isinstance(orderby, (list, tuple)):
+        items = [orderby]
+    else:
+        items = orderby
+
+    s3db = current.s3db
+    for item in items:
+        if type(item) is Expression:
+            f = item.first
+            if type(f) is not Field:
+                continue
+        elif isinstance(item, Field):
+            f = item
+        elif isinstance(item, str):
+            fn, direction = (item.strip().split() + ["asc"])[:2]
+            tn, fn = ([table._tablename] + fn.split(".", 1))[-2:]
+            try:
+                f = s3db.table(tn)[fn]
+            except (AttributeError, KeyError):
+                continue
+        else:
+            continue
+        yield f
+
+# =============================================================================
 def search_vars_represent(search_vars):
     """
         Unpickle and convert saved search form variables into
@@ -1070,7 +1122,7 @@ def search_vars_represent(search_vars):
 
         @param search_vars: the (c)pickled search form variables
 
-        @returns: HTML as string
+        @return: HTML as string
     """
 
     import cPickle
@@ -2175,7 +2227,7 @@ class S3MultiPath:
                 Find a sequence of node IDs in this path
 
                 @param sequence: sequence of node IDs (or path)
-                @returns: position of the sequence (index+1), 0 if the path
+                @return: position of the sequence (index+1), 0 if the path
                           is empty, -1 if the sequence wasn't found
             """
             path = S3MultiPath.Path(sequence)

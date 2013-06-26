@@ -306,6 +306,11 @@ class S3OrganisationModel(S3Model):
                                "website"
                                ])
 
+        # Custom Method for S3SiteAddressAutocompleteWidget
+        self.set_method("org", "organisation",
+                        method="search_ac",
+                        action=self.org_search_ac)
+
         # Components
 
         # Documents
@@ -314,10 +319,10 @@ class S3OrganisationModel(S3Model):
 
         # Groups
         add_component("org_group",
-                      org_organisation=Storage(link="org_group_membership",
-                                               joinby="organisation_id",
-                                               key="group_id",
-                                               actuate="hide"))
+                      org_organisation=dict(link="org_group_membership",
+                                            joinby="organisation_id",
+                                            key="group_id",
+                                            actuate="hide"))
         # Format for filter_widget
         add_component("org_group_membership",
                       org_organisation="organisation_id")
@@ -348,10 +353,10 @@ class S3OrganisationModel(S3Model):
 
         # Locations served
         add_component("gis_location",
-                      org_organisation=Storage(link="org_organisation_location",
-                                               joinby="organisation_id",
-                                               key="location_id",
-                                               actuate="hide"))
+                      org_organisation=dict(link="org_organisation_location",
+                                            joinby="organisation_id",
+                                            key="location_id",
+                                            actuate="hide"))
         # Format for filter_widget
         add_component("org_organisation_location",
                       org_organisation="organisation_id")
@@ -366,20 +371,20 @@ class S3OrganisationModel(S3Model):
 
         # Sectors
         add_component("org_sector",
-                      org_organisation=Storage(link="org_sector_organisation",
-                                               joinby="organisation_id",
-                                               key="sector_id",
-                                               actuate="hide"))
+                      org_organisation=dict(link="org_sector_organisation",
+                                            joinby="organisation_id",
+                                            key="sector_id",
+                                            actuate="hide"))
         # Format for filter_widget
         add_component("org_sector_organisation",
                       org_organisation="organisation_id")
 
         # Services
         add_component("org_service",
-                      org_organisation=Storage(link="org_service_organisation",
-                                               joinby="organisation_id",
-                                               key="service_id",
-                                               actuate="hide"))
+                      org_organisation=dict(link="org_service_organisation",
+                                            joinby="organisation_id",
+                                            key="service_id",
+                                            actuate="hide"))
         # Format for filter_widget
         add_component("org_service_organisation",
                       org_organisation="organisation_id")
@@ -389,17 +394,21 @@ class S3OrganisationModel(S3Model):
                       org_organisation="organisation_id")
 
         # Projects
-        if settings.get_project_mode_3w():
+        if settings.get_project_multiple_organisations():
             add_component("project_project",
-                          org_organisation=Storage(
-                                    link="project_organisation",
-                                    joinby="organisation_id",
-                                    key="project_id",
-                                    # Embed widget doesn't currently support 2 fields of same name (8 hours)
-                                    #actuate="embed",
-                                    actuate="hide",
-                                    autocomplete="name",
-                                    autodelete=False))
+                          org_organisation=dict(link="project_organisation",
+                                                joinby="organisation_id",
+                                                key="project_id",
+                                                # Embed widget doesn't currently support 2 fields of same name (8 hours)
+                                                #actuate="embed",
+                                                actuate="hide",
+                                                autocomplete="name",
+                                                autodelete=False))
+            # Format for filter_widget
+            add_component("project_organisation",
+                          org_organisation=dict(joinby="organisation_id",
+                                                name="project_organisation"))
+            
         else:
             add_component("project_project",
                           org_organisation="organisation_id")
@@ -644,6 +653,109 @@ class S3OrganisationModel(S3Model):
                     # Retain the correct spelling of the name
                     item.data.name = duplicate.name
                     item.method = item.METHOD.UPDATE
+
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def org_search_ac(r, **attr):
+        """
+            JSON search method for S3OrganisationAutocompleteWidget
+            - searches name & acronym for both this organisation & the parent
+              of branches
+            @param r: the S3Request
+            @param attr: request attributes
+        """
+
+        response = current.response
+        resource = r.resource
+        table = resource.table
+        settings = current.deployment_settings
+
+        use_branches = settings.get_org_branches()
+
+        # Query comes in pre-filtered to accessible & deletion_status
+        # Respect response.s3.filter
+        resource.add_filter(response.s3.filter)
+
+        _vars = current.request.get_vars
+
+        # JQueryUI Autocomplete uses "term"
+        # old JQuery Autocomplete uses "q"
+        # what uses "value"?
+        value = _vars.term or _vars.value or _vars.q or None
+
+        # We want to do case-insensitive searches
+        # (default anyway on MySQL/SQLite, but not PostgreSQL)
+        value = value.lower().strip()
+
+        filter = _vars.filter
+
+        if filter and value:
+
+            if filter == "~":
+                query = (S3FieldSelector("organisation.name").lower().like(value + "%")) | \
+                        (S3FieldSelector("organisation.acronym").lower().like(value + "%"))
+                if use_branches:
+                    query |= (S3FieldSelector("parent.name").lower().like(value + "%")) | \
+                             (S3FieldSelector("parent.acronym").lower().like(value + "%"))
+
+            else:
+                output = current.xml.json_message(False, 400,
+                                "Unsupported filter! Supported filters: ~")
+                raise HTTP(400, body=output)
+
+        resource.add_filter(query)
+
+        MAX_SEARCH_RESULTS = settings.get_search_max_results()
+        limit = int(_vars.limit or MAX_SEARCH_RESULTS)
+        if (not limit or limit > MAX_SEARCH_RESULTS) and resource.count() > MAX_SEARCH_RESULTS:
+            output = jsons([dict(id="",
+                                 name="Search results are over %d. Please input more characters." \
+                                 % MAX_SEARCH_RESULTS)])
+        else:
+            field = table.name
+            field2 = table.acronym
+
+            # Fields to return
+            fields = [table.id, field, field2]
+            if use_branches:
+                btable = current.s3db.org_organisation_branch
+                field3 = btable.organisation_id
+                fields.append(field3)
+                db = current.db
+
+            attributes = dict(orderby=field)
+            limitby = resource.limitby(start=0, limit=limit)
+            if limitby is not None:
+                attributes["limitby"] = limitby
+            rows = resource._load(*fields, **attributes)
+            output = []
+            append = output.append
+            for row in rows:
+                if use_branches:
+                    _row = row[table]
+                else:
+                    _row = row
+                name = _row.name
+                parent = None
+                if "org_organisation_branch" in row:
+                    query = (table.id == row[btable].organisation_id)
+                    parent = db(query).select(table.name,
+                                              limitby = (0, 1)).first()
+                    if parent:
+                        name = "%s > %s" % (parent.name, name)
+                if not parent:
+                    acronym = _row.acronym
+                    if acronym:
+                        name = "%s (%s)" % (name, acronym)
+                record = dict(
+                    id = _row.id,
+                    name = name,
+                    )
+                append(record)
+            output = jsons(output)
+
+        response.headers["Content-Type"] = "application/json"
+        return output
 
     # -----------------------------------------------------------------------------
     @staticmethod
@@ -1688,6 +1800,11 @@ class S3SiteModel(S3Model):
                                   comment=comment
                                   )
 
+        # Custom Method for S3SiteAddressAutocompleteWidget
+        self.set_method("org", "site",
+                        method="search_address_ac",
+                        action=self.site_search_address_ac)
+
         # Components
         add_component = self.add_component
 
@@ -1781,7 +1898,8 @@ class S3SiteModel(S3Model):
                         wildcard_posn.append(length - (1 + w))
                 wildcard_bit += 1
                 code_list = S3SiteModel.getCodeList(code, wildcard_posn)
-                temp_code = S3SiteModel.returnUniqueCode(code, wildcard_posn, code_list)
+                temp_code = S3SiteModel.returnUniqueCode(code, wildcard_posn,
+                                                         code_list)
         if temp_code:
             db(site_table.site_id == form.vars.site_id).update(code=temp_code)
 
@@ -1789,6 +1907,7 @@ class S3SiteModel(S3Model):
     @staticmethod
     def getCodeList(code, wildcard_posn=[]):
         """
+            Called by org_site_onaccept
         """
 
         temp_code = ""
@@ -1814,6 +1933,7 @@ class S3SiteModel(S3Model):
     @staticmethod
     def returnUniqueCode(code, wildcard_posn=[], code_list=[]):
         """
+            Called by org_site_onaccept
         """
 
         # Select the replacement letters with numbers first and then
@@ -1845,6 +1965,87 @@ class S3SiteModel(S3Model):
             # If no new permutation of replacement characters has been found
             if p == len(wildcard_posn):
                 return None
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def site_search_address_ac(r, **attr):
+        """
+            JSON search method for S3SiteAddressAutocompleteWidget
+
+            @param r: the S3Request
+            @param attr: request attributes
+        """
+
+        response = current.response
+        resource = r.resource
+        table = resource.table
+
+        # Query comes in pre-filtered to accessible & deletion_status
+        # Respect response.s3.filter
+        resource.add_filter(response.s3.filter)
+
+        _vars = current.request.get_vars
+
+        # JQueryUI Autocomplete uses "term"
+        # old JQuery Autocomplete uses "q"
+        # what uses "value"?
+        value = _vars.term or _vars.value or _vars.q or None
+
+        # We want to do case-insensitive searches
+        # (default anyway on MySQL/SQLite, but not PostgreSQL)
+        value = value.lower().strip()
+
+        filter = _vars.filter
+
+        if filter and value:
+
+            if filter == "~":
+                query = (S3FieldSelector("name").lower().like(value + "%")) | \
+                        (S3FieldSelector("location_id$address").lower().like(value + "%"))
+
+            else:
+                output = current.xml.json_message(False, 400,
+                                "Unsupported filter! Supported filters: ~")
+                raise HTTP(400, body=output)
+
+        resource.add_filter(query)
+
+        MAX_SEARCH_RESULTS = current.deployment_settings.get_search_max_results()
+        limit = int(_vars.limit or MAX_SEARCH_RESULTS)
+        if (not limit or limit > MAX_SEARCH_RESULTS) and resource.count() > MAX_SEARCH_RESULTS:
+            output = jsons([dict(id="",
+                                 name="Search results are over %d. Please input more characters." \
+                                 % MAX_SEARCH_RESULTS)])
+        else:
+            s3db = current.s3db
+            field = table.name
+            field2 = s3db.gis_location.address
+
+            # Fields to return
+            fields = [table.id, field, field2]
+
+            attributes = dict(orderby=field)
+            limitby = resource.limitby(start=0, limit=limit)
+            if limitby is not None:
+                attributes["limitby"] = limitby
+            rows = resource._load(*fields, **attributes)
+            output = []
+            append = output.append
+            represent = s3db.org_site_represent
+            for row in rows:
+                name = represent(row[table].name)
+                address = row.gis_location.address
+                if address:
+                        name = "%s, %s" % (name, address)
+                record = dict(
+                    id = row[table].id,
+                    name = name,
+                    )
+                append(record)
+            output = jsons(output)
+
+        response.headers["Content-Type"] = "application/json"
+        return output
 
 # =============================================================================
 class S3SiteDetailsModel(S3Model):
@@ -1907,7 +2108,6 @@ class S3FacilityModel(S3Model):
 
     names = ["org_facility_type",
              "org_facility",
-             "org_facility_group",
              "org_facility_geojson",
              ]
 
@@ -2146,22 +2346,38 @@ class S3FacilityModel(S3Model):
                                     "website",
                                     "site_details.last_contacted",
                                     "obsolete",
-                                    "comments")
+                                    "comments",
+                                    )
 
-        filter_widgets = [S3OptionsFilter("facility_type_id",
-                                          label=T("Type"),
-                                          represent="%(name)s",
-                                          widget="multiselect",
-                                          ),
-                          S3OptionsFilter("organisation_id",
-                                          label=T("Organization"),
-                                          represent="%(name)s",
-                                          widget="multiselect",
-                                          ),
-                          ]
+        filter_widgets = [
+            S3TextFilter(["name",
+                          "code",
+                          "comments",
+                          "organisation_id$name",
+                          "organisation_id$acronym",
+                          "location_id$name",
+                          "location_id$L1",
+                          "location_id$L2",
+                          ],
+                         label=T("Name"),
+                         _class="filter-search",
+                         ),
+            S3OptionsFilter("facility_type_id",
+                            label=T("Type"),
+                            represent="%(name)s",
+                            widget="multiselect",
+                            ),
+            S3OptionsFilter("organisation_id",
+                            label=T("Organization"),
+                            represent="%(name)s",
+                            widget="multiselect",
+                            ),
+            ]
 
         configure(tablename,
                   super_entity=("org_site", "doc_entity", "pr_pentity"),
+                  context = {"org_group": "organisation_id$group_membership.group_id",
+                             },
                   crud_form = crud_form,
                   deduplicate = self.org_facility_duplicate,
                   onaccept = self.org_facility_onaccept,
@@ -2210,20 +2426,6 @@ class S3FacilityModel(S3Model):
         # Format for filter_widgets
         add_component("org_facility_group",
                       org_facility="facility_id")
-
-        # ---------------------------------------------------------------------
-        # Facilities <> Organisation Groups Link Table
-        #
-        tablename = "org_facility_group"
-        define_table(tablename,
-                     Field("facility_id", table),
-                     self.org_group_id(),
-                     *s3_meta_fields()
-                     )
-
-        configure(tablename,
-                  deduplicate=self.org_facility_group_deduplicate,
-                  )
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
@@ -2443,31 +2645,6 @@ class S3FacilityModel(S3Model):
         File = open(path, "w")
         File.write(output)
         File.close()
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_facility_group_deduplicate(item):
-        """ Import item de-duplication """
-
-        if item.tablename != "org_facility_group":
-            return
-
-        data = item.data
-        if "facility_id" in data and \
-           "group_id" in data:
-            facility_id = data.facility_id
-            group_id = data.group_id
-            table = item.table
-            query = (table.facility_id == facility_id) & \
-                    (table.group_id == group_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
-
-        return
 
 # -----------------------------------------------------------------------------
 def org_facility_rheader(r, tabs=[]):
@@ -2790,28 +2967,48 @@ class S3OfficeModel(S3Model):
                       #),
             ))
 
+        filter_widgets = [
+                S3TextFilter(["name",
+                              "code",
+                              "comments",
+                              "organisation_id$name",
+                              "organisation_id$acronym",
+                              "location_id$name",
+                              "location_id$L1",
+                              "location_id$L2",
+                              ],
+                             label=T("Name"),
+                             _class="filter-search",
+                             ),
+                #S3OptionsFilter("office_type_id",
+                #                label=T("Type"),
+                #                represent="%(name)s",
+                #                widget="multiselect",
+                #                cols=3,
+                #                #hidden=True,
+                #                ),
+                S3OptionsFilter("organisation_id",
+                                label=messages.ORGANISATION,
+                                represent="%(name)s",
+                                widget="multiselect",
+                                cols=3,
+                                #hidden=True,
+                                ),
+                S3LocationFilter("location_id",
+                                 label=T("Location"),
+                                 levels=["L0", "L1", "L2"],
+                                 widget="multiselect",
+                                 cols=3,
+                                 #hidden=True,
+                                 ),
+                ]
+
         configure(tablename,
                   super_entity=("pr_pentity", "org_site"),
                   onaccept=self.org_office_onaccept,
                   deduplicate=self.org_office_duplicate,
+                  filter_widgets=filter_widgets,
                   search_method=search_method,
-                  ## Experimental: filter form
-                  #filter_widgets=[
-                       #S3TextFilter(["name", "email", "comments"],
-                                    #label=T("Search"),
-                                    #comment=T("Search for office by text.")),
-                       #S3OptionsFilter("organisation_id",
-                                       #label=messages.ORGANISATION,
-                                       #comment=T("Search for office by organization."),
-                                       #represent="%(name)s",
-                                       #cols=3,
-                                       #widget="multiselect"),
-                       #S3OptionsFilter("location_id$L1",
-                                       #location_level="L1",
-                                       #none=False,
-                                       #cols=3,
-                                       #widget="multiselect")
-                  #],
                   list_fields=["id",
                                "name",
                                "organisation_id", # Filtered in Component views
@@ -3105,7 +3302,7 @@ def org_root_organisation(organisation_id=None, pe_id=None):
                                 which contains the organisation_id
         @param pe_id: the organisation's pe_id
 
-        @returns: tuple of (id, pe_id) of the root organisation,
+        @return: tuple of (id, pe_id) of the root organisation,
                   or (None, None) if no root organisation can be found
     """
 
@@ -3594,7 +3791,7 @@ def org_organisation_controller():
                     SECTOR = T("Cluster")
                 else:
                     SECTOR = T("Sector")
-                search_method = S3OrganisationSearch(
+                search_method = S3Search(
                         # simple = (S3SearchSimpleWidget(
                             # name="org_search_text_simple",
                             # label = T("Search"),
@@ -4027,7 +4224,7 @@ def org_office_controller():
                             # A non-standard formstyle with just a single row
                             pass
 
-                elif r.method not in ("import", "search") and \
+                elif r.method not in ("import", "map", "search") and \
                      "form" in output:
 
                     sep = ": "
@@ -4068,7 +4265,15 @@ def org_office_controller():
         return output
     s3.postp = postp
 
+    if "map" in request.args:
+        # S3Map has migrated
+        hide_filter = False
+    else:
+        # Not yet ready otherwise
+        hide_filter = True
+
     output = current.rest_controller("org", "office",
+                                     hide_filter=hide_filter,
                                      # Don't allow components with components (such as document) to breakout from tabs
                                      native=False,
                                      rheader=org_rheader)
