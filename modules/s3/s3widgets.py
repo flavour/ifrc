@@ -98,6 +98,7 @@ from gluon.html import BUTTON
 from gluon.sqlhtml import *
 from gluon.storage import Storage
 
+from s3export import S3Exporter
 from s3utils import *
 from s3validators import *
 
@@ -985,9 +986,11 @@ class S3DateWidget(FormWidget):
                         _type = "text",
                         value = (value != None and str(value)) or "",
                     )
+                    
         attr = StringWidget._attributes(field, default, **attributes)
-
-        attr["_class"] = "date"
+        
+        widget = INPUT(**attr)
+        widget.add_class("date")
 
         if "_id" in attr:
             selector = attr["_id"]
@@ -1005,9 +1008,7 @@ class S3DateWidget(FormWidget):
              future = self.future,
              format = format))
 
-        return TAG[""](INPUT(**attr),
-                       requires = field.requires
-                       )
+        return TAG[""](widget, requires = field.requires)
 
 # =============================================================================
 class S3DateTimeWidget(FormWidget):
@@ -4645,7 +4646,6 @@ def s3_richtext_widget(field, value):
                     requires=field.requires)
 
 # =============================================================================
-@staticmethod
 def search_ac(r, **attr):
     """
         JSON search method for S3AutocompleteWidget
@@ -4760,6 +4760,7 @@ def search_ac(r, **attr):
         resource.add_filter(query)
 
         if filter == "~":
+            MAX_SEARCH_RESULTS = current.deployment_settings.get_search_max_results()
             if (not limit or limit > MAX_SEARCH_RESULTS) and \
                resource.count() > MAX_SEARCH_RESULTS:
                 output = jsons([dict(id="",
