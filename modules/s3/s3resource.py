@@ -1842,7 +1842,7 @@ class S3Resource(object):
         tablename = self.tablename
         table = self.table
 
-        records = self.fast_select([self._id.name])
+        records = self.fast_select([self._id.name], limit=None)
         for record in records["rows"]:
 
             record_id = record[str(self._id)]
@@ -2867,22 +2867,30 @@ class S3Resource(object):
         # Add referenced resources to the tree
         #if DEBUG:
         #    _start = datetime.datetime.now()
+        
         depth = dereference and manager.MAX_DEPTH or 0
         while reference_map and depth:
+            
             depth -= 1
+            
             load_map = dict()
+            
             get_exported = export_map.get
             for ref in reference_map:
                 if "table" in ref and "id" in ref:
+
+                    # Get tablename and IDs
                     tname = ref["table"]
                     ids = ref["id"]
                     if not isinstance(ids, list):
                         ids = [ids]
+
                     # Exclude records which are already in the tree
                     exported = get_exported(tname, [])
                     ids = [x for x in ids if x not in exported]
                     if not ids:
                         continue
+                    
                     # Append the new ids to load_map[tname]
                     if tname in load_map:
                         ids = [x for x in ids if x not in load_map[tname]]
@@ -2894,11 +2902,13 @@ class S3Resource(object):
             REF = xml.ATTRIBUTE.ref
             for tablename in load_map:
                 load_list = load_map[tablename]
+                
                 # Sync filters
                 if filters:
                     filter_vars = filters.get(tablename, None)
                 else:
                     filter_vars = None
+                    
                 prefix, name = tablename.split("_", 1)
                 rresource = define_resource(tablename,
                                             id=load_list,
@@ -2912,7 +2922,10 @@ class S3Resource(object):
                 rfields, dfields = rresource.split_fields(skip=skip,
                                                           data=fields,
                                                           references=references)
+
+                # @todo: apply field selection
                 rresource.load()
+
                 export_resource = rresource.__export_resource
                 for record in rresource:
                     element = export_resource(record,
@@ -3020,6 +3033,7 @@ class S3Resource(object):
                                msince=msince,
                                master=master,
                                locations=locations)
+                               
         if element is not None:
             add = True
 
@@ -4366,7 +4380,7 @@ class S3Resource(object):
         return current.s3db.get_config(self.tablename, key, default=default)
 
     # -------------------------------------------------------------------------
-    def limitby(self, start=None, limit=None):
+    def limitby(self, start=0, limit=0):
         """
             Convert start+limit parameters into a limitby tuple
                 - limit without start => start = 0
@@ -4378,16 +4392,13 @@ class S3Resource(object):
             @param limit: maximum number of records to select
         """
 
+        if limit is None:
+            return None
+            
         if start is None:
-            if not limit:
-                return None
-            else:
-                start = 0
-
-        if not limit:
+            start = 0
+        if limit == 0:
             limit = current.manager.ROWSPERPAGE
-            if limit is None:
-                return None
 
         if limit <= 0:
             limit = 1
@@ -7414,7 +7425,11 @@ class S3ResourceFilter(object):
                 return 0
 
         else:
-            data = resource.fast_select([table._id.name], count=True)
+            data = resource.fast_select([table._id.name],
+                                        # We don't really want to retrieve
+                                        # any rows but just count, hence:
+                                        limit=1,
+                                        count=True)
             return data["numrows"]
 
     # -------------------------------------------------------------------------
