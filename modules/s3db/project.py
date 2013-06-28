@@ -146,7 +146,7 @@ class S3ProjectModel(S3Model):
             title_display = T("Status Details"),
             title_list = T("Statuses"),
             title_update = T("Edit Status"),
-            title_upload = T("Import Statuses"),
+            #title_upload = T("Import Statuses"),
             subtitle_create = T("Add New Status"),
             label_list_button = T("List Statuses"),
             label_create_button = ADD_STATUS,
@@ -522,10 +522,10 @@ class S3ProjectModel(S3Model):
         
         # Activity Types
         add_component("project_activity_type",
-                      project_project=Storage(link="project_activity_type_project",
-                                              joinby="project_id",
-                                              key="activity_type_id",
-                                              actuate="link"))
+                      project_project=dict(link="project_activity_type_project",
+                                           joinby="project_id",
+                                           key="activity_type_id",
+                                           actuate="link"))
 
         # Milestones
         add_component("project_milestone", project_project="project_id")
@@ -535,12 +535,12 @@ class S3ProjectModel(S3Model):
 
         # Tasks
         add_component("project_task",
-                      project_project=Storage(link="project_task_project",
-                                              joinby="project_id",
-                                              key="task_id",
-                                              actuate="replace",
-                                              autocomplete="name",
-                                              autodelete=False))
+                      project_project=dict(link="project_task_project",
+                                           joinby="project_id",
+                                           key="task_id",
+                                           actuate="replace",
+                                           autocomplete="name",
+                                           autodelete=False))
 
         # Annual Budgets
         add_component("project_annual_budget", project_project="project_id")
@@ -550,10 +550,10 @@ class S3ProjectModel(S3Model):
 
         # Hazards
         add_component("project_hazard",
-                      project_project=Storage(link="project_hazard_project",
-                                              joinby="project_id",
-                                              key="hazard_id",
-                                              actuate="hide"))
+                      project_project=dict(link="project_hazard_project",
+                                           joinby="project_id",
+                                           key="hazard_id",
+                                           actuate="hide"))
 
         # Human Resources
         add_component("project_human_resource", project_project="project_id")
@@ -563,20 +563,20 @@ class S3ProjectModel(S3Model):
 
         # Sectors
         add_component("org_sector",
-                      project_project=Storage(link="project_sector_project",
-                                              joinby="project_id",
-                                              key="sector_id",
-                                              actuate="hide"))
+                      project_project=dict(link="project_sector_project",
+                                           joinby="project_id",
+                                           key="sector_id",
+                                           actuate="hide"))
         # Format needed by S3Filter
         add_component("project_sector_project",
                       project_project="project_id")
 
         # Themes
         add_component("project_theme",
-                      project_project=Storage(link="project_theme_project",
-                                              joinby="project_id",
-                                              key="theme_id",
-                                              actuate="hide"))
+                      project_project=dict(link="project_theme_project",
+                                           joinby="project_id",
+                                           key="theme_id",
+                                           actuate="hide"))
         # Format needed by S3Filter
         add_component("project_theme_project",
                       project_project="project_id")
@@ -584,8 +584,8 @@ class S3ProjectModel(S3Model):
         # DRR
         if mode_drr:
             add_component("project_drr",
-                          project_project=Storage(joinby="project_id",
-                                                  multiple = False))
+                          project_project=dict(joinby="project_id",
+                                               multiple = False))
 
         # ---------------------------------------------------------------------
         # Project Human Resources
@@ -1179,7 +1179,13 @@ class S3ProjectActivityModel(S3Model):
         )
 
         # Search Method
-        project_activity_search = S3Search(field="name")
+        filter_widgets = [
+            S3OptionsFilter("activity_type_id",
+                            label=T("Type"),
+                            represent="%(name)s",
+                            widget="multiselect",
+                            ),
+            ]
 
         # Resource Configuration
         report_fields = []
@@ -1208,18 +1214,11 @@ class S3ProjectActivityModel(S3Model):
         else:
             create_next = URL(c="project", f="activity", args=["[id]"])
 
-        filter_widgets = [S3OptionsFilter("activity_type_id",
-                                          label=T("Type"),
-                                          represent="%(name)s",
-                                          widget="multiselect",
-                                          )
-                          ]
-
         self.configure(tablename,
                        super_entity="doc_entity",
                        create_next=create_next,
-                       search_method=project_activity_search,
                        deduplicate=self.project_activity_deduplicate,
+                       filter_widgets = filter_widgets,
                        report_options=Storage(
                                 rows=report_fields,
                                 cols=report_fields,
@@ -1227,12 +1226,10 @@ class S3ProjectActivityModel(S3Model):
                                 defaults=Storage(
                                     rows="activity.project_id",
                                     cols="activity.name",
-                                    fact="activity.time_actual",
-                                    aggregate="sum",
+                                    fact="sum(activity.time_actual)",
                                     totals=True
                                 )
                             ),
-                       filter_widgets = filter_widgets,
                        list_fields = list_fields,
                        )
 
@@ -3387,7 +3384,7 @@ class S3ProjectThemeModel(S3Model):
             title_display = T("Theme Details"),
             title_list = T("Themes"),
             title_update = T("Edit Theme"),
-            title_upload = T("Import Themes"),
+            #title_upload = T("Import Themes"),
             subtitle_create = T("Add New Theme"),
             label_list_button = T("List Themes"),
             label_create_button = ADD_THEME,
@@ -3493,7 +3490,7 @@ class S3ProjectThemeModel(S3Model):
             title_list = T("Themes"),
             title_update = T("Edit Theme"),
             title_search = T("Search Themes"),
-            title_upload = T("Import Theme data"),
+            #title_upload = T("Import Theme data"),
             subtitle_create = T("Add New Theme"),
             label_list_button = T("List Themes"),
             label_create_button = T("Add Theme to Project"),
@@ -3940,7 +3937,7 @@ class S3ProjectTaskModel(S3Model):
             title_list = T("Milestones"),
             title_update = T("Edit Milestone"),
             title_search = T("Search Milestones"),
-            title_upload = T("Import Milestone Data"),
+            #title_upload = T("Import Milestones"),
             subtitle_create = T("Add New Milestone"),
             label_list_button = T("List Milestones"),
             label_create_button = ADD_MILESTONE,
@@ -4119,67 +4116,67 @@ class S3ProjectTaskModel(S3Model):
             msg_list_empty = T("No tasks currently registered"))
 
         # Search Method
-        advanced_task_search = [
-                    S3SearchSimpleWidget(
-                        name = "task_search_text_advanced",
-                        label = T("Description"),
-                        comment = T("Search for a Task by name or description."),
-                        field = ["name",
-                                 "description",
-                                 ]
-                    ),
-                    S3SearchOptionsWidget(
-                        name = "task_search_priority",
-                        label = T("Priority"),
-                        field = "priority",
-                        cols = 4
-                    ),
-                    S3SearchOptionsWidget(
-                        name = "task_search_project",
-                        label = T("Project"),
-                        field = "task_project.project_id",
-                        options = self.project_task_project_opts,
-                        cols = 3
-                    ),
-                    S3SearchOptionsWidget(
-                        name = "task_search_activity",
-                        label = T("Activity"),
-                        field = "task_activity.activity_id",
-                        options = self.project_task_activity_opts,
-                        cols = 3
-                    ),
-                    S3SearchOptionsWidget(
-                        name = "task_search_created_by",
-                        label = T("Created By"),
-                        field = "created_by",
-                        cols = 4
-                    ),
-                    S3SearchOptionsWidget(
-                        name = "task_search_assignee",
-                        label = T("Assigned To"),
-                        field = "pe_id",
-                        null = T("Unassigned"),
-                        cols = 4
-                    ),
-                    S3SearchMinMaxWidget(
-                        name="task_search_date_created",
-                        method="range",
-                        label=T("Date Created"),
-                        field="created_on"
-                    ),
-                    S3SearchMinMaxWidget(
-                        name="task_search_date_due",
-                        method="range",
-                        label=T("Date Due"),
-                        field="date_due"
-                    ),
-                    S3SearchOptionsWidget(
-                        name = "task_search_status",
-                        label = T("Status"),
-                        field = "status",
-                        cols = 4
-                    ),
-                ]
+        filter_widgets = [
+            S3TextFilter(["name",
+                          "description",
+                          ],
+                         label=T("Description"),
+                         _class="filter-search",
+                         ),
+            S3OptionsFilter("priority",
+                            label=T("Priority"),
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            options=project_task_priority_opts,
+                            cols=4,
+                            ),
+            S3OptionsFilter("task_project.project_id",
+                            label=T("Project"),
+                            options = self.project_task_project_opts,
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            cols=3,
+                            ),
+            S3OptionsFilter("task_activity.activity_id",
+                            label=T("Activity"),
+                            options = self.project_task_activity_opts,
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            cols=3,
+                            ),
+            S3OptionsFilter("pe_id",
+                            label=T("Assigned To"),
+                            # @ToDo: Implement support for this in S3OptionsFilter
+                            #null = T("Unassigned"),
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            cols=4,
+                            ),
+            S3OptionsFilter("created_by",
+                            label=T("Created By"),
+                            #widget="multiselect",
+                            cols=3,
+                            hidden=True,
+                            ),
+            S3RangeFilter("created_on",
+                          label=T("Date Created"),
+                          hide_time=True,
+                          hidden=True,
+                          ),
+            S3RangeFilter("created_on",
+                          label=T("Date Due"),
+                          hide_time=True,
+                          hidden=True,
+                          ),
+            S3OptionsFilter("status",
+                            label=T("Status"),
+                            options=project_task_status_opts,
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            cols=4,
+                            ),
+            ]
+
         list_fields=["id",
                      (T("ID"), "task_id"),
                      "priority",
@@ -4196,27 +4193,21 @@ class S3ProjectTaskModel(S3Model):
         if settings.get_project_milestones():
             # Use the field in this format to get the custom represent
             list_fields.insert(5, (T("Milestone"), "task_milestone.milestone_id"))
-            advanced_task_search.insert(4, S3SearchOptionsWidget(
-                                            name = "task_search_milestone",
-                                            label = T("Milestone"),
-                                            field = "task_milestone.milestone_id",
-                                            options = self.project_task_milestone_opts,
-                                            cols = 3
-                                            ))
+            filter_widgets.insert(4, S3OptionsFilter("task_milestone.milestone_id",
+                                                     label = T("Milestone"),
+                                                     options = self.project_task_milestone_opts,
+                                                     cols = 3
+                                                     ))
 
-        task_search = S3Search(advanced = advanced_task_search)
-
-        task_report = Storage(rows = list_fields,
-                              cols = list_fields,
-                              fact = list_fields,
-                              defaults = Storage(rows = "task.project",
-                                                 cols = "task.pe_id",
-                                                 fact = "task.time_estimated",
-                                                 aggregate = "sum",
-                                                 totals = True
-                                                 ),
-                              search = advanced_task_search,
-                              )
+        report_options = Storage(rows = list_fields,
+                                 cols = list_fields,
+                                 fact = list_fields,
+                                 defaults = Storage(rows = "task.project",
+                                                    cols = "task.pe_id",
+                                                    fact = "sum(task.time_estimated)",
+                                                    totals = True
+                                                    ),
+                                 )
 
         # Custom Form
         crud_form = S3SQLCustomForm(
@@ -4243,20 +4234,21 @@ class S3ProjectTaskModel(S3Model):
 
         # Resource Configuration
         configure(tablename,
-                  super_entity="doc_entity",
-                  copyable=True,
-                  orderby="project_task.priority",
-                  realm_entity=self.project_task_realm_entity,
-                  onvalidation=self.project_task_onvalidation,
-                  #create_next=URL(f="task", args=["[id]"]),
-                  create_onaccept=self.project_task_create_onaccept,
-                  update_onaccept=self.project_task_update_onaccept,
-                  search_method=task_search,
-                  report_options = task_report,
-                  list_fields=list_fields,
+                  super_entity = "doc_entity",
+                  copyable = True,
+                  orderby = "project_task.priority",
+                  realm_entity = self.project_task_realm_entity,
+                  onvalidation = self.project_task_onvalidation,
+                  #create_next = URL(f="task", args=["[id]"]),
+                  create_onaccept = self.project_task_create_onaccept,
+                  update_onaccept = self.project_task_update_onaccept,
+                  filter_widgets = filter_widgets,
+                  report_options = report_options,
+                  list_fields = list_fields,
                   extra_fields = ["id"],
                   crud_form = crud_form,
-                  extra="description")
+                  extra = "description"
+                  )
 
         # Reusable field
         task_id = S3ReusableField("task_id", table,
@@ -4280,63 +4272,57 @@ class S3ProjectTaskModel(S3Model):
         # Components
         # Projects (for imports)
         add_component("project_project",
-                      project_task=Storage(
-                                link="project_task_project",
-                                joinby="task_id",
-                                key="project_id",
-                                actuate="embed",
-                                autocomplete="name",
-                                autodelete=False))
+                      project_task=dict(link="project_task_project",
+                                        joinby="task_id",
+                                        key="project_id",
+                                        actuate="embed",
+                                        autocomplete="name",
+                                        autodelete=False))
 
         # Activities
         add_component("project_activity",
-                      project_task=Storage(
-                                link="project_task_activity",
-                                joinby="task_id",
-                                key="activity_id",
-                                actuate="embed",
-                                autocomplete="name",
-                                autodelete=False))
+                      project_task=dict(link="project_task_activity",
+                                        joinby="task_id",
+                                        key="activity_id",
+                                        actuate="embed",
+                                        autocomplete="name",
+                                        autodelete=False))
 
         # Milestones
         add_component("project_milestone",
-                      project_task=Storage(
-                                link="project_task_milestone",
-                                joinby="task_id",
-                                key="milestone_id",
-                                actuate="embed",
-                                autocomplete="name",
-                                autodelete=False))
+                      project_task=dict(link="project_task_milestone",
+                                        joinby="task_id",
+                                        key="milestone_id",
+                                        actuate="embed",
+                                        autocomplete="name",
+                                        autodelete=False))
 
         # Job roles
         add_component("hrm_job_role",
-                      project_task=Storage(
-                                link="project_task_job_role",
-                                joinby="task_id",
-                                key="job_role_id",
-                                actuate="embed",
-                                autocomplete="name",
-                                autodelete=False))
+                      project_task=dict(link="project_task_job_role",
+                                        joinby="task_id",
+                                        key="job_role_id",
+                                        actuate="embed",
+                                        autocomplete="name",
+                                        autodelete=False))
 
         # Human Resources (assigned)
         add_component("hrm_human_resource",
-                      project_task=Storage(
-                                link="project_task_human_resource",
-                                joinby="task_id",
-                                key="human_resource_id",
-                                actuate="embed",
-                                autocomplete="name",
-                                autodelete=False))
+                      project_task=dict(link="project_task_human_resource",
+                                        joinby="task_id",
+                                        key="human_resource_id",
+                                        actuate="embed",
+                                        autocomplete="name",
+                                        autodelete=False))
 
         # Requests
         add_component("req_req",
-                      project_task=Storage(
-                                link="project_task_req",
-                                joinby="task_id",
-                                key="req_id",
-                                actuate="embed",
-                                autocomplete="request_number",
-                                autodelete=False))
+                      project_task=dict(link="project_task_req",
+                                        joinby="task_id",
+                                        key="req_id",
+                                        actuate="embed",
+                                        autocomplete="request_number",
+                                        autodelete=False))
 
         # Time
         add_component("project_time", project_task="task_id")
@@ -4470,35 +4456,43 @@ class S3ProjectTaskModel(S3Model):
         table.day = Field.Lazy(project_time_day)
         table.week = Field.Lazy(project_time_week)
 
-        task_time_search = [S3SearchOptionsWidget(name="person_id",
-                                                  label = T("Person"),
-                                                  field = "person_id",
-                                                  cols = 3),
-                            S3SearchOptionsWidget(name="project",
-                                                  label = T("Project"),
-                                                  field = "task_id$task_project.project_id",
-                                                  options = self.project_task_project_opts,
-                                                  cols = 3),
-                            S3SearchOptionsWidget(name="activity",
-                                                  label = T("Activity"),
-                                                  field = "task_id$task_activity.activity_id",
-                                                  options = self.project_task_activity_opts,
-                                                  cols = 3),
-                            S3SearchMinMaxWidget(name="date",
-                                                 label=T("Date"),
-                                                 field="date"),
-                            ]
+        filter_widgets = [
+            S3OptionsFilter("person_id",
+                            label=T("Person"),
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            cols=3,
+                            ),
+            S3OptionsFilter("task_id$task_project.project_id",
+                            label=T("Project"),
+                            options = self.project_task_project_opts,
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            cols=3,
+                            ),
+            S3OptionsFilter("task_id$task_activity.activity_id",
+                            label=T("Activity"),
+                            options = self.project_task_activity_opts,
+                            #represent="%(name)s",
+                            #widget="multiselect",
+                            cols=3,
+                            hidden=True,
+                            ),
+            S3DateFilter("date",
+                         label=T("Date"),
+                         hide_time=True,
+                         hidden=True,
+                         ),
+            ]
 
         if settings.get_project_milestones():
             # Use the field in this format to get the custom represent
             list_fields.insert(3, (T("Milestone"), "task_id$task_milestone.milestone_id"))
-            task_time_search.insert(3, S3SearchOptionsWidget(
-                                    name = "task_search_milestone",
-                                    label = T("Milestone"),
-                                    field = "task_id$task_milestone.milestone_id",
-                                    options = self.project_task_milestone_opts,
-                                    cols = 3
-                                   ))
+            filter_widgets.insert(3, S3OptionsFilter("task_id$task_milestone.milestone_id",
+                                                     label = T("Milestone"),
+                                                     cols = 3,
+                                                     hidden = True,
+                                                     ))
 
         report_fields = list_fields + \
                         [(T("Day"), "day"),
@@ -4514,12 +4508,11 @@ class S3ProjectTaskModel(S3Model):
                 for row in rows:
                     sector_opts[row.id] = row.name
                 return sector_opts
-            task_time_search.insert(2, S3SearchOptionsWidget(name="sectors",
-                                                             label = T("Sector"),
-                                                             field = "task_id$task_project.project_id$sector_project.sector_id",
-                                                             options = get_sector_opts,
-                                                             cols = 3),
-                                    )
+            filter_widgets.insert(1, S3OptionsFilter("task_id$task_project.project_id$sector_project.sector_id",
+                                                     label = T("Sector"),
+                                                     options = get_sector_opts,
+                                                     cols = 3,
+                                                     ))
 
         # Custom Methods
         set_method("project", "time",
@@ -4528,21 +4521,19 @@ class S3ProjectTaskModel(S3Model):
 
         configure(tablename,
                   onaccept=self.project_time_onaccept,
-                  search_method=S3Search(advanced=task_time_search),
+                  filter_widgets=filter_widgets,
                   report_fields=["date"],
                   report_options=Storage(
-                        rows = report_fields,
-                        cols = report_fields,
-                        fact = report_fields,
-                        defaults = Storage(
-                            rows = "task_id$task_project.project_id",
-                            cols = "person_id",
-                            fact = "hours",
-                            aggregate = "sum",
-                            totals = True
+                    rows=report_fields,
+                    cols=report_fields,
+                    fact=report_fields,
+                    defaults=Storage(
+                        rows="task_id$task_project.project_id",
+                        cols="person_id",
+                        fact="sum(hours)",
+                        totals=True
                         ),
-                        search=task_time_search,
-                    ),
+                  ),
                   list_fields=list_fields
                   )
 
@@ -6091,7 +6082,6 @@ def project_task_controller():
                            insertable=False,
                            deletable=False,
                            copyable=False,
-                           #search_method=task_search,
                            list_fields=list_fields)
         elif "open" in vars:
             # Show Only Open Tasks
@@ -6139,7 +6129,15 @@ def project_task_controller():
         return output
     s3.postp = postp
 
+    if "mine" in vars or \
+       "project" in vars:
+        hide_filter = True
+    else:
+        hide_filter = False
+
     return current.rest_controller("project", "task",
-                                   rheader=s3db.project_rheader)
+                                   rheader=s3db.project_rheader,
+                                   hide_filter=hide_filter,
+                                   )
 
 # END =========================================================================

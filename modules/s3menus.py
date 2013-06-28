@@ -1638,8 +1638,7 @@ class S3OptionsMenu(object):
                  ),
                  M("Tasks", f="task")(
                     M("New", m="create"),
-                    #M("List All Tasks"),
-                    M("Search", m="search"),
+                    M("Search"),
                  ),
                 )
             if current.auth.s3_has_role("STAFF"):
@@ -1654,20 +1653,18 @@ class S3OptionsMenu(object):
                         M("Import Tasks", f="task", m="import", p="create"),
                      ),
                      M("Reports", f="report")(
-                        M("Activity Report", f="activity", m="report"),
-                        M("Last Week's Work", f="time", m="report",
+                        M("Activity Report", f="activity", m="report2"),
+                        M("Last Week's Work", f="time", m="report2",
                           vars=Storage(rows="person_id",
                                        cols="day",
-                                       fact="hours",
-                                       aggregate="sum",
+                                       fact="sum(hours)",
                                        week=1)),
-                        M("Last Month's Work", f="time", m="report",
+                        M("Last Month's Work", f="time", m="report2",
                           vars=Storage(rows="person_id",
                                        cols="week",
-                                       fact="hours",
-                                       aggregate="sum",
+                                       fact="sum(hours)",
                                        month=1)),
-                        M("Project Time Report", f="time", m="report"),
+                        M("Project Time Report", f="time", m="report2"),
                      ),
                     )
         else:
