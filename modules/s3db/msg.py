@@ -33,6 +33,7 @@ __all__ = ["S3MessagingModel",
            "S3EmailInboundModel",
            "S3MCommonsModel",
            "S3ParsingModel",
+           "S3RSSModel",
            "S3SMSOutboundModel",
            "S3SubscriptionModel",
            "S3TropoModel",
@@ -699,6 +700,7 @@ class S3EmailInboundModel(S3ChannelModel):
         #
         tablename = "msg_email_inbox"
         table = define_table(tablename,
+                             self.super_link("message_id", "msg_message"),
                              Field("sender", notnull=True,
                                    label = T("Sender"),
                                    requires = IS_EMAIL()),
@@ -756,6 +758,7 @@ class S3MCommonsModel(S3ChannelModel):
                              Field("name"),
                              Field("description"),
                              Field("campaign_id",
+                                   length=128,
                                    unique=True,
                                    requires=IS_NOT_EMPTY()),
                              Field("url",
@@ -990,6 +993,63 @@ class S3ParsingModel(S3Model):
                     db(stable.id == record.id).update(enabled = False)
 
         redirect(URL(f="workflow"))
+
+# =============================================================================
+class S3RSSModel(S3ChannelModel):
+    """
+        RSS channel
+    """
+
+    names = ["msg_rss_channel",
+             "msg_rss_feed"
+             ]
+
+    def model(self):
+
+        T = current.T
+
+        define_table = self.define_table
+
+        # ---------------------------------------------------------------------
+        # RSS Settings for an account
+        #
+        tablename = "msg_rss_channel"
+        table = define_table(tablename,
+                             self.super_link("channel_id", "msg_channel"),
+                             Field("name"),
+                             Field("description"),
+                             Field("url"),
+                             Field("subscribed", "boolean", default = True,
+                                    represent = s3_yes_no_represent,
+                                    label = T("Subscription Status")),
+                             *s3_meta_fields())
+
+        self.configure(tablename,
+                       super_entity = "msg_channel",
+                       )
+
+        # ---------------------------------------------------------------------
+        # RSS Feeds
+        #
+        tablename = "msg_rss_feed"
+        table = define_table(tablename,
+                             Field("title"),
+                             Field("link"),
+                             Field("created_on","datetime"),
+                             Field("description"),
+                             *s3_meta_fields())
+
+        self.configure(tablename,
+                       list_fields = ["title",
+                                      "link",
+                                      "created_on",
+                                      "description"
+                                      ]
+                       )
+
+        # ---------------------------------------------------------------------
+        return Storage()
+
 
 # =============================================================================
 class S3SMSOutboundModel(S3Model):
@@ -1246,7 +1306,8 @@ class S3TwilioModel(S3ChannelModel):
                              Field("name"),
                              Field("description"),
                              Field("account_name",
-                                    unique=True),
+                                   length=255,
+                                   unique=True),
                              Field("url",
                                    default = \
                                    "https://api.twilio.com/2010-04-01/Accounts"

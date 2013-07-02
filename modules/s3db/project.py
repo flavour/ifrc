@@ -193,7 +193,9 @@ class S3ProjectModel(S3Model):
                                     updateable = True,
                                     ),
                                 ),
-                             Field("name", unique = True,
+                             Field("name",
+                                   length = 255,
+                                   unique = True,
                                    label = T("Name"),
                                    # Require unique=True if using IS_NOT_ONE_OF like here (same table,
                                    # no filter) in order to allow both automatic indexing (faster)
@@ -1723,10 +1725,6 @@ class S3ProjectBeneficiaryModel(S3Model):
                              # Populated automatically from project_location
                              self.gis_location_id(readable = False,
                                                   writable = False),
-                             # Used for Aggregation as per Vulnerability needs
-                             # @ToDo: Can we remove from here?
-                             self.stats_group_id(readable = False,
-                                                 writable = False),
                              Field("value", "double",
                                    label = T("Quantity"),
                                    requires = IS_INT_IN_RANGE(0, 99999999),
@@ -1740,6 +1738,7 @@ class S3ProjectBeneficiaryModel(S3Model):
                                      label = T("End Date"),
                                      #empty = False,
                                      ),
+                             #self.stats_source_id(),
                              s3_comments(),
                              *s3_meta_fields())
 
@@ -2335,7 +2334,9 @@ class S3ProjectFrameworkModel(S3Model):
         tablename = "project_framework"
         table = define_table(tablename,
                              self.super_link("doc_id", "doc_entity"),
-                             Field("name", unique=True,
+                             Field("name",
+                                   length=255,
+                                   unique=True,
                                    label = T("Name"),
                                    ),
                              s3_comments("description",

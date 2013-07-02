@@ -2437,9 +2437,9 @@ class S3FeatureLayerModel(S3Model):
                                                                         T("Used to build onHover Tooltip & 1st field also used in Cluster Popups to differentiate between records."))),
                                         ),
                                   Field("attr_fields", "list:string",
-                                        label = T("Attribute Fields"),
+                                        label = T("Attributes"),
                                         comment = DIV(_class="tooltip",
-                                                      _title="%s|%s" % (T("Attribute Fields"),
+                                                      _title="%s|%s" % (T("Attributes"),
                                                                         T("Used to populate feature attributes which can be used for Styling."))),
                                         ),
                                   Field("use_site", "boolean",
@@ -2489,8 +2489,7 @@ class S3FeatureLayerModel(S3Model):
                                      "controller",
                                      "function",
                                      "filter",
-                                     "popup_label",
-                                     "popup_fields",
+                                     "attr_fields",
                                      "dir",
                                      "trackable",
                                      "polygons",
@@ -2518,8 +2517,10 @@ class S3FeatureLayerModel(S3Model):
                                                 autodelete=False))
 
         # ---------------------------------------------------------------------
+        # Pass model-global names to response.s3
+        #
         return Storage(
-            )
+                )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4497,27 +4498,19 @@ class gis_LocationRepresent(S3Represent):
                     if L0_name:
                         path = row.path.split("/")
                         L0_id = path[0]
-                        query = (htable.location_id == L0_id)
+                        level_name = gis.get_location_hierarchy(level, L0_id)
                     else:
                         # Fallback to system default
-                        query = (htable.uuid == "SITE_DEFAULT")
-                    config = current.db(query).select(htable.L1,
-                                                      htable.L2,
-                                                      htable.L3,
-                                                      htable.L4,
-                                                      htable.L5,
-                                                      cache=s3db.cache,
-                                                      limitby=(0, 1)).first()
-                    level_name = config[row.level]
+                        level_name = gis.get_location_hierarchy(level)
 
+                    represent = name
+                    if level_name:
+                        represent = "%s (%s)" % (represent, level_name)
                     if row.parent:
                         parent_level = "L%s" % (int(level[1]) - 1)
                         parent_name = row[parent_level]
-                        represent = "%s (%s), %s" % (name,
-                                                     level_name,
-                                                     parent_name)
-                    else:
-                        represent = "%s %s" % (name, level_name)
+                        if parent_name:
+                            represent = "%s, %s" % (represent, parent_name)
                 else:
                     # Specific location:
                     # Don't duplicate the Resource Name
