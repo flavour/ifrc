@@ -1971,13 +1971,14 @@ def customize_cms_post(**attr):
         elif r.representation == "plain" and \
              r.method != "search":
             # Map Popups
+            s3db = current.s3db
             table = r.table
             table.location_id.represent = s3db.gis_LocationRepresent(sep=" | ")
             table.created_by.represent = s3_auth_user_represent_name
             # Used by default popups
             series = T(table.series_id.represent(r.record.series_id))
             s3.crud_strings["cms_post"].title_display = "%(series)s Details" % dict(series=series)
-            current.s3db.configure("cms_post", popup_url="")
+            s3db.configure("cms_post", popup_url="")
             table.avatar.readable = False
             table.body.label = ""
             table.expired.readable = False
@@ -2399,13 +2400,21 @@ def customize_gis_location(**attr):
                                          list_layout = render_posts,
                                          )
                 name = location.name
+                # https://code.google.com/p/web2py/issues/detail?id=1533
+                public_url = current.deployment_settings.get_base_public_url()
+                if public_url.startswith("http://127.0.0.1"):
+                    # Assume Rocket
+                    image = quote_unicode(s3_unicode(name))
+                else:
+                    # Assume Apache or Cherokee
+                    image = s3_unicode(name)
                 s3db.configure("gis_location",
                                list_fields = list_fields,
                                profile_header = DIV(A(IMG(_class="media-object",
-                                                          _src=URL(c="static",
-                                                                   f="themes",
-                                                                   args=["DRMP", "img",
-                                                                         "%s.png" % s3_unicode(name)]),
+                                                          _src="%s/%s.png" % (URL(c="static",
+                                                                                  f="themes",
+                                                                                  args=["DRMP", "img"]),
+                                                                              image),
                                                           ),
                                                       _class="pull-left",
                                                       #_href=location_url,
