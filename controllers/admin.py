@@ -63,12 +63,26 @@ def role():
     return output
 
 # -----------------------------------------------------------------------------
-@auth.s3_requires_membership(1)
 def user():
     """ RESTful CRUD controller """
 
     table = auth.settings.table_user
-    tablename = table._tablename
+
+    if s3_has_role("ADMIN"):
+        # Needed as Admin has all roles
+        pass
+    elif s3_has_role("ORG_ADMIN"):
+        # Filter users to just those belonging to the Org Admin's Org & Descendants
+        otable = s3db.org_organisation
+        pe_id = db(otable.id == auth.user.organisation_id).select(otable.pe_id,
+                                                                  limitby=(0, 1)
+                                                                  ).first().pe_id
+        pe_ids = s3db.pr_get_descendants(pe_id, entity_types="org_organisation")
+        pe_ids.append(pe_id)
+        s3.filter = (otable.pe_id.belongs(pe_ids)) & \
+                    (table.organisation_id == otable.id)
+    else:
+        auth.permission.fail()
 
     auth.configure_user_fields()
 
@@ -89,7 +103,7 @@ def user():
         lappend("link_user_to")
     lappend((T("Roles"), "membership.group_id"))
 
-    s3db.configure(tablename,
+    s3db.configure("auth_user",
                    main="first_name",
                    create_next = URL(c="admin", f="user", args=["[id]", "roles"]),
                    create_onaccept = lambda form: auth.s3_approve_user(form.vars),
@@ -132,10 +146,9 @@ def user():
         redirect(URL(args=[]))
 
     # Custom Methods
-    role_manager = s3base.S3RoleManager()
     set_method = s3db.set_method
     set_method("auth", "user", method="roles",
-               action=role_manager)
+               action=s3base.S3RoleManager())
 
     set_method("auth", "user", method="disable",
                action=disable_user)
@@ -148,7 +161,7 @@ def user():
 
     # CRUD Strings
     ADD_USER = T("Add User")
-    s3.crud_strings[tablename] = Storage(
+    s3.crud_strings["auth_user"] = Storage(
         title_create = ADD_USER,
         title_display = T("User Details"),
         title_list = T("Users"),
@@ -291,6 +304,9 @@ def user():
             # @ToDo: Merge these with the code in s3aaa.py and use S3SQLCustomForm to implement
             form = output.get("form", None)
             if not form:
+                create_url = URL(args=["create"])
+                output["showadd_btn"] = s3base.S3CRUD.crud_button(T("Add User"),
+                                                                  _href=create_url)
                 return output
             form.attributes["_id"] = "regform"
             if s3_formstyle == "bootstrap":
@@ -780,7 +796,6 @@ def translate():
 
         opt = request.vars.opt
         if opt == "1":
-
             # Select modules for Translation
             if form.accepts(request.vars, session):
 
@@ -795,7 +810,7 @@ def translate():
                 # If no module is selected
                 if modlist is None:
                     modlist = []
-                
+
                 # If "Select All" option is chosen
                 all_template_flag = 0
                 if "all" in modlist:
@@ -809,7 +824,6 @@ def translate():
                 code = form.request_vars.new_code
                 if code == "":
                     code = form.request_vars.code
-
                 code += ".py"
 
                 # Obtaining the type of file to export to
@@ -826,12 +840,16 @@ def translate():
 
             # Creating a form with checkboxes for list of modules
             A = TranslateAPI()
-            modlist = A.get_modules()
-            modlist.sort()
-            modcount = len(modlist)
-            
             # Retreiving list of active modules
             activemodlist = settings.modules.keys()
+            modlist = activemodlist
+            # Hiding core modules
+            hidden_modules = ["auth", "default", "error", "appadmin"]
+            for module in hidden_modules:
+                if module in modlist:
+                    modlist.remove(module)
+            modlist.sort()
+            modcount = len(modlist)
 
             langlist = A.get_langcodes()
             langlist.sort()
@@ -845,24 +863,27 @@ def translate():
             # Displaying "NO_OF_COLUMNS" modules per row so as to utilize the page completely
             num = 0
             max_rows = int(ceil(modcount / float(NO_OF_COLUMNS)))
-
+            modules = settings.modules
             while num < max_rows:
-                check = None
-                if modlist[num] in activemodlist:
-                    check = "yes"
+                check = "yes"
+                mod_name = modules[modlist[num]].name_nice
+                mod_name = "%s (%s)" %(mod_name, modlist[num])
                 row = TR(TD(num + 1),
                          TD(INPUT(_type="checkbox", _name="module_list",
                                   _value=modlist[num], _checked = check)),
-                         TD(modlist[num]))
+                         TD(mod_name))
+
                 for c in range(1, NO_OF_COLUMNS):
                     cmax_rows = num + c*max_rows
                     if cmax_rows < modcount:
+                        mod_name = modules[modlist[cmax_rows]].name_nice
+                        mod_name = "%s (%s)" %(mod_name, modlist[cmax_rows])
                         row.append(TD(cmax_rows + 1))
                         row.append(TD(INPUT(_type="checkbox",
                                             _name="module_list",
                                             _value=modlist[cmax_rows],
                                             _checked = check)))
-                        row.append(TD(modlist[cmax_rows]))
+                        row.append(TD(mod_name))
                 num += 1
                 table.append(row)
 
