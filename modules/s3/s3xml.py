@@ -36,6 +36,7 @@ __all__ = ["S3XML"]
 
 import datetime
 import os
+import re
 import sys
 import urllib2
 
@@ -2235,5 +2236,124 @@ class S3XML(S3Codec):
         #print >>sys.stderr, cls.tostring(root, pretty_print=True)
 
         return  etree.ElementTree(root)
+
+# =============================================================================
+class S3XMLFormat(object):
+    """ Helper class to store a pre-parsed stylesheet """
+
+    def __init__(self, stylesheet):
+        """
+            Constructor
+
+            @param stylesheet: the stylesheet (pathname or stream)
+        """
+
+        self.tree = current.xml.parse(stylesheet)
+        
+        self.select = None
+        self.skip = None
+
+    # -------------------------------------------------------------------------
+    def get_fields(self, tablename):
+        """
+            Get the fields to include/exclude for the specified table.
+
+            @param tablename: the tablename
+            @return: tuple of lists (include, exclude) of fields to
+                     include or exclude. None indicates "all fields",
+                     whereas an empty list indicates "no fields".
+        """
+
+        ANY = "ANY"
+        default = None
+
+        tree = self.tree
+        if not tree:
+            return default
+
+        if self.select is None:
+            self.__inspect()
+
+        def find_match(items, tablename, default):
+
+            if tablename in items:
+                match = items[tablename]
+            else:
+                match = False
+                maxlen = 0
+                for tn, fields in items.iteritems():
+                    if "*" in tn:
+                        m = re.match(tn.replace("*", ".*"), tablename)
+                        if not m:
+                            continue
+                        l = m.span()[-1]
+                        if l > maxlen:
+                            match = fields
+                if match is False:
+                    match = items.get(ANY, default)
+            return match
+
+        select = find_match(self.select, tablename, None)
+        skip = find_match(self.skip, tablename, set())
+        
+        if skip:
+            if select:
+                include = [fn for fn in select if fn not in skip]
+                exclude = [fn for fn in skip if fn not in select]
+            else:
+                include = None
+                exclude = list(skip)
+        else:
+            include = list(select) if select else None
+            exclude = []
+        return (include, exclude)
+
+    # -------------------------------------------------------------------------
+    def __inspect(self):
+        """ Check the fields configuration in the stylesheet (if any) """
+
+        ALL = "ALL"
+        ANY = "ANY"
+
+        tree = self.tree
+
+        ns = {"s3": "http://eden.sahanafoundation.org/wiki/S3"}
+        elements = tree.xpath("./s3:fields", namespaces=ns)
+
+        select = {}
+        skip = {}
+
+        for element in elements:
+            tables = element.get("tables", ANY).split(",")
+
+            fields = element.get("select", None)
+            if fields is not None and fields != ALL:
+                fields = set([f.strip() for f in fields.split(",")])
+                
+            exclude = element.get("exclude", None)
+            if exclude is not None:
+                exclude = set([f.strip() for f in exclude.split(",")])
+
+            for table in tables:
+                tablename = table.strip()
+                if fields:
+                    select[tablename] = None if fields == ALL else fields
+                if exclude:
+                    skip[tablename] = exclude
+                
+        self.select = select
+        self.skip = skip
+        return
+
+    # -------------------------------------------------------------------------
+    def transform(self, tree, **args):
+        """
+            Transform an element tree using this format
+
+            @param tree: the element tree
+            @param args: parameters for the stylesheet
+        """
+
+        return current.xml.transform(tree, self.tree, **args)
 
 # End =========================================================================

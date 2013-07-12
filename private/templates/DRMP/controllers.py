@@ -21,7 +21,7 @@ class index():
 
         response = current.response
         output = {}
-        output["title"] = response.title = current.deployment_settings.get_system_name()
+        #output["title"] = response.title = current.deployment_settings.get_system_name()
         view = path.join(current.request.folder, "private", "templates",
                          THEME, "views", "index.html")
         try:
@@ -41,7 +41,7 @@ class index():
             resource = s3db.resource("cms_post")
             resource.add_filter(S3FieldSelector("series_id$name") == "Event")
             list_fields = ["location_id",
-                           "created_on",
+                           "date",
                            "body",
                            "created_by",
                            "created_by$organisation_id",
@@ -49,7 +49,7 @@ class index():
                            "event_post.event_id",
                            ]
             orderby = resource.get_config("list_orderby",
-                                          ~resource.table.created_on)
+                                          ~resource.table.date)
             datalist, numrows, ids = resource.datalist(fields=list_fields,
                                                        start=None,
                                                        limit=4,
@@ -83,7 +83,7 @@ class index():
             resource = s3db.resource("cms_post")
             list_fields = ["series_id",
                            "location_id",
-                           "created_on",
+                           "date",
                            "body",
                            "created_by",
                            "created_by$organisation_id",
@@ -91,7 +91,7 @@ class index():
                            "event_post.event_id",
                            ]
             orderby = resource.get_config("list_orderby",
-                                          ~resource.table.created_on)
+                                          ~resource.table.date)
             datalist, numrows, ids = resource.datalist(fields=list_fields,
                                                        start=None,
                                                        limit=4,
@@ -178,8 +178,8 @@ def _updates():
         - Filterable DataList of CMS Posts & a DataList of Events
     """
 
-    if not current.auth.is_logged_in():
-        current.auth.permission.fail()
+    #if not current.auth.is_logged_in():
+    #    current.auth.permission.fail()
 
     T = current.T
     s3db = current.s3db
@@ -273,7 +273,7 @@ def _updates():
             response.view = "plain.html"
     elif not ajax:
         # Set Title & View after REST Controller, in order to override
-        output["title"] = response.title = current.deployment_settings.get_system_name()
+        output["title"] = T("News Feed")
         view = path.join(request.folder, "private", "templates",
                          THEME, "views", "updates.html")
         try:
@@ -468,7 +468,7 @@ def render_cms_events(listid, resource, rfields, record, **attr):
 
     raw = record._row
     series = "Event"
-    date = record["cms_post.created_on"]
+    date = record["cms_post.date"]
     body = record["cms_post.body"]
     location = record["cms_post.location_id"]
     location_id = raw["cms_post.location_id"]
@@ -621,28 +621,6 @@ class glossary():
             raise HTTP("404", "Unable to open Custom View: %s" % view)
 
         title = current.T("Glossary")
-
-        return dict(title = title,
-                    )
-
-# =============================================================================
-class support():
-    """
-        Custom page
-    """
-
-    def __call__(self):
-
-        view = path.join(current.request.folder, "private", "templates",
-                         THEME, "views", "support.html")
-        try:
-            # Pass view as file not str to work in compiled mode
-            current.response.view = open(view, "rb")
-        except IOError:
-            from gluon.http import HTTP
-            raise HTTP("404", "Unable to open Custom View: %s" % view)
-
-        title = current.T("Support")
 
         return dict(title = title,
                     )

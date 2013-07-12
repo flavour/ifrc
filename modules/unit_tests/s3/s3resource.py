@@ -7,6 +7,7 @@
 #
 import unittest
 import datetime
+from lxml import etree
 from gluon import *
 from gluon.storage import Storage
 from gluon.dal import Row
@@ -589,7 +590,7 @@ class ResourceFilterQueryTests(unittest.TestCase):
         self.assertEqual(rfilter.joins, Storage())
         self.assertEqual(rfilter.left, Storage())
         # Try to select rows
-        rows = component.fast_select(None, limit=1, as_rows=True)
+        rows = component.select(None, limit=1, as_rows=True)
 
     # -------------------------------------------------------------------------
     @unittest.skipIf(not current.deployment_settings.has_module("hrm"), "hrm module disabled")
@@ -631,7 +632,7 @@ class ResourceFilterQueryTests(unittest.TestCase):
         self.assertEqual(rfilter.joins, Storage())
         self.assertEqual(rfilter.left, Storage())
         # Try to select rows
-        rows = component.fast_select(None, limit=1, as_rows=True)
+        rows = component.select(None, limit=1, as_rows=True)
 
     # -------------------------------------------------------------------------
     @unittest.skipIf(not current.deployment_settings.has_module("project"), "project module disabled")
@@ -665,7 +666,7 @@ class ResourceFilterQueryTests(unittest.TestCase):
         self.assertEqual(rfilter.joins, Storage())
         self.assertEqual(rfilter.left, Storage())
         # Try to select rows
-        rows = component.fast_select(None, limit=1, as_rows=True)
+        rows = component.select(None, limit=1, as_rows=True)
 
     # -------------------------------------------------------------------------
     @unittest.skipIf(not current.deployment_settings.has_module("hrm"), "hrm module disabled")
@@ -776,7 +777,6 @@ class ResourceContextFilterTests(unittest.TestCase):
     </resource>
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
 
         current.auth.override = True
@@ -805,7 +805,7 @@ class ResourceContextFilterTests(unittest.TestCase):
                                       "CONTEXT1OFFICE2",
                                       "CONTEXT2OFFICE1"],
                                  context=True)
-        data = resource.fast_select(["name"], limit=None)
+        data = resource.select(["name"], limit=None)
         items = data["rows"]
         self.assertEqual(len(items), 3)
         names = [item.values()[0] for item in items]
@@ -818,7 +818,7 @@ class ResourceContextFilterTests(unittest.TestCase):
                                       "CONTEXT2PERSON",
                                       "CONTEXT12PERSON"],
                                  context=True)
-        data = resource.fast_select(["first_name"], limit=None)
+        data = resource.select(["first_name"], limit=None)
         items = data["rows"]
         self.assertEqual(len(items), 3)
         names = [item.values()[0] for item in items]
@@ -834,7 +834,7 @@ class ResourceContextFilterTests(unittest.TestCase):
                                       "CONTEXT1OFFICE2",
                                       "CONTEXT2OFFICE1"],
                                  context=True)
-        data = resource.fast_select(["name"], limit=None)
+        data = resource.select(["name"], limit=None)
         items = data["rows"]
         self.assertEqual(len(items), 2)
         names = [item.values()[0] for item in items]
@@ -847,7 +847,7 @@ class ResourceContextFilterTests(unittest.TestCase):
                                       "CONTEXT2PERSON",
                                       "CONTEXT12PERSON"],
                                  context=True)
-        data = resource.fast_select(["first_name"], limit=None)
+        data = resource.select(["first_name"], limit=None)
         items = data["rows"]
         self.assertEqual(len(items), 2)
         names = [item.values()[0] for item in items]
@@ -863,7 +863,7 @@ class ResourceContextFilterTests(unittest.TestCase):
                                       "CONTEXT1OFFICE2",
                                       "CONTEXT2OFFICE1"],
                                  context=True)
-        data = resource.fast_select(["name"], limit=None)
+        data = resource.select(["name"], limit=None)
         items = data["rows"]
         self.assertEqual(len(items), 1)
         names = [item.values()[0] for item in items]
@@ -876,7 +876,7 @@ class ResourceContextFilterTests(unittest.TestCase):
                                       "CONTEXT2PERSON",
                                       "CONTEXT12PERSON"],
                                  context=True)
-        data = resource.fast_select(["first_name"], limit=None)
+        data = resource.select(["first_name"], limit=None)
         items = data["rows"]
         self.assertEqual(len(items), 2)
         names = [item.values()[0] for item in items]
@@ -1394,7 +1394,6 @@ class ResourceDataAccessTests(unittest.TestCase):
     </resource>
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
         resource = s3db.resource("org_organisation")
         resource.import_xml(xmltree)
@@ -1408,8 +1407,8 @@ class ResourceDataAccessTests(unittest.TestCase):
         resource = s3db.resource("org_organisation",
                                  uid="DATESTORG")
 
-        rows = resource.fast_select(["name", "office.name"],
-                                    limit=1, as_rows=True)
+        rows = resource.select(["name", "office.name"],
+                               limit=1, as_rows=True)
         self.assertEqual(len(rows), 2)
         row = rows[0]
 
@@ -1444,7 +1443,7 @@ class ResourceDataAccessTests(unittest.TestCase):
 
     # -------------------------------------------------------------------------
     def testCollapseRows(self):
-        """ Test correct handling of ambiguous rows in extract() """
+        """ Test correct handling of ambiguous rows in select """
 
         s3db = current.s3db
 
@@ -1459,22 +1458,23 @@ class ResourceDataAccessTests(unittest.TestCase):
                                         ftable.name)
         self.assertEqual(len(rows), 2)
 
-        resource = s3db.resource("org_organisation")
+        resource = s3db.resource("org_organisation", uid="DATESTORG")
         list_fields = ["name", "office.name"]
-        lfields = resource.resolve_selectors(list_fields)[0]
-        collapsed = resource.extract(rows, lfields)
-        self.assertEqual(len(collapsed), 1)
+        
+        rows = resource.select(list_fields)["rows"]
+        self.assertEqual(len(rows), 1)
 
-        office_names = collapsed[0]["org_office.name"]
+        office_names = rows[0]["org_office.name"]
         self.assertTrue(isinstance(office_names, list))
         self.assertEqual(len(office_names), 2)
         self.assertTrue("DATestOffice1" in office_names)
         self.assertTrue("DATestOffice2" in office_names)
 
-        collapsed = resource.extract(rows, lfields, represent=True)
-        self.assertEqual(len(collapsed), 1)
+        rows = resource.select(list_fields,
+                                    represent=True)["rows"]
+        self.assertEqual(len(rows), 1)
 
-        office_names = collapsed[0]["org_office.name"]
+        office_names = rows[0]["org_office.name"]
         self.assertTrue(isinstance(office_names, basestring))
         office_names = [s.strip() for s in office_names.split(",")]
         self.assertEqual(len(office_names), 2)
@@ -1646,6 +1646,7 @@ class ResourceDataTableFilterTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def testDataTableFilterStandard(self):
         """ Test Standard Data Table """
+        
         resource = current.s3db.resource("hrm_certificate_skill")
         vars = Storage({"bSortable_0": "false",
                         "bSortable_1": "true",
@@ -1663,6 +1664,7 @@ class ResourceDataTableFilterTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def testDataTableFilterWithBulkColumn(self):
         """ Test De-Duplicator Data Table """
+        
         resource = current.s3db.resource("hrm_certificate_skill")
         vars = Storage({"bSortable_0": "false",
                         "bSortable_1": "false",
@@ -1681,6 +1683,7 @@ class ResourceDataTableFilterTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def testDataTableFilterOther(self):
         """ Test Other Data Table """
+        
         resource = current.s3db.resource("hrm_certificate_skill")
         vars = Storage({"bSortable_0": "false",
                         "bSortable_1": "true",
@@ -1705,53 +1708,96 @@ class ResourceExportTests(unittest.TestCase):
         """ Test export of a resource as element tree """
 
         xml = current.xml
+        auth = current.auth
 
-        current.auth.override = True
-        resource = current.s3db.resource("org_office", id=1)
-        tree = resource.export_tree(start=0, limit=1, dereference=False)
+        auth.override = True
+        
+        xmlstr = """
+<s3xml>
+    <resource name="org_organisation">
+        <data field="name">TestExportTreeOrganisation1</data>
+        <resource name="org_office" uuid="ETO1">
+            <data field="name">TestExportTreeOffice1</data>
+        </resource>
+    </resource>
+</s3xml>"""
 
-        root = tree.getroot()
-        self.assertEqual(root.tag, xml.TAG.root)
+        try:
+            xmltree = etree.ElementTree(etree.fromstring(xmlstr))
+            resource = current.s3db.resource("org_organisation")
+            resource.import_xml(xmltree)
 
-        attrib = root.attrib
-        self.assertEqual(len(attrib), 5)
-        self.assertEqual(attrib["success"], "true")
-        self.assertEqual(attrib["start"], "0")
-        self.assertEqual(attrib["limit"], "1")
-        self.assertEqual(attrib["results"], "1")
-        self.assertTrue("url" in attrib)
+            resource = current.s3db.resource("org_office", uid="ETO1")
+            tree = resource.export_tree(start=0, limit=1, dereference=False)
 
-        self.assertEqual(len(root), 1)
-        for child in root:
-            self.assertEqual(child.tag, xml.TAG.resource)
-            attrib = child.attrib
-            self.assertEqual(attrib["name"], "org_office")
-            self.assertTrue("uuid" in attrib)
+            root = tree.getroot()
+            self.assertEqual(root.tag, xml.TAG.root)
 
+            attrib = root.attrib
+            self.assertEqual(len(attrib), 5)
+            self.assertEqual(attrib["success"], "true")
+            self.assertEqual(attrib["start"], "0")
+            self.assertEqual(attrib["limit"], "1")
+            self.assertEqual(attrib["results"], "1")
+            self.assertTrue("url" in attrib)
+
+            self.assertEqual(len(root), 1)
+            for child in root:
+                self.assertEqual(child.tag, xml.TAG.resource)
+                attrib = child.attrib
+                self.assertEqual(attrib["name"], "org_office")
+                self.assertTrue("uuid" in attrib)
+        finally:
+            current.db.rollback()
+            auth.override = False
 
     # -------------------------------------------------------------------------
     def testExportTreeWithMaxBounds(self):
         """ Text XML output with max bounds """
 
         xml = current.xml
+        auth = current.auth
 
-        current.auth.override = True
-        resource = current.s3db.resource("org_office", id=1)
-        tree = resource.export_tree(start=0, limit=1, dereference=False, maxbounds=True)
-        root = tree.getroot()
-        attrib = root.attrib
-        self.assertEqual(len(attrib), 9)
-        self.assertTrue("latmin" in attrib)
-        self.assertTrue("latmax" in attrib)
-        self.assertTrue("lonmin" in attrib)
-        self.assertTrue("lonmax" in attrib)
+        auth.override = True
+
+        xmlstr = """
+<s3xml>
+    <resource name="org_organisation">
+        <data field="name">TestExportTreeOrganisation2</data>
+        <resource name="org_office" uuid="ETO2">
+            <data field="name">TestExportTreeOffice2</data>
+        </resource>
+    </resource>
+</s3xml>"""
+
+        try:
+            xmltree = etree.ElementTree(etree.fromstring(xmlstr))
+            resource = current.s3db.resource("org_organisation")
+            resource.import_xml(xmltree)
+
+            resource = current.s3db.resource("org_office", uid="ETO2")
+            tree = resource.export_tree(start=0,
+                                        limit=1,
+                                        dereference=False,
+                                        maxbounds=True)
+            root = tree.getroot()
+            attrib = root.attrib
+            self.assertEqual(len(attrib), 9)
+            self.assertTrue("latmin" in attrib)
+            self.assertTrue("latmax" in attrib)
+            self.assertTrue("lonmin" in attrib)
+            self.assertTrue("lonmax" in attrib)
+
+        finally:
+            current.db.rollback()
+            auth.override = False
 
     # -------------------------------------------------------------------------
     def testExportTreeWithMSince(self):
         """ Test automatic ordering of export items by mtime if msince is given """
 
-        manager = current.manager
-        current.auth.override = True
+        auth = current.auth
+        auth.override = True
 
         xmlstr = """
 <s3xml>
@@ -1764,7 +1810,6 @@ class ResourceExportTests(unittest.TestCase):
 </s3xml>"""
 
         try:
-            from lxml import etree
             xmltree = etree.ElementTree(etree.fromstring(xmlstr))
             resource = current.s3db.resource("hms_hospital")
             resource.import_xml(xmltree)
@@ -1806,12 +1851,12 @@ class ResourceExportTests(unittest.TestCase):
 
         finally:
             current.db.rollback()
+            auth.override = False
 
     # -------------------------------------------------------------------------
     def testExportXMLWithSyncFilters(self):
         """ Test XML Export with Sync Filters """
 
-        manager = current.manager
         auth = current.auth
         s3db = current.s3db
         
@@ -1851,7 +1896,6 @@ class ResourceExportTests(unittest.TestCase):
 </s3xml>"""
 
         try:
-            from lxml import etree
             xmltree = etree.ElementTree(etree.fromstring(xmlstr))
             resource = current.s3db.resource("org_organisation")
             resource.import_xml(xmltree)
@@ -1988,14 +2032,14 @@ class ResourceImportTests(unittest.TestCase):
 
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
-        current.auth.override = True
-
+        
         resource = current.s3db.resource("pr_person")
         msg = resource.import_xml(xmltree)
+        
         from gluon.contrib import simplejson as json
         msg = json.loads(msg)
+        
         self.assertEqual(msg["status"], "success")
         self.assertEqual(msg["statuscode"], "200")
         self.assertEqual(msg["records"], 1)
@@ -2006,8 +2050,6 @@ class ResourceImportTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def testImportXMLWithMTime(self):
         """ Test mtime update in imports """
-
-        manager = current.manager
 
         # If mtime is given in the import XML, then resource.mtime should
         # get updated to the youngest entry
@@ -2021,7 +2063,6 @@ class ResourceImportTests(unittest.TestCase):
     </resource>
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
         resource = current.s3db.resource("hms_hospital")
         resource.import_xml(xmltree)
@@ -2032,8 +2073,6 @@ class ResourceImportTests(unittest.TestCase):
     def testImportXMLWithoutMTime(self):
         """ Test mtime update in imports with no mtime given """
 
-        manager = current.manager
-
         # If no mtime is given, resource.mtime should be set to current UTC
         xmlstr = """
 <s3xml>
@@ -2042,7 +2081,6 @@ class ResourceImportTests(unittest.TestCase):
     </resource>
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
         resource = current.s3db.resource("hms_hospital")
         resource.import_xml(xmltree)
@@ -2055,8 +2093,6 @@ class ResourceImportTests(unittest.TestCase):
     def testImportXMLWithPartialMTime(self):
         """ Test mtime update in imports if mtime given in only some records """
 
-        manager = current.manager
-
         # If mixed, then we should still get current UTC
         xmlstr = """
 <s3xml>
@@ -2068,7 +2104,6 @@ class ResourceImportTests(unittest.TestCase):
     </resource>
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
         resource = current.s3db.resource("hms_hospital")
         resource.import_xml(xmltree)
@@ -2090,10 +2125,8 @@ class ResourceDataObjectAPITests (unittest.TestCase):
     def testLoadStatusIndication(self):
         """ Test load status indication by value of _rows """
 
-        s3db = current.s3db
-
         # A newly created resource has _rows=None
-        resource = s3db.resource("project_time")
+        resource = current.s3db.resource("project_time")
         self.assertEqual(resource._rows, None)
 
         # After load(), this must always be a list
@@ -2105,6 +2138,102 @@ class ResourceDataObjectAPITests (unittest.TestCase):
         resource.clear()
         self.assertEqual(resource._rows, None)
 
+    # -------------------------------------------------------------------------
+    def testLoadFieldSelection(self):
+        """ Test selection of fields in load() with fields and skip """
+
+        s3db = current.s3db
+        auth = current.auth
+        auth.override = True
+
+        xmlstr = """
+<s3xml>
+    <resource name="org_office" uuid="LOADTESTOFFICE">
+        <data field="name">LoadTestOffice</data>
+        <reference field="organisation_id" resource="org_organisation">
+            <resource name="org_organisation">
+                <data field="name">LoadTestOrganisation</data>
+            </resource>
+        </reference>
+    </resource>
+</s3xml>"""
+
+        xmltree = etree.ElementTree(etree.fromstring(xmlstr))
+
+        try:
+            resource = s3db.resource("org_office")
+            resource.import_xml(xmltree)
+
+            resource = s3db.resource("org_office", uid="LOADTESTOFFICE")
+
+            # Restrict field selection
+            rows = resource.load(fields=["name"])
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertTrue(hasattr(row, "id"))
+            self.assertTrue(hasattr(row, "name"))
+            self.assertTrue(hasattr(row, "created_on")) # meta-field
+            self.assertTrue(hasattr(row, "pe_id")) # super-key
+            self.assertFalse(hasattr(row, "organisation_id"))
+
+            # Skip field
+            rows = resource.load(skip=["name"])
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertTrue(hasattr(row, "id"))
+            self.assertFalse(hasattr(row, "name"))
+            self.assertTrue(hasattr(row, "created_on"))
+            self.assertTrue(hasattr(row, "pe_id"))
+            self.assertTrue(hasattr(row, "organisation_id"))
+
+            # skip overrides fields
+            rows = resource.load(fields=["name", "organisation_id"],
+                                 skip=["organisation_id"])
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertTrue(hasattr(row, "id"))
+            self.assertTrue(hasattr(row, "name"))
+            self.assertTrue(hasattr(row, "created_on"))
+            self.assertTrue(hasattr(row, "pe_id"))
+            self.assertFalse(hasattr(row, "organisation_id"))
+
+            # Can't skip meta-fields
+            rows = resource.load(fields=["name", "organisation_id"],
+                                 skip=["created_on"])
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertTrue(hasattr(row, "id"))
+            self.assertTrue(hasattr(row, "name"))
+            self.assertTrue(hasattr(row, "created_on"))
+            self.assertTrue(hasattr(row, "pe_id"))
+            self.assertTrue(hasattr(row, "organisation_id"))
+
+            # Can't skip record ID
+            rows = resource.load(fields=["name", "organisation_id"],
+                                 skip=["id"])
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertTrue(hasattr(row, "id"))
+            self.assertTrue(hasattr(row, "name"))
+            self.assertTrue(hasattr(row, "created_on"))
+            self.assertTrue(hasattr(row, "pe_id"))
+            self.assertTrue(hasattr(row, "organisation_id"))
+
+            # Can't skip super-keys
+            rows = resource.load(fields=["name", "organisation_id"],
+                                 skip=["pe_id"])
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertTrue(hasattr(row, "id"))
+            self.assertTrue(hasattr(row, "name"))
+            self.assertTrue(hasattr(row, "created_on"))
+            self.assertTrue(hasattr(row, "pe_id"))
+            self.assertTrue(hasattr(row, "organisation_id"))
+
+        finally:
+            auth.override = False
+            current.db.rollback()
+        
 # =============================================================================
 class MergeOrganisationsTests(unittest.TestCase):
     """ Test merging org_organisation records """
@@ -2242,7 +2371,6 @@ class MergeOrganisationsTests(unittest.TestCase):
         """ Test merge of link table entries """
 
         db = current.db
-        auth = current.auth
         s3db = current.s3db
         deployment_settings = current.deployment_settings
 
@@ -2397,27 +2525,30 @@ class MergePersonsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def testPermissionError(self):
         """ Check for exception if not authorized """
+        
         db = current.db
         auth = current.auth
         s3db = current.s3db
         deployment_settings = current.deployment_settings
 
+        # Anonymous
         auth.override = False
         auth.s3_impersonate(None)
+
         self.assertRaises(current.auth.permission.error,
                           self.resource.merge, self.id1, self.id2)
+                          
         # Check for proper rollback
         ptable = s3db.pr_person
         query = ptable._id.belongs((self.id1, self.id2))
         rows = db(query).select(ptable._id, limitby=(0, 2))
         self.assertEqual(len(rows), 0)
-        current.auth.override = True
 
     # -------------------------------------------------------------------------
     def testOriginalNotFoundError(self):
         """ Check for exception if record not found """
+        
         db = current.db
-        auth = current.auth
         s3db = current.s3db
         deployment_settings = current.deployment_settings
 
@@ -2431,8 +2562,8 @@ class MergePersonsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def testNotDuplicateFoundError(self):
         """ Check for exception if record not found """
+        
         db = current.db
-        auth = current.auth
         s3db = current.s3db
         deployment_settings = current.deployment_settings
 
@@ -2495,7 +2626,6 @@ class MergePersonsTests(unittest.TestCase):
         """ Test merge of single-component """
 
         db = current.db
-        auth = current.auth
         s3db = current.s3db
         deployment_settings = current.deployment_settings
 
@@ -2536,7 +2666,6 @@ class MergePersonsTests(unittest.TestCase):
         """ Test merge of multiple-component """
 
         db = current.db
-        auth = current.auth
         s3db = current.s3db
         deployment_settings = current.deployment_settings
 
@@ -2733,8 +2862,7 @@ class MergeReferenceListsTest(unittest.TestCase):
         resource = s3db.resource("org_facility_type",
                                  uid=["TESTMERGEFACTYPE1", "TESTMERGEFACTYPE2"])
 
-        rows = resource.fast_select(["id"],
-                                    limit=2, as_rows=True)
+        rows = resource.select(["id"], limit=2, as_rows=True)
         self.assertEqual(len(rows), 2)
         
         original = rows[0].id
@@ -2743,8 +2871,8 @@ class MergeReferenceListsTest(unittest.TestCase):
 
         resource = s3db.resource("org_facility",
                                  uid="TESTMERGEFACILITY")
-        rows = resource.fast_select(["id", "facility_type_id"],
-                                    limit=None, as_rows=True)
+        rows = resource.select(["id", "facility_type_id"],
+                               limit=None, as_rows=True)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].facility_type_id, [original])
 
@@ -2774,7 +2902,6 @@ class ResourceGetTests(unittest.TestCase):
     </resource>
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
         resource = current.s3db.resource("org_organisation")
         resource.import_xml(xmltree)
@@ -2889,8 +3016,8 @@ class ResourceLazyVirtualFieldsSupportTests(unittest.TestCase):
         resource = current.s3db.resource("pr_person")
 
         # Select raw rows
-        rows = resource.fast_select(["name", "first_name", "last_name"],
-                                    limit=1, as_rows=True)
+        rows = resource.select(["name", "first_name", "last_name"],
+                               limit=1, as_rows=True)
         row = rows[0]
         self.assertTrue("name" in row)
         self.assertTrue(callable(row["name"]))
@@ -2900,7 +3027,7 @@ class ResourceLazyVirtualFieldsSupportTests(unittest.TestCase):
         name = "%s %s" % (row.first_name, row.last_name)
 
         # Select with value extraction
-        data = resource.fast_select(["name"], limit=1)
+        data = resource.select(["name"], limit=1)
         item = data["rows"][0]
         self.assertTrue("pr_person.name" in item)
         # lazy field called
@@ -2920,8 +3047,8 @@ class ResourceLazyVirtualFieldsSupportTests(unittest.TestCase):
         query = FS("name").like("Admin%")
         resource.add_filter(query)
 
-        data = resource.fast_select(["name", "first_name", "last_name"],
-                                    limit=None)
+        data = resource.select(["name", "first_name", "last_name"],
+                               limit=None)
         rows = data["rows"]
         for item in rows:
             self.assertTrue("pr_person.name" in item)
@@ -2939,8 +3066,8 @@ class ResourceLazyVirtualFieldsSupportTests(unittest.TestCase):
         vars = Storage({"person.name__like": "Admin*"})
         resource = current.s3db.resource("pr_person", vars=vars)
 
-        data = resource.fast_select(["name", "first_name", "last_name"],
-                                    limit=None)
+        data = resource.select(["name", "first_name", "last_name"],
+                               limit=None)
         rows = data["rows"]
         for item in rows:
             self.assertTrue("pr_person.name" in item)
@@ -3422,7 +3549,7 @@ class ResourceFilteredComponentTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     @unittest.skipIf(not current.deployment_settings.has_module("org"), "org module disabled")
     def testSelectWithFilteredComponent(self):
-        """ Test S3Resource.fast_select with fields in a filtered component """
+        """ Test S3Resource.select with fields in a filtered component """
     
         s3db = current.s3db
         auth = current.auth
@@ -3442,7 +3569,6 @@ class ResourceFilteredComponentTests(unittest.TestCase):
     </resource>
 </s3xml>"""
 
-        from lxml import etree
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
 
         auth.override = True
@@ -3451,7 +3577,7 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         resource.import_xml(xmltree)
 
         resource = s3db.resource("org_office_type", uid="FCTESTTYPE")
-        row = resource.fast_select(["id"], limit=1, as_rows=True)[0]
+        row = resource.select(["id"], limit=1, as_rows=True)[0]
         type_id = row.id
 
         s3db.add_component("org_office",
@@ -3462,7 +3588,7 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         
         resource = current.s3db.resource("org_organisation", uid="FCTESTORG")
         fields = ["id", "name", "test.name", "test.office_type_id$name"]
-        data = resource.fast_select(fields, limit=None)
+        data = resource.select(fields, limit=None)
         result = data["rows"]
 
         self.assertEqual(len(result), 1)

@@ -4,7 +4,16 @@
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 {{# Always force latest IE rendering engine (even in intranet) & Chrome Frame }}
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-<title>{{try:}}{{=title}}{{except:}}{{=response.title or settings.get_system_name_short()}}{{pass}}</title>
+<title>
+{{try:}}
+ {{title #Test Title}}
+ {{=settings.get_system_name_short()}}
+ : 
+ {{=title}}
+{{except:}}
+ {{=settings.get_system_name()}}
+{{pass}}
+</title>
 {{if response.refresh:}}{{=XML(response.refresh)}}{{pass}}
 {{# http://dev.w3.org/html5/markup/meta.name.html }}
 <meta name="application-name" content="{{=appname}}" />
@@ -81,8 +90,8 @@
      <li class='dropdown'> <a href='#' class='dropdown-toggle disabled top-level' id='profiles' data-toggle='dropdown'><i class='icon-folder-open-alt'></i> {{=T("Profiles")}}<b class='caret'></b></a>
       <ul class='dropdown-menu' role='menu' aria-labelledby='profiles'>
        <li role='menuitem'><a href='/{{=appname}}/event/event/datalist' tabindex='-1' class='menu-item'><i class='icon-incident'></i> {{=T("Disasters")}}</a></li>
-       <li role='menuitem'><a href='/{{=appname}}/org/organisation/datalist' tabindex='-1' class='menu-item'><i class='icon-sitemap'></i> {{=T("Stakeholders")}}</a></li>
        <li role='menuitem'><a href='/{{=appname}}/gis/location/datalist' tabindex='-1' class='menu-item'><i class='icon-map'></i> {{=T("Districts")}}</a></li>
+       <li role='menuitem'><a href='/{{=appname}}/org/organisation/datalist' tabindex='-1' class='menu-item'><i class='icon-sitemap'></i> {{=T("Stakeholders")}}</a></li>
       </ul>
      </li>
      <li class='dropdown'> <a href='#' class='dropdown-toggle disabled top-level' id='more' data-toggle='dropdown'><i class='icon-plus-sign'></i> {{=T("More")}}<b class='caret'></b></a>
@@ -99,6 +108,9 @@
       <li class='dropdown'><a href='#' class='dropdown-toggle disabled' data-toggle='dropdown'><i class='icon-cog'></i><b class='caret'></b></a>
        <ul class='dropdown-menu'>
         <li><a href='/{{=appname}}/default/user/profile'><i class='icon-cog'></i> {{=T("Profile")}}</a></li>
+        {{if auth.s3_has_role("ADMIN"):}}
+        <li><a href='/{{=appname}}/admin/user'><i class='icon-cogs'></i> {{=T("Admin")}}</a></li>
+        {{pass}}
         <li class='divider'></li>
         <li><a href='/{{=appname}}/default/user/logout'><i class='icon-off'></i> {{=T("Logout")}}</a></li>
        </ul>
