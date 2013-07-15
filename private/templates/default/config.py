@@ -38,6 +38,9 @@ settings = current.deployment_settings
 # Theme (folder to use for views/layout.html)
 #settings.base.theme = "default"
 
+# Enable Guided Tours
+settings.base.guided_tour = True
+
 # Authentication settings
 # These settings should be changed _after_ the 1st (admin) user is
 # registered in order to secure the deployment
@@ -574,6 +577,10 @@ settings.modules = OrderedDict([
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
+        )),
+    ("tour", Storage(
+            name_nice = T("Guided Tour Functionality"),
+            module_type = None,
         )),
     ("translate", Storage(
             name_nice = T("Translation Functionality"),
