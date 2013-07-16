@@ -14,7 +14,7 @@ from gluon.storage import Storage
 from s3.s3filter import S3OptionsFilter
 from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentCheckbox
 from s3.s3validators import IS_LOCATION_SELECTOR2
-from s3.s3widgets import S3LocationSelectorWidget2, S3AddPersonWidget2
+from s3.s3widgets import S3LocationSelectorWidget2, S3AddPersonWidget, S3AddPersonWidget2
 
 T = current.T
 settings = current.deployment_settings
@@ -257,7 +257,7 @@ def customize_event_incident_report(**attr):
                                                          show_postcode=True,
                                                          )
     table.person_id.comment = None
-    table.person_id.widget = S3AddPersonWidget2(controller="pr")
+    table.person_id.widget = S3AddPersonWidget(controller="pr")
     
     current.response.s3.crud_strings[tablename] = Storage(
                 title_create = T("Add Incident"),
@@ -305,12 +305,6 @@ def customize_org_organisation(**attr):
         "name",
         "logo",
         S3SQLInlineComponentCheckbox(
-            "group",
-            label = T("Coalition"),
-            field = "group_id",
-            cols = 3,
-        ),
-        S3SQLInlineComponentCheckbox(
             "sector",
             label = T("Sectors"),
             field = "sector_id",
@@ -338,7 +332,7 @@ def customize_org_organisation(**attr):
             label = T("Organization's Locations"),
             #comment = "Bob",
             fields = ["name", 
-                      "facility_type_id",
+                      "site_facility_type.facility_type_id",
                       "location_id",
                       ],
         ),
@@ -354,12 +348,7 @@ def customize_org_organisation(**attr):
         "comments",
     ) 
 
-    filter_widgets = [S3OptionsFilter("group_membership.group_id",
-                                      label=T("Coalition"),
-                                      represent="%(name)s",
-                                      widget="multiselect",
-                                      ),
-                      S3OptionsFilter("sector_organisation.sector_id",
+    filter_widgets = [S3OptionsFilter("sector_organisation.sector_id",
                                       label=T("Sector"),
                                       represent="%(name)s",
                                       widget="multiselect",
@@ -371,9 +360,26 @@ def customize_org_organisation(**attr):
                                       ),
                       ]
 
+    # Custom Report Fields
+    report_fields = ["name",
+                     (T("Sectors"), "sector_organisation.sector_id"),
+                     (T("Services"), "service_organisation.service_id"),
+                     ]
+
+    report_options = Storage(rows = report_fields,
+                             cols = report_fields,
+                             fact = report_fields,
+                             defaults = Storage(rows = "service_organisation.service_id",
+                                                cols = "sector_organisation.sector_id",
+                                                fact = "list(name)",
+                                                totals = True
+                                                )
+                             )
+
     s3db.configure(tablename,
                    crud_form = crud_form,
                    filter_widgets = filter_widgets,
+                   report_options = report_options,
                    )
 
     attr["hide_filter"] = False
@@ -467,7 +473,7 @@ def customize_org_facility(**attr):
                                       represent="%(name)s",
                                       widget="multiselect",
                                       ),
-                      S3OptionsFilter("facility_type_id",
+                      S3OptionsFilter("site_facility_type.facility_type_id",
                                       label=T("Type"),
                                       represent="%(name)s",
                                       widget="multiselect",
@@ -483,6 +489,8 @@ def customize_org_facility(**attr):
                    crud_form = crud_form,
                    filter_widgets = filter_widgets,
                    )
+
+    attr["hide_filter"] = False
 
     current.response.s3.crud_strings[tablename] = Storage(
                 title_create = T("Add Location"),
