@@ -610,6 +610,7 @@ class S3CMS(S3Method):
         if _item:
             if ADMIN:
                 item = DIV(XML(_item.body),
+                           # @ToDo: Replace with CSS
                            BR(),
                            A(current.T("Edit"),
                              _href=URL(c="cms", f="post",
@@ -617,7 +618,7 @@ class S3CMS(S3Method):
                                        vars={"module": module,
                                              "resource": resource
                                              }),
-                             _class="action-btn"))
+                             _class="action-btn cms-edit"))
             else:
                 item = XML(_item.body)
         elif ADMIN:

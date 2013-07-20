@@ -155,10 +155,16 @@ table.embeddedComponent tr.label-row td {
 }
 
 /* Summary Page */
+#summary-tabs {
+    /* Hide while loading */
+    display: none;
+}
+
 #summary-filter-form {
     margin: 0;
 }
 #summary-sections #map{
+    margin-top: 0;
     padding: 0;
 }
 
@@ -1061,6 +1067,14 @@ ul.x-tab-strip,
 ul.x-tree-node-ct,
 ul.x-tree-root-ct {
     list-style: none outside none;
+}
+
+/* LocationSelector 2 */
+.geocode_success {
+    color: #0a0;
+}
+.geocode_fail {
+    color: #f00;
 }
 
 /* Search Form */
