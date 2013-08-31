@@ -97,9 +97,11 @@ def user():
         lappend("language")
     if settings.get_auth_registration_requests_organisation():
         lappend("organisation_id")
+    if settings.get_auth_registration_requests_organisation_group():
+        lappend("org_group_id")
     if settings.get_auth_registration_requests_site():
         lappend("site_id")
-    if settings.get_auth_registration_link_user_to():
+    if settings.get_auth_registration_link_user_to() and settings.get_auth_show_link():
         lappend("link_user_to")
     lappend((T("Roles"), "membership.group_id"))
 
@@ -368,7 +370,7 @@ def user():
         return output
     s3.postp = postp
 
-    s3mgr.import_prep = auth.s3_membership_import_prep
+    s3mgr.import_prep = auth.s3_import_prep
 
     output = s3_rest_controller("auth", "user",
                                 rheader=rheader,

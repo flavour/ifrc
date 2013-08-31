@@ -3,6 +3,10 @@
 .map_home {
     margin: 0 0 0 -12px;
 }
+.map_wrapper {
+    /* Allow Absolutely positioned panels within */
+    position: relative;
+}
 /* Ensure Throbber shows centered on main map (but not on location selector)
    - core definition in widgets.css */
 .map_loader {
@@ -19,6 +23,13 @@ form .map_loader {
 }
 
 /* Location Selector Widget */
+.form-container form button.gis_loc_select_btn {
+    padding: 4px;
+}
+.form-container form button.gis_loc_select_btn i.icon-map {
+    padding-right: 2px;
+}
+
 .gis_coord_wrap .decimal {
     width: 174px;
 }
@@ -36,6 +47,9 @@ form .map_loader {
 }
 
 /* LayerTree */
+.x-tree-elbow,
+.x-tree-elbow-end,
+.x-tree-node-indent,
 .x-tree-node-icon {
     display: none;
 }
@@ -44,6 +58,92 @@ form .map_loader {
 }
 .x-tree-node {
     font-size: 12px;
+}
+.x-tree-node-leaf {
+    margin-left: 10px;
+}
+/* Override Bootstrap */
+.x-tree-root-ct,
+.x-tree-node-ct {
+    margin: 0;
+}
+
+/* Legend */
+.map_legend_panel {
+    background-color: #FBFBFB;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    margin: 0 0 20px;
+    padding: 1px;
+    border: solid;
+    border-radius: 5px 5px 5px 5px;
+    width: auto;
+    max-width: 800px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+.map_legend_panel.fullscreen {
+    z-index: 9100;
+    margin-bottom: -600px;
+}
+.gis_legend_title {
+    font-weight: bold;
+}
+.gis_legend_desc {
+    max-width: 200px;
+}
+
+/* Save Panel */
+.map_save_panel {
+    background-color: #FBFBFB;
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+    padding: 5px;
+    border: solid;
+    border-radius: 5px 5px 5px 5px;
+    width: 250px;
+}
+.map_save_panel.fullscreen {
+    z-index: 9100;
+    margin-top: -50px;
+}
+.map_save_panel.off {
+    visibility: hidden;
+}
+.map_save_button {
+    background-color: #FBFBFB;
+    padding: 5px;
+    border: solid;
+    border-radius: 5px 5px 5px 5px;
+    float: right;
+    width: auto;
+    cursor: pointer;
+    visibility: visible;
+}
+.map_save_name {
+    font-weight: bold;
+    text-align: center;
+}
+.map_save_panel input {
+    width: 150px;
+    margin-top: 6px;
+}
+.map_save_panel input.checkbox {
+    width: 10px;
+    margin: 0 5px 0 0;
+}
+.map_save_panel .saved {
+    float: left;
+    padding: 5px;
+}
+.map_save_panel p {
+    float: left;
+    padding: 5px;
+    color: green;
+    margin: 0;
 }
 
 /* Current Coordinates */

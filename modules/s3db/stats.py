@@ -166,24 +166,21 @@ class S3StatsModel(S3Model):
         #                          #      label=T("Review")),
         #                          )
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage(
-                stats_source_superlink = source_superlink,
-                stats_source_id = source_id,
-            )
+        return dict(stats_source_superlink = source_superlink,
+                    stats_source_id = source_id,
+                    )
 
     # -------------------------------------------------------------------------
     def defaults(self):
         """ Safe defaults if module is disabled """
 
-        return Storage(
-                # Needed for doc
-                stats_source_superlink = S3ReusableField("source_id", "integer",
-                                                         readable=False,
-                                                         writable=False,
-                                                         )(),
+        return dict(
+            # Needed for doc
+            stats_source_superlink = S3ReusableField("source_id", "integer",
+                                                     readable=False,
+                                                     writable=False,
+                                                     )(),
             )
 
 # =============================================================================
@@ -212,7 +209,7 @@ class S3StatsDemographicModel(S3Model):
 
         location_id = self.gis_location_id
 
-        stats_parameter_represent = S3Represent(lookup="stats_parameter"),
+        stats_parameter_represent = S3Represent(lookup="stats_parameter")
 
         #----------------------------------------------------------------------
         # Demographic
@@ -362,7 +359,8 @@ class S3StatsDemographicModel(S3Model):
                              Field("agg_type", "integer",
                                    requires = IS_IN_SET(aggregate_types),
                                    represent = lambda opt: \
-                                        aggregate_types.get(opt, UNKNOWN_OPT),
+                                    aggregate_types.get(opt,
+                                                        current.messages.UNKNOWN_OPT),
                                    default = 1,
                                    label = T("Aggregation Type"),
                                    ),
@@ -411,7 +409,7 @@ class S3StatsDemographicModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage(
+        return dict(
             stats_demographic_rebuild_all_aggregates = self.stats_demographic_rebuild_all_aggregates,
             stats_demographic_update_aggregates = self.stats_demographic_update_aggregates,
             stats_demographic_update_location_aggregate = self.stats_demographic_update_location_aggregate,
@@ -1102,23 +1100,29 @@ class S3StatsResidentModel(S3Model):
 
     names = ["stats_resident",
              "stats_resident_type",
+             "stats_resident_group",
              ]
 
     def model(self):
 
         T = current.T
 
+        add_component = self.add_component
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
         super_link = self.super_link
 
+        # ---------------------------------------------------------------------
+        # Resident Types
+        #
         tablename = "stats_resident_type"
         table = define_table(tablename,
                              # Instance
                              super_link("parameter_id", "stats_parameter"),
                              Field("name",
-                                   label=T("Name")),
+                                   label=T("Name"),
+                                   ),
                              s3_comments(),
                              *s3_meta_fields())
 
@@ -1142,10 +1146,14 @@ class S3StatsResidentModel(S3Model):
         # Resource Configuration
         configure(tablename,
                   super_entity = "stats_parameter",
+                  deduplicate = self.stats_resident_type_duplicate,
                   )
 
         represent = S3Represent(lookup=tablename)
 
+        # ---------------------------------------------------------------------
+        # Residents
+        #
         tablename = "stats_resident"
         table = define_table(tablename,
                              # Instance
@@ -1195,7 +1203,12 @@ class S3StatsResidentModel(S3Model):
             msg_record_deleted=T("Resident deleted"),
             msg_list_empty=T("No Residents defined"))
 
-        filter_widgets = [S3OptionsFilter("parameter_id",
+        filter_widgets = [S3OptionsFilter("stats_resident_group.group_id",
+                                          label=T("Coalition"),
+                                          represent="%(name)s",
+                                          widget="multiselect",
+                                          ),
+                          S3OptionsFilter("parameter_id",
                                           label=T("Type"),
                                           represent="%(name)s",
                                           widget="multiselect",
@@ -1207,8 +1220,61 @@ class S3StatsResidentModel(S3Model):
                   filter_widgets = filter_widgets,
                   )
 
-        return Storage(
-        )
+        # Coalitions
+        add_component("org_group",
+                      stats_resident=dict(link="stats_resident_group",
+                                          joinby="resident_id",
+                                          key="group_id",
+                                          actuate="hide"))
+        # Format for InlineComponent/filter_widget
+        add_component("stats_resident_group",
+                      stats_resident="resident_id")
+
+        represent = S3Represent(lookup=tablename)
+
+        # ---------------------------------------------------------------------
+        # Residents <> Coalitions link table
+        #
+        tablename = "stats_resident_group"
+        table = define_table(tablename,
+                             Field("resident_id", table,
+                                   requires = IS_ONE_OF(current.db, "stats_resident.id",
+                                                        represent,
+                                                        sort=True,
+                                                        ),
+                                   represent = represent,
+                                   ),
+                             self.org_group_id(empty=False),
+                             *s3_meta_fields())
+
+        # Pass names back to global scope (s3.*)
+        return dict()
+
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def stats_resident_type_duplicate(item):
+        """
+            Deduplication of Resident Types
+        """
+
+        if item.tablename != "stats_resident_type":
+            return
+
+        data = item.data
+        name = data.get("name", None)
+
+        if not name:
+            return
+
+        table = item.table
+        query = (table.name.lower() == name.lower())
+        _duplicate = current.db(query).select(table.id,
+                                              limitby=(0, 1)).first()
+        if _duplicate:
+            item.id = _duplicate.id
+            item.data.id = _duplicate.id
+            item.method = item.METHOD.UPDATE
+
 # =============================================================================
 class S3StatsTrainedPeopleModel(S3Model):
     """
@@ -1217,23 +1283,29 @@ class S3StatsTrainedPeopleModel(S3Model):
 
     names = ["stats_trained",
              "stats_trained_type",
+             "stats_trained_group",
              ]
 
     def model(self):
 
         T = current.T
 
+        add_component = self.add_component
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
         super_link = self.super_link
 
+        # ---------------------------------------------------------------------
+        # Trained People Types
+        #
         tablename = "stats_trained_type"
         table = define_table(tablename,
                              # Instance
                              super_link("parameter_id", "stats_parameter"),
                              Field("name",
-                                   label=T("Name")),
+                                   label=T("Name"),
+                                   ),
                              s3_comments(),
                              *s3_meta_fields())
 
@@ -1257,10 +1329,14 @@ class S3StatsTrainedPeopleModel(S3Model):
         # Resource Configuration
         configure(tablename,
                   super_entity = "stats_parameter",
+                  deduplicate = self.stats_trained_type_duplicate,
                   )
 
         represent = S3Represent(lookup=tablename)
 
+        # ---------------------------------------------------------------------
+        # Trained People
+        #
         tablename = "stats_trained"
         table = define_table(tablename,
                              # Instance
@@ -1315,7 +1391,12 @@ class S3StatsTrainedPeopleModel(S3Model):
             msg_record_deleted=T("Trained People deleted"),
             msg_list_empty=T("No Trained People defined"))
 
-        filter_widgets = [S3OptionsFilter("parameter_id",
+        filter_widgets = [S3OptionsFilter("stats_trained_group.group_id",
+                                          label=T("Coalition"),
+                                          represent="%(name)s",
+                                          widget="multiselect",
+                                          ),
+                          S3OptionsFilter("parameter_id",
                                           label=T("Type"),
                                           represent="%(name)s",
                                           widget="multiselect",
@@ -1327,7 +1408,59 @@ class S3StatsTrainedPeopleModel(S3Model):
                   filter_widgets = filter_widgets,
                   )
 
-        return Storage(
-        )
+        # Coalitions
+        add_component("org_group",
+                      stats_trained=dict(link="stats_trained_group",
+                                         joinby="trained_id",
+                                         key="group_id",
+                                         actuate="hide"))
+        # Format for InlineComponent/filter_widget
+        add_component("stats_trained_group",
+                      stats_trained="trained_id")
+
+        represent = S3Represent(lookup=tablename)
+
+        # ---------------------------------------------------------------------
+        # Trained People <> Coalitions link table
+        #
+        tablename = "stats_trained_group"
+        table = define_table(tablename,
+                             Field("trained_id", table,
+                                   requires = IS_ONE_OF(current.db, "stats_trained.id",
+                                                        represent,
+                                                        sort=True,
+                                                        ),
+                                   represent = represent,
+                                   ),
+                             self.org_group_id(empty=False),
+                             *s3_meta_fields())
+
+        # Pass names back to global scope (s3.*)
+        return dict()
+
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def stats_trained_type_duplicate(item):
+        """
+            Deduplication of Trained Types
+        """
+
+        if item.tablename != "stats_trained_type":
+            return
+
+        data = item.data
+        name = data.get("name", None)
+
+        if not name:
+            return
+
+        table = item.table
+        query = (table.name.lower() == name.lower())
+        _duplicate = current.db(query).select(table.id,
+                                              limitby=(0, 1)).first()
+        if _duplicate:
+            item.id = _duplicate.id
+            item.data.id = _duplicate.id
+            item.method = item.METHOD.UPDATE
 
 # END =========================================================================

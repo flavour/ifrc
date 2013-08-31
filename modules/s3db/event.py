@@ -30,6 +30,7 @@
 __all__ = ["S3EventModel",
            "S3IncidentModel",
            "S3IncidentReportModel",
+           "S3IncidentGroupModel",
            "S3IncidentTypeModel",
            "S3IncidentTypeTagModel",
            "S3EventAssetModel",
@@ -281,9 +282,8 @@ class S3EventModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage(
-                event_event_id = event_id,
-            )
+        return dict(event_event_id = event_id,
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -292,11 +292,11 @@ class S3EventModel(S3Model):
             Return safe defaults in case the model has been deactivated.
         """
 
-        return Storage(
+        return dict(
                 event_event_id = S3ReusableField("event_id", "integer",
                                                  readable=False,
                                                  writable=False),
-            )
+                )
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -562,12 +562,9 @@ class S3IncidentModel(S3Model):
                                              autocomplete="name",
                                              autodelete=True))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage(
-                event_incident_id = incident_id,
-            )
+        return dict(event_incident_id = incident_id,
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -576,12 +573,12 @@ class S3IncidentModel(S3Model):
             Return safe defaults in case the model has been deactivated.
         """
 
-        return Storage(
+        return dict(
                 event_incident_id = S3ReusableField("incident_id", "integer",
                                                     readable=False,
                                                     writable=False),
 
-            )
+                )
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -718,16 +715,15 @@ class S3IncidentReportModel(S3Model):
     def model(self):
 
         T = current.T
-        db = current.db
-        settings = current.deployment_settings
-        super_link = self.super_link
+
+        add_component = self.add_component
 
         # ---------------------------------------------------------------------
         # Incident Reports
         #
         tablename = "event_incident_report"
         table = self.define_table(tablename,
-                                  super_link("doc_id", "doc_entity"),
+                                  self.super_link("doc_id", "doc_entity"),
                                   # @ToDo: Use link tables?
                                   #self.event_event_id(),
                                   #self.event_incident_id(),
@@ -767,11 +763,48 @@ class S3IncidentReportModel(S3Model):
                        filter_widgets = filter_widgets,
                        )
 
-        # ---------------------------------------------------------------------
+        # Coalitions
+        add_component("org_group",
+                      event_incident_report=dict(link="event_incident_report_group",
+                                                 joinby="incident_report_id",
+                                                 key="group_id",
+                                                 actuate="hide"))
+        # Format for InlineComponent/filter_widget
+        add_component("event_incident_report_group",
+                      event_incident_report="incident_report_id")
+
         # Pass names back to global scope (s3.*)
+        return dict()
+
+# =============================================================================
+class S3IncidentGroupModel(S3Model):
+    """
+        Links between Incident Reports & Organisation Groups
+    """
+
+    names = ["event_incident_report_group"]
+
+    def model(self):
+
+        represent = S3Represent(lookup="event_incident_report")
+
+        # ---------------------------------------------------------------------
+        # Incident Reports <> Coalitions link table
         #
-        return Storage(
-            )
+        tablename = "event_incident_report_group"
+        table = self.define_table(tablename,
+                                  Field("incident_report_id", self.event_incident_report,
+                                        requires = IS_ONE_OF(current.db, "event_incident_report.id",
+                                                             represent,
+                                                             sort=True,
+                                                             ),
+                                        represent = represent,
+                                        ),
+                                  self.org_group_id(empty=False),
+                                  *s3_meta_fields())
+
+        # Pass names back to global scope (s3.*)
+        return dict()
 
 # =============================================================================
 class S3IncidentTypeModel(S3Model):
@@ -795,7 +828,8 @@ class S3IncidentTypeModel(S3Model):
         table = self.define_table(tablename,
                                   Field("name", notnull=True,
                                         length=64,
-                                        label=T("Name")),
+                                        label=T("Name"),
+                                        ),
                                   s3_comments(),
                                   *s3_meta_fields())
 
@@ -838,12 +872,9 @@ class S3IncidentTypeModel(S3Model):
                        deduplicate=self.incident_type_duplicate
                        )
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage(
-                event_incident_type_id = incident_type_id,
-            )
+        return dict(event_incident_type_id = incident_type_id,
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -852,7 +883,7 @@ class S3IncidentTypeModel(S3Model):
             Return safe defaults in case the model has been deactivated.
         """
 
-        return Storage(
+        return dict(
             event_incident_type_id = S3ReusableField("incident_type_id", "integer",
                                                      readable=False,
                                                      writable=False),
@@ -875,7 +906,7 @@ class S3IncidentTypeModel(S3Model):
             return
 
         table = item.table
-        query = (table.name == name)
+        query = (table.name.lower() == name.lower())
         _duplicate = current.db(query).select(table.id,
                                               limitby=(0, 1)).first()
         if _duplicate:
@@ -912,11 +943,8 @@ class S3IncidentTypeTagModel(S3Model):
                                   s3_comments(),
                                   *s3_meta_fields())
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage(
-                )
+        return dict()
 
 # =============================================================================
 class S3EventAssetModel(S3Model):
@@ -958,10 +986,8 @@ class S3EventAssetModel(S3Model):
             msg_record_deleted = T("Asset removed"),
             msg_list_empty = T("No Assets currently registered in this incident"))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage()
+        return dict()
 
 # =============================================================================
 class S3EventCMSModel(S3Model):
@@ -1004,10 +1030,8 @@ class S3EventCMSModel(S3Model):
             msg_record_deleted = T("Tag removed"),
             msg_list_empty = T("No Posts currently tagged to this event"))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage()
+        return dict()
 
 # =============================================================================
 class S3EventHRModel(S3Model):
@@ -1047,10 +1071,8 @@ class S3EventHRModel(S3Model):
             msg_record_deleted = T("Human Resource unassigned"),
             msg_list_empty = T("No Human Resources currently assigned to this incident"))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage()
+        return dict()
 
 # =============================================================================
 class S3EventIReportModel(S3Model):
@@ -1090,10 +1112,8 @@ class S3EventIReportModel(S3Model):
             msg_record_deleted = T("Incident Report removed"),
             msg_list_empty = T("No Incident Reports currently registered in this incident"))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage()
+        return dict()
 
 # =============================================================================
 class S3EventMapModel(S3Model):
@@ -1130,10 +1150,8 @@ class S3EventMapModel(S3Model):
             msg_record_deleted = T("Map Configuration removed"),
             msg_list_empty = T("No Map Configurations currently registered in this incident"))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage()
+        return dict()
 
 # =============================================================================
 class S3EventSiteModel(S3Model):
@@ -1173,10 +1191,8 @@ class S3EventSiteModel(S3Model):
             msg_record_deleted = T("Facility removed"),
             msg_list_empty = T("No Facilities currently registered in this incident"))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage()
+        return dict()
 
 # =============================================================================
 class S3EventTaskModel(S3Model):
@@ -1221,9 +1237,7 @@ class S3EventTaskModel(S3Model):
             msg_record_deleted = T("Task removed"),
             msg_list_empty = T("No Tasks currently registered in this incident"))
 
-        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        #
-        return Storage()
+        return dict()
 
 # END =========================================================================

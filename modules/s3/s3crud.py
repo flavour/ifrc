@@ -463,7 +463,7 @@ class S3CRUD(S3Method):
                     r.method = "create"
                     return self.create(r, **attr)
                 else:
-                    return self.select(r, **attr)
+                    return self.select_filter(r, **attr)
 
             # Redirect to update if user has permission unless
             # a method has been specified in the URL
@@ -507,7 +507,7 @@ class S3CRUD(S3Method):
                 output["caller"] = caller
 
             # Buttons
-            buttons = self.insert_buttons(r, "edit", "delete", "list",
+            buttons = self.insert_buttons(r, "edit", "delete", "list", "summary",
                                           record_id=record_id)
             if buttons:
                 output["buttons"] = buttons
@@ -800,18 +800,21 @@ class S3CRUD(S3Method):
         if not authorised:
             r.unauthorised()
 
-        elif r.interactive and r.http == "GET" and not record_id:
-            # Provide a confirmation form and a record list
-            form = FORM(TABLE(TR(
-                        TD(self.settings.confirm_delete,
-                           _style="color: red;"),
-                        TD(INPUT(_type="submit", _value=current.T("Delete"),
-                           _style="margin-left: 10px;")))))
-            items = self.select(r, **attr).get("items", None)
-            if isinstance(items, DIV):
-                output.update(form=form)
-            output.update(items=items)
-            current.response.view = self._view(r, "delete.html")
+        elif (r.interactive or r.representation == "aadata") and \
+             r.http == "GET" and not record_id:
+            output = self._datatable(r, **attr)
+            if isinstance(output, dict):
+                # Provide a confirmation form and a record list
+                form = FORM(TABLE(TR(TD(self.settings.confirm_delete,
+                                        _style="color: red;"),
+                                     TD(INPUT(_type="submit",
+                                              _value=current.T("Delete"),
+                                              _style="margin-left: 10px;")))))
+                output["form"] = form
+                current.response.view = self._view(r, "delete.html")
+            else:
+                # @todo: sorting not working yet
+                return output
 
         elif r.interactive and (r.http == "POST" or
                                 r.http == "GET" and record_id):
@@ -1393,6 +1396,14 @@ class S3CRUD(S3Method):
                             report_groupby=report_groupby,
                             **attr)
 
+        elif representation == "msg":
+
+            if r.http == "POST":
+                from s3notify import S3Notifications
+                return S3Notifications.send(r, resource)
+            else:
+                r.error(405, r.ERROR.BAD_METHOD)
+            
         else:
             r.error(501, r.ERROR.BAD_FORMAT)
 
@@ -1498,10 +1509,9 @@ class S3CRUD(S3Method):
                     limit = 2 * display_length
                 session.s3.filter = get_vars
                 if orderby is None:
-                    dt_sorting = {
-                        "iSortingCols": "1",
-                        "sSortDir_0": "asc"
-                    }
+                    dt_sorting = {"iSortingCols": "1",
+                                  "sSortDir_0": "asc"
+                                  }
 
                     if len(list_fields) > 1:
                         dt_sorting["bSortable_0"] = "false"
@@ -1938,17 +1948,17 @@ class S3CRUD(S3Method):
                 dt_pagination = "true"
                 if not limit:
                     limit = 2 * display_length
-                session.s3.filter = vars
+                session.s3.filter = get_vars
                 if orderby is None:
                     # Default initial sorting
                     scol = len(list_fields) > 1 and "1" or "0"
-                    vars.update(iSortingCols="1",
-                                iSortCol_0=scol,
-                                sSortDir_0="asc")
-                    q, orderby, left = resource.datatable_filter(list_fields, vars)
-                    del vars["iSortingCols"]
-                    del vars["iSortCol_0"]
-                    del vars["sSortDir_0"]
+                    get_vars.update(iSortingCols="1",
+                                    iSortCol_0=scol,
+                                    sSortDir_0="asc")
+                    q, orderby, left = resource.datatable_filter(list_fields, get_vars)
+                    del get_vars["iSortingCols"]
+                    del get_vars["iSortCol_0"]
+                    del get_vars["sSortDir_0"]
                 if r.method == "search" and not orderby:
                     orderby = fields[0]
             else:
@@ -1985,7 +1995,7 @@ class S3CRUD(S3Method):
             resource.build_query(filter=s3.filter, vars=session.s3.filter)
 
             # Apply datatable filters
-            searchq, orderby, left = resource.datatable_filter(list_fields, vars)
+            searchq, orderby, left = resource.datatable_filter(list_fields, get_vars)
             if searchq is not None:
                 totalrows = resource.count()
                 resource.add_filter(searchq)
@@ -2012,7 +2022,7 @@ class S3CRUD(S3Method):
                 totalrows = displayrows
 
             # Echo
-            sEcho = int(vars.sEcho or 0)
+            sEcho = int(get_vars.sEcho or 0)
 
             # Representation
             if dt is not None:
@@ -2167,13 +2177,13 @@ class S3CRUD(S3Method):
         output = Storage()
         resource = self.resource
 
-        vars = r.get_vars
-        if "component" in vars:
-            alias = vars["component"]
+        get_vars = r.get_vars
+        if "component" in get_vars:
+            alias = get_vars["component"]
         else:
             alias = None
-        if "resource" in vars:
-            tablename = vars["resource"]
+        if "resource" in get_vars:
+            tablename = get_vars["resource"]
             components = [alias] if alias else None
             try:
                 resource = current.s3db.resource(tablename,
@@ -2432,8 +2442,8 @@ class S3CRUD(S3Method):
 
         record_id = attr.get("record_id", None)
 
-        remove_filters = lambda vars: dict([(k, vars[k])
-                                            for k in vars if "." not in k])
+        remove_filters = lambda get_vars: dict([(k, get_vars[k])
+                                            for k in get_vars if "." not in k])
 
         # Button labels
         crud_string = self.crud_string
@@ -2469,6 +2479,14 @@ class S3CRUD(S3Method):
                 list_btn = self.crud_button(LIST,
                                             _href=href_list, _id="list-btn")
                 output["list_btn"] = list_btn
+
+        # Summary button
+        if "summary" in buttons:
+            if not r.component or r.multiple:
+                summary_btn = self.crud_button(crud_string(tablename, "title_list"),
+                                               _href = url(method="summary", vars=remove_filters(r.get_vars)), 
+                                               _id="summary-btn")
+                output["summary_btn"] = summary_btn
 
         if not record_id:
             return output

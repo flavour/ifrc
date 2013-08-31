@@ -389,6 +389,7 @@ class S3HRModel(S3Model):
                              s3_comments(),
                              *s3_meta_fields())
 
+        # @ToDo: Move this configurability to templates rather than lots of deployment_settings
         if STAFF == T("Contacts"):
             contacts = True
             crud_strings["hrm_staff"] = Storage(
@@ -407,7 +408,6 @@ class S3HRModel(S3Model):
                 msg_record_deleted = T("Contact deleted"),
                 msg_list_empty = T("No Contacts currently registered"))
         else:
-            # @ToDo: make more flexible
             contacts = False
             crud_strings["hrm_staff"] = Storage(
                 title_create = T("Add Staff Member"),
@@ -1571,7 +1571,7 @@ class S3HRSkillModel(S3Model):
                                    label = T("Priority"),
                                    default = 1,
                                    requires = IS_INT_IN_RANGE(1, 9),
-                                   widget = S3SliderWidget(minval=1, maxval=9, steprange=1, value=1),
+                                   widget = S3SliderWidget(minval=1, maxval=9, steprange=1),
                                    comment = DIV(_class="tooltip",
                                                  _title="%s|%s" % (T("Priority"),
                                                                    T("Priority from 1 to 9. 1 is most preferred.")))),
@@ -1672,8 +1672,9 @@ class S3HRSkillModel(S3Model):
         #                     skill_id(),
         #                     competency_id(),
         #                     Field("priority", "integer",
+        #                           default = 1,
         #                           requires = IS_INT_IN_RANGE(1, 9),
-        #                           widget = S3SliderWidget(minval=1, maxval=9, steprange=1, value=1),
+        #                           widget = S3SliderWidget(minval=1, maxval=9, steprange=1),
         #                           comment = DIV(_class="tooltip",
         #                                         _title="%s|%s" % (T("Priority"),
         #                                                           T("Priority from 1 to 9. 1 is most preferred.")))),
@@ -3474,7 +3475,7 @@ def hrm_human_resource_onaccept(form):
     s3db = current.s3db
     auth = current.auth
 
-    # Get the full record
+    # Get the 'full' record
     htable = db.hrm_human_resource
     record = db(htable.id == id).select(htable.id, # needed for update_record
                                         htable.type,
@@ -3577,11 +3578,12 @@ def hrm_human_resource_onaccept(form):
         elif "location_id" in record and record.location_id:
             # Create Address from newly-created HRM
             query = (ptable.id == person_id)
-            pe_id = db(query).select(ptable.pe_id,
-                                     limitby=(0, 1)).first().pe_id
-            record_id = atable.insert(type = 1,
-                                      pe_id = pe_id,
-                                      location_id = record.location_id)
+            pe = db(query).select(ptable.pe_id,
+                                  limitby=(0, 1)).first()
+            if pe:
+                record_id = atable.insert(type = 1,
+                                          pe_id = pe.pe_id,
+                                          location_id = record.location_id)
         request_vars = current.request.vars
         if request_vars and "programme_id" in request_vars:
             programme_id = request_vars.programme_id

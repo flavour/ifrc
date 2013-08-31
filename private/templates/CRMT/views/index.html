@@ -44,21 +44,24 @@
   </div>
   <div class="row">
    <div class="span8 map">
-    {{=XML(gis.show_map(width=770, height=270, collapsed = True))}}
+    {{=XML(map)}}
    </div>
   </div>
  </div>
  <div class="span4"> 
   <div class="community-data ">
    <h3>Community Data</h3>
-   <p>Record the vulnerabilities, hazards, activities and resources which affects your community's resilience</p>
+   <p>Record the vulnerabilities, hazards, activities and resources which affect your community's resilience</p>
    {{for opt in response.menu:}}
-     <p>
+    <a href='{{=opt["url"]}}/summary' class="">
+     <i class='{{=opt["icon"]}}'></i> {{=opt["name"]}}
+    </a>     {{=opt["cms"]}}
+       <!--  
        <a href='{{=opt["url"]}}/summary' class="btn btn-info btn-large menu" type="button">
         <i class='{{=opt["icon"]}}'></i> {{=opt["name"]}}
        </a>
        <a href='{{=opt["url"]}}/create' class="btn btn-info btn-large create" type="button"><i class='icon-plus'></i></a>
-     </p>
+        -->
    {{pass}}
   </div>
  </div>

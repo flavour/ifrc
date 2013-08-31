@@ -539,6 +539,9 @@ def user():
     elif arg == "profile":
         title = response.title = T("User Profile")
         form = auth.profile()
+    elif arg == "options.s3json":
+        # Used when adding organisations from registration form
+        return s3_rest_controller(prefix="auth", resourcename="user")
     else:
         # logout
         title = ""
@@ -592,7 +595,7 @@ def person():
     # If it is an json request, leave the arguments unmodified.
     if not request.args or (request.args[0] != user_person_id
                             and request.args[-1] != "options.s3json"):
-        request.args = [str(user_person_id)]
+        request.args = [user_person_id]
 
     set_method = s3db.set_method
 
@@ -612,7 +615,7 @@ def person():
 
         next = URL(c = "default",
                    f = "person",
-                   args = [str(user_person_id), "user"])
+                   args = [user_person_id, "user"])
         onaccept = lambda form: auth.s3_approve_user(form.vars),
         form = auth.profile(next = next,
                             onaccept = onaccept)
@@ -687,32 +690,44 @@ def person():
                                 raise HTTP(404)
 
                 elif r.component_name == "config":
-                    _config = s3db.gis_config
+                    ctable = s3db.gis_config
                     s3db.gis_config_form_setup()
-                    # Name will be generated from person's name.
-                    #_config.name.readable = _config.name.writable = False
-                    # Hide Location
-                    #_config.region_location_id.readable = _config.region_location_id.writable = False
 
-                    # OpenStreetMap config
-                    s3db.add_component("auth_user_options",
-                                       gis_config=dict(joinby="pe_id",
-                                                       pkey="pe_id",
-                                                       multiple=False)
-                                       )
-                    fields = ["default_location_id",
+                    # Create forms use this
+                    # (update forms are in gis/config())
+                    fields = ["name",
+                              "pe_default",
+                              "default_location_id",
                               "zoom",
                               "lat",
                               "lon",
-                              "projection_id",
-                              "symbology_id",
-                              "wmsbrowser_url",
-                              "wmsbrowser_name",
-                              "user_options.osm_oauth_consumer_key",
-                              "user_options.osm_oauth_consumer_secret",
+                              #"projection_id",
+                              #"symbology_id",
+                              #"wmsbrowser_url",
+                              #"wmsbrowser_name",
                               ]
+                    osm_table = s3db.gis_layer_openstreetmap
+                    openstreetmap = db(osm_table.deleted == False).select(osm_table.id,
+                                                                          limitby=(0, 1))
+                    if openstreetmap:
+                        # OpenStreetMap config
+                        s3db.add_component("auth_user_options",
+                                           gis_config=dict(joinby="pe_id",
+                                                           pkey="pe_id",
+                                                           multiple=False)
+                                           )
+                        fields += ["user_options.osm_oauth_consumer_key",
+                                   "user_options.osm_oauth_consumer_secret",
+                                   ]
                     crud_form = s3base.S3SQLCustomForm(*fields)
-                    s3db.configure("gis_config", crud_form=crud_form)
+                    list_fields = ["name",
+                                   "pe_default",
+                                   ]
+                    s3db.configure("gis_config",
+                                   crud_form=crud_form,
+                                   insertable=False,
+                                   list_fields = list_fields,
+                                   )
             else:
                 table = r.table
                 table.pe_label.readable = False
@@ -740,6 +755,16 @@ def person():
                 # Set the minimum end_date to the same as the start_date
                 s3.jquery_ready.append(
 '''S3.start_end_date('hrm_experience_start_date','hrm_experience_end_date')''')
+            elif r.component_name == "config":
+                update_url = URL(c="gis", f="config",
+                                 args="[id]")
+                s3_action_buttons(r, update_url=update_url)
+                s3.actions.append(
+                    dict(url=URL(c="gis", f="index",
+                                 vars={"config":"[id]"}),
+                         label=str(T("Show")),
+                         _class="action-btn")
+                )
             elif r.component_name == "saved_search" and r.method in (None, "search"):
                 s3_action_buttons(r)
                 s3.actions.append(
@@ -823,7 +848,7 @@ def person():
             experience_tab,
             teams_tab,
             #(T("Assets"), "asset"),
-            (T("Map Options"), "config"),
+            (T("My Maps"), "config"),
             searches_tab,
             ]
     

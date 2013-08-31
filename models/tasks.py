@@ -203,6 +203,31 @@ def sync_synchronize(repository_id, user_id=None, manual=False):
 tasks["sync_synchronize"] = sync_synchronize
 
 # -----------------------------------------------------------------------------
+def notify_check_subscriptions(user_id=None):
+    """
+        Scheduled task to check subscriptions for updates,
+        creates notify_notify tasks where updates exist.
+    """
+    notify = s3base.S3Notifications()
+    return notify.check_subscriptions()
+
+tasks["notify_check_subscriptions"] = notify_check_subscriptions
+
+def notify_notify(resource_id, user_id=None):
+    """
+        Asynchronous task to notify a subscriber about resource
+        updates. This task is created by notify_check_subscriptions.
+
+        @param subscription: JSON with the subscription data
+        @param now: lookup date (@todo: remove this)
+    """
+
+    notify = s3base.S3Notifications
+    return notify.notify(resource_id)
+
+tasks["notify_notify"] = notify_notify
+
+# -----------------------------------------------------------------------------
 def maintenance(period="daily"):
     """
         Run all maintenance tasks which should be done daily
@@ -227,7 +252,6 @@ def maintenance(period="daily"):
 
 tasks["maintenance"] = maintenance
 
-
 # -----------------------------------------------------------------------------
 if settings.has_module("msg"):
 
@@ -249,6 +273,25 @@ if settings.has_module("msg"):
         return result
 
     tasks["msg_process_outbox"] = msg_process_outbox
+
+    # -------------------------------------------------------------------------
+    def msg_process_twitter_search(query_id, user_id=None):
+        """
+            Process Twitter Search
+                - will normally be done Asynchronously if there is a worker alive
+
+            @param query_id: one of s3db.msg_twitter_search_query.id
+            @param user_id: calling request's auth.user.id or None
+        """
+        if user_id:
+            # Authenticate
+            auth.s3_impersonate(user_id)
+        # Run the Task & return the result
+        result = msg.twitter_search_poll(query_id)
+        db.commit()
+        return result
+
+    tasks["msg_process_twitter_search"] = msg_process_twitter_search
 
     # -------------------------------------------------------------------------
     def msg_email_poll(account_id, user_id):

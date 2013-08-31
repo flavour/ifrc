@@ -318,11 +318,11 @@ def s3_fullname(person=None, pe_id=None, truncate=True):
     record = None
     query = None
     if isinstance(person, (int, long)) or str(person).isdigit():
-        query = (ptable.id == person) & (ptable.deleted != True)
+        query = (ptable.id == person)# & (ptable.deleted != True)
     elif person is not None:
         record = person
     elif pe_id is not None:
-        query = (ptable.pe_id == pe_id) & (ptable.deleted != True)
+        query = (ptable.pe_id == pe_id)# & (ptable.deleted != True)
 
     if not record and query is not None:
         record = db(query).select(ptable.first_name,
@@ -1423,6 +1423,22 @@ def URL2(a=None, c=None, r=None):
     #other = ""
     url = "/%s/%s" % (application, controller)
     return url
+
+# =============================================================================
+class S3CustomController(object):
+
+    @classmethod
+    def _view(cls, theme, name):
+
+        view = os.path.join(current.request.folder,
+                            "private", "templates", theme, "views", name)
+        try:
+            # Pass view as file not str to work in compiled mode
+            current.response.view = open(view, "rb")
+        except IOError:
+            from gluon.http import HTTP
+            raise HTTP("404", "Unable to open Custom View: %s" % view)
+        return
 
 # =============================================================================
 class S3DateTime(object):

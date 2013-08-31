@@ -24,19 +24,21 @@ $(function() {
 
     // Read JSON from real_input, decode and store as data object
     var inline_deserialize = function(formname) {
-        var real_input = '#' + inline_get_field(formname);
-        var data_json = $(real_input).val();
+        var selector = inline_get_field(formname);
+        var real_input = $('#' + selector);
+        var data_json = real_input.val();
         var data = JSON.parse(data_json);
-        $(real_input).data('data', data);
+        real_input.data('data', data);
         return data;
     };
 
     // Serialize the data object as JSON and store into real_input
     var inline_serialize = function(formname) {
-        var real_input = '#' + inline_get_field(formname);
-        var data = $(real_input).data('data');
+        var selector = inline_get_field(formname);
+        var real_input = $('#' + selector);
+        var data = real_input.data('data');
         var data_json = JSON.stringify(data);
-        $(real_input).val(data_json);
+        real_input.val(data_json);
         return data_json;
     };
 
@@ -110,47 +112,58 @@ $(function() {
         }
 
         // Collect the input data
-        var fields = data['fields'];
-        var fieldname;
-        var element;
-        var input;
-        var value;
-        var cssclass;
-        var intvalue;
+        var fieldname,
+            element,
+            input,
+            value,
+            cssclass,
+            intvalue,
+            fields = data['fields'];
         for (var i=0; i < fields.length; i++) {
             fieldname = fields[i]['name'];
             element = '#sub_' +
                       formname + '_' + formname + '_i_' +
                       fieldname + '_edit_' + rowindex;
             input = $(element);
-            value = input.val();
-            if (input.attr('type') == 'file') {
-                // Store the upload at the end of the form
-                var form = input.closest('form');
-                var cloned = input.clone();
-                var upload_id = 'upload_' + formname + '_' + fieldname + '_' + rowindex;
-                $('#' + upload_id).remove();
-                if (value.match(/fakepath/)) {
-                    // IE, etc: Remove 'fakepath' from filename
-                    value = value.replace(/(c:\\)*fakepath\\/i, '');
-                }
-                // Clone the Input ready for any additional files
-                cloned.insertAfter(input);
-                // We move the original input as it doesn't contain the file otherwise on IE, etc
-                // http://stackoverflow.com/questions/415483/clone-a-file-input-element-in-javascript
-                input.css({display: 'none'})
-                     .attr('id', upload_id)
-                     .attr('name', upload_id)
-                     .appendTo(form);
-            } else {
-                cssclass = input.attr('class');
-                if (cssclass == 'generic-widget') {
-                    // Reference values need to be ints for S3Represent to find a match in theset
-                    // - ensure we don't do this to dates though!
-                    intvalue = parseInt(value, 10);
-                    if (!isNaN(intvalue)) {
-                        value = intvalue;
+            if (input.length) {
+                // Field is Writable
+                value = input.val();
+                if (input.attr('type') == 'file') {
+                    // Store the upload at the end of the form
+                    var form = input.closest('form');
+                    var cloned = input.clone();
+                    var upload_id = 'upload_' + formname + '_' + fieldname + '_' + rowindex;
+                    $('#' + upload_id).remove();
+                    if (value.match(/fakepath/)) {
+                        // IE, etc: Remove 'fakepath' from filename
+                        value = value.replace(/(c:\\)*fakepath\\/i, '');
                     }
+                    // Clone the Input ready for any additional files
+                    cloned.insertAfter(input);
+                    // We move the original input as it doesn't contain the file otherwise on IE, etc
+                    // http://stackoverflow.com/questions/415483/clone-a-file-input-element-in-javascript
+                    input.css({display: 'none'})
+                         .attr('id', upload_id)
+                         .attr('name', upload_id)
+                         .appendTo(form);
+                } else {
+                    cssclass = input.attr('class');
+                    if (cssclass == 'generic-widget') {
+                        // Reference values need to be ints for S3Represent to find a match in theset
+                        // - ensure we don't do this to dates though!
+                        intvalue = parseInt(value, 10);
+                        if (!isNaN(intvalue)) {
+                            value = intvalue;
+                        }
+                    }
+                }
+            } else {
+                // Field is Read-only
+                if (typeof original != 'undefined') {
+                    // Keep current value
+                    value = original[fieldname]['value'];
+                } else {
+                    value = '';
                 }
             }
             row[fieldname] = value;
@@ -189,6 +202,7 @@ $(function() {
         }
 
         // Request validation of the row
+        // @ToDo: Skip read-only fields (especially Virtual)
         var row_json = JSON.stringify(row);
         var response = null;
         $.ajaxS3({
@@ -211,11 +225,19 @@ $(function() {
             has_errors = true;
             inline_append_error(formname, rowindex, null, response['_error']);
         }
+        var item,
+            error;
         for (field in response) {
-            var item = response[field];
+            item = response[field];
             if (item.hasOwnProperty('_error')) {
-                inline_append_error(formname, rowindex, field, item['_error']);
-                has_errors = true;
+                error = item['_error'];
+                if (error == "invalid field") {
+                    // Virtual Field - not a real error
+                    item['text'] = item['value'];
+                } else {
+                    inline_append_error(formname, rowindex, field, error);
+                    has_errors = true;
+                }
             }
         }
 
@@ -245,10 +267,11 @@ $(function() {
         var data = inline_deserialize(formname);
         var fields = data['fields'];
         var row = data['data'][rowindex];
-        var fieldname;
-        var value;
-        var element;
-        var input;
+        var fieldname,
+            element,
+            input,
+            text,
+            value;
         for (i=0; i < fields.length; i++) {
             fieldname = fields[i]['name'];
             value = row[fieldname]['value'];
@@ -265,34 +288,42 @@ $(function() {
                 }
             }
             input = $(element);
-            if (input.attr('type') != 'file') {
-                input.val(value);
-                // Populate text in autocompletes
-                element = '#dummy_sub_' + formname + '_' + formname + '_i_' + fieldname + '_edit_0';
-                var text = row[fieldname]['text'];
-                $(element).val(text);
+            if (!input.length) {
+                // Read-only field
+                text = row[fieldname]['text'];
+                var td = $('#edit-row-' + formname + ' td')[i];
+                td.innerHTML = text;
             } else {
-                // Update the existing upload item, if there is one
-                var upload = $('#upload_' + formname + '_' + fieldname + '_' + rowindex);
-                if (upload.length) {
-                    var id = input.attr('id');
-                    var name = input.attr('name');
-                    input.replaceWith(upload);
-                    upload.attr('id', id)
-                          .attr('name', name)
-                          .css({display: ''});
+                if (input.attr('type') != 'file') {
+                    input.val(value);
+                    // Populate text in autocompletes
+                    element = '#dummy_sub_' + formname + '_' + formname + '_i_' + fieldname + '_edit_0';
+                    text = row[fieldname]['text'];
+                    $(element).val(text);
+                } else {
+                    // Update the existing upload item, if there is one
+                    var upload = $('#upload_' + formname + '_' + fieldname + '_' + rowindex);
+                    if (upload.length) {
+                        var id = input.attr('id');
+                        var name = input.attr('name');
+                        input.replaceWith(upload);
+                        upload.attr('id', id)
+                              .attr('name', name)
+                              .css({display: ''});
+                    }
                 }
             }
         }
 
         // Insert the edit row after this read row
-        $('#edit-row-' + formname).insertAfter('#read-row-' + rowname);
+        var edit_row = $('#edit-row-' + formname);
+        edit_row.insertAfter('#read-row-' + rowname);
 
-        // Remember the current row index in the edit row
-        $('#edit-row-' + formname).data('rowindex', rowindex);
+        // Remember the current row index in the edit row & show it
+        edit_row.data('rowindex', rowindex)
+                .removeClass('hide');
 
-        // Show the edit row
-        $('#edit-row-' + formname).removeClass('hide');
+        // Trigger the dropdown change event
         $('#edit-row-' + formname + ' select').change();
 
         // Disable the add-row while editing
@@ -305,12 +336,12 @@ $(function() {
 
         inline_remove_errors(formname);
 
-        var $edit = $('#edit-row-' + formname);
+        var edit_row = $('#edit-row-' + formname);
         
         // Hide and reset the edit-row
-        $edit.addClass('hide')
-             .data('rowindex', null)
-             .removeClass('changed');
+        edit_row.addClass('hide')
+                .data('rowindex', null)
+                .removeClass('changed');
         
         // Show the read-row
         $('#read-row-' + rowname).removeClass('hide');
@@ -418,10 +449,10 @@ $(function() {
 
         // Collect the values from the edit-row
         var data = inline_deserialize(formname);
-        var edit_row = inline_collect_data(formname, data, '0');
+        var edit_row = inline_collect_data(formname, data, rowindex);
 
         // Validate the form data
-        var new_row = inline_validate(formname, '0', data, edit_row);
+        var new_row = inline_validate(formname, rowindex, data, edit_row);
 
         var success = false;
         if (null !== new_row) {
@@ -708,9 +739,9 @@ $(function() {
             // Read current data from real input
             var data = inline_deserialize(formname);
             var _data = data['data'];
-            var item;
+            var i, item;
             for (var prop in _data) {
-                var i = _data[prop];
+                i = _data[prop];
                 if (i.hasOwnProperty(fieldname) && i[fieldname]['value'] == value) {
                     item = i;
                     break;
@@ -734,4 +765,61 @@ $(function() {
         });
     };
     inline_checkbox_events();
+
+    // Used by S3SQLInlineComponentMultiSelectWidget
+    var inline_multiselect_events = function() {
+        // Listen for changes on all Inline MultiSelect Widgets
+        $('.inline-multiselect-widget').change(function() {
+            var that = $(this);
+            var values = that.val();
+            var names = that.attr('id').split('-');
+            var formname = names[0];
+            var fieldname = names[1];
+            // Read current data from real input
+            var data = inline_deserialize(formname);
+            var _data = data['data'];
+            var old_values = [];
+            var i;
+            for (var prop in _data) {
+                i = _data[prop];
+                if (i.hasOwnProperty(fieldname)) {
+                    old_values.push(i[fieldname]['value'].toString());
+                }
+            }
+            // Modify the Data
+            var new_items = $(values).not(old_values).get();
+            var item,
+                value,
+                len = new_items.length;
+            if (len) {
+                var label;
+                for (i = 0; i < len; i++) {
+                    item = {};
+                    value = new_items[i];
+                    label = that.find('option[value=' + value + ']').html();
+                    item[fieldname] = {'text': label,
+                                       'value': value
+                                       };
+                    item['_changed'] = true;
+                    _data.push(item);
+                }
+            }
+            var old_items = $(old_values).not(values).get();
+            len = old_items.length;
+            if (len) {
+                for (i = 0; i < len; i++) {
+                    value = old_items[i];
+                    for (var prop in _data) {
+                        item = _data[prop];
+                        if ((item.hasOwnProperty(fieldname)) && (item[fieldname]['value'] == value)) {
+                            item['_delete'] = true;
+                        }
+                    }
+                }
+            }
+            // Write data back to real input
+            inline_serialize(formname);
+        });
+    };
+    inline_multiselect_events();
 });

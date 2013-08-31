@@ -38,6 +38,7 @@ __all__ = ["S3PersonEntity",
            "S3PersonEducationModel",
            "S3PersonDetailsModel",
            "S3SavedFilterModel",
+           "S3SubscriptionModel",
            "S3SavedSearch",
            "S3PersonPresence",
            "S3PersonDescription",
@@ -53,7 +54,6 @@ __all__ = ["S3PersonEntity",
            "pr_rheader",
            # Custom Resource Methods
            "pr_contacts",
-           "pr_profile",
            # Hierarchy Manipulation
            "pr_update_affiliations",
            "pr_add_affiliation",
@@ -88,6 +88,13 @@ import os
 import re
 
 try:
+    # Python 2.7
+    from collections import OrderedDict
+except:
+    # Python 2.6
+    from gluon.contrib.simplejson.ordered_dict import OrderedDict
+
+try:
     import json # try stdlib (Python 2.6)
 except ImportError:
     try:
@@ -112,6 +119,7 @@ class S3PersonEntity(S3Model):
 
     names = ["pr_pentity",
              "pr_affiliation",
+             "pr_person_user",
              "pr_role",
              "pr_role_types",
              "pr_role_id",
@@ -234,12 +242,10 @@ class S3PersonEntity(S3Model):
         add_component("dvi_identification",
                       pr_pentity=dict(joinby=pe_id,
                                       multiple=False))
-        # Map Configs
+        # Map Configs 'Saved Maps'
         #   - Personalised configurations
         #   - OU configurations (Organisation/Branch/Facility/Team)
-        add_component("gis_config",
-                      pr_pentity=dict(joinby=pe_id,
-                                      multiple=False))
+        add_component("gis_config", pr_pentity=pe_id)
 
         # ---------------------------------------------------------------------
         # Person <-> User
@@ -552,8 +558,8 @@ class S3PersonEntity(S3Model):
     @staticmethod
     def pr_affiliation_onaccept(form):
         """
-            Remove duplicate affiliations and clear descendant paths (to
-            trigger lazy rebuild)
+            Remove duplicate affiliations and clear descendant paths
+            (to trigger lazy rebuild)
 
             @param form: the CRUD form
         """
@@ -634,7 +640,6 @@ class S3PersonModel(S3Model):
     """ Persons and Groups """
 
     names = ["pr_person",
-             "pr_person_user",
              "pr_gender",
              "pr_gender_opts",
              "pr_person_id",
@@ -740,6 +745,7 @@ class S3PersonModel(S3Model):
                              pr_gender(label = T("Sex")),
                              s3_date("date_of_birth",
                                      label = T("Date of Birth"),
+                                     future = 0,
                                      past = 1320,  # Months, so 110 years
                                      ),
                              # @ToDo: Move this field from this core table (should be using Saved Searches/Subscription)
@@ -796,6 +802,7 @@ class S3PersonModel(S3Model):
 
         # Custom Form
         crud_form = S3SQLCustomForm("first_name",
+                                    "middle_name",
                                     "last_name",
                                     "date_of_birth",
                                     "initials",
@@ -815,24 +822,24 @@ class S3PersonModel(S3Model):
 
         # Resource configuration
         self.configure(tablename,
-                        super_entity=("pr_pentity", "sit_trackable"),
-                        list_fields = ["id",
-                                       "first_name",
-                                       "middle_name",
-                                       "last_name",
-                                       #"picture",
-                                       "gender",
-                                       (T("Age"), "age"),
-                                       (messages.ORGANISATION, "human_resource.organisation_id"),
-                                       ],
-                        crud_form = crud_form,
-                        onaccept=self.pr_person_onaccept,
-                        search_method=pr_person_search,
-                        deduplicate=self.person_deduplicate,
-                        main="first_name",
-                        extra="last_name",
-                        realm_components = ["presence"],
-                        )
+                       super_entity = ("pr_pentity", "sit_trackable"),
+                       list_fields = ["id",
+                                      "first_name",
+                                      "middle_name",
+                                      "last_name",
+                                      #"picture",
+                                      "gender",
+                                      (T("Age"), "age"),
+                                      (messages.ORGANISATION, "human_resource.organisation_id"),
+                                      ],
+                       crud_form = crud_form,
+                       onaccept = self.pr_person_onaccept,
+                       search_method = pr_person_search,
+                       deduplicate = self.person_deduplicate,
+                       main = "first_name",
+                       extra = "last_name",
+                       realm_components = ["presence"],
+                       )
 
         person_id_comment = pr_person_comment(
                                     T("Person"),
@@ -895,12 +902,11 @@ class S3PersonModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage(
-                pr_gender = pr_gender,
-                pr_gender_opts = pr_gender_opts,
-                pr_person_id = person_id,
-                pr_person_represent = person_represent,
-            )
+        return dict(pr_gender = pr_gender,
+                    pr_gender_opts = pr_gender_opts,
+                    pr_person_id = person_id,
+                    pr_person_represent = person_represent,
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1033,8 +1039,9 @@ class S3PersonModel(S3Model):
         db = current.db
         ptable = db.pr_person
         s3db = current.s3db
-        etable = s3db.pr_contact.with_alias("pr_email")
-        stable = s3db.pr_contact.with_alias("pr_sms")
+        table = s3db.pr_contact
+        etable = table.with_alias("pr_email")
+        stable = table.with_alias("pr_sms")
 
         left = [etable.on((etable.pe_id == ptable.pe_id) & \
                           (etable.contact_method == "EMAIL")),
@@ -1423,10 +1430,9 @@ class S3GroupModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage(
-            pr_group_id = group_id,
-            pr_mailing_list_crud_strings = mailing_list_crud_strings
-        )
+        return dict(pr_group_id = group_id,
+                    pr_mailing_list_crud_strings = mailing_list_crud_strings
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1591,8 +1597,7 @@ class S3ContactModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage(
-        )
+        return dict()
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1747,9 +1752,8 @@ class S3AddressModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage(
-                pr_address_type_opts = pr_address_type_opts
-            )
+        return dict(pr_address_type_opts = pr_address_type_opts
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1937,7 +1941,7 @@ class S3PersonImageModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage()
+        return dict()
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2084,10 +2088,9 @@ class S3ImageLibraryModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage(
-            pr_image_size = self.pr_image_size,
-            pr_image_delete_all = self.pr_image_delete_all,
-        )
+        return dict(pr_image_size = self.pr_image_size,
+                    pr_image_delete_all = self.pr_image_delete_all,
+                    )
 
     # -----------------------------------------------------------------------------
     @staticmethod
@@ -2215,7 +2218,7 @@ class S3PersonIdentityModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage()
+        return dict()
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2317,7 +2320,7 @@ class S3PersonEducationModel(S3Model):
         # ---------------------------------------------------------------------
         # Return model-global names to response.s3
         #
-        return Storage()
+        return dict()
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2447,7 +2450,7 @@ class S3PersonDetailsModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage()
+        return dict()
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2475,7 +2478,7 @@ class S3PersonDetailsModel(S3Model):
 class S3SavedFilterModel(S3Model):
     """ Saved Filters """
 
-    names = ["pr_filter"]
+    names = ["pr_filter", "pr_filter_id"]
 
     def model(self):
 
@@ -2484,20 +2487,142 @@ class S3SavedFilterModel(S3Model):
         # ---------------------------------------------------------------------
         tablename = "pr_filter"
         table = self.define_table(tablename,
+                                  self.super_link("pe_id", "pr_pentity"),
                                   Field("title"),
                                   Field("controller"),
                                   Field("function"),
                                   Field("resource"),
                                   Field("description", "text"),
-                                  self.super_link("pe_id", "pr_pentity"),
                                   Field("query", "text"),
                                   s3_comments(),
+                                  *s3_meta_fields())
+
+        represent = S3Represent(lookup=tablename, fields=["title"])
+        filter_id = S3ReusableField("filter_id", table,
+                                    requires = IS_EMPTY_OR(IS_ONE_OF(
+                                                    db, "pr_filter.id",
+                                                    represent,
+                                                    orderby="pr_filter.title",
+                                                    sort=True)),
+                                    represent = represent,
+                                    label = T("Filter"),
+                                    ondelete = "SET NULL")
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return dict(pr_filter_id = filter_id)
+
+# =============================================================================
+class S3SubscriptionModel(S3Model):
+    """ Model for subscriptions """
+
+    names = ["pr_subscription",
+             "pr_subscription_resource",
+             "pr_subscription_check_intervals",
+            ]
+
+    def model(self):
+
+        T = current.T
+        UNKNOWN_OPT = current.messages.UNKNOWN_OPT
+
+        trigger_opts = {
+            "new": T("New Records"),
+            "upd": T("Record Updates"),
+        }
+
+        frequency_opts = OrderedDict([
+            ("immediately", T("Immediately")),
+            ("hourly", T("Hourly")),
+            ("daily", T("Daily")),
+            ("weekly", T("Weekly")),
+            ("never", T("Never")),
+        ])
+
+        check_intervals = {
+            "immediately": 5,
+            "hourly": 60,
+            "daily": 1440,
+            "weekly": 10080,
+            "never": 0
+        }
+
+        email_format_opts = {
+            "text": T("Text"),
+            "html": T("HTML")
+        }
+
+        MSG_CONTACT_OPTS = current.msg.MSG_CONTACT_OPTS
+
+        # ---------------------------------------------------------------------
+        tablename = "pr_subscription"
+        table = self.define_table(tablename,
+                                  self.super_link("pe_id", "pr_pentity"),
+                                  self.pr_filter_id(),
+                                  Field("notify_on", "list:string",
+                                        requires=IS_IN_SET(trigger_opts,
+                                                           multiple=True,
+                                                           zero=None),
+                                        default=["new"],
+                                        represent=S3Represent(
+                                                    options=trigger_opts,
+                                                    multiple=True)),
+                                  Field("frequency",
+                                        requires=IS_IN_SET(frequency_opts,
+                                                           zero=None),
+                                        default="daily",
+                                        represent=lambda opt: \
+                                                  frequency_opts.get(opt,
+                                                                     UNKNOWN_OPT)),
+                                  Field("method", "list:string",
+                                        requires=IS_IN_SET(MSG_CONTACT_OPTS,
+                                                           multiple=True,
+                                                           zero=None),
+                                        default=["EMAIL"],
+                                        represent=S3Represent(
+                                                    options=MSG_CONTACT_OPTS,
+                                                    multiple=True)),
+                                  Field("email_format",
+                                        requires=IS_EMPTY_OR(
+                                                   IS_IN_SET(email_format_opts,
+                                                             zero=None)),
+                                        represent=S3Represent(
+                                                    options=email_format_opts)),
+                                  *s3_meta_fields())
+
+        self.add_component("pr_subscription_resource",
+                           pr_subscription="subscription_id")
+
+        # ---------------------------------------------------------------------
+        tablename = "pr_subscription_resource"
+        table = self.define_table(tablename,
+                                  Field("subscription_id",
+                                        "reference pr_subscription",
+                                        ondelete="CASCADE"),
+                                  Field("resource"),
+                                  Field("url"),
+                                  Field("auth_token",
+                                        length=40,
+                                        readable=False,
+                                        writable=False),
+                                  Field("locked", "boolean",
+                                        default=False,
+                                        readable=False,
+                                        writable=False),
+                                  Field("batch_mode", "boolean",
+                                        default=True),
+                                  Field("last_check_time", "datetime",
+                                        default=current.request.utcnow,
+                                        writable=False),
+                                  Field("next_check_time", "datetime",
+                                        writable=False),
                                   *s3_meta_fields())
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage()
+        return dict(pr_subscription_check_intervals = check_intervals)
 
 # =============================================================================
 class S3SavedSearch(S3Model):
@@ -2678,7 +2803,7 @@ class S3SavedSearch(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return Storage()
+        return dict()
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2968,13 +3093,12 @@ class S3PersonPresence(S3Model):
         # ---------------------------------------------------------------------
         # Return model-global names to response.s3
         #
-        return Storage(
-             pr_trackable_types=pr_trackable_types,
-             pr_default_trackable=pr_default_trackable,
-             pr_presence_opts=pr_presence_opts,
-             pr_presence_conditions=pr_presence_conditions,
-             pr_default_presence=pr_default_presence
-        )
+        return dict(pr_trackable_types=pr_trackable_types,
+                    pr_default_trackable=pr_default_trackable,
+                    pr_presence_opts=pr_presence_opts,
+                    pr_presence_conditions=pr_presence_conditions,
+                    pr_default_presence=pr_default_presence
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3106,7 +3230,9 @@ class S3PersonPresence(S3Model):
 
             # Re-open the last persistent presence if no closing event
             query = this_entity & is_present
-            presence = db(query).select(table.ALL, orderby=~table.datetime, limitby=(0,1)).first()
+            presence = db(query).select(table.ALL,
+                                        orderby=~table.datetime,
+                                        limitby=(0, 1)).first()
             if presence and presence.closed:
                 later = (table.datetime > presence.datetime)
                 query = this_entity & later & is_absent & same_place
@@ -3115,7 +3241,9 @@ class S3PersonPresence(S3Model):
 
             # Re-open the last missing if no later persistent presence
             query = this_entity & is_missing
-            presence = db(query).select(table.ALL, orderby=~table.datetime, limitby=(0,1)).first()
+            presence = db(query).select(table.ALL,
+                                        orderby=~table.datetime,
+                                        limitby=(0,1)).first()
             if presence and presence.closed:
                 later = (table.datetime > presence.datetime)
                 query = this_entity & later & is_present
@@ -3123,7 +3251,8 @@ class S3PersonPresence(S3Model):
                     db(table.id == presence.id).update(closed=False)
 
         pentity = db(db.pr_pentity.pe_id == pe_id).select(db.pr_pentity.instance_type,
-                                                          limitby=(0,1)).first()
+                                                          limitby=(0, 1)
+                                                          ).first()
         if pentity and pentity.instance_type == "pr_person":
             query = this_entity & is_missing & (table.closed == False)
             if db(query).count():
@@ -3469,11 +3598,9 @@ class S3PersonDescription(S3Model):
         # ---------------------------------------------------------------------
         # Return model-global names to response.s3
         #
-        return Storage(
-                pr_age_group = pr_age_group,
-                pr_age_group_opts = pr_age_group_opts,
-            )
-
+        return dict(pr_age_group = pr_age_group,
+                    pr_age_group_opts = pr_age_group_opts,
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3681,17 +3808,20 @@ class pr_PersonEntityRepresent(S3Represent):
     def __init__(self,
                  show_label=True,
                  default_label="[No ID Tag]",
+                 show_type=True,
                  multiple=False):
         """
             Constructor
 
             @param show_label: show the ID tag label for persons
             @param default_label: the default for the ID tag label
+            @param show_type: show the instance_type
             @param multiple: assume a value list by default
         """
 
         self.show_label = show_label
         self.default_label = default_label
+        self.show_type = show_type
 
         super(pr_PersonEntityRepresent, self).__init__(lookup="pr_pentity",
                                                        key="pe_id",
@@ -3780,25 +3910,29 @@ class pr_PersonEntityRepresent(S3Represent):
         else:
             label = None
 
-        etable = current.s3db.pr_pentity
-        instance_type_nice = etable.instance_type.represent(instance_type)
+        if self.show_type:
+            etable = current.s3db.pr_pentity
+            instance_type_nice = etable.instance_type.represent(instance_type)
+            instance_type_nice = " (%s)" % instance_type_nice
+        else:
+            instance_type_nice = ""
 
         item = object.__getattribute__(row, instance_type)
         if instance_type == "pr_person":
             if show_label:
-                pe_str = "%s %s (%s)" % (s3_fullname(item),
-                                         label,
-                                         instance_type_nice)
-            else:
-                pe_str = "%s (%s)" % (s3_fullname(item),
+                pe_str = "%s %s%s" % (s3_fullname(item),
+                                      label,
                                       instance_type_nice)
+            else:
+                pe_str = "%s%s" % (s3_fullname(item),
+                                   instance_type_nice)
 
         elif "name" in item:
-            pe_str = "%s (%s)" % (item["name"],
-                                  instance_type_nice)
+            pe_str = "%s" % (item["name"],
+                             instance_type_nice)
         else:
-            pe_str = "[%s] (%s)" % (label,
-                                    instance_type_nice)
+            pe_str = "[%s]" % (label,
+                               instance_type_nice)
 
         return pe_str
 
@@ -4094,8 +4228,7 @@ def pr_contacts(r, **attr):
     items = contact_groups.items()
     def mysort(key):
         """ Sort Contact Types by Priority"""
-        keys = {
-                "SMS": 1,
+        keys = {"SMS": 1,
                 "EMAIL": 2,
                 "WORK_PHONE": 3,
                 "HOME_PHONE": 4,
@@ -4193,13 +4326,6 @@ def pr_contacts(r, **attr):
     s3.js_global.append("controller='%s'" % current.request.controller)
     s3.js_global.append("personId=%s" % person.id);
 
-    # Load the Google JS now as can't load it async
-    # @ToDo: Is this worth making conditional on this being their default base layer?
-    #apikey = current.deployment_settings.get_gis_api_google()
-    #if apikey:
-    #    s3.scripts.append("http://www.google.com/jsapi?key=%s" % apikey)
-    #s3.scripts.append("http://maps.google.com/maps/api/js?v=3.6&sensor=false")
-
     # Custom View
     response.view = "pr/contacts.html"
 
@@ -4208,43 +4334,10 @@ def pr_contacts(r, **attr):
     if callable(rheader):
         rheader = rheader(r)
 
-    return dict(
-            title = T("Contacts"),
-            rheader = rheader,
-            content = content,
-        )
-
-# =============================================================================
-def pr_profile(r, **attr):
-    """
-        Custom Method to provide the auth_user profile as a Tab of the Person
-        @ToDo: Complete this (currently unfinished)
-    """
-
-    if r.http != "GET":
-        r.error(405, current.manager.ERROR.BAD_METHOD)
-
-    person = r.record
-
-    # Profile
-    s3db = current.s3db
-    ltable = s3db.pr_person_user
-    query = (ltable.pe_id == person.pe_id)
-    profile = current.db(query).select(limitby=(0, 1)).first()
-
-    form = current.auth()
-
-    # Custom View
-    response.view = "pr/profile.html"
-
-    # RHeader for consistency
-    rheader = s3db.hrm_rheader(r)
-
-    return dict(
-            title = current.T("Profile"),
-            rheader = rheader,
-            form = form,
-        )
+    return dict(title = T("Contacts"),
+                rheader = rheader,
+                content = content,
+                )
 
 # =============================================================================
 # Hierarchy Manipulation
@@ -4268,7 +4361,8 @@ def pr_update_affiliations(table, record):
         # Get the HR record
         htable = current.s3db.hrm_human_resource
         if not isinstance(record, Row):
-            record = current.db(htable.id == record).select(htable.ALL,
+            record = current.db(htable.id == record).select(htable.deleted_fk,
+                                                            htable.person_id,
                                                             limitby=(0, 1)
                                                             ).first()
         if not record:
@@ -4293,7 +4387,9 @@ def pr_update_affiliations(table, record):
 
         mtable = current.s3db.pr_group_membership
         if not isinstance(record, Row):
-            record = current.db(mtable.id == record).select(mtable.ALL,
+            record = current.db(mtable.id == record).select(mtable.deleted,
+                                                            mtable.deleted_fk,
+                                                            mtable.person_id,
                                                             limitby=(0, 1)
                                                             ).first()
         if not record:
@@ -4712,7 +4808,8 @@ def pr_add_to_role(role_id, pe_id):
     atable = current.s3db.pr_affiliation
     query = (atable.role_id == role_id) & \
             (atable.pe_id == pe_id)
-    affiliation = current.db(query).select(limitby=(0, 1)).first()
+    affiliation = current.db(query).select(atable.id,
+                                           limitby=(0, 1)).first()
     if affiliation is None:
         # Insert affiliation record
         atable.insert(role_id=role_id, pe_id=pe_id)
@@ -4734,7 +4831,8 @@ def pr_remove_from_role(role_id, pe_id):
     atable = current.s3db.pr_affiliation
     query = (atable.role_id == role_id) & \
             (atable.pe_id == pe_id)
-    affiliation = current.db(query).select(limitby=(0, 1)).first()
+    affiliation = current.db(query).select(atable.id,
+                                           limitby=(0, 1)).first()
     if affiliation is not None:
         # Soft-delete the record, clear foreign keys
         deleted_fk = {"role_id": role_id, "pe_id": pe_id}
@@ -4786,7 +4884,9 @@ def pr_get_role_paths(pe_id, roles=None, role_types=None):
             role_types = [role_types]
         query &= (rtable.role_type.belongs(role_types))
 
-    rows = current.db(query).select(rtable.role, rtable.path, rtable.pe_id)
+    rows = current.db(query).select(rtable.role,
+                                    rtable.path,
+                                    rtable.pe_id)
 
     role_paths = Storage()
     for role in rows:
@@ -4878,7 +4978,10 @@ def pr_get_path(pe_id):
             (atable.pe_id == pe_id) & \
             (rtable.deleted != True) & \
             (rtable.role_type == OU)
-    roles = current.db(query).select(rtable.ALL)
+    roles = current.db(query).select(rtable.id,
+                                     rtable.pe_id,
+                                     rtable.path,
+                                     rtable.role_type)
     multipath = S3MultiPath()
     append = multipath.append
     for role in roles:
@@ -4913,8 +5016,10 @@ def pr_get_ancestors(pe_id):
             (rtable.deleted != True) & \
             (rtable.role_type == OU)
 
-    roles = current.db(query).select(rtable.ALL)
-
+    roles = current.db(query).select(rtable.id,
+                                     rtable.pe_id,
+                                     rtable.path,
+                                     rtable.role_type)
     paths = []
     append = paths.append
     for role in roles:
@@ -5023,8 +5128,11 @@ def pr_ancestors(entities):
             (atable.pe_id.belongs(entities)) & \
             (rtable.deleted != True) & \
             (rtable.role_type == OU)
-    rows = current.db(query).select(rtable.ALL, atable.pe_id)
-
+    rows = current.db(query).select(rtable.id,
+                                    rtable.pe_id,
+                                    rtable.path,
+                                    rtable.role_type,
+                                    atable.pe_id)
     ancestors = Storage([(pe_id, []) for pe_id in entities])
     r = rtable._tablename
     a = atable._tablename
@@ -5044,24 +5152,38 @@ def pr_ancestors(entities):
     return ancestors
 
 # =============================================================================
-def pr_descendants(pe_ids, skip=[]):
+def pr_descendants(pe_ids, skip=None, root=True):
     """
+        Find descendant entities of a person entity in the OU hierarchy
+        (performs a real search, not a path lookup), grouped by root PE
+
+        @param pe_ids: set/list of pe_ids
+        @param skip: list of person entity IDs to skip during
+                     descending (internal)
+        @param root: this is the top-node (internal)
+
+        @return: a dict of lists of descendant PEs per root PE
     """
 
-    pe_ids = [i for i in pe_ids if i not in skip]
+    if skip is None:
+        skip = set()
+
+    # We still need to support Py 2.6
+    #pe_ids = {i for i in pe_ids if i not in skip}
+    pe_ids = set(i for i in pe_ids if i not in skip)
     if not pe_ids:
-        return []
+        return {}
 
     s3db = current.s3db
     etable = s3db.pr_pentity
     rtable = s3db.pr_role
     atable = s3db.pr_affiliation
 
-    query = (rtable.deleted != True) & \
-            (rtable.pe_id.belongs(pe_ids)) & \
-            (rtable.role_type == OU) & \
-            (atable.role_id == rtable.id) & \
-            (atable.deleted != True) & \
+    q = (rtable.pe_id.belongs(pe_ids)) \
+        if len(pe_ids) > 1 else (rtable.pe_id == list(pe_ids)[0])
+
+    query = (q & (rtable.role_type == OU) & (rtable.deleted != True)) & \
+            ((atable.role_id == rtable.id) & (atable.deleted != True)) & \
             (etable.pe_id == atable.pe_id)
 
     rows = current.db(query).select(rtable.pe_id,
@@ -5071,92 +5193,116 @@ def pr_descendants(pe_ids, skip=[]):
     e = etable._tablename
     a = atable._tablename
 
-    nodes = []
-    result = Storage()
+    nodes = set()
+    ogetattr = object.__getattribute__
+
+    result = dict()
+    
+    skip.update(pe_ids)
     for row in rows:
-        parent = row[r].pe_id
-        child = row[a].pe_id
-        if row[e].instance_type != "pr_person":
+
+        parent = ogetattr(ogetattr(row, r), "pe_id")
+        child = ogetattr(ogetattr(row, a), "pe_id")
+        instance_type = ogetattr(ogetattr(row, e), "instance_type")
+        if instance_type != "pr_person":
             if parent not in result:
-                result[parent] = [child]
-            else:
-                result[parent].append(child)
-        if child not in nodes:
-            nodes.append(child)
+                result[parent] = []
+            result[parent].append(child)
+        if child not in skip:
+            nodes.add(child)
 
-    skip = skip + pe_ids
-    descendants = pr_descendants(nodes, skip=skip)
-
-    for child in descendants:
-        for parent in result:
-            if child in result[parent]:
-                for node in descendants[child]:
-                    if node not in result[parent]:
-                        result[parent].append(node)
-    for x in result:
-        for y in result:
-            if x in result[y]:
-                result[y].extend([i for i in result[x] if i not in result[y] and i != y])
+    if nodes:
+        descendants = pr_descendants(nodes, skip=skip, root=False)
+        for child, nodes in descendants.iteritems():
+            for parent, children in result.iteritems():
+                if child in children:
+                    for node in nodes:
+                        if node not in children:
+                            children.append(node)
+    if root:
+        for child, nodes in result.iteritems():
+            for parent, children in result.iteritems():
+                if child in children:
+                    for node in nodes:
+                        if node not in children and node != parent:
+                            children.append(node)
 
     return result
 
 # =============================================================================
-def pr_get_descendants(pe_ids, skip=[], entity_types=None, ids=True):
+def pr_get_descendants(pe_ids, entity_types=None, skip=None, ids=True):
     """
         Find descendant entities of a person entity in the OU hierarchy
         (performs a real search, not a path lookup).
 
         @param pe_ids: person entity ID or list of IDs
-        @param skip: list of person entity IDs to skip during descending
         @param entity_types: optional filter to a specific entity_type
-        @param ids: whether to return a list of ids or nodes
+        @param ids: whether to return a list of ids or nodes (internal)
+        @param skip: list of person entity IDs to skip during
+                     descending (internal)
 
         @return: a list of PE-IDs
     """
 
-    if type(pe_ids) is not list:
-        pe_ids = [pe_ids]
-    pe_ids = [i for i in pe_ids if i not in skip]
     if not pe_ids:
         return []
+    if type(pe_ids) is not set:
+        pe_ids = set(pe_ids) \
+                 if isinstance(pe_ids, (list, tuple)) else set([pe_ids])
 
     db = current.db
     s3db = current.s3db
     etable = s3db.pr_pentity
     rtable = db.pr_role
     atable = db.pr_affiliation
-    en = etable._tablename
-    an = atable._tablename
-    query = (rtable.deleted != True) & \
-            (rtable.pe_id.belongs(pe_ids)) & \
-            (~(rtable.pe_id.belongs(skip))) &\
-            (rtable.role_type == OU) & \
-            (atable.deleted != True) & \
-            (atable.role_id == rtable.id) & \
-            (etable.pe_id == atable.pe_id)
-    skip = skip + pe_ids
-    rows = db(query).select(atable.pe_id,
-                            etable.instance_type)
-    nodes = [(r[an].pe_id, r[en].instance_type) for r in rows]
-    result = []
-    append = result.append
-    for n in nodes:
-        if n not in result:
-            append(n)
-    node_ids = [n[0] for n in result]
+
+    if skip is None:
+        skip = set()
+    skip.update(pe_ids)
+
+    if len(pe_ids) > 1:
+        q = (rtable.pe_id.belongs(pe_ids))
+    else:
+        q = (rtable.pe_id == list(pe_ids)[0])
+
+    query = ((rtable.deleted != True) & q & (rtable.role_type == OU)) & \
+            ((atable.deleted != True) & (atable.role_id == rtable.id))
+
+    if entity_types is not None:
+        query &= (etable.pe_id == atable.pe_id)
+        rows = db(query).select(etable.pe_id, etable.instance_type)
+        # We still need to support Py 2.6
+        #result = {(r.pe_id, r.instance_type) for r in rows}
+        result = set((r.pe_id, r.instance_type) for r in rows)
+        # We still need to support Py 2.6
+        #node_ids = {i for i, t in result if i not in skip}
+        node_ids = set(i for i, t in result if i not in skip)
+    else:
+        rows = db(query).select(atable.pe_id)
+        # We still need to support Py 2.6
+        #result = {r.pe_id for r in rows}
+        result = set(r.pe_id for r in rows)
+        # We still need to support Py 2.6
+        #node_ids = {i for i in result if i not in skip}
+        node_ids = set(i for i in result if i not in skip)
     # Recurse
-    descendants = pr_get_descendants(node_ids, skip=skip, ids=False)
-    for d in descendants:
-        if d not in result:
-            append(d)
+    if node_ids:
+        descendants = pr_get_descendants(node_ids,
+                                         skip=skip,
+                                         entity_types=entity_types,
+                                         ids=False)
+        result.update(descendants)
 
     if ids:
-        if entity_types and not isinstance(entity_types, (list, tuple)):
-            entity_types = [entity_types]
-        result = [n[0]
-                  for n in result
-                  if (entity_types is None) or (n[1] in entity_types)]
-        return result
+        if entity_types is not None:
+            if type(entity_types) is not set:
+                if not isinstance(entity_types, (tuple, list)):
+                    entity_types = set([entity_types])
+                else:
+                    entity_types = set(entity_types)
+            return [n[0] for n in result if n[1] in entity_types]
+        else:
+            return list(result)
     else:
         return result
 
@@ -5176,12 +5322,15 @@ def pr_rebuild_path(pe_id, clear=False):
         pe_id = row.pe_id
 
     rtable = current.s3db.pr_role
-    query = (rtable.deleted != True) & \
-            (rtable.pe_id == pe_id) & \
-            (rtable.role_type == OU)
+    query = (rtable.pe_id == pe_id) & \
+            (rtable.role_type == OU) & \
+            (rtable.deleted != True)
     db = current.db
     db(query).update(path=None)
-    roles = db(query).select()
+    roles = db(query).select(rtable.id,
+                             rtable.pe_id,
+                             rtable.path,
+                             rtable.role_type)
     for role in roles:
         if role.path is None:
             pr_role_rebuild_path(role, clear=clear)
@@ -5221,12 +5370,15 @@ def pr_role_rebuild_path(role_id, skip=[], clear=False):
         path = None
     else:
         # Get all parent roles
-        query = (atable.deleted != True) & \
-                (atable.pe_id == pe_id) & \
+        query = (atable.pe_id == pe_id) & \
+                (atable.deleted != True) & \
                 (rtable.deleted != True) & \
                 (rtable.id == atable.role_id) & \
                 (rtable.role_type == OU)
-        parent_roles = db(query).select(rtable.ALL)
+        parent_roles = db(query).select(rtable.id,
+                                        rtable.pe_id,
+                                        rtable.path,
+                                        rtable.role_type)
 
         # Update ancestor path
         path = S3MultiPath()

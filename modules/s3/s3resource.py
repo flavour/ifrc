@@ -940,13 +940,14 @@ class S3Resource(object):
                 continue
             tname = dfield.tname
             if tname not in stables:
-                sfields = stables[tname] = {"_left": {}}
+                sfields = stables[tname] = {"_left": S3LeftJoins(table)}
             else:
                 sfields = stables[tname]
             if colname not in sfields:
                 sfields[colname] = dfield.field
-                if dfield.left:
-                    sfields["_left"].update(dfield.left)
+                l = dfield.left
+                if l:
+                    [sfields["_left"].add(l[tn]) for tn in l]
 
         # Retrieve + extract into records
         for tname in stables:
@@ -958,7 +959,7 @@ class S3Resource(object):
             efields, ejoins, l, d = sresource.resolve_selectors([])
 
             # Get all left joins for subtable
-            tnames = left_joins.extend(l) + stable["_left"].keys()
+            tnames = left_joins.extend(l) + stable["_left"].tables
             sjoins = left_joins.as_list(tablenames=tnames,
                                         aqueries=aqueries)
             if not sjoins:
@@ -4464,26 +4465,38 @@ class S3Resource(object):
             return "~.%s" % selector
 
     # -------------------------------------------------------------------------
-    def list_fields(self, key="list_fields"):
+    def list_fields(self, key="list_fields", id_column=0):
         """
             Get the list_fields for this resource
 
             @param key: alternative key for the table configuration
+            @param id_column: True/False, whether to include the record ID
+                              or not, or 0 to enforce the record ID to be
+                              the first column
         """
 
         list_fields = self.get_config(key, None)
+        if not list_fields and key != "list_fields":
+            list_fields = self.get_config("list_fields", None)
         if not list_fields:
             list_fields = [f.name for f in self.readable_fields()]
-        pkey = self._id.name
+
+        pkey = _pkey = self._id.name
         fields = []
         append = fields.append
+        selectors = set()
+        seen = selectors.add
         for f in list_fields:
-            if f not in fields and f != pkey:
+            selector = f if type(f) is not tuple else f[1]
+            if selector == _pkey and not id_column:
+                pkey = f
+            elif selector not in selectors:
+                seen(selector)
                 append(f)
-        list_fields = fields
-        list_fields.insert(0, self._id.name)
-        return list_fields
-
+        if id_column is 0:
+            fields.insert(0, pkey)
+        return fields
+        
 # =============================================================================
 class S3LeftJoins(object):
 
@@ -4668,9 +4681,9 @@ class S3FieldSelector(object):
     def __init__(self, name, type=None):
         """ Constructor """
 
-        if not isinstance(name, str) or not name:
+        if not isinstance(name, basestring) or not name:
             raise SyntaxError("name required")
-        self.name = name
+        self.name = str(name)
         self.type = type
 
         self.op = None
@@ -5279,6 +5292,8 @@ class S3ResourceField(object):
                     label = current.gis.get_location_hierarchy(fname)
                 except:
                     label = None
+            elif fname == "L0":
+                label = current.messages.COUNTRY
             if label is None:
                 f = self.field
                 if f:
@@ -6430,9 +6445,11 @@ class S3URLQuery(object):
             # Add to subquery
             if q is None:
                 q = rquery
+            elif invert:
+                q &= rquery
             else:
                 q |= rquery
-
+                
         return q
 
 # =============================================================================
@@ -6522,6 +6539,10 @@ class S3ResourceFilter(object):
         if parent:
 
             pf = parent.rfilter
+            if not pf:
+                # Parent filter could be None if the parent is a component
+                # itself (e.g. inline components in component tabs)
+                pf = parent.build_query()
             alias = resource.alias
 
             # Use the master virtual filter

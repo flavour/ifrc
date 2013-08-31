@@ -10,6 +10,7 @@
          Name....................org_facility.name
          Type....................org_facility.type comma-sep list
          Organisation............org_organisation.name
+         Organisation Group......org_site_org_group.group_id  
          Building................gis_location.name
          Address.................gis_location.addr_street
          Postcode................gis_location.addr_postcode
@@ -60,6 +61,7 @@
     <xsl:key name="organisation" match="row" use="col[contains(
                     document('../labels.xml')/labels/column[@name='Organisation']/match/text(),
                     concat('|', @field, '|'))]"/>
+    <xsl:key name="organisation_group" match="row" use="col[@field='Organisation Group']"/>
 
     <!-- ****************************************************************** -->
     <xsl:template match="/">
@@ -72,6 +74,12 @@
                                                 concat('|', @field, '|'))]
                                         )[1])]">
                 <xsl:call-template name="Organisation"/>
+            </xsl:for-each>
+
+            <!-- Organisation Group -->
+            <xsl:for-each select="//row[generate-id(.)=generate-id(key('organisation_group',
+                                                                       col[@field='Organisation Group'])[1])]">
+                <xsl:call-template name="OrganisationGroup"/>
             </xsl:for-each>
 
             <xsl:apply-templates select="table/row"/>
@@ -113,6 +121,17 @@
                 </xsl:with-param>
                 <xsl:with-param name="arg">facility_type_ref</xsl:with-param>
             </xsl:call-template>
+
+            <!-- Organisation Group -->
+            <xsl:if test="col[@field='Organisation Group']!=''">
+                <resource name="org_site_org_group">
+                    <reference field="group_id" resource="org_group">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="concat('OrganisationGroup:', col[@field='Organisation Group'])"/>
+                        </xsl:attribute>
+                    </reference>
+                </resource>
+            </xsl:if>
 
             <!-- Site Needs -->
             <xsl:if test="col[@field='Urgently Needed']!='' or 
@@ -203,6 +222,21 @@
                     <xsl:value-of select="concat('FacilityType:', $Type)"/>
                 </xsl:attribute>
                 <data field="name"><xsl:value-of select="$Type"/></data>
+            </resource>
+        </xsl:if>
+    </xsl:template>
+
+    <!-- ****************************************************************** -->
+    <xsl:template name="OrganisationGroup">
+
+        <xsl:variable name="OrganisationGroup" select="col[@field='Organisation Group']"/>
+
+        <xsl:if test="$OrganisationGroup!=''">
+            <resource name="org_group">
+                <xsl:attribute name="tuid">
+                    <xsl:value-of select="concat('OrganisationGroup:', $OrganisationGroup)"/>
+                </xsl:attribute>
+                <data field="name"><xsl:value-of select="$OrganisationGroup"/></data>
             </resource>
         </xsl:if>
     </xsl:template>
