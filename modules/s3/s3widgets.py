@@ -612,7 +612,7 @@ class S3AddPersonWidget(FormWidget):
 # =============================================================================
 class S3AddPersonWidget2(FormWidget):
     """
-        Renders a person_id field as a Create Person form,
+        Renders a person_id or human_resource_id field as a Create Person form,
         with an embedded Autocomplete to select existing people.
 
         It relies on JS code in static/S3/s3.add_person.js
@@ -622,7 +622,7 @@ class S3AddPersonWidget2(FormWidget):
                  controller = None,
                  select_existing = None):
 
-        # Controller to retrieve the person record
+        # Controller to retrieve the person or hrm record
         self.controller = controller
         if select_existing is not None:
             self.select_existing = select_existing
@@ -649,6 +649,20 @@ class S3AddPersonWidget2(FormWidget):
         s3db = current.s3db
         ptable = s3db.pr_person
 
+        field_type = field.type[10:]
+        if field_type == "pr_person":
+            # person_id
+            hrm = False
+            fn = "person"
+        elif field_type == "hrm_human_resource":
+            # human_resource_id
+            hrm = True
+            fn = "human_resource"
+            htable = s3db.hrm_human_resource
+            organisation_id = htable.organisation_id
+        else:
+            raise UnsupportedError
+
         if settings.get_pr_request_dob():
             date_of_birth = ptable.date_of_birth
         else:
@@ -670,6 +684,10 @@ class S3AddPersonWidget2(FormWidget):
             dtable = s3db.pr_person_details
             occupation = dtable.occupation
             emailRequired = settings.get_hrm_email_required()
+        elif hrm:
+            controller = "hrm"
+            emailRequired = settings.get_hrm_email_required()
+            occupation = None
         else:
             controller = "pr"
             emailRequired = False
@@ -678,12 +696,18 @@ class S3AddPersonWidget2(FormWidget):
         values = {}
         if value:
             db = current.db
-            query = (ptable.id == value)
             fields = [ptable.first_name,
                       ptable.middle_name,
                       ptable.last_name,
                       ptable.pe_id,
                       ]
+            if hrm:
+                query = (htable.id == value) & \
+                        (htable.person_id == ptable.id)
+                fields.append(htable.organisation_id)
+            else:
+                query = (ptable.id == value)
+
             if date_of_birth:
                 fields.append(date_of_birth)
             if gender:
@@ -693,12 +717,17 @@ class S3AddPersonWidget2(FormWidget):
                 left = dtable.on(dtable.person_id == ptable.id)
             else:
                 left = None
-            person = db(query).select(*fields,
-                                      left=left,
-                                      limitby=(0, 1)).first()
+            row = db(query).select(*fields,
+                                   left=left,
+                                   limitby=(0, 1)).first()
+            if hrm:
+                values["organisation_id"] = row["hrm_human_resource.organisation_id"]
             if occupation:
-                values["occupation"] = person["pr_person_details.occupation"]
-                person = person["pr_person"]
+                values["occupation"] = row["pr_person_details.occupation"]
+            if hrm or occupation:
+                person = row["pr_person"]
+            else:
+                person = row
             values["full_name"] = s3_fullname(person)
             if date_of_birth:
                 values["date_of_birth"] = person.date_of_birth
@@ -766,13 +795,22 @@ class S3AddPersonWidget2(FormWidget):
 
         # Fields
         # (id, label, widget, required)
-        fattr = {"_data-c": controller}
-        fields = [# Name field
-                  # - can search for an existing person
-                  # - can create a new person
-                  # - multiple names get assigned to first, middle, last
-                  ("full_name", T("Name"), INPUT(**fattr), True)
-                  ]
+        fattr = {"_data-c": controller,
+                 "_data-f": fn,
+                 }
+        fields = []
+
+        if hrm:
+            fields.append(("organisation_id", organisation_id.label,
+                           OptionsWidget.widget(organisation_id, values.get("organisation_id", None),
+                                                _id = "%s_organisation_id" % fieldname),
+                           settings.get_hrm_org_required()))
+
+        # Name field
+        # - can search for an existing person
+        # - can create a new person
+        # - multiple names get assigned to first, middle, last
+        fields.append(("full_name", T("Name"), INPUT(**fattr), True))
 
         if date_of_birth:
             fields.append(("date_of_birth", date_of_birth.label,
@@ -3461,11 +3499,10 @@ class S3LocationSelectorWidget2(FormWidget):
         * Selection of lower Lx levels only happens when higher-level have been done
 
         Limitations:
-        * Currently assumes use within just 1 country
+        * Doesn't support variable Levels by Country
         * Doesn't allow creation of new Lx Locations
         * Doesn't allow selection of existing Locations
         * Doesn't support manual entry of LatLons
-        * Doesn't support Geocoding
 
         May evolve into a replacement in-time if missing features get migrated here.
 
@@ -3705,14 +3742,11 @@ class S3LocationSelectorWidget2(FormWidget):
                                      country.lat_max
                                      ]
             else:
-                # @ToDo: Lookup Labels dynamically when L0 changes
-                raise NotImplementedError
-                default_L0 = 0
-                default_bounds = [config.lon_min,
-                                  config.lat_min,
-                                  config.lon_max,
-                                  config.lat_max
-                                  ]
+                default_L0_bounds = [config.lon_min,
+                                     config.lat_min,
+                                     config.lon_max,
+                                     config.lat_max
+                                     ]
 
         parent = ""
         # Keep the selected Lat/Lon/Address/Postcode during validation errors
@@ -3831,15 +3865,17 @@ class S3LocationSelectorWidget2(FormWidget):
             lon_input = ""
             wkt_input = ""
 
-        if "L0" in levels:
-            L0_input = ""
-        else:
+        if "L0" not in levels and \
+           "L0" in _levels:
             # Have a hidden L0 input
             # - used for Geocoder
             L0_input = INPUT(_name="L0",
                              _id="%s_L0" % fieldname,
                              fvalue=default_L0,
                              )
+        else:
+            L0_input = ""
+
         if "L1" not in levels and \
            "L1" in _levels:
             # Have a hidden L1 input
@@ -3950,10 +3986,46 @@ class S3LocationSelectorWidget2(FormWidget):
             postcode_row = ""
 
         # Hierarchy Labels
+        # @ToDo: Country-specific Translations of Labels
         htable = s3db.gis_hierarchy
         fields = [htable[level] for level in levels if level != "L0"]
-        labels = db(htable.location_id == default_L0).select(*fields,
-                                                             limitby=(0, 1)).first()
+        query = (htable.uuid == "SITE_DEFAULT")
+        if default_L0:
+            query |= (htable.location_id == default_L0)
+            limit = 2
+        else:
+            limit = 1
+        rows = db(query).select(*fields,
+                                limitby=(0, limit)
+                                )
+        hdict = {}
+        labels = {}
+        if default_L0:
+            for row in rows:
+                if row.uuid == "SITE_DEFAULT":
+                    d = hdict["d"] = {}
+                    for level in levels:
+                        if level != "L0":
+                            d[int(level[1:])] = row[level]
+                else:
+                    h_l0 = hdict[default_L0] = {}
+                    for level in levels:
+                        if level == "L0":
+                            labels["L0"] = current.messages.COUNTRY
+                        else:
+                            v = row[level]
+                            h_l0[int(level[1:])] = v
+                            labels[level] = v
+        else:
+            row = rows.first()
+            d = hdict["d"] = {}
+            for level in levels:
+                if level == "L0":
+                    labels["L0"] = current.messages.COUNTRY
+                else:
+                    v = row[level]
+                    d[int(level[1:])] = v
+                    labels[level] = v
 
         # Lx Dropdowns
         Lx_rows = DIV()
@@ -3961,7 +4033,6 @@ class S3LocationSelectorWidget2(FormWidget):
         hidden = False
         for level in levels:
             id = "%s_%s" % (fieldname, level)
-            # @ToDo: Translate Labels
             label = labels[level]
             widget = SELECT(OPTION(T("Select %(location)s") % dict(location = label),
                                    _value=""),
@@ -3996,8 +4067,14 @@ class S3LocationSelectorWidget2(FormWidget):
             # (client-side JS will open when-needed)
             hidden = hide_lx
 
-        # @ToDo: Don't assume we start at L1
-        if default_L0 and "L1" in levels:
+        if not default_L0:
+            query = (gtable.level == "L0")
+            if len(countries):
+                ttable = s3db.gis_location_tag
+                query &= ((ttable.tag == "ISO2") & \
+                          (ttable.value.belongs(countries)) & \
+                          (ttable.location_id == gtable.id))
+        elif "L1" in levels:
             query = (gtable.level == "L1") & \
                     (gtable.parent == default_L0)
         elif default_L1 and "L2" in levels:
@@ -4040,38 +4117,33 @@ class S3LocationSelectorWidget2(FormWidget):
             for location in locations:
                 l = location["gis_location"]
                 name = location["gis_location_name.name_l10n"] or l.name
-                if l.inherited:
-                    location_dict[int(l.id)] = dict(n=name,
-                                                    l=int(l.level[1]),
-                                                    f=int(l.parent),
-                                                    )
-                else:
-                    location_dict[int(l.id)] = dict(n=name,
-                                                    l=int(l.level[1]),
-                                                    f=int(l.parent),
-                                                    b=[l.lon_min,
-                                                       l.lat_min,
-                                                       l.lon_max,
-                                                       l.lat_max,
-                                                       ],
-                                                    )
+                data = dict(n=name,
+                            l=int(l.level[1]),
+                            )
+                if l.parent:
+                    data["f"] = int(l.parent)
+                if not l.inherited:
+                    data["b"] = [l.lon_min,
+                                 l.lat_min,
+                                 l.lon_max,
+                                 l.lat_max,
+                                 ]
+                location_dict[int(l.id)] = data
         else:
             for l in locations:
-                if l.inherited:
-                    location_dict[int(l.id)] = dict(n=l.name,
-                                                    l=int(l.level[1]),
-                                                    f=int(l.parent),
-                                                    )
-                else:
-                    location_dict[int(l.id)] = dict(n=l.name,
-                                                    l=int(l.level[1]),
-                                                    f=int(l.parent),
-                                                    b=[l.lon_min,
-                                                       l.lat_min,
-                                                       l.lon_max,
-                                                       l.lat_max,
-                                                       ],
-                                                    )
+                data = dict(n=l.name,
+                            l=int(l.level[1]),
+                            )
+                if l.parent:
+                    data["f"] = int(l.parent)
+                if not l.inherited:
+                    data["b"] = [l.lon_min,
+                                 l.lat_min,
+                                 l.lon_max,
+                                 l.lat_max,
+                                 ]
+                location_dict[int(l.id)] = data
+
         if default_L0 and default_L0 not in location_dict:
             location_dict[default_L0] = dict(l=0,
                                              b=default_L0_bounds)
@@ -4089,8 +4161,11 @@ class S3LocationSelectorWidget2(FormWidget):
                                              b=default_L4_bounds)
 
         if not location_selector_loaded:
+            global_append = s3.js_global.append
             script = '''l=%s''' % json.dumps(location_dict)
-            s3.js_global.append(script)
+            global_append(script)
+            script = '''h=%s''' % json.dumps(hdict)
+            global_append(script)
 
         # If we need to show the map since we have an existing lat/lon/wkt
         # then we need to launch the client-side JS as a callback to the MapJS loader

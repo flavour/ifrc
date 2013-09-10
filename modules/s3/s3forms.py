@@ -806,8 +806,12 @@ class S3SQLCustomForm(S3SQLForm):
                 if labels is not None and f.name not in labels:
                     labels[f.name] = "%s:" % f.label
 
-        # Mark required subtable-fields (retaining override-labels)
-        if not readonly:
+        if readonly:
+            # Strip all comments
+            for a, n, f in fields:
+                f.comment = None
+        else:
+            # Mark required subtable-fields (retaining override-labels)
             for alias in subtables:
                 if alias in rcomponents:
                     component = rcomponents[alias]
@@ -1760,6 +1764,9 @@ class S3SQLInlineComponent(S3SQLSubForm):
         _deletable = get_config(tablename, "deletable")
         if _deletable is None:
             _deletable = True
+        _class = "read-row inline-form"
+        if not multiple:
+            _class = "%s single" % _class
         for i in xrange(len(items)):
             has_rows = True
             item = items[i]
@@ -1795,7 +1802,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
                                          multiple=multiple,
                                          index=i,
                                          _id="read-row-%s" % rowname,
-                                         _class="read-row inline-form")
+                                         _class=_class)
             if record_id:
                 audit("read", prefix, name,
                       record=record_id, representation="html")
@@ -2307,34 +2314,35 @@ class S3SQLInlineComponent(S3SQLSubForm):
             if not tr.attributes["_id"] == "submit_record__row":
                 columns.append(tr[0])
 
-        # Render the action icons for this item
-        action = self._action_icon
-        if readonly:
-            if editable:
-                edt = action(T("Edit this entry"),
-                             "edt", index)
-                columns.append(edt)
+        if multiple:
+            # Render the action icons for this item
+            action = self._action_icon
+            if readonly:
+                if editable:
+                    edt = action(T("Edit this entry"),
+                                 "edt", index)
+                    columns.append(edt)
+                else:
+                    columns.append(TD())
+                if deletable:
+                    rmv = action(T("Remove this entry"),
+                                 "rmv", index)
+                    columns.append(rmv)
+                else:
+                    columns.append(TD())
             else:
-                columns.append(TD())
-            if deletable:
-                rmv = action(T("Remove this entry"),
-                             "rmv", index)
-                columns.append(rmv)
-            else:
-                columns.append(TD())
-        else:
-            if index != "none" or item:
-                rdy = action(T("Update this entry"),
-                             "rdy", index, throbber=True)
-                columns.append(rdy)
-                cnc = action(T("Cancel editing"),
-                             "cnc", index)
-                columns.append(cnc)
-            elif multiple:
-                columns.append(TD())
-                add = action(T("Add this entry"),
-                             "add", index, throbber=True)
-                columns.append(add)
+                if index != "none" or item:
+                    rdy = action(T("Update this entry"),
+                                 "rdy", index, throbber=True)
+                    columns.append(rdy)
+                    cnc = action(T("Cancel editing"),
+                                 "cnc", index)
+                    columns.append(cnc)
+                else:
+                    columns.append(TD())
+                    add = action(T("Add this entry"),
+                                 "add", index, throbber=True)
+                    columns.append(add)
 
         return TR(columns, **attributes)
 

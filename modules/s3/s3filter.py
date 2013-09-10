@@ -656,6 +656,8 @@ class S3LocationFilter(S3FilterWidget):
     """
         Hierarchical Location Filter Widget
         @see: L{Configuration Options<S3FilterWidget.__init__>}
+
+        NB This will show records linked to all child locations of the Lx
     """
 
     _class = "location-filter"
@@ -1901,6 +1903,10 @@ class S3Filter(S3Method):
         if query is not None:
             filter_data["query"] = json.dumps(query)
 
+        url = data.get("url")
+        if url is not None:
+            filter_data["url"] = url
+
         # Store record
         onaccept = None
         if record:
@@ -2029,14 +2035,10 @@ class S3FilterString(object):
 
         self.resource = resource
         self.get_vars = get_vars
-        
+
     # -------------------------------------------------------------------------
     def represent(self):
-        """
-            Render the query representation for the given resource
-
-            @param resource: the S3Resource
-        """
+        """ Render the query representation for the given resource """
 
         default = ""
 
@@ -2047,13 +2049,24 @@ class S3FilterString(object):
         else:
             queries = S3URLQuery.parse(resource, get_vars)
 
+        # Get alternative field labels
+        labels = {}
+        get_config = resource.get_config
+        prefix = resource.prefix_selector
+        for config in ("list_fields", "notify_fields"):
+            fields = get_config(config, set())
+            for f in fields:
+                if type(f) is tuple:
+                    labels[prefix(f[1])] = f[0]
+
         # Iterate over the sub-queries
+        render = self._render
         substrings = []
         append = substrings.append
         for alias, subqueries in queries.iteritems():
 
             for subquery in subqueries:
-                s = self._render(resource, alias, subquery)
+                s = render(resource, alias, subquery, labels=labels)
                 if s:
                     append(s)
 
@@ -2068,7 +2081,7 @@ class S3FilterString(object):
 
     # -------------------------------------------------------------------------
     @classmethod
-    def _render(cls, resource, alias, query, invert=False):
+    def _render(cls, resource, alias, query, invert=False, labels=None):
         """
             Recursively render a human-readable representation of a
             S3ResourceQuery.
@@ -2087,8 +2100,8 @@ class S3FilterString(object):
 
         l = query.left
         r = query.right
-        render = lambda q, invert=False, resource=resource, alias=alias: \
-                        cls._render(resource, alias, q, invert=invert)
+        render = lambda q, r=resource, a=alias, invert=False, labels=labels: \
+                        cls._render(r, a, q, invert=invert, labels=labels)
 
         if op == query.AND:
             # Recurse AND
@@ -2129,8 +2142,13 @@ class S3FilterString(object):
                 values = r
 
             # Alias
-            tlabel = " ".join(s.capitalize() for s in rfield.tname.split("_")[1:])
-            rfield.label = "%s %s" % (tlabel, rfield.label)
+            selector = l.name
+            if labels and selector in labels:
+                rfield.label = labels[selector]
+            # @todo: for duplicate labels, show the table name
+            #else:
+                #tlabel = " ".join(s.capitalize() for s in rfield.tname.split("_")[1:])
+                #rfield.label = "(%s) %s" % (tlabel, rfield.label)
 
             # Represent the values
             if values is None:
@@ -2248,14 +2266,14 @@ class S3FilterString(object):
             query.EQ: (query.NE, vor, T("%(label)s is %(values)s")),
             query.GE: (query.LT, vand, "%(label)s >= %(values)s"),
             query.GT: (query.LE, vand, "%(label)s > %(values)s"),
-            query.NE: (query.EQ, vor, T("%(label)s is not %(values)s")),
-            query.LIKE: ("notlike", vor, T("%(label)s is like %(values)s")),
-            query.BELONGS: (query.NE, vor, T("%(label)s is %(values)s")),
+            query.NE: (query.EQ, vor, T("%(label)s != %(values)s")),
+            query.LIKE: ("notlike", vor, T("%(label)s like %(values)s")),
+            query.BELONGS: (query.NE, vor, T("%(label)s = %(values)s")),
             query.CONTAINS: ("notall", vand, T("%(label)s contains %(values)s")),
             query.ANYOF: ("notany", vor, T("%(label)s contains any of %(values)s")),
             "notall": (query.CONTAINS, vand, T("%(label)s does not contain %(values)s")),
             "notany": (query.ANYOF, vor, T("%(label)s does not contain %(values)s")),
-            "notlike": (query.LIKE, vor, T("%(label)s is not like %(values)s"))
+            "notlike": (query.LIKE, vor, T("%(label)s not like %(values)s"))
         }
 
         # Quote values as necessary

@@ -58,7 +58,6 @@ class S3Config(Storage):
         self.L10n = Storage()
         self.mail = Storage()
         self.msg = Storage()
-        self.options = Storage()
         self.search = Storage()
         self.security = Storage()
         self.ui = Storage()
@@ -285,6 +284,13 @@ class S3Config(Storage):
             Use key = 0 to have the roles not restricted to a realm
         """
         return self.auth.get("registration_roles", [])
+
+    def get_auth_terms_of_service(self):
+        """
+            Force users to accept Terms of Servcie before Registering an account
+            - uses <template>/views/tos.html
+        """
+        return self.auth.get("terms_of_service", False)
 
     def get_auth_registration_volunteer(self):
         """ Redirect the newly-registered user to their volunteer details page """
@@ -532,6 +538,10 @@ class S3Config(Storage):
     def get_gis_latlon_selector(self):
         " Display Lat/Lon form fields when selecting Locations "
         return self.gis.get("latlon_selector", True)
+
+    def get_gis_layer_metadata(self):
+        " Use CMS to provide Metadata on Map Layers "
+        return self.has_module("cms") and self.gis.get("layer_metadata", False)
 
     def get_gis_layer_properties(self):
         " Display Layer Properties Tool above Map's Layer Tree "
@@ -808,11 +818,6 @@ class S3Config(Storage):
         return excluded_fields
 
     # -------------------------------------------------------------------------
-    # Options
-    def get_terms_of_service(self):
-        return self.options.get("terms_of_service", False)
-
-    # -------------------------------------------------------------------------
     # UI Settings
     @staticmethod
     def default_formstyle(id, label, widget, comment, hidden=False):
@@ -1052,26 +1057,34 @@ class S3Config(Storage):
 
     # -------------------------------------------------------------------------
     # Notifications
-    def get_msg_notification_subject(self):
+    def get_msg_notify_subject(self):
         """
-            Template for the subject line of resource update notifications.
+            Template for the subject line in update notifications.
 
             Available placeholders:
+                $S = System Name (long)
                 $s = System Name (short)
                 $r = Resource Name
 
             Use {} to separate the placeholder from immediately following
             identifier characters (like: ${placeholder}text).
         """
-        return self.msg.get("notification_subject",
+        return self.msg.get("notify_subject",
                             "$s %s: $r" % current.T("Update Notification"))
 
-    def get_msg_notification_email_format(self):
+    def get_msg_notify_email_format(self):
         """
-            The preferred email format for resource update notifications,
+            The preferred email format for update notifications,
             "text" or "html".
         """
-        return self.msg.get("notification_email_format", "text")
+        return self.msg.get("notify_email_format", "text")
+
+    def get_msg_notify_renderer(self):
+        """
+            Custom content renderer function for update notifications,
+            function()
+        """
+        return self.msg.get("notify_renderer", None)
                             
     # -------------------------------------------------------------------------
     # Save Search and Subscription

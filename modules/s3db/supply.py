@@ -106,6 +106,13 @@ class S3SupplyModel(S3Model):
 
         NONE = current.messages["NONE"]
 
+        if current.auth.permission.format == "html":
+            i18n = {"in_inv": T("in Stock"),
+                    "no_packs": T("No Packs for Item"),
+                    }
+            s3.js_global.append('''i18n.in_inv="%s"''' % i18n["in_inv"])
+            s3.js_global.append('''i18n.no_packs="%s"''' % i18n["no_packs"])
+            
         # =====================================================================
         # Brand
         #

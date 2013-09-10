@@ -114,6 +114,8 @@ settings.gis.geocode_imported_addresses = "google"
 settings.gis.toolbar = False
 # Hide unnecessary Toolbar items
 settings.gis.nav_controls = False
+# Uncomment to use CMS to provide Metadata on Map Layers
+settings.gis.layer_metadata = True
 # Uncomment to hide Layer Properties tool
 settings.gis.layer_properties = False
 # Uncomment to hide the Base Layers folder in the LayerTree
@@ -214,6 +216,10 @@ settings.ui.summary = [{"common": True,
                         "label": "Table",
                         "widgets": [{"method": "datatable"}]
                         },
+                       {"name": "charts",
+                        "label": "Charts",
+                        "widgets": [{"method": "report2"}]
+                        },
                        {"name": "map",
                         "label": "Map",
                         "widgets": [{"method": "map"}]
@@ -310,8 +316,9 @@ def customize_pr_person(**attr):
                                                    title=T("Office"),
                                                    tooltip=T("If you don't see the Office in the list, you can add a new one by clicking link 'Add New Office'."))
 
-            # Best to have no labels when only 1 field in the row
+            # Hide Labels when just 1 column in inline form
             s3db.pr_contact.value.label = ""
+
             image_field = s3db.pr_image.image
             image_field.label = ""
             # ImageCrop widget doesn't currently work within an Inline Form
@@ -424,7 +431,7 @@ def customize_pr_person(**attr):
         if callable(standard_postp):
             output = standard_postp(r, output)
 
-        if r.interactive and r.method != "search_ac":
+        if r.interactive and isinstance(output, dict):
             output["rheader"] = ""
             actions = [dict(label=str(T("Open")),
                             _class="action-btn",
@@ -474,11 +481,10 @@ def customize_pr_person(**attr):
             #        action["restrict"] = restrict
             #    actions.append(action)
             s3.actions = actions
-            if isinstance(output, dict):
-                if "form" in output:
-                    output["form"].add_class("pr_person")
-                elif "item" in output and hasattr(output["item"], "add_class"):
-                    output["item"].add_class("pr_person")
+            if "form" in output:
+                output["form"].add_class("pr_person")
+            elif "item" in output and hasattr(output["item"], "add_class"):
+                output["item"].add_class("pr_person")
 
         return output
     s3.postp = custom_postp
@@ -532,8 +538,11 @@ def customize_project_activity(**attr):
             field.requires = IS_ADD_PERSON_WIDGET2()
             field.widget = S3AddPersonWidget2(controller="pr")
             
-            # Custom Crud Form
+            # Hide Labels when just 1 column in inline form
+            s3db.doc_document.file.label = ""
             s3db.project_activity_group.group_id.label = ""
+
+            # Custom Crud Form
             crud_form = S3SQLCustomForm(
                 "date",
                 "name",
@@ -550,6 +559,14 @@ def customize_project_activity(**attr):
                     "activity_organisation",
                     label = T("Participating Organizations"),
                     fields = ["organisation_id"],
+                ),
+                S3SQLInlineComponent(
+                    "document",
+                    name = "file",
+                    label = T("Files"),
+                    fields = ["file",
+                              #"comments",
+                              ],
                 ),
                 "comments",
             )
@@ -603,7 +620,7 @@ def customize_project_activity(**attr):
 settings.ui.customize_project_activity = customize_project_activity
 
 # -----------------------------------------------------------------------------
-# Incidents
+# Incidents (unused)
 # -----------------------------------------------------------------------------
 def customize_event_incident_report(**attr):
     """
@@ -663,8 +680,11 @@ def customize_event_incident_report(**attr):
                 msg_list_empty = T("No Incidents currently recorded")
                 )
 
-            # Custom Crud Form
+            # Hide Labels when just 1 column in inline form
+            s3db.doc_document.file.label = ""
             s3db.event_incident_report_group.group_id.label = ""
+
+            # Custom Crud Form
             crud_form = S3SQLCustomForm(
                 "date",
                 "name",
@@ -976,8 +996,11 @@ def customize_org_facility(**attr):
 
                 s3db.hrm_human_resource.person_id.widget = None
 
-                # Custom Crud Form
+                # Hide Labels when just 1 column in inline form
+                s3db.doc_document.file.label = ""
                 s3db.org_site_org_group.group_id.label = ""
+
+                # Custom Crud Form
                 crud_form = S3SQLCustomForm(
                     "name",
                     S3SQLInlineComponentMultiSelectWidget(
@@ -1000,6 +1023,14 @@ def customize_org_facility(**attr):
                                   "job_title_id",
                                   #"email",
                                   #"phone",
+                                  ],
+                    ),
+                    S3SQLInlineComponent(
+                        "document",
+                        name = "file",
+                        label = T("Files"),
+                        fields = ["file",
+                                  #"comments",
                                   ],
                     ),
                     "comments",
@@ -1145,8 +1176,11 @@ def customize_stats_resident(**attr):
             field.requires = IS_ADD_PERSON_WIDGET2()
             field.widget = S3AddPersonWidget2(controller="pr")
 
-            # Custom Crud Form
+            # Hide Labels when just 1 column in inline form
+            s3db.doc_document.file.label = ""
             current.db.stats_resident_group.group_id.label = ""
+
+            # Custom Crud Form
             crud_form = S3SQLCustomForm(
                 "name",
                 "parameter_id",
@@ -1159,6 +1193,14 @@ def customize_stats_resident(**attr):
                 ),
                 "location_id",
                 "person_id",
+                S3SQLInlineComponent(
+                    "document",
+                    name = "file",
+                    label = T("Files"),
+                    fields = ["file",
+                              #"comments",
+                              ],
+                ),
                 "comments",
             )
 
@@ -1197,7 +1239,7 @@ def customize_stats_resident(**attr):
 settings.ui.customize_stats_resident = customize_stats_resident
 
 #-----------------------------------------------------------------------------
-# Trained People
+# Trained People (unused)
 #-----------------------------------------------------------------------------
 def customize_stats_trained(**attr):
     """
@@ -1241,8 +1283,11 @@ def customize_stats_trained(**attr):
             field.requires = IS_ADD_PERSON_WIDGET2()
             field.widget = S3AddPersonWidget2(controller="pr")
 
-            # Custom Crud Form
+            # Hide Labels when just 1 column in inline form
+            s3db.doc_document.file.label = ""
             current.db.stats_trained_group.group_id.label = ""
+
+            # Custom Crud Form
             crud_form = S3SQLCustomForm(
                 "name",
                 "parameter_id",
@@ -1329,8 +1374,11 @@ def customize_vulnerability_evac_route(**attr):
                                                                  polygons=True,
                                                                  )
 
-            # Custom Crud Form
+            # Hide Labels when just 1 column in inline form
+            s3db.doc_document.file.label = ""
             current.db.vulnerability_evac_route_group.group_id.label = ""
+
+            # Custom Crud Form
             crud_form = S3SQLCustomForm(
                 "name",
                 "hazard_id",
@@ -1341,6 +1389,14 @@ def customize_vulnerability_evac_route(**attr):
                     multiple = False,
                 ),
                 "location_id",
+                S3SQLInlineComponent(
+                    "document",
+                    name = "file",
+                    label = T("Files"),
+                    fields = ["file",
+                              #"comments",
+                              ],
+                ),
                 "comments",
             )
 
@@ -1436,9 +1492,11 @@ def customize_vulnerability_risk(**attr):
                                                      #show_postcode=True,
                                                      )
 
+            # Hide Labels when just 1 column in inline form
+            s3db.doc_document.file.label = ""
+            current.db.vulnerability_risk_group.group_id.label = ""
+
             # Custom Crud Form
-            ltable = current.db.vulnerability_risk_group
-            ltable.group_id.label = ""
             crud_form = S3SQLCustomForm(
                 "name",
                 "hazard_id",
@@ -1449,11 +1507,19 @@ def customize_vulnerability_risk(**attr):
                     multiple = False,
                 ),
                 "location_id",
+                S3SQLInlineComponent(
+                    "document",
+                    name = "file",
+                    label = T("Files"),
+                    fields = ["file",
+                              #"comments",
+                              ],
+                ),
                 "comments",
             )
 
             s3db.configure(tablename,
-                           #crud_form = crud_form,
+                           crud_form = crud_form,
                            )
     
             if r.method == "summary":
