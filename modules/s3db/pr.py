@@ -1445,8 +1445,10 @@ class S3GroupModel(S3Model):
         tablename = "pr_group_membership"
         table = define_table(tablename,
                              group_id(label = T("Group"),
+                                      empty = False,
                                       ondelete="CASCADE"),
                              self.pr_person_id(label = T("Person"),
+                                               empty = False,
                                                ondelete="CASCADE"),
                              Field("group_head", "boolean",
                                    label = T("Group Head"),
@@ -4020,11 +4022,11 @@ class pr_PersonEntityRepresent(S3Represent):
                                    instance_type_nice)
 
         elif "name" in item:
-            pe_str = "%s" % (item["name"],
-                             instance_type_nice)
-        else:
-            pe_str = "[%s]" % (label,
+            pe_str = "%s%s" % (item["name"],
                                instance_type_nice)
+        else:
+            pe_str = "[%s]%s" % (label,
+                                 instance_type_nice)
 
         return pe_str
 
