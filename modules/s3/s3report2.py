@@ -281,7 +281,10 @@ class S3Report2(S3Method):
                 get_vars["cols"] = prefix(cols) if cols else None
                 get_vars["fact"] = "%s(%s)" % (method, selector)
 
-                pivottable = resource.pivottable(rows, cols, [layer])
+                if visible:
+                    pivottable = resource.pivottable(rows, cols, [layer])
+                else:
+                    pivottable = None
         else:
             pivottable = None
 
@@ -439,6 +442,8 @@ class S3ReportForm(object):
             "renderChart": True,
             "collapseChart": True,
             "defaultChart": None,
+
+            "autoSubmit": settings.get_ui_report_auto_submit(),
         }
 
         chart_opt = get_vars["chart"]
