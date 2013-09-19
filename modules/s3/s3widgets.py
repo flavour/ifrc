@@ -43,6 +43,8 @@ __all__ = ["S3ACLWidget",
            "S3DateWidget",
            "S3DateTimeWidget",
            "S3EmbedComponentWidget",
+           "S3GroupedOptionsWidget",
+           "S3RadioOptionsWidget",
            "S3HiddenWidget",
            "S3HumanResourceAutocompleteWidget",
            "S3ImageCropWidget",
@@ -57,6 +59,7 @@ __all__ = ["S3ACLWidget",
            "S3OrganisationAutocompleteWidget",
            "S3OrganisationHierarchyWidget",
            "S3PersonAutocompleteWidget",
+           "S3PentityAutocompleteWidget",
            "S3PriorityListWidget",
            "S3SiteAutocompleteWidget",
            "S3SiteAddressAutocompleteWidget",
@@ -1906,9 +1909,9 @@ class S3GroupedOptionsWidget(FormWidget):
                 for option in options:
                     append(option)
 
-            script = '''$('#%s').groupedopts({columns: %s})''' % (_id, self.cols)
+            script = '''$('#%s').groupedopts({columns:%s})''' % (_id, self.cols)
             current.response.s3.jquery_ready.append(script)
-        
+
         return widget
 
     # -------------------------------------------------------------------------
@@ -1932,7 +1935,8 @@ class S3GroupedOptionsWidget(FormWidget):
             return None
 
     # -------------------------------------------------------------------------
-    def _render_item(self, item):
+    @staticmethod
+    def _render_item(item):
         """
             Helper method to render one option
 
@@ -1957,17 +1961,8 @@ class S3GroupedOptionsWidget(FormWidget):
             @param value: the currently selected value(s)
         """
 
-        options = self.options
-        help_field = self.help_field
-
-        # Get the current values as list of unicode
-        if not isinstance(value, (list, tuple)):
-            values = [value]
-        else:
-            values = value
-        values = [s3_unicode(v) for v in values]
-
         # Get the options as sorted list of tuples (key, value)
+        options = self.options
         if options is None:
             requires = field.requires
             if not isinstance(requires, (list, tuple)):
@@ -1985,10 +1980,18 @@ class S3GroupedOptionsWidget(FormWidget):
 
         # No options available?
         if not options:
-            return {"empty": T("no options available")}
+            return {"empty": current.T("no options available")}
+
+        # Get the current values as list of unicode
+        if not isinstance(value, (list, tuple)):
+            values = [value]
+        else:
+            values = value
+        values = [s3_unicode(v) for v in values]
 
         # Get the tooltips as dict {key: tooltip}
         helptext = {}
+        help_field = self.help_field
         if help_field:
             if callable(help_field):
                 help_field = help_field(options)
@@ -2107,15 +2110,181 @@ class S3GroupedOptionsWidget(FormWidget):
         # Add tooltips
         items = []
         for key, label in group_items:
-            if helptext and key in helptext:
-                tooltip = helptext[key]
-            else:
-                tooltip = None
+            tooltip = helptext.get(key, None)
             item = (key, label, key in values, tooltip)
             items.append(item)
 
         group["items"] = items
         return
+
+#==============================================================================
+class S3RadioOptionsWidget(FormWidget):
+    """ Widget with radio buttons for S3OptionsFilter """
+
+    def __init__(self,
+                 options=None,
+                 cols=None,
+                 help_field=None,
+                 none=None,
+                 sort=True):
+        """
+            Constructor
+
+            @param options: the options for the SELECT, as list of tuples
+                            [(value, label)], or as dict {value: label},
+                            or None to auto-detect the options from the
+                            Field when called
+            @param cols: number of columns for the options table
+            @param help_field: field in the referenced table to retrieve
+                               a tooltip text from (for foreign keys only)
+            @param none: True to render "None" as normal option
+            @param sort: sort the options
+        """
+
+        self.options = options
+        self.cols = cols or 3
+        self.help_field = help_field
+        self.none = none
+        self.sort = sort
+
+    # -------------------------------------------------------------------------
+    def __call__(self, field, value, **attributes):
+        """
+            Render this widget
+
+            @param field: the Field
+            @param value: the currently selected value(s)
+            @param attributes: HTML attributes for the widget
+        """
+
+        fieldname = field.name
+
+        attr = Storage(attributes)
+        if "_id" in attr:
+            _id = attr.pop("_id")
+        else:
+            _id = "%s-options" % fieldname
+        attr["_id"] = _id
+        if "_name" not in attr:
+            attr["_name"] = fieldname
+
+        options = self._options(field, value)
+        if "empty" in options:
+            widget = DIV(SPAN(options["empty"],
+                              _class="no-options-available"),
+                         INPUT(_type="hidden",
+                               _name=fieldname,
+                               _value=None),
+                         **attr)
+        else:
+            widget = DIV(**attr)
+            append = widget.append
+            render_item = self._render_item
+            for option in options:
+                item = render_item(fieldname, option)
+                append(item)
+
+            #script = '''$('#%s').groupedopts({columns:%s})''' % (_id, self.cols)
+            #current.response.s3.jquery_ready.append(script)
+
+        return widget
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _render_item(fieldname, item):
+        """
+            Helper method to render one option
+
+            @param item: the item as tuple (key, label, value, tooltip),
+                         value=True indicates that the item is selected
+        """
+
+        key, label, value, tooltip = item
+        attr = {"_type": "radio",
+                "_name": fieldname,
+                "_value": key,
+                }
+        if value:
+            attr["_checked"] = "checked"
+        if tooltip:
+            attr["_title"] = tooltip
+        return DIV(INPUT(**attr),
+                   LABEL(label,
+                         _for="%s%s" % (fieldname, key),
+                         ),
+                   )
+
+    # -------------------------------------------------------------------------
+    def _options(self, field, value):
+        """
+            Find and sort the options
+
+            @param field: the Field
+            @param value: the currently selected value(s)
+        """
+
+        # Get the options as sorted list of tuples (key, value)
+        options = self.options
+        if options is None:
+            requires = field.requires
+            if not isinstance(requires, (list, tuple)):
+                requires = [requires]
+            if hasattr(requires[0], "options"):
+                options = requires[0].options()
+            else:
+                options = []
+        elif isinstance(options, dict):
+            options = options.items()
+        none = self.none
+        exclude = ("",) if none is not None else ("", None)
+        options = [(s3_unicode(k) if k is not None else none, s3_unicode(v))
+                   for k, v in options if k not in exclude]
+
+        # No options available?
+        if not options:
+            return {"empty": current.T("no options available")}
+
+        # Get the current values as list of unicode
+        if not isinstance(value, (list, tuple)):
+            values = [value]
+        else:
+            values = value
+        values = [s3_unicode(v) for v in values]
+
+        # Get the tooltips as dict {key: tooltip}
+        helptext = {}
+        help_field = self.help_field
+        if help_field:
+            if callable(help_field):
+                help_field = help_field(options)
+            if isinstance(help_field, dict):
+                for key in help_field.keys():
+                    helptext[s3_unicode(key)] = help_field[key]
+            else:
+                ktablename, pkey, multiple = s3_get_foreign_key(field)
+                if ktablename is not None:
+                    ktable = current.s3db[ktablename]
+                    if hasattr(ktable, help_field):
+                        keys = [k for k, v in options if k.isdigit()]
+                        query = ktable[pkey].belongs(keys)
+                        rows = current.db(query).select(ktable[pkey],
+                                                        ktable[help_field])
+                        for row in rows:
+                            helptext[unicode(row[pkey])] = row[help_field]
+
+        # Prepare output for _render_item()
+        _options = []
+        oappend = _options.append
+        for k, v in options:
+            tooltip = helptext.get(k, None)
+            item = (k, v, k in values, tooltip)
+            oappend(item)
+
+        if self.sort:
+            # Sort options
+            _options = sorted(_options, key=lambda i: i[1].upper()[0])
+
+        return _options
 
 # =============================================================================
 class S3HiddenWidget(StringWidget):
@@ -4538,7 +4707,7 @@ class S3PersonAutocompleteWidget(FormWidget):
         To make this widget use the HR table, set the controller to "hrm"
 
         @ToDo: Migrate to template (initial attempt failed)
-   """
+    """
 
     def __init__(self,
                  controller = "pr",
@@ -4586,15 +4755,104 @@ class S3PersonAutocompleteWidget(FormWidget):
         else:
             represent = ""
 
-        script = '''S3.autocomplete.person('%(module)s','%(resourcename)s','%(input)s',"%(postprocess)s",%(delay)s,%(min_length)s)''' % \
-            dict(module = self.c,
-                 resourcename = self.f,
+        script = '''S3.autocomplete.person('%(controller)s','%(fn)s','%(input)s',"%(postprocess)s",%(delay)s,%(min_length)s)''' % \
+            dict(controller = self.c,
+                 fn = self.f,
                  input = real_input,
                  postprocess = self.post_process,
                  delay = self.delay,
                  min_length = self.min_length,
                  )
         current.response.s3.jquery_ready.append(script)
+        return TAG[""](INPUT(_id=dummy_input,
+                             _class="string",
+                             _value=represent),
+                       DIV(_id="%s_throbber" % dummy_input,
+                           _class="throbber hide"),
+                       INPUT(hideerror=self.hideerror, **attr),
+                       requires = field.requires
+                       )
+
+# =============================================================================
+class S3PentityAutocompleteWidget(FormWidget):
+    """
+        Renders a pr_pentity SELECT as an INPUT field with AJAX Autocomplete.
+        Differs from the S3AutocompleteWidget in that it can filter by type &
+        also represents results with the type
+    """
+
+    def __init__(self,
+                 controller = "pr",
+                 function = "pentity",
+                 types = None,
+                 post_process = "",
+                 hideerror = False,
+                 delay = 450,   # milliseconds
+                 min_length=2): # Increase this for large deployments
+
+        self.post_process = post_process
+        self.delay = delay
+        self.min_length = min_length
+        self.c = controller
+        self.f = function
+        self.types = None
+        self.hideerror = hideerror
+
+    def __call__(self, field, value, **attributes):
+
+        default = dict(
+            _type = "text",
+            value = (value != None and str(value)) or "",
+            )
+        attr = StringWidget._attributes(field, default, **attributes)
+
+        # Hide the real field
+        attr["_class"] = "%s hide" % attr["_class"]
+
+        if "_id" in attr:
+            real_input = attr["_id"]
+        else:
+            real_input = str(field).replace(".", "_")
+
+        dummy_input = "dummy_%s" % real_input
+
+        if value:
+            try:
+                value = long(value)
+            except ValueError:
+                pass
+            # Provide the representation for the current/default Value
+            text = s3_unicode(field.represent(value))
+            if "<" in text:
+                text = s3_strip_markup(text)
+            represent = text.encode("utf-8")
+        else:
+            represent = ""
+
+        T = current.T
+        s3 = current.response.s3
+        script = '''i18n.person="%s"\ni18n.group="%s"''' % (T("Person"),
+                                                            T("Group"),
+                                                            )
+        s3.js_global.append(script)
+
+        if self.types:
+            # Something other than default: ("pr_person", "pr_group")
+            types = json.dumps(self.types)
+        else:
+            types = "''"
+
+        script = '''S3.autocomplete.pentity('%(controller)s','%(fn)s','%(input)s',"%(postprocess)s",%(delay)s,%(min_length)s,%(types)s)''' % \
+            dict(controller = self.c,
+                 fn = self.f,
+                 input = real_input,
+                 postprocess = self.post_process,
+                 delay = self.delay,
+                 min_length = self.min_length,
+                 types = types,
+                 )
+        
+        s3.jquery_ready.append(script)
         return TAG[""](INPUT(_id=dummy_input,
                              _class="string",
                              _value=represent),
