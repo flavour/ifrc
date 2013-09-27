@@ -87,14 +87,14 @@
      <li><a href='/{{=appname}}/default/index/newsfeed'> <i class='icon-updates'></i> {{=T("News Feed")}}</a></li>
      <li><a href='/{{=appname}}/gis/index'><i class='icon-map'></i> {{=T("Map")}}</a></li>
      <li><a href='/{{=appname}}/project/project'><i class='icon-project'></i> {{=T("Projects")}}</a></li>
-     <li class='dropdown'> <a href='#' class='dropdown-toggle disabled top-level' id='profiles' data-toggle='dropdown'><i class='icon-folder-open-alt'></i> {{=T("Profiles")}}<b class='caret'></b></a>
+     <li class='dropdown'> <a href='#' class='dropdown-toggle top-level' id='profiles' data-toggle='dropdown'><i class='icon-folder-open-alt'></i> {{=T("Profiles")}}<b class='caret'></b></a>
       <ul class='dropdown-menu' role='menu' aria-labelledby='profiles'>
        <li role='menuitem'><a href='/{{=appname}}/event/event/datalist' tabindex='-1' class='menu-item'><i class='icon-incident'></i> {{=T("Disasters")}}</a></li>
        <li role='menuitem'><a href='/{{=appname}}/gis/location/datalist' tabindex='-1' class='menu-item'><i class='icon-map'></i> {{=T("Districts")}}</a></li>
        <li role='menuitem'><a href='/{{=appname}}/org/organisation/datalist' tabindex='-1' class='menu-item'><i class='icon-sitemap'></i> {{=T("Stakeholders")}}</a></li>
       </ul>
      </li>
-     <li class='dropdown'> <a href='#' class='dropdown-toggle disabled top-level' id='more' data-toggle='dropdown'><i class='icon-plus-sign'></i> {{=T("More")}}<b class='caret'></b></a>
+     <li class='dropdown'> <a href='#' class='dropdown-toggle top-level' id='more' data-toggle='dropdown'><i class='icon-plus-sign'></i> {{=T("More")}}<b class='caret'></b></a>
       <ul class='dropdown-menu' role='menu' aria-labelledby='more'>
        <li role='menuitem'><a href='/{{=appname}}/org/resource' tabindex='-1' class='menu-item'><i class='icon-resource'></i> {{=T("Resource Inventory")}}</a></li>
        <li role='menuitem'><a href='/{{=appname}}/pr/person' tabindex='-1' class='menu-item'><i class='icon-contact'></i> {{=T("Contact Directory")}}</a></li>
@@ -104,31 +104,31 @@
       </ul>
      </li>
     </ul>
-    <div class='pull-right'>
-     <ul class='nav pull-right'>
-      <li class='dropdown'><a href='#' class='dropdown-toggle disabled' data-toggle='dropdown'><i class='icon-cog'></i><b class='caret'></b></a>
-       <ul class='dropdown-menu'>{{vars=request.vars}}
-       {{if response.s3.language == "en":}}{{tet_vars=dict(_language="tet")}}{{for var in vars:}}{{tet_vars[var]=vars[var]}}{{pass}}
-        <li><a href='{{=URL(args=request.args, vars=tet_vars)}}'><i class='icon-comment-alt'></i> Tetum</a></li>
-       {{else:}}{{en_vars=dict(_language="en")}}{{for var in vars:}}{{en_vars[var]=vars[var]}}{{pass}}
-        <li><a href='{{=URL(args=request.args, vars=en_vars)}}'><i class='icon-comment-alt'></i> English</a></li>{{pass}}
-        <li class='divider'></li>
-       {{if auth.is_logged_in():}}
-        <li><a href='/{{=appname}}/default/user/profile'><i class='icon-user'></i> {{=T("Profile")}}</a></li>
-        <li><a href='/{{=appname}}/default/index/subscriptions'><i class='icon-envelope'></i> {{=T("Notifications")}}</a></li>
-        <li><a href='/{{=appname}}/default/user/change_password'><i class='icon-lock'></i> {{=T("Change Password")}}</a></li>
-        {{if auth.s3_has_role("ADMIN"):}}
-        <li><a href='/{{=appname}}/admin/user'><i class='icon-cogs'></i> {{=T("Admin")}}</a></li>
-        {{pass}}
-        <li class='divider'></li>
-        <li><a href='/{{=appname}}/default/user/logout'><i class='icon-off'></i> {{=T("Logout")}}</a></li>
-       {{else:}}
-        <li><a href='/{{=appname}}/default/user/login'><i class='icon-signin'></i> {{=T("Login")}}</a></li>
+    <ul class='nav pull-right'>
+     <li class='dropdown'><a href='#' class='dropdown-toggle' data-toggle='dropdown'><i class='icon-cog'></i><b class='caret'></b></a>
+      <ul class='dropdown-menu'>{{vars=request.vars}}{{is_logged_in=auth.is_logged_in()}}
+       {{if is_logged_in and auth.s3_has_role("ADMIN"):}}
+       <li><a href='/{{=appname}}/admin/user'><i class='icon-cogs'></i> {{=T("Admin")}}</a></li>
+       <li class='divider'></li>
        {{pass}}
-       </ul>
-      </li>
-     </ul>
-    </div>
+       {{if is_logged_in:}}
+       <li><a href='/{{=appname}}/default/user/profile'><i class='icon-user'></i> {{=auth.user.email}}</li>
+       {{pass}}
+       {{if response.s3.language == "en":}}{{tet_vars=dict(_language="tet")}}{{for var in vars:}}{{tet_vars[var]=vars[var]}}{{pass}}
+       <li><a href='{{=URL(args=request.args, vars=tet_vars)}}'><i class='icon-comment-alt'></i> Tetum</a></li>
+       {{else:}}{{en_vars=dict(_language="en")}}{{for var in vars:}}{{en_vars[var]=vars[var]}}{{pass}}
+       <li><a href='{{=URL(args=request.args, vars=en_vars)}}'><i class='icon-comment-alt'></i> English</a></li>
+       {{pass}}
+       {{if is_logged_in:}}
+       <li><a href='/{{=appname}}/default/index/subscriptions'><i class='icon-envelope'></i> {{=T("Notifications")}}</a></li>
+       <li><a href='/{{=appname}}/default/user/change_password'><i class='icon-lock'></i> {{=T("Change Password")}}</a></li>
+       <li><a href='/{{=appname}}/default/user/logout'><i class='icon-off'></i> {{=T("Logout")}}</a></li>
+       {{else:}}
+       <li><a href='/{{=appname}}/default/user/login'><i class='icon-signin'></i> {{=T("Login")}}</a></li>
+       {{pass}}
+      </ul>
+     </li>
+    </ul>
    </div>
   </div>
  </div>
@@ -150,12 +150,5 @@
 {{pass}}
 {{include "bootstrap_js.html"}}
 {{include "scripts.html"}}
-<script type="text/javascript">
-window.setTimeout(function() {
- $('.alert').fadeTo(500, 0).slideUp(500, function(){
-  $(this).remove(); 
- });
-}, 4000);
-</script>
 </body>
 </html>

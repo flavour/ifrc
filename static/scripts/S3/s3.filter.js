@@ -5,7 +5,7 @@
 S3.search = {};
 
 // Module pattern to hide internal vars
-(function () {
+(function() {
 
     /**
      * pendingTargets: targets which were invisible during last filter-submit
@@ -126,18 +126,24 @@ S3.search = {};
 
         form = typeof form !== 'undefined' ? form : $('body').find('form.filter-form').first();
 
-        var queries = [];
+        var i,
+            id,
+            queries = [],
+            $this,
+            url_var,
+            value,
+            values;
 
         // Text widgets
         form.find('.text-filter:visible').each(function() {
-
-            var id = $(this).attr('id');
-
-            var url_var = $('#' + id + '-data').val(),
-                value = $(this).val();
+            $this = $(this);
+            id = $this.attr('id');
+            url_var = $('#' + id + '-data').val();
+            value = $this.val();
             if (value) {
-                var values = value.split(' '), v;
-                for (var i=0; i < values.length; i++) {
+                values = value.split(' ');
+                var v;
+                for (i=0; i < values.length; i++) {
                     v = '*' + values[i] + '*';
                     queries.push([url_var, quoteValue(v)]);
                 }
@@ -157,8 +163,9 @@ S3.search = {};
                   '.options-filter.multiselect-filter-widget.active,' +
                   '.options-filter.multiselect-filter-bootstrap.active'))
         .each(function() {
-            var id = $(this).attr('id');
-            var url_var = $('#' + id + '-data').val();
+            $this = $(this);
+            id = $this.attr('id');
+            url_var = $('#' + id + '-data').val();
             var operator = $("input:radio[name='" + id + "_filter']:checked").val();
             var contains = /__contains$/;
             var anyof = /__anyof$/;
@@ -170,7 +177,7 @@ S3.search = {};
             if (this.tagName.toLowerCase() == 'select') {
                 // Standard SELECT
                 value = '';
-                values = $(this).val();
+                values = $this.val();
                 if (values) {
                     for (i=0; i < values.length; i++) {
                         v = quoteValue(values[i]);
@@ -183,7 +190,7 @@ S3.search = {};
                 }
             } else {
                 // Checkboxes widget
-                var value = '';
+                value = '';
                 $("input[name='" + id + "']:checked").each(function() {
                     if (value === '') {
                         value = quoteValue($(this).val());
@@ -192,18 +199,19 @@ S3.search = {};
                     }
                 });
             }
-            if (value !== '') {
-                queries.push([url_var, value]);
-            } else {
+            if ((value === '') || (value == '*')) {
                 queries.push([url_var, null]);
+            } else {
+                queries.push([url_var, value]);
             }
         });
 
         // Numerical range widgets -- each widget has two inputs.
         form.find('.range-filter-input:visible').each(function() {
-            var id = $(this).attr('id');
-            var url_var = $('#' + id + '-data').val();
-            var value = $(this).val();
+            $this = $(this);
+            id = $this.attr('id');
+            url_var = $('#' + id + '-data').val();
+            value = $this.val();
             if (value) {
                 queries.push([url_var, value]);
             } else {
@@ -213,8 +221,10 @@ S3.search = {};
 
         // Date(time) range widgets -- each widget has two inputs.
         form.find('.date-filter-input:visible').each(function() {
-            var id = $(this).attr('id'), value = $(this).val();
-            var url_var = $('#' + id + '-data').val(), dt, dtstr;
+            $this = $(this);
+            id = $this.attr('id');
+            url_var = $('#' + id + '-data').val();
+            value = $this.val();
             var pad = function (val, len) {
                 val = String(val);
                 len = len || 2;
@@ -229,10 +239,11 @@ S3.search = {};
                        pad(dt.getMinutes(), 2) + ':' +
                        pad(dt.getSeconds(), 2);
             };
+            var dt, dtstr;
             if (value) {
-                if ($(this).hasClass('datetimepicker')) {
-                    if ($(this).hasClass('hide-time')) {
-                        dt = $(this).datepicker('getDate');
+                if ($this.hasClass('datetimepicker')) {
+                    if ($this.hasClass('hide-time')) {
+                        dt = $this.datepicker('getDate');
                         op = id.split('-').pop();
                         if (op == 'le' || op == 'gt') {
                             dt.setHours(23, 59, 59, 0);
@@ -240,7 +251,7 @@ S3.search = {};
                             dt.setHours(0, 0, 0, 0);
                         }
                     } else {
-                        dt = $(this).datetimepicker('getDate');
+                        dt = $this.datetimepicker('getDate');
                     }
                     dt_str = iso(dt);
                 } else {
@@ -268,8 +279,8 @@ S3.search = {};
           '.location-filter.multiselect-filter-widget.active,' +
           '.location-filter.multiselect-filter-bootstrap.active'))
         .each(function() {
-            var id = $(this).attr('id');
-            var url_var = $('#' + id + '-data').val();
+            id = $(this).attr('id');
+            url_var = $('#' + id + '-data').val();
             var operator = $("input:radio[name='" + id + "_filter']:checked").val();
             if (this.tagName.toLowerCase() == 'select') {
                 // Standard SELECT
@@ -287,7 +298,7 @@ S3.search = {};
                 }
             } else {
                 // Checkboxes widget
-                var value = '';
+                value = '';
                 $("input[name='" + id + "']:checked").each(function() {
                     if (value === '') {
                         value = quoteValue($(this).val());
@@ -296,10 +307,10 @@ S3.search = {};
                     }
                 });
             }
-            if (value !== '') {
-                queries.push([url_var, value]);
-            } else {
+            if (value === '') {
                 queries.push([url_var, null]);
+            } else {
+                queries.push([url_var, value]);
             }
         });
 
@@ -322,11 +333,19 @@ S3.search = {};
         // Temporarily disable auto-submit
         form.data('noAutoSubmit', 1);
 
-        var q = {};
-        for (var i=0, len=queries.length, query; i<len; i++) {
+        var expression,
+            i,
+            id,
+            q = {},
+            len,
+            $this,
+            value,
+            values;
+
+        for (i=0, len=queries.length; i < len; i++) {
             var query = queries[i];
-            var expression = query[0],
-                values = parseValue(query[1]);
+            expression = query[0];
+            values = parseValue(query[1]);
             if (q.hasOwnProperty(expression)) {
                 q[expression] = q[expression].concat(values);
             } else {
@@ -336,12 +355,14 @@ S3.search = {};
         
         // Text widgets
         form.find('.text-filter:visible').each(function() {
-            var id = $(this).attr('id');
-            var expression = $('#' + id + '-data').val();
+            $this = $(this);
+            id = $this.attr('id');
+            expression = $('#' + id + '-data').val();
             if (q.hasOwnProperty(expression)) {
-                var values = q[expression], value = '';
+                values = q[expression];
+                value = '';
                 if (values) {
-                    for (var i=0, len=values.length; i<len; i++) {
+                    for (i=0, len=values.length; i < len; i++) {
                         v = values[i];
                         if (!v) {
                             continue;
@@ -358,7 +379,7 @@ S3.search = {};
                         value += v;
                     }
                 }
-                $(this).val(value);
+                $this.val(value);
             }
         });
 
@@ -373,11 +394,11 @@ S3.search = {};
                   '.options-filter.multiselect-filter-widget.active,' +
                   '.options-filter.multiselect-filter-bootstrap.active'))
         .each(function() {
-            var id = $(this).attr('id');
-            var expression = $('#' + id + '-data').val(),
-                operator = $('input:radio[name="' + id + '_filter"]:checked').val();
+            $this = $(this);
+            id = $this.attr('id');
+            expression = $('#' + id + '-data').val();
+            var operator = $('input:radio[name="' + id + '_filter"]:checked').val();
 
-            var that = $(this);
             if (this.tagName && this.tagName.toLowerCase() == 'select') {
                 var refresh = false;
                 
@@ -400,14 +421,14 @@ S3.search = {};
                     }
                 }
                 if (refresh) {
-                    that.val(values);
-                    if (that.hasClass('groupedopts-filter-widget') &&
-                        typeof that.groupedopts != 'undefined') {
-                        that.groupedopts('refresh');
+                    $this.val(values);
+                    if ($this.hasClass('groupedopts-filter-widget') &&
+                        typeof $this.groupedopts != 'undefined') {
+                        $this.groupedopts('refresh');
                     } else
-                    if (that.hasClass('multiselect-filter-widget') &&
-                        typeof that.multiselect != 'undefined') {
-                        that.multiselect('refresh');
+                    if ($this.hasClass('multiselect-filter-widget') &&
+                        typeof $this.multiselect != 'undefined') {
+                        $this.multiselect('refresh');
                     }
                 }
             }
@@ -415,40 +436,42 @@ S3.search = {};
         
         // Numerical range widgets
         form.find('.range-filter-input:visible').each(function() {
-            var id = $(this).attr('id');
-            var expression = $('#' + id + '-data').val();
+            $this = $(this);
+            id = $this.attr('id');
+            expression = $('#' + id + '-data').val();
             if (q.hasOwnProperty(expression)) {
-                var values = q[expression];
+                values = q[expression];
                 if (values) {
-                    $(this).val(values[0]);
+                    $this.val(values[0]);
                 } else {
-                    $(this).val('');
+                    $this.val('');
                 }
             }
         });
 
         // Date(time) range widgets
         form.find('.date-filter-input:visible').each(function() {
-            var id = $(this).attr('id');
-            var expression = $('#' + id + '-data').val();
+            $this = $(this);
+            id = $this.attr('id');
+            expression = $('#' + id + '-data').val();
             if (q.hasOwnProperty(expression)) {
-                var values = q[expression];
+                values = q[expression];
                 if (values) {
-                    var value = new Date(values[0]);
-                    if ($(this).hasClass('datetimepicker')) {
-                        if ($(this).hasClass('hide-time')) {
-                            $(this).datepicker('setDate', value);
+                    value = new Date(values[0]);
+                    if ($this.hasClass('datetimepicker')) {
+                        if ($this.hasClass('hide-time')) {
+                            $this.datepicker('setDate', value);
                         } else {
-                            $(this).datetimepicker('setDate', value);
+                            $this.datetimepicker('setDate', value);
                         }
-                    } else if ($(this).hasClass('hasDatepicker')) {
-                        $(this).datepicker('setDate', value);
+                    } else if ($this.hasClass('hasDatepicker')) {
+                        $this.datepicker('setDate', value);
                     } else {
-                        $(this).val('');
+                        $this.val('');
                         // @todo: format required!
                     }
                 } else {
-                    $(this).val('');
+                    $this.val('');
                 }
             }
         });
@@ -462,11 +485,11 @@ S3.search = {};
           '.location-filter.multiselect-filter-widget.active,' +
           '.location-filter.multiselect-filter-bootstrap.active'))
         .each(function() {
-            var id = $(this).attr('id');
-            var expression = $('#' + id + '-data').val(),
-                operator = $('input:radio[name="' + id + '_filter"]:checked').val();
+            $this = $(this);
+            id = $this.attr('id');
+            expression = $('#' + id + '-data').val();
+            var operator = $('input:radio[name="' + id + '_filter"]:checked').val();
 
-            var that = $(this);
             if (this.tagName && this.tagName.toLowerCase() == 'select') {
                 var refresh = false;
 
@@ -489,14 +512,14 @@ S3.search = {};
                     }
                 }
                 if (refresh) {
-                    that.val(values);
-                    if (that.hasClass('groupedopts-filter-widget') &&
-                        typeof that.groupedopts != 'undefined') {
-                        that.groupedopts('refresh');
+                    $this.val(values);
+                    if ($this.hasClass('groupedopts-filter-widget') &&
+                        typeof $this.groupedopts != 'undefined') {
+                        $this.groupedopts('refresh');
                     } else
-                    if (that.hasClass('multiselect-filter-widget') &&
-                        typeof that.multiselect != 'undefined') {
-                        that.multiselect('refresh');
+                    if ($this.hasClass('multiselect-filter-widget') &&
+                        typeof $this.multiselect != 'undefined') {
+                        $this.multiselect('refresh');
                     }
                     hierarchical_location_change(this);
                 }
@@ -728,7 +751,8 @@ S3.search = {};
     S3.search.ajaxUpdateOptions = function(form) {
 
         // Ajax-load the item
-        var ajaxurl = $(form).find('input.filter-ajax-url');
+        var $form = $(form);
+        var ajaxurl = $form.find('input.filter-ajax-url');
         if (ajaxurl.length) {
             ajaxurl = $(ajaxurl[0]).val();
         }
@@ -736,9 +760,9 @@ S3.search = {};
             'url': ajaxurl,
             'dataType': 'json'
         }).done(function(data) {
-            $(form).data('noAutoSubmit', 1);
+            $form.data('noAutoSubmit', 1);
             updateOptions(data);
-            $(form).data('noAutoSubmit', 0);
+            $form.data('noAutoSubmit', 0);
         }).fail(function(jqXHR, textStatus, errorThrown) {
             if (errorThrown == 'UNAUTHORIZED') {
                 msg = i18n.gis_requires_login;
@@ -828,20 +852,20 @@ S3.search = {};
         if (!filter_form.length || !timeout) {
             return;
         }
-        filter_form.on('optionChanged', function (){
-            var that = $(this);
-            if (that.data('noAutoSubmit')) {
+        filter_form.on('optionChanged', function() {
+            var $this = $(this);
+            if ($this.data('noAutoSubmit')) {
                 // Event temporarily disabled
                 return;
             }
-            var timer = that.data('autoSubmitTimeout');
+            var timer = $this.data('autoSubmitTimeout');
             if (timer) {
                 clearTimeout(timer);
             }
-            timer = setTimeout(function () {
-                filterSubmit(that);
+            timer = setTimeout(function() {
+                filterSubmit($this);
             }, timeout);
-            that.data('autoSubmitTimeout', timer);
+            $this.data('autoSubmitTimeout', timer);
         });
     };
 
@@ -1297,17 +1321,17 @@ S3.search = {};
         $('.groupedopts-filter-widget:visible').addClass('active');
 
         // Activate MultiSelect Widgets
-        $('.multiselect-filter-widget').each(function() {
-            if ($(this).find('option').length > 5) {
-                $(this).multiselect({
-                    selectedList: 5
-                }).multiselectfilter();
-            } else {
-                $(this).multiselect({
-                    selectedList: 5
-                });
-            }
-        });
+//         $('.multiselect-filter-widget').each(function() {
+//             if ($(this).find('option').length > 5) {
+//                 $(this).multiselect({
+//                     selectedList: 5
+//                 }).multiselectfilter();
+//             } else {
+//                 $(this).multiselect({
+//                     selectedList: 5
+//                 });
+//             }
+//         });
         if (typeof($.fn.multiselect_bs) != 'undefined') {
             // Alternative with bootstrap-multiselect (note the hack for the fn-name):
             $('.multiselect-filter-bootstrap:visible').addClass('active');
@@ -1547,7 +1571,8 @@ S3.search = {};
             // @todo: ignore if readOnly
 
             // Hide selector and buttons
-            var el = this.element.hide();
+            var el = this.element.hide(),
+                fm = this;
             this.create_btn.hide();
             this.load_btn.hide();
             this.save_btn.hide();
@@ -1574,6 +1599,15 @@ S3.search = {};
                                 $(this).removeClass('changed')
                                        .css({color: 'grey'})
                                        .val(hint);
+                            }
+                        }).keypress(function(e) {
+                            if(e.which == 13) {
+                                e.preventDefault();
+                                $this = $(this);
+                                if ($this.val()) {
+                                    $this.addClass('changed');
+                                }
+                                fm._accept();
                             }
                         });
             this.input = input;

@@ -2,25 +2,12 @@
 
 /* Main Navigation (S3MainMenu or modules menu) */
 
-
-a.brand img{
-    width: 60px;
-    position: relative;
-    top: -13px;
+.dropdown-menu {
+    /* Default 160px from Bootstrap is too wide for just Login/Register &makes menu hard to use */
+    min-width: 100px;
 }
 
-.navbar .brand {
-    width: 200px;
-    text-shadow: none;
-    color: #fff;
-    letter-spacing: 2px;
-    font-family: "Lucida Grande", Lucida, Verdana, sans-serif;
-    margin-top: 0.4em;
-}
-
-/*NAV BAR AND NAV-DROPDOWN STYLING*/
-
-div.navbar-inner {
+.navbar-inner {
     position: fixed;
     top: 0px;
     width: 100%;
@@ -39,15 +26,11 @@ div.navbar-inner {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-div.navbar-inner{
+.navbar-inner {
     padding: 0;
     border-radius: 0px;
     border: none;
     border-bottom: 1px solid hsl(205, 57%, 21%);
-}
-
-#nav {
-    text-align: right;
 }
 
 .navbar .nav > li > a  {
@@ -63,6 +46,8 @@ ul.nav li.dropdown:hover > ul.dropdown-menu{
 .navbar .nav  {
     list-style: none;
     margin: 0;
+    /* Push above Alerts */
+    z-index: 1000;
 }
 
 i.icon-cog {
@@ -109,7 +94,8 @@ ul.nav li.dropdown ul.dropdown-menu {
     text-transform: none;
     border: 1px solid #b2b2b2;
     border-top: none;
-    margin-top: 1px;
+    margin-top: 0px;
+    margin-left: 1px;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
     background-color: #f2f3f2;
@@ -195,7 +181,7 @@ button.btn.btn-navbar:hover {
     ul.nav li.dropdown:hover > ul.dropdown-menu{
         display: block;
         padding: 0;
-        margin: -7px -1px -1px;
+        margin: -9px -1px -1px;
         background: none;
         border: none;	 
     }

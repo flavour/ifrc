@@ -20,7 +20,7 @@ p {
 
 .title {
     position: absolute;
-    width: 100%;
+    width: 80%;
     top: 0;
     margin: 35px 0 0 60px;
 }
@@ -46,22 +46,33 @@ p {
     margin: 0;
 }
 
+.banner-btns {
+    width: 100%;
+    padding-left: 82%;
+    position: absolute;
+    top: 15px;
+}
+
+.banner .btn {
+    clear: left;
+    float: left;
+    margin: 0 15px 15px 0;
+}
+
 .intro { 
     background-color: #3788B3;
     color: white;
     margin: 20px 0;
-    padding: 0 20px 10px 20px;
+    padding: 25px 40px;
 }
 .intro h3 {
-    font-size: 20px;
-    line-height: 25px;
-    padding-top: 25px;
+    font-size: 30px;
+    line-height: 36px;
     margin-bottom: 5px;
 }
 .intro p {
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 800;
-    margin-bottom: 20px;
 }
 
 .updates,
@@ -74,8 +85,12 @@ p {
 }
 
 .updates {
-    padding-top: 5px;
+    padding: 5px 0;
 }
+.updates .dl-item {
+    float: none;
+}
+
 .updates p {
     font-size: 14px;
     line-height: 16px;
@@ -88,11 +103,32 @@ p {
 .updates h5 {
     margin-bottom: 0;
 }
+.update .empty {
+    margin-left: 10px;
+    margin-top: 10px;
+}
 #log-filter-form {
     float: right;
-    margin: 15px 15px 0 0;
 }
-.updates .media {
+#log-filter-form .s3-groupedopts-option {
+    /* Hide the Radios (we can click on labels) */
+    display: none;
+}
+#log-filter-form td {
+    padding-top: 0;
+}
+#log-filter-form td:first-child {
+    border-right: solid 1px;
+}
+
+#popup .form-container {
+    margin: 0;
+}
+#popup #table-container {
+    margin: 0;
+}
+.updates .media,
+#popup .media {
     background: linear-gradient(to bottom, #EDEDED 0%, #F6F6F6 10%, #FFFFFF 50%) repeat scroll 0 0 transparent;
     border-top: 1px solid #C8C8C8;
     padding: 5px 10px;
@@ -105,24 +141,34 @@ p {
 .updates .dl-col-0 {
     margin-right: 0;
 }
-.updates .dl-row.even,
-.updates .dl-row.odd,
-.updates .dl-row.even .dl-item,
-.updates .dl-row.odd .dl-item {
-    background-color: transparent;
+.updates .dl-row,
+.updates .dl-row .dl-item,
+#popup .dl-row,
+#popup .dl-row .dl-item {
+    /*background-color: transparent;*/
     padding: 0;
 }
 .updates .dl-navigation {
     border-top: 1px solid #C8C8C8;
-    padding: 5px 10px;
+    padding-left: 5px;
     margin: 0;
+}
+.updates form {
+    margin: 0;
+}
+#audit-auth_user_org_group_id-options-filter {
+    display: none;
+}
+label.inactive {
+    color: #0088CC;
+    text-decoration: underline;
 }
 
 .map-btn {
     float: right;
     position: relative;
-    z-index:1;
-    margin: 15px
+    margin: 15px;
+    z-index: 1;
 }
 
 div.map {

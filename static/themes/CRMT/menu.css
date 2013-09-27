@@ -9,22 +9,31 @@
 .navbar .nav > li > a.home  {
     padding: 5px;
 }
-
-.navbar .nav > li > a.map  {
+.navbar .nav > li > a  {
     padding: 12px;
     font-size: 18px;
+    height: 22px;
 }
 
-.navbar .nav > li > a  {
-    float: left;
-    font-size: 16px;
-    text-transform: uppercase;
-    padding: 0.75em 1em;
-}
 .dropdown-menu > li > a  {
-    display: inline;
+    display: inline-block;
 }
 
+/* Breaks 'Explore Community Data'
+.dropdown-menu > li > a:first-child {
+    width: 190px;
+}*/
 .dropdown-menu > li > a.create  {
     float: right;
+}
+
+/* Login Form */
+.dropdown-menu form {
+    height: 90px
+}
+
+.dropdown-menu input.btn {
+    left: 250px;
+    position: relative;
+    top: -45px;
 }

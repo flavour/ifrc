@@ -1,11 +1,31 @@
 /* Stuff which is DRMP-specific */
 
+.navbar .brand {
+    width: 200px;
+    text-shadow: none;
+    color: #fff;
+    letter-spacing: 2px;
+    font-family: "Lucida Grande", Lucida, Verdana, sans-serif;
+    margin-top: 0.4em;
+}
+
+a.brand img{
+    width: 60px;
+    position: relative;
+    top: -13px;
+}
+
 .export_xls {
     background-image: url(img/icon-xls.png);
 }
 
 .map_legend_panel  .x-panel-body {
     max-width: 200px;
+}
+
+/* Main Map */
+.gis_print_map-btn {
+    display: none;
 }
 
 /* Posts */
@@ -57,7 +77,7 @@ div.defaultlocation_error.error{
 }
 
 /* Contacts Page */
-#pr_person_sub_human_resourcehuman_resource__label {
+.form-container #pr_person_sub_human_resourcehuman_resource__label {
     /* Hide the colon */
     display: none;
 }

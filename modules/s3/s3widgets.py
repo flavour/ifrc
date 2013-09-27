@@ -44,7 +44,7 @@ __all__ = ["S3ACLWidget",
            "S3DateTimeWidget",
            "S3EmbedComponentWidget",
            "S3GroupedOptionsWidget",
-           "S3RadioOptionsWidget",
+           #"S3RadioOptionsWidget",
            "S3HiddenWidget",
            "S3HumanResourceAutocompleteWidget",
            "S3ImageCropWidget",
@@ -1833,7 +1833,10 @@ def S3GenericAutocompleteTemplate(post_process,
 
 #==============================================================================
 class S3GroupedOptionsWidget(FormWidget):
-    """ Widget with grouped checkboxes for S3OptionsFilter """
+    """
+        Widget with checkboxes or radio buttons for S3OptionsFilter
+        - checkboxes can be optionally grouped by letter
+    """
 
     def __init__(self,
                  options=None,
@@ -2119,7 +2122,10 @@ class S3GroupedOptionsWidget(FormWidget):
 
 #==============================================================================
 class S3RadioOptionsWidget(FormWidget):
-    """ Widget with radio buttons for S3OptionsFilter """
+    """
+        Widget with radio buttons for S3OptionsFilter
+        - unused: can just use S3GroupedOptionsWidget with multiple=False
+    """
 
     def __init__(self,
                  options=None,
@@ -2184,9 +2190,6 @@ class S3RadioOptionsWidget(FormWidget):
                 item = render_item(fieldname, option)
                 append(item)
 
-            #script = '''$('#%s').groupedopts({columns:%s})''' % (_id, self.cols)
-            #current.response.s3.jquery_ready.append(script)
-
         return widget
 
     # -------------------------------------------------------------------------
@@ -2200,8 +2203,11 @@ class S3RadioOptionsWidget(FormWidget):
         """
 
         key, label, value, tooltip = item
+        id = "%s%s" % (fieldname, key)
         attr = {"_type": "radio",
                 "_name": fieldname,
+                "_id": id,
+                "_class": "s3-radioopts-option",
                 "_value": key,
                 }
         if value:
@@ -2210,7 +2216,7 @@ class S3RadioOptionsWidget(FormWidget):
             attr["_title"] = tooltip
         return DIV(INPUT(**attr),
                    LABEL(label,
-                         _for="%s%s" % (fieldname, key),
+                         _for=id,
                          ),
                    )
 
@@ -4494,8 +4500,8 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
         # * Show Selected List
         if self.header is True:
             header = '''checkAllText:'%s',uncheckAllText:"%s"''' % \
-                (T("Check all"),
-                 T("Uncheck all"))
+                (T("Select all"),
+                 T("Clear all"))
         elif self.header is False:
             header = '''header:false'''
         else:

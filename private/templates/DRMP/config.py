@@ -1187,7 +1187,7 @@ def render_posts(listid, resource, rfields, record,
         for doc in documents:
             try:
                 doc_name = retrieve(doc)[0]
-            except IOError:
+            except (IOError, TypeError):
                 doc_name = current.messages["NONE"]
             doc_url = URL(c="default", f="download",
                           args=[doc])
@@ -1293,6 +1293,7 @@ def render_posts(listid, resource, rfields, record,
 
     return item
 
+# For access from custom controllers
 s3.render_posts = render_posts
 
 # -----------------------------------------------------------------------------
@@ -3342,14 +3343,16 @@ def customize_org_organisation(**attr):
                 query = (ottable.name == "National")
                 national = current.db(query).select(ottable.id,
                                                     limitby=(0, 1)
-                                                    ).first().id
-                s3db.add_component("org_office",
-                                   org_organisation=dict(name="nat_office",
-                                                         joinby="organisation_id",
-                                                         filterby="office_type_id",
-                                                         filterfor=[national],
-                                                         ))
-                list_fields.append("nat_office.location_id$addr_street")
+                                                    ).first()
+                if national:
+                    national = national.id
+                    s3db.add_component("org_office",
+                                       org_organisation=dict(name="nat_office",
+                                                             joinby="organisation_id",
+                                                             filterby="office_type_id",
+                                                             filterfor=[national],
+                                                             ))
+                    list_fields.append("nat_office.location_id$addr_street")
 
             # Represent used in rendering
             current.auth.settings.table_user.organisation_id.represent = s3db.org_organisation_represent

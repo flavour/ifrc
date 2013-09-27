@@ -7,6 +7,11 @@ body {
     padding-top: 60px;
 }
 
+/* Main Map */
+.gis_fullscreen_map-btn {
+    display: none;
+}
+
 /* Summary Page */
 h2.summary {
     float: left;
@@ -17,6 +22,9 @@ h2.summary {
     margin: 15px;
     padding: 4px 6px;
     float: left;
+    /* Push above alert-space */
+    position: relative;
+    z-index: 1000;
 }
 
 .ui-tabs {
@@ -49,6 +57,10 @@ h2.summary {
     margin-top: 125px;
 }
 
+#summary-tab-headers li {
+    z-index: 1000; /* Push above alert-space */
+}
+
 #summary-tabs .ui-tabs-nav {
     border: none;
     margin: 0 10px 0 0;
@@ -64,16 +76,30 @@ h2.summary {
     border: none;
 }
 #summary-tabs #filter-form {
-    margin: 0 50px;
+    margin: 0 20px 0 50px;
     position: absolute;
-    top: 53px;
+    top: 45px;
     width: auto;
     z-index: 1;
 }
 
 #summary-tabs #table,
 #summary-tabs #charts {
-    padding: 132px 20px 20px 20px;
+    padding: 82px 20px 20px 20px;
+}
+
+#table select {
+    width: auto;
+}
+
+#summary-tabs #table #table-container th,
+#summary-tabs #table #table-container tr td {
+    border-left: 1px solid #d9d8d8;
+}
+
+#summary-tabs #map {
+    border-radius: 5px;
+    margin: 0;
 }
 
 #summary-2_filter {
@@ -174,7 +200,7 @@ form.filter-form,
 form#summary-filter-form
  {
     float: left;
-    background-color: white;
+    background-color: rgba(255,255,255,0.8);
     padding: 5px 10px;
     border-radius: 5px;
 }
@@ -186,12 +212,15 @@ form#summary-filter-form
 
 .horiz_filter_form .filter-controls,
 .horiz_filter_form .filter-submit {
-    margin-top: 30px;
+    margin: 30px 0 12px 0;
+}
+
+.horiz_filter_form div.filter-controls {
+    margin-right: 20px;
 }
 
 .horiz_filter_form.filter-manager-row {
-    float: right;
-    clear: left;
+    margin: 23px 0 0 0;
 }
 
 .fm-accept {
@@ -203,13 +232,20 @@ form#summary-filter-form
     float: left;
 }
 
+.ui-multiselect-all span,
+.ui-multiselect-none span,
+.filter-clear.action-lnk {
+    text-decoration: underline;
+    color: #0088CC;
+}
+
 /* Register screen */
 #auth_user_org_group_id {
     margin-left: 10px;
 }
 
 /* Contacts Page */
-#pr_person_sub_human_resourcehuman_resource__label {
+.form-container #pr_person_sub_human_resourcehuman_resource__label {
     /* Hide the colon */
     display: none;
 }
@@ -254,4 +290,63 @@ form.jeditable-input input {
 button.toggle-text {
     font-size: 10px !important;
     margin-left: 12px !important;
+}
+
+/* Map Borders*/
+div.map_save_button,
+div.map_save_panel,
+div.map_legend_tab,
+div.map_legend_panel,
+div.x-panel-body {
+    border: 1px solid #B2B2B2;
+}
+
+div.map_legend_tab {
+    border-right: none;
+    margin-right: -1px;
+}
+
+/* Hide border on main map (avoids 2x border) + layer panel*/ 
+div#ext-gen105,
+div#ext-gen113 {
+    border: none;
+    padding: 1px;
+}
+
+div.map_legend_panel {
+    margin-bottom: 30px;
+}
+
+/* Report */
+#charts .pt-form,
+#charts .pt-form fieldset {
+    border: none;
+    background-color: transparent;
+    margin-top: 0;
+    padding-top: 0;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.pt-chart-title {
+    text-align: center;
+    width: 100%;
+}
+
+.pt-chart-contents {
+    background-color: white;
+    border: 1px solid #b2b2b2;
+    border-radius: 5px;
+}
+
+#charts legend,
+.pt-fact-single-option,
+#charts tr td:nth-child(3),
+#summary-2-cols,
+.pt-show-totals-option,
+.pt-chart-controls,
+.pt-hide-chart,
+.pt-toggle-table
+ {
+    display: none;
 }

@@ -911,7 +911,7 @@ class S3CRUD(S3Method):
                 if not filter_submit_url:
                     _vars = self._remove_filters(r.get_vars)
                     filter_submit_url = r.url(vars=_vars)
-                    
+
                 # Where to retrieve updated filter options from:
                 filter_ajax_url = attr.get("filter_ajax_url",
                                            r.url(method="filter",
@@ -1027,14 +1027,11 @@ class S3CRUD(S3Method):
             else:
                 start = None
 
-            table = resource.table
-            if list_fields:
-                fields = [table[f] for f in list_fields if f in table.fields]
-                if table._id.name not in list_fields:
-                    fields.insert(0, table._id)
-            else:
-                fields = [f for f in table if f.type == "id" or f.readable]
-
+            fields = resource.list_fields(id_column=True)
+            rfields, j, l, d = resource.resolve_selectors(fields,
+                                                          extra_fields=False)
+            fields = [rfield.fname for rfield in rfields
+                                   if rfield.tname == tablename]
             orderby = get_config("orderby", None)
 
             exporter = S3Exporter().json
@@ -1387,11 +1384,13 @@ class S3CRUD(S3Method):
                     limit = None
                 else:
                     try:
-                        start = int(start)
                         limit = int(limit)
                     except ValueError:
-                        start = None
                         limit = 0 # use default
+                    try:
+                        start = int(start)
+                    except ValueError:
+                        start = None
             else:
                 start = None
 

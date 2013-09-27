@@ -124,6 +124,13 @@ class S3Config(Storage):
         return self.base.get("google_analytics_tracking_id", None)
 
     # -------------------------------------------------------------------------
+    def get_youtube_video_id(self):
+        """
+            YouTube ID
+        """
+        return self.base.get("youtube_id", None)
+
+    # -------------------------------------------------------------------------
     # Authentication settings
     def get_auth_hmac_key(self):
         """
@@ -841,6 +848,16 @@ class S3Config(Storage):
             Whether to translate Location names
         """
         return self.L10n.get("translate_gis_location", False)
+
+    def get_L10n_pootle_url(self):
+        """ URL for Pootle server """
+        return self.L10n.get("pootle_url", "http://pootle.sahanafoundation.org/")
+    def get_L10n_pootle_username(self):
+        """ Username for Pootle server """
+        return self.L10n.get("pootle_username", False)
+    def get_L10n_pootle_password(self):
+        """ Password for Pootle server """
+        return self.L10n.get("pootle_password", False)
 
     # -------------------------------------------------------------------------
     # PDF settings
