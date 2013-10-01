@@ -58,6 +58,7 @@ settings.auth.registration_organisation_group_required = False
 settings.auth.registration_requests_site = False
 
 settings.auth.registration_link_user_to = {"staff": T("Staff")}
+settings.auth.registration_link_user_to_default = "staff"
 
 settings.auth.record_approval = False
 
@@ -253,11 +254,11 @@ settings.ui.filter_auto_submit = 750
 settings.ui.report_auto_submit = 750
                        
 # -----------------------------------------------------------------------------
-# Filter forms
+# Filter forms - style for Summary pages
 def filter_formstyle(row_id, label, widget, comment, hidden=False):
-        return DIV(label, widget, comment, 
-                   _id=row_id,
-                   _class="horiz_filter_form")
+    return DIV(label, widget, comment, 
+               _id=row_id,
+               _class="horiz_filter_form")
 
 # =============================================================================
 # Module Settings
@@ -633,9 +634,11 @@ def customize_project_activity(**attr):
             s3db.project_activity_group.group_id.label = T("Coalition")
 
         if r.interactive or r.representation == "json":
-            # CRUD Strings
+            # CRUD Strings / Represent
             table.location_id.label = T("Address")
+            table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
             s3db.project_activity_group.group_id.label = T("Coalition")
+
             if r.method in ("summary", "report2"):
                 from s3.s3filter import S3OptionsFilter, S3DateFilter
                 filter_widgets = [S3OptionsFilter("activity_group.group_id",
@@ -830,7 +833,7 @@ def customize_org_organisation(**attr):
             s3db.org_group_membership.group_id.label = T("Coalition")
 
         if (r.interactive or r.representation=="json") and not r.component:
-            # CRUD Strings
+            # CRUD Strings / Represent
 
             if r.method in ("summary", "report2"):
                 from s3.s3filter import S3OptionsFilter
@@ -894,6 +897,7 @@ def customize_org_organisation(**attr):
                 ftable = s3db.org_facility
                 field = ftable.location_id
                 field.label = T("Address")
+                field.represent = s3db.gis_LocationRepresent(address_only=True)
                 # We don't have a widget capable of creating/editing Locations inline
                 field.widget = None
                 field.writable = False
@@ -1122,8 +1126,9 @@ def customize_org_facility(**attr):
             s3db.org_site_org_group.group_id.label = T("Coalition")
 
         if r.interactive or r.representation == "json":
-            # CRUD Strings
+            # CRUD Strings / Represent
             table.location_id.label = T("Address")
+            table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
             s3db.org_site_org_group.group_id.label = T("Coalition")
 
             s3.crud_strings[tablename] = Storage(
@@ -1262,6 +1267,7 @@ def customize_org_facility(**attr):
              r.method != "search":
             # Map Popups
             table.location_id.label = T("Address")
+            table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
             table.organisation_id.comment = ""
             s3.crud_strings[tablename].title_display = T("Place Details")
             s3db.configure(tablename,
@@ -1341,8 +1347,9 @@ def customize_stats_people(**attr):
             s3db.stats_people_group.group_id.label = T("Coalition")
 
         if r.interactive or r.representation == "json":
-            # CRUD Strings
+            # CRUD Strings / Represent
             #table.location_id.label = T("Address")
+            #table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
 
             s3.crud_strings[tablename] = Storage(
                 title_create = T("Add People"),
@@ -1536,8 +1543,9 @@ def customize_vulnerability_evac_route(**attr):
             s3db.vulnerability_evac_route_group.group_id.label = T("Coalition")
 
         if r.interactive or r.representation == "json":
-            # CRUD Strings
+            # CRUD Strings / Represent
             table.location_id.label = T("Address")
+            table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
             s3db.vulnerability_evac_route_group.group_id.label = T("Coalition")
 
             if r.method in ("summary", "report2"):
@@ -1691,8 +1699,9 @@ def customize_vulnerability_risk(**attr):
             s3db.vulnerability_risk_group.group_id.label = T("Coalition")
 
         if r.interactive or r.representation == "json":
-            # CRUD Strings
+            # CRUD Strings / Represent
             table.location_id.label = T("Address")
+            table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
             s3db.vulnerability_risk_group.group_id.label = T("Coalition")
 
             s3.crud_strings[tablename] = Storage(
@@ -1873,6 +1882,20 @@ def render_log(listid, resource, rfields, record, **attr):
             body = T("Saved a Filter")
         elif method == "update":
             body = T("Updated a Filter")
+    elif tablename == "gis_config":
+        table = s3db[tablename]
+        row = db(table.id == record_id).select(table.name,
+                                               limitby=(0, 1)
+                                               ).first()
+        if row:
+            label = row.name or ""
+        else:
+            label = ""
+        url = URL(c="gis", f="index", vars={"config": record_id})
+        if method == "create":
+            body = T("Saved a Map")
+        elif method == "update":
+            body = T("Updated a Map")
     else:
         table = s3db[tablename]
         row = db(table.id == record_id).select(table.name,
@@ -1914,11 +1937,6 @@ def render_log(listid, resource, rfields, record, **attr):
                 body = T("Added a Hazard")
             elif method == "update":
                 body = T("Edited a Hazard")
-        elif tablename == "gis_config":
-            if method == "create":
-                body = T("Saved a Map")
-            elif method == "update":
-                body = T("Updated a Map")
 
     body = P(body,
              BR(),

@@ -829,8 +829,8 @@ class S3AddPersonWidget2(FormWidget):
         if occupation:
             fields.append(("occupation", occupation.label, INPUT(), False))
 
-        fields.append(("email", T("Email Address"), INPUT(), emailRequired))
         fields.append(("mobile_phone", settings.get_ui_label_mobile_phone(), INPUT(), False))
+        fields.append(("email", T("Email"), INPUT(), emailRequired))
 
         for f in fields:
             fname = f[0]
@@ -3152,6 +3152,7 @@ S3.gis.tab="%s"''' % s3.gis.tab
                                                  search = True,
                                                  window = True,
                                                  window_hide = True,
+                                                 zoomWheelEnabled = False,
                                                  )
                 else:
                     # Bad location_id
@@ -3196,6 +3197,7 @@ S3.gis.tab="%s"''' % s3.gis.tab
                                              search = True,
                                              window = True,
                                              window_hide = True,
+                                             zoomWheelEnabled = False,
                                              )
             else:
                 # No Permission to create a location, so don't render a row
@@ -3676,7 +3678,7 @@ class S3LocationSelectorWidget2(FormWidget):
         Limitations:
         * Doesn't support variable Levels by Country
         * Doesn't allow creation of new Lx Locations
-        * Doesn't allow selection of existing Locations
+        * Doesn't allow selection of existing specific Locations
         * Doesn't support manual entry of LatLons
 
         May evolve into a replacement in-time if missing features get migrated here.
@@ -4409,6 +4411,7 @@ class S3LocationSelectorWidget2(FormWidget):
                                # Hide controls from toolbar
                                nav = False,
                                area = False,
+                               zoomWheelEnabled = False,
                                # Don't use normal callback (since we postpone rendering Map until DIV unhidden)
                                # but use our one if we need to display a map by default
                                callback = callback if use_callback else None,
@@ -4436,11 +4439,18 @@ class S3LocationSelectorWidget2(FormWidget):
                 comment = ""
                 map_icon = formstyle(row_id, label, widget, comment)
             if geocoder:
+                if not location_selector_loaded:
+                    global_append('''i18n.address_mapped="%s"
+i18n.address_not_mapped="%s"
+i18n.location_found="%s"
+i18n.location_not_found="%s"''' % (T("Address Mapped"),
+                                  T("Address NOT Mapped"),
+                                  T("Location Found"),
+                                  T("Location NOT Found"),
+                                  ))
                 map_icon.append(DIV(DIV(_class="throbber hide"),
-                                    DIV(T("Address Mapped"),
-                                        _class="geocode_success hide"),
-                                    DIV(T("Address NOT Mapped"),
-                                        _class="geocode_fail hide"),
+                                    DIV(_class="geocode_success hide"),
+                                    DIV(_class="geocode_fail hide"),
                                     BUTTON(T("Geocode"),
                                            _class="hide"),
                                     _id="%s_geocode" % fieldname,
