@@ -1219,6 +1219,8 @@ class S3OrganisationSectorModel(S3Model):
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
 
+        NONE = current.messages["NONE"]
+        
         location = current.session.s3.location_filter
         if location:
             filterby = "location_id"
@@ -1233,9 +1235,13 @@ class S3OrganisationSectorModel(S3Model):
         #
         tablename = "org_sector"
         table = define_table(tablename,
-                             Field("name", length=128,
+                             Field("name",
+                                   length=128,
                                    notnull=True,
-                                   label=T("Name")),
+                                   label=T("Name"),
+                                   represent=lambda v: T(v) if v is not None \
+                                                       else NONE,
+                                  ),
                              Field("abrv", length=64,
                                    #notnull=True,
                                    label=T("Abbreviation")),
@@ -1585,7 +1591,7 @@ class S3OrganisationServiceModel(S3Model):
             msg_list_empty = T("No Services currently registered"))
 
         # Reusable Field
-        represent = S3Represent(lookup=tablename)
+        represent = S3Represent(lookup=tablename, translate=True)
         service_id = S3ReusableField("service_id", table,
                                     sortby = "name",
                                     label = T("Services"),
