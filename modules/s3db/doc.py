@@ -66,6 +66,7 @@ class S3DocumentLibrary(S3Model):
         configure = self.configure
         crud_strings = s3.crud_strings
         define_table = self.define_table
+        folder = current.request.folder
         super_key = self.super_key
         super_link = self.super_link
 
@@ -107,29 +108,45 @@ class S3DocumentLibrary(S3Model):
                              self.stats_source_superlink,
                              # Component not instance
                              super_link("doc_id", doc_entity),
-                             super_link("site_id", "org_site"),
-                             Field("file", "upload", autodelete=True),
+                             super_link("site_id", "org_site"), # @ToDo: Remove since Site Instances are doc entities?
+                             Field("file", "upload",
+                                   # upload folder needs to be visible to the download() function as well as the upload
+                                   uploadfolder = os.path.join(folder,
+                                                               "uploads"),
+                                   autodelete=True
+                                   ),
                              Field("name", length=128,
                                    # Allow Name to be added onvalidation
                                    requires = IS_NULL_OR(IS_LENGTH(128)),
-                                   label=T("Name")),
-                             Field("url", label=T("URL"),
+                                   label=T("Name")
+                                   ),
+                             Field("url",
+                                   label=T("URL"),
                                    requires = IS_NULL_OR(IS_URL()),
                                    represent = lambda url: \
-                                               url and A(url, _href=url) or NONE),
+                                    url and A(url, _href=url) or NONE
+                                   ),
                              Field("has_been_indexed", "boolean", 
-                                   readable=False, writable=False,
-                                   default = False),
-                             person_id(label=T("Author"),
-                                       comment=person_comment(T("Author"),
-                                                              T("The Author of this Document (optional)"))),
+                                   default = False,
+                                   readable = False,
+                                   writable = False,
+                                   ),
+                             person_id(
+                                label=T("Author"),
+                                comment=person_comment(T("Author"),
+                                                       T("The Author of this Document (optional)"))
+                                ),
                              organisation_id(
                                 widget = S3OrganisationAutocompleteWidget(default_from_profile=True)
                                 ),
                              s3_date(label = T("Date Published")),
+                             # @ToDo: Move location to link table
                              location_id(),
                              s3_comments(),
-                             Field("checksum", readable=False, writable=False),
+                             Field("checksum",
+                                   readable = False,
+                                   writable = False,
+                                   ),
                              *s3_meta_fields())
 
         # Field configuration
@@ -189,16 +206,16 @@ class S3DocumentLibrary(S3Model):
         tablename = "doc_image"
         table = define_table(tablename,
                              # Component not instance
-                             super_link("site_id", "org_site"),
-                             super_link("pe_id", "pr_pentity"),
                              super_link("doc_id", doc_entity),
+                             super_link("pe_id", "pr_pentity"), # @ToDo: Remove & make Persons doc entities instead?
+                             super_link("site_id", "org_site"), # @ToDo: Remove since Site Instances are doc entities?
                              Field("file", "upload", autodelete=True,
                                    requires = IS_NULL_OR(
-                                                IS_IMAGE(extensions=(s3.IMAGE_EXTENSIONS)
-                                                         )),
+                                    IS_IMAGE(extensions=(s3.IMAGE_EXTENSIONS))
+                                    ),
                                    represent = doc_image_represent,
                                    # upload folder needs to be visible to the download() function as well as the upload
-                                   uploadfolder = os.path.join(current.request.folder,
+                                   uploadfolder = os.path.join(folder,
                                                                "uploads",
                                                                "images"),
                                    widget=S3ImageCropWidget((300, 300))),
@@ -209,18 +226,24 @@ class S3DocumentLibrary(S3Model):
                              Field("url", label=T("URL"),
                                    requires = IS_NULL_OR(IS_URL())),
                              Field("type", "integer",
-                                   requires = IS_IN_SET(doc_image_type_opts, zero=None),
+                                   requires = IS_IN_SET(doc_image_type_opts,
+                                                        zero=None),
                                    default = 1,
                                    label = T("Image Type"),
-                                   represent = lambda opt: doc_image_type_opts.get(opt, UNKNOWN_OPT)),
+                                   represent = lambda opt: \
+                                    doc_image_type_opts.get(opt, UNKNOWN_OPT)),
                              person_id(label=T("Author")),
                              organisation_id(
                                 widget = S3OrganisationAutocompleteWidget(default_from_profile=True)
                                 ),
                              s3_date(label = T("Date Taken")),
+                             # @ToDo: Move location to link table
                              location_id(),
                              s3_comments(),
-                             Field("checksum", readable=False, writable=False),
+                             Field("checksum",
+                                   readable = False,
+                                   writable = False,
+                                   ),
                              *s3_meta_fields())
 
         # CRUD Strings

@@ -270,20 +270,23 @@ def customize_org_organisation(**attr):
             s3db.configure("org_organisation", list_fields=list_fields)
             
         if r.interactive:
-            from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentCheckbox
+            from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
             s3db.pr_address.comments.label = ""
             s3db.pr_contact.value.label = ""
+            s3db.doc_document.url.label = ""
             crud_form = S3SQLCustomForm(
                 "name",
                 "acronym",
                 "organisation_type_id",
-                S3SQLInlineComponentCheckbox(
+                #S3SQLInlineComponentCheckbox(
+                S3SQLInlineComponentMultiSelectWidget(
                     "service",
                     label = T("Services"),
                     field = "service_id",
                     cols = 4,
                 ),
-                S3SQLInlineComponentCheckbox(
+                #S3SQLInlineComponentCheckbox(
+                S3SQLInlineComponentMultiSelectWidget(
                     "group",
                     label = T("Network"),
                     field = "group_id",
@@ -297,13 +300,15 @@ def customize_org_organisation(**attr):
                     # Ultimately should go into location_id$addr_street
                     fields = ["comments"],
                 ),
-                S3SQLInlineComponentCheckbox(
+                #S3SQLInlineComponentCheckbox(
+                S3SQLInlineComponentMultiSelectWidget(
                     "location",
                     label = T("Neighborhoods Served"),
                     field = "location_id",
                     filterby = dict(field = "level",
                                     options = "L4"
                                     ),
+                    # @ToDo: GroupedCheckbox Widget or Hierarchical MultiSelectWidget
                     cols = 5,
                 ),
                 "phone",
@@ -339,6 +344,28 @@ def customize_org_organisation(**attr):
                                     )
                 ),
                 S3SQLInlineComponent(
+                    "document",
+                    name = "iCal",
+                    label = "iCAL",
+                    multiple = False,
+                    fields = ["url",
+                              ],
+                    filterby = dict(field = "name",
+                                    options="iCal"
+                                    )
+                ),                                                                
+                S3SQLInlineComponent(
+                    "document",
+                    name = "data",
+                    label = T("Data"),
+                    multiple = False,
+                    fields = ["url",
+                              ],
+                    filterby = dict(field = "name",
+                                    options="Data"
+                                    )
+                ),                                                                
+                S3SQLInlineComponent(
                     "contact",
                     name = "twitter",
                     label = T("Twitter"),
@@ -346,6 +373,16 @@ def customize_org_organisation(**attr):
                     fields = ["value"],
                     filterby = dict(field = "contact_method",
                                     options = "TWITTER"
+                                    )
+                ),
+                S3SQLInlineComponent(
+                    "contact",
+                    name = "facebook",
+                    label = T("Facebook"),
+                    multiple = False,
+                    fields = ["value"],
+                    filterby = dict(field = "contact_method",
+                                    options = "FACEBOOK"
                                     )
                 ),
                 "comments",
@@ -614,7 +651,7 @@ def customize_project_project(**attr):
                 #"objectives",
                 "human_resource_id",
                 # Activities
-               S3SQLInlineComponent(
+                S3SQLInlineComponent(
                     "location",
                     label = T("Location"),
                     fields = ["location_id"],
