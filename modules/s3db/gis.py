@@ -2476,7 +2476,8 @@ class S3FeatureLayerModel(S3Model):
                                         ),
                                   # @ToDo: Build Popups from Attributes & Format to avoid duplication
                                   Field("popup_fields", "list:string",
-                                        default = "name",
+                                        # Want to be able to prepop layers with this empty to prevent popups from showing
+                                        #default = "name",
                                         label = T("Popup Fields"),
                                         comment = DIV(_class="tooltip",
                                                       _title="%s|%s" % (T("Popup Fields"),
@@ -4526,6 +4527,16 @@ class gis_LocationRepresent(S3Represent):
             self.multi_country = len(current.deployment_settings.get_gis_countries()) != 1
         elif address_only:
             fields = ["id",
+                      "name",
+                      "level",
+                      "parent",
+                      "path",
+                      "L0",
+                      "L1",
+                      "L2",
+                      "L3",
+                      "L4",
+                      "L5",
                       "addr_street",
                       ]
         else:
@@ -4619,14 +4630,6 @@ class gis_LocationRepresent(S3Represent):
 
             @param row: the gis_location Row
         """
-
-        if self.address_only:
-            if row.addr_street:
-                # Get the 1st line of the street address.
-                represent = row.addr_street.splitlines()[0]
-                return s3_unicode(represent)
-            else:
-                return current.messages["NONE"]
 
         sep = self.sep
         translate = self.translate
@@ -4749,13 +4752,19 @@ class gis_LocationRepresent(S3Represent):
                     # Get the 1st line of the street address.
                     represent = row.addr_street.splitlines()[0]
                 if (not represent) and \
+                   (not self.address_only) and \
                    (row.inherited == False) and \
                    (row.lat is not None) and \
                    (row.lon is not None):
                     represent = self.lat_lon_represent(row)
                 if row.parent:
+                    if row.path:
+                        path = row.path
+                    else:
+                        # Not yet been built, so do it now
+                        path = current.gis.update_location_tree(row)
                     # @ToDo: Assumes no missing levels in PATH
-                    path = row.path.split("/")
+                    path = path.split("/")
                     parent_level = "L%s" % (len(path) - 2)
                     parent_name = row[parent_level]
                     if parent_name:

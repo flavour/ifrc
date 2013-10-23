@@ -1,6 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="{{=T.accepted_language or "en"}}">{{# class="no-js" needed for modernizr }}
-<head>
+<head>{{theme=response.s3.theme}}
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 {{# Always force latest IE rendering engine (even in intranet) & Chrome Frame }}
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
@@ -16,7 +16,7 @@
  initial-scale = 1.0 retains dimensions instead of zooming out if page height > device height
  maximum-scale = 1.0 retains dimensions instead of zooming in if page width < device width
 --> """}}
-<meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0;" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
 <!--[if lt IE 9]>
  <script src="http://html5shim.googlecode.com/svn/trunk/html5.js" />
@@ -40,14 +40,12 @@
  <link href="/{{=appname}}/static/styles/{{=sheet}}" rel="stylesheet" type="text/css" media="screen" charset="utf-8" />
 {{pass}}
 {{include "bootstrap_css.html"}}
-{{if s3.debug:}}
- {{=s3base.s3_include_debug_css()}}
-{{else:}}
+{{if s3.debug:}}{{=s3base.s3_include_debug_css()}}{{else:}}
  {{# Built by /static/scripts/tools/build.sahana.py }}
- <link href="/{{=appname}}/static/themes/{{=response.s3.theme}}/eden.min.css" rel="stylesheet" type="text/css" />
+ <link href="/{{=appname}}/static/themes/{{=theme}}/eden.min.css" rel="stylesheet" type="text/css" />
 {{pass}}
 <!--[if IE]>
- <link rel="stylesheet" type="text/css" href="/{{=appname}}/static/themes/{{=response.s3.theme}}/ie.css"></link>
+ <link rel="stylesheet" type="text/css" href="/{{=appname}}/static/themes/{{=theme}}/ie.css"></link>
 <![endif]-->
 {{include "scripts_top.html"}}
 </head>
@@ -77,10 +75,10 @@
    </button>
    <div class='nav-collapse collapse'>
     <ul class='nav'>
-     <li><a class='home' href='/{{=appname}}/default/index'><img src="/{{=appname}}/static/img/sahanalarge_14.png" alt="Sahana"/></a></li>
+     <li><a class='home' href='/{{=appname}}/default/index'><img src='/{{=appname}}/static/img/sahanalarge_14.png' alt='Sahana'/></a></li>
      <li><a class='map' href='/{{=appname}}/gis/index'><i class='icon-globe'></i> {{=T("Make a Map")}}</a></li>
-     <li class='dropdown'> <a href='#' class='dropdown-toggle top-level' id='community-data' data-toggle='dropdown'><i class='icon-folder-open-alt'></i> {{=T("Explore Community Data")}}<b class='caret'></b></a>
-      <ul class='dropdown-menu' role='menu' aria-labelledby='profiles'>
+     <li class='dropdown'> <a href='#' class='dropdown-toggle top-level community-data-menu' data-toggle='dropdown'><i class='icon-folder-open-alt'></i> {{=T("Explore Community Data")}}<b class='caret'></b></a>
+      <ul class='dropdown-menu community-data-menu' role='menu' aria-labelledby='profiles'>
        {{for opt in response.menu:}}
         <li role='menuitem'>
          <a href='{{=opt["url"]}}/summary' tabindex='-1' class='menu-item'> <i class='{{=opt["icon"]}}'></i> {{=opt["name"]}}</a>
@@ -107,13 +105,31 @@
        <!--<li><a href='/{{=appname}}/default/user/register'><i class='icon-check'></i> {{=T("Register")}}</a></li>-->
       </ul>
      </li>
-     {{else:}}{{if request.controller == "default" and request.function == "user" and "login" in request.args:}} {{else:}}
+     {{else:}}{{if request.controller == "default" and request.function == "user":}} {{else:}}
      <li class='dropdown'><a href='#' class='dropdown-toggle' data-toggle='dropdown'><i class='icon-signin'></i><b class='caret'></b></a>
       <ul class='dropdown-menu'>
       {{=auth.login()}}
       </ul>
      </li>
      {{pass}}{{pass}}
+     <li class='dropdown'><a href='#' class='dropdown-toggle' data-toggle='dropdown'><i class='icon-comment-alt'></i><b class='caret'></b></a>
+      <ul class='dropdown-menu'>
+       {{vars=request.vars}}
+       {{language=response.s3.language}}
+       {{icon = {"en":"icon-check"}.get(language,"icon-check-empty")}}
+       {{vars["_language"] = "en"}} 
+       <li><a href='{{=URL(args=request.args, vars=vars)}}'><i class='{{=icon}}'></i> English</a></li>
+       {{icon = {"es":"icon-check"}.get(language,"icon-check-empty")}}
+       {{vars["_language"] = "es"}}
+       <li><a href='{{=URL(args=request.args, vars=vars)}}'><i class='{{=icon}}'></i> Español</a></li>
+      </ul>
+     </li>
+     <li class='dropdown'><a href='#' class='dropdown-toggle' data-toggle='dropdown'><i class='icon-question-sign'></i><b class='caret'></b></a>
+      <ul class='dropdown-menu'>
+        <li><a href='/{{=appname}}/default/video'><i class='icon-youtube-play'></i> {{=T("Video Tutorials")}}</a></li>
+        <li><a href='/{{=appname}}/static/themes/CRMT/SahanaUserManual.pdf'><i class='icon-book'></i> {{=T("User Manual")}}</a></li>
+      </ul>
+     </li>
     </ul>
    </div>
   </div>

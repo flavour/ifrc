@@ -155,7 +155,7 @@ def customize_org_office(**attr):
         else:
             result = True
 
-        if r.interactive or r.representation.lower() == "aadata":
+        if r.interactive or r.representation == "aadata":
             s3db = current.s3db
         
         if r.interactive:
@@ -225,7 +225,7 @@ def customize_org_organisation(**attr):
         else:
             result = True
 
-        if r.interactive or r.representation.lower() == "aadata":
+        if r.interactive or r.representation == "aadata":
             s3db = current.s3db
             list_fields = ["id",
                            "name",
@@ -349,14 +349,12 @@ def customize_project_project(**attr):
                                 label=T("Theme"),
                                 represent="%(name)s",
                                 widget="multiselect",
-                                cols=3,
                                 #hidden=True,
                                 ),
                 S3LocationFilter("location.location_id",
                                  label=T("Location"),
                                  levels=["L1", "L2"],
                                  widget="multiselect",
-                                 cols=3,
                                  #hidden=True,
                                  ),
                 # @ToDo: Widget to handle Start & End in 1!

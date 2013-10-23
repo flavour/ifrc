@@ -165,7 +165,7 @@ settings.ui.camp = True
 
 # -----------------------------------------------------------------------------
 # Uncomment to restrict the export formats available
-settings.ui.export_formats = ["xls"]
+#settings.ui.export_formats = ["xls"]
 
 settings.ui.update_label = "Edit"
 
@@ -188,9 +188,6 @@ settings.ui.summary = [#{"common": True,
                         "widgets": [{"method": "datatable"}]
                         },
                        ]
-
-settings.ui.filter_auto_submit = 750
-settings.ui.report_auto_submit = 750
 
 settings.search.filter_manager = False
 
@@ -513,8 +510,8 @@ def render_events(listid, resource, rfields, record, **attr):
     # Render the item
     item = DIV(DIV(A(IMG(_class="media-object",
                          _src=URL(c="static",
-                                  f="themes",
-                                  args=["DRMP", "img", "%s.png" % event_type]),
+                                  f="img",
+                                  args=["event", "%s.png" % event_type]),
                          ),
                      _class="pull-left",
                      _href=event_url,
@@ -1939,11 +1936,14 @@ def customize_cms_post_fields():
     field.label = ""
     field.represent = s3db.gis_LocationRepresent(sep=" | ")
     field.requires = IS_NULL_OR(
-                        IS_LOCATION_SELECTOR2(levels=["L0", "L1", "L2", "L3"])
+                        IS_LOCATION_SELECTOR2(levels=("L0", "L1", "L2", "L3"))
                      )
-    field.widget = S3LocationSelectorWidget2(levels=["L0", "L1", "L2", "L3"])
+    field.widget = S3LocationSelectorWidget2(levels=("L0", "L1", "L2", "L3"))
 
     table.created_by.represent = s3_auth_user_represent_name
+
+    current.auth.settings.table_user.organisation_id.represent = \
+        s3db.org_organisation_represent
 
     list_fields = ["series_id",
                    "location_id",
@@ -2419,9 +2419,6 @@ def customize_event_event(**attr):
                 # Customise the cms_post table as that is used for the widgets
                 customize_cms_post_fields()
 
-                # Represent used in rendering
-                current.auth.settings.table_user.organisation_id.represent = s3db.org_organisation_represent
-
                 gtable = db.gis_location
                 ltable = db.event_event_location
                 query = (ltable.event_id == r.id) & \
@@ -2519,8 +2516,8 @@ def customize_event_event(**attr):
                                                             record.name),
                                profile_header = DIV(A(IMG(_class="media-object",
                                                           _src=URL(c="static",
-                                                                   f="themes",
-                                                                   args=["DRMP", "img",
+                                                                   f="img",
+                                                                   args=["event",
                                                                          "%s.png" % event_type]),
                                                           ),
                                                       _class="pull-left",
@@ -2670,9 +2667,6 @@ def customize_gis_location(**attr):
                 list_fields = ["name",
                                "id",
                                ]
-
-                # Represent used in rendering
-                current.auth.settings.table_user.organisation_id.represent = s3db.org_organisation_represent
 
                 location = r.record
                 record_id = location.id
@@ -3023,8 +3017,8 @@ def customize_org_office(**attr):
                 # Don't add new Locations here
                 location_field.comment = None
                 # L1s only
-                location_field.requires = IS_LOCATION_SELECTOR2(levels=["L0", "L1"])
-                location_field.widget = S3LocationSelectorWidget2(levels=["L0", "L1"],
+                location_field.requires = IS_LOCATION_SELECTOR2(levels=("L0", "L1"))
+                location_field.widget = S3LocationSelectorWidget2(levels=("L0", "L1"),
                                                                   show_address=True,
                                                                   show_map=False)
             s3.cancel = True
@@ -3327,6 +3321,7 @@ def customize_pr_person(**attr):
     """
 
     s3db = current.s3db
+    request = current.request
     s3 = current.response.s3
 
     tablename = "pr_person"
@@ -3347,23 +3342,23 @@ def customize_pr_person(**attr):
             image_field.requires = None
 
         if r.interactive or r.representation == "aadata":
-            from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent
-            # CRUD Strings
-            ADD_CONTACT = T("Add New Contact")
-            s3.crud_strings[tablename] = Storage(
-                title_create = T("Add Contact"),
-                title_display = T("Contact Details"),
-                title_list = T("Contact Directory"),
-                title_update = T("Edit Contact Details"),
-                title_search = T("Search Contacts"),
-                subtitle_create = ADD_CONTACT,
-                label_list_button = T("List Contacts"),
-                label_create_button = ADD_CONTACT,
-                label_delete_button = T("Delete Contact"),
-                msg_record_created = T("Contact added"),
-                msg_record_modified = T("Contact details updated"),
-                msg_record_deleted = T("Contact deleted"),
-                msg_list_empty = T("No Contacts currently registered"))
+            if request.controller != "default":
+                # CRUD Strings
+                ADD_CONTACT = T("Add New Contact")
+                s3.crud_strings[tablename] = Storage(
+                    title_create = T("Add Contact"),
+                    title_display = T("Contact Details"),
+                    title_list = T("Contact Directory"),
+                    title_update = T("Edit Contact Details"),
+                    title_search = T("Search Contacts"),
+                    subtitle_create = ADD_CONTACT,
+                    label_list_button = T("List Contacts"),
+                    label_create_button = ADD_CONTACT,
+                    label_delete_button = T("Delete Contact"),
+                    msg_record_created = T("Contact added"),
+                    msg_record_modified = T("Contact details updated"),
+                    msg_record_deleted = T("Contact deleted"),
+                    msg_list_empty = T("No Contacts currently registered"))
 
             MOBILE = settings.get_ui_label_mobile_phone()
             EMAIL = T("Email")
@@ -3396,13 +3391,14 @@ def customize_pr_person(**attr):
                          ]
             if r.method in ("create", "update"):
                 # Context from a Profile page?"
-                organisation_id = current.request.get_vars.get("(organisation)", None)
+                organisation_id = request.get_vars.get("(organisation)", None)
                 if organisation_id:
                     field = s3db.hrm_human_resource.organisation_id
                     field.default = organisation_id
                     field.readable = field.writable = False
                     hr_fields.remove("organisation_id")
 
+            from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent
             s3_sql_custom_fields = [
                     "first_name",
                     #"middle_name",
@@ -3482,7 +3478,7 @@ def customize_pr_person(**attr):
             #iappend('''i18n.job_title="%s"''' % T("Job Title"))
             #i18n = '''\n'''.join(i18n)
             #s3.js_global.append(i18n)
-            #s3.scripts.append('/%s/static/themes/DRMP/js/contacts.js' % current.request.application)
+            #s3.scripts.append('/%s/static/themes/DRMP/js/contacts.js' % request.application)
 
         return True
     s3.prep = custom_prep
@@ -3908,7 +3904,7 @@ def customize_project_beneficiary(**attr):
         report_options = Storage(
             rows=report_fields,
             cols=report_fields,
-            fact=[("sum(value)", T("Number of Beneficiaries"))],
+            fact=[(T("Number of Beneficiaries"), "sum(value)")],
             defaults=Storage(rows="location_id$L1",
                              cols="parameter_id",
                              fact="sum(value)",

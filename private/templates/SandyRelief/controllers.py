@@ -6,6 +6,8 @@ from gluon import *
 from gluon.storage import Storage
 from s3 import *
 
+THEME = "SandyRelief"
+
 # =============================================================================
 class index():
     """ Custom Home Page """
@@ -148,7 +150,7 @@ google.setOnLoadCallback(LoadDynamicFeedControl)'''))
             s3.js_global.append(feed_control)
 
         view = path.join(request.folder, "private", "templates",
-                         "SandyRelief", "views", "index.html")
+                         THEME, "views", "index.html")
         try:
             # Pass view as file not str to work in compiled mode
             response.view = open(view, "rb")
@@ -219,7 +221,7 @@ class req():
                                             ),
                             dt_pagination="true",
                            )
-        elif request.extension.lower() == "aadata":
+        elif request.extension == "aadata":
             if "sEcho" in request.vars:
                 echo = int(request.vars.sEcho)
             else:
@@ -243,7 +245,7 @@ class contact():
         response = current.response
 
         view = path.join(request.folder, "private", "templates",
-                         "SandyRelief", "views", "contact.html")
+                         THEME, "views", "contact.html")
         try:
             # Pass view as file not str to work in compiled mode
             response.view = open(view, "rb")

@@ -457,8 +457,8 @@ def render_events(listid, resource, rfields, record, **attr):
     # Render the item
     item = DIV(DIV(A(IMG(_class="media-object",
                          _src=URL(c="static",
-                                  f="themes",
-                                  args=["DRMP", "img", "%s.png" % event_type]),
+                                  f="img",
+                                  args=["event", "%s.png" % event_type]),
                          ),
                      _class="pull-left",
                      _href=event_url,
@@ -1679,13 +1679,16 @@ def customize_cms_post_fields():
     field.label = ""
     field.represent = s3db.gis_LocationRepresent(sep=" | ")
     field.requires = IS_NULL_OR(
-                        IS_LOCATION_SELECTOR2(levels=["L1", "L2", "L3"])
+                        IS_LOCATION_SELECTOR2(levels=("L1", "L2", "L3"))
                      )
-    field.widget = S3LocationSelectorWidget2(levels=["L1", "L2", "L3"],
+    field.widget = S3LocationSelectorWidget2(levels=("L1", "L2", "L3"),
                                              #polygons=True,
                                              )
 
     table.created_by.represent = s3_auth_user_represent_name
+
+    current.auth.settings.table_user.organisation_id.represent = \
+        s3db.org_organisation_represent
 
     list_fields = ["series_id",
                    "location_id",
@@ -2125,9 +2128,6 @@ def customize_event_event(**attr):
                 # Customise the cms_post table as that is used for the widgets
                 customize_cms_post_fields()
 
-                # Represent used in rendering
-                current.auth.settings.table_user.organisation_id.represent = s3db.org_organisation_represent
-
                 gtable = db.gis_location
                 ltable = db.event_event_location
                 query = (ltable.event_id == r.id) & \
@@ -2238,8 +2238,8 @@ def customize_event_event(**attr):
                                                             record.name),
                                profile_header = DIV(A(IMG(_class="media-object",
                                                           _src=URL(c="static",
-                                                                   f="themes",
-                                                                   args=["DRMP", "img",
+                                                                   f="img",
+                                                                   args=["event",
                                                                          "%s.png" % event_type]),
                                                           ),
                                                       _class="pull-left",
@@ -2391,9 +2391,6 @@ def customize_gis_location(**attr):
                 list_fields = ["name",
                                "id",
                                ]
-
-                # Represent used in rendering
-                current.auth.settings.table_user.organisation_id.represent = s3db.org_organisation_represent
 
                 location = r.record
                 default = "~.(location)=%s" % location.id
@@ -2764,8 +2761,8 @@ def customize_org_office(**attr):
                 # Don't add new Locations here
                 location_field.comment = None
                 # L1s only
-                location_field.requires = IS_LOCATION_SELECTOR2(levels=["L1"])
-                location_field.widget = S3LocationSelectorWidget2(levels=["L1"],
+                location_field.requires = IS_LOCATION_SELECTOR2(levels=("L1",))
+                location_field.widget = S3LocationSelectorWidget2(levels=("L1",),
                                                                   show_address=True,
                                                                   show_map=False)
             s3.cancel = True

@@ -156,21 +156,19 @@ def _newsfeed():
                                       label=T("Filter by Type"),
                                       represent="%(name)s",
                                       widget="multiselect",
-                                      cols=3,
                                       hidden=True,
                                       ),
                       S3LocationFilter("location_id",
                                        label=T("Filter by Location"),
                                        levels=["L1", "L2", "L3"],
                                        widget="multiselect",
-                                       cols=3,
                                        hidden=True,
                                        ),
                       S3OptionsFilter("created_by$organisation_id",
                                       label=T("Filter by Organization"),
-                                      represent="%(name)s",
+                                      # Can't use this for integers, use field.represent instead
+                                      #represent="%(name)s",
                                       widget="multiselect",
-                                      cols=3,
                                       hidden=True,
                                       ),
                       S3DateFilter("created_on",
@@ -397,8 +395,8 @@ def render_events(listid, resource, rfields, record, **attr):
     # Render the item
     item = DIV(DIV(A(IMG(_class="media-object",
                          _src=URL(c="static",
-                                  f="themes",
-                                  args=["DRMP", "img", "%s.png" % event_type]),
+                                  f="img",
+                                  args=["event", "%s.png" % event_type]),
                          ),
                      _class="pull-left",
                      _href="#",
@@ -462,7 +460,7 @@ def render_cms_events(listid, resource, rfields, record, **attr):
     # @ToDo: Optimise by not doing DB lookups (especially duplicate) within render, but doing these in the bulk query
     avatar = s3_avatar_represent(author_id,
                                  _class="media-object",
-                                 _style="width:50px;padding:5px;padding-top:0px;")
+                                 _style="width:50px;padding:5px;padding-top:0;")
     db = current.db
     ltable = current.s3db.pr_person_user
     ptable = db.pr_person

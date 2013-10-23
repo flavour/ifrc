@@ -2342,7 +2342,7 @@ class S3HRSkillModel(S3Model):
                     list_fields = ["course_id",
                                    "date",
                                    "hours",
-                                  ]
+                                   ]
                   )
 
         # =====================================================================
@@ -4798,8 +4798,6 @@ def hrm_human_resource_controller():
         if method in ("form", "lookup"):
             return True
         elif method == "summary":
-            settings.ui.filter_auto_submit = 750
-            settings.ui.report_auto_submit = 750
             s3.crud_strings["hrm_human_resource"]["title_list"] = T("Staff & Volunteers")
             filter_widgets = [
                 S3TextFilter(["person_id$first_name",
@@ -4835,6 +4833,14 @@ def hrm_human_resource_controller():
                                 hidden=True,
                                 ),
                 ]
+            # @ToDo
+            #if settings.get_org_regions():
+            #    filter_widgets.insert(2,
+            #        S3OptionsFilter("organisation_id.region_id",
+            #                        label = T("Region"),
+            #                        widget="multiselect",
+            #                        hidden=True,
+            #                        ))
             if settings.get_hrm_teams():
                 filter_widgets.append(
                     S3OptionsFilter("group_membership.group_id",
@@ -4852,6 +4858,9 @@ def hrm_human_resource_controller():
                              "site_id",
                              "department_id",
                              ]
+            # @ToDo
+            #if settings.get_org_regions():
+            #   report_fields.append()
 
             report_options = Storage(
                 rows=report_fields,
@@ -4901,7 +4910,14 @@ def hrm_human_resource_controller():
 
         if r.interactive:
             if method == "create" and not r.component:
-                redirect(URL(f="volunteer",
+                request = current.request
+                if request.controller == "vol":
+                    c = "vol"
+                    f = "volunteer"
+                else:
+                    c = "hrm"
+                    f = "staff"
+                redirect(URL(c=c, f=f,
                              args=request.args,
                              vars=request.vars))
             elif method == "delete":
@@ -4911,7 +4927,7 @@ def hrm_human_resource_controller():
                 # Don't use AddPersonWidget here
                 from gluon.sqlhtml import OptionsWidget
                 field = r.table.person_id
-                field.requires = IS_ONE_OF(db, "pr_person.id",
+                field.requires = IS_ONE_OF(current.db, "pr_person.id",
                                            label = field.represent)
                 field.widget = OptionsWidget.widget
             elif r.id:
@@ -5256,7 +5272,7 @@ def hrm_training_controller():
 
     def prep(r):
         if r.interactive or \
-           r.extension.lower() == "aadata":
+           r.extension == "aadata":
             # Suitable list_fields
             T = current.T
             list_fields = ["course_id",

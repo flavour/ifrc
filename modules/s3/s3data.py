@@ -420,20 +420,25 @@ class S3DataTable(object):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def listFormats(id, rfields=None, permalink=None):
+    def listFormats(id, rfields=None, permalink=None, base_url=None):
         """
             Calculate the export formats that can be added to the table
 
-            @param id: The unique dataTable ID
-            @param rfields: optional list of rfields
+            @param id: the unique dataTable ID
+            @param rfields: optional list of field selectors for exports
+            @param permalink: search result URL
+            @param base_url: the base URL of the datatable (without
+                             method or query vars) to construct format URLs
         """
 
         T = current.T
         s3 = current.response.s3
         request = current.request
 
+        if base_url is None:
+            base_url = request.url
+
         # @todo: this needs rework
-        #        - formatRequest must remove the "search" method
         #        - other data formats could have other list_fields,
         #          hence applying the datatable sorting/filters is
         #          not transparent
@@ -441,16 +446,16 @@ class S3DataTable(object):
             end = s3.datatable_ajax_source.find(".aadata")
             default_url = s3.datatable_ajax_source[:end] # strip '.aadata' extension
         else:
-            default_url = request.url
+            default_url = base_url
 
         # Keep any URL filters
-        vars = request.get_vars
-        if vars:
-            default_url = "%s?" % default_url
-            for var in vars:
-                default_url = "%s%s=%s&" % (default_url, var, vars[var])
+        get_vars = request.get_vars
+        if get_vars:
+            query = "&".join("%s=%s" % (k, v) for k, v in get_vars.items())
+            default_url = "%s?%s" % (default_url, query)
 
-        div = DIV(_class='list_formats')
+        div = DIV(_id = "%s_list_formats" % id, # Used by s3.filter.js to update URLs
+                  _class = "list_formats")
         if permalink is not None:
             link = A(T("Link to this result"),
                      _href=permalink,
@@ -460,7 +465,7 @@ class S3DataTable(object):
 
         export_formats = current.deployment_settings.get_ui_export_formats()
         if export_formats:
-            div.append("%s:" % current.T("Export to"))
+            div.append("%s:" % current.T("Export as"))
             iconList = []
             formats = s3.formats
             EXPORT = T("Export in %(format)s format")
@@ -539,6 +544,8 @@ class S3DataTable(object):
             @param custom_actions: custom actions as list of dicts like
                                    {"label":label, "url":url, "_class":class},
                                    will be appended to the default actions
+
+            @ToDo: DRY with S3CRUD.action_buttons()
         """
 
         from s3crud import S3CRUD
@@ -562,26 +569,33 @@ class S3DataTable(object):
             c = resource.prefix
             f = resource.name
 
+        tablename = resource.tablename
+        get_config = current.s3db.get_config
+
         # "Open" button
-        if has_permission("update", table) and \
+        editable = get_config(tablename, "editable", True)
+        if editable and has_permission("update", table) and \
            not ownership_required("update", table):
             update_url = URL(c=c, f=f, args=args + ["update"])
-            S3CRUD.action_button(labels.UPDATE, update_url)
+            S3CRUD.action_button(labels.UPDATE, update_url,
+                                 _class="action-btn edit")
         else:
             read_url = URL(c=c, f=f, args=args)
-            S3CRUD.action_button(labels.READ, read_url)
-        # Delete action
+            S3CRUD.action_button(labels.READ, read_url,
+                                 _class="action-btn read")
+
+        # Delete button
         # @todo: does not apply selective action (renders DELETE for
         #        all items even if the user is only permitted to delete
         #        some of them) => should implement "restrict", see
         #        S3CRUD.action_buttons
-        deletable = current.s3db.get_config(resource.tablename, "deletable",
-                                            True)
+        deletable = get_config(tablename, "deletable", True)
         if deletable and \
            has_permission("delete", table) and \
            not ownership_required("delete", table):
-            delete_url = URL(c=c, f=f, args = args + ["delete"])
-            S3CRUD.action_button(labels.DELETE, delete_url)
+            delete_url = URL(c=c, f=f, args=args + ["delete"])
+            S3CRUD.action_button(labels.DELETE, delete_url,
+                                 _class="delete-btn")
 
         # Append custom actions
         if custom_actions:
@@ -642,6 +656,8 @@ class S3DataTable(object):
                                      two types are supported, 'individulal' and 'accordion'
                    dt_group_types: The type of indicator for groups that can be 'shrunk'
                                    Permitted valies are: 'icon' (the default) 'text' and 'none'
+                   dt_base_url: base URL to construct export format URLs, resource
+                                default URL without any URL method or query part
             @global current.response.s3.actions used to get the RowActions
         """
 
@@ -721,8 +737,10 @@ class S3DataTable(object):
         form = FORM()
         if not s3.no_formats and len(html) > 0:
             permalink = attr.get("dt_permalink", None)
+            base_url = attr.get("dt_base_url", None)
             form.append(S3DataTable.listFormats(id, rfields,
-                                                permalink=permalink))
+                                                permalink=permalink,
+                                                base_url=base_url))
         form.append(html)
         # Add the configuration details for this dataTable
         form.append(INPUT(_type="hidden",
@@ -1916,44 +1934,46 @@ class S3PivotTable(object):
                   "breakdown": str(T("Breakdown")),
                  }
 
-        # Layer title
-        layer_title = None
+        # Layer label
+        layer_label = None
+        field_label = None
+        
         report_options = resource.get_config("report_options", None)
-
         if report_options and "fact" in report_options:
+            # Custom label from report options?
             
-            # Custom layer title from report options?
             import re
             layer_pattern = re.compile("([a-zA-Z]+)\((.*)\)\Z")
+            
             prefix = resource.prefix_selector
             selector = prefix(field)
+            
             for item in report_options["fact"]:
                 if type(item) is tuple:
-                    if isinstance(item[0], lazyT):
-                        opt = [item]
-                    else:
-                        opt = list(item)
-                else:
-                    opt = [item]
-                if isinstance(opt[-1], lazyT):
-                    s, m = opt[:2] if len(opt) > 2 else (opt[0], None)
-                    if isinstance(s, tuple):
-                        s = s[-1]
+                    label, s = item
                     match = layer_pattern.match(s)
+                    
                     if match is not None:
                         s, m = match.group(2), match.group(1)
-                    if not m:
-                        continue
-                    elif prefix(s) == selector and m == method:
-                        layer_title = s3_unicode(opt[-1])
-                        break
+                    else:
+                        m = None
+                    if prefix(s) == selector:
+                        if m == method:
+                            # Specific layer label
+                            layer_label = s3_unicode(label)
+                            break
+                        else:
+                            # Field label
+                            field_label = label
                         
-        if layer_title is None:
+        if layer_label is None:
             # Construct label from field and method
-            fname = get_label(rfields, field, resource, "fact")
-            mname = get_mname(method)
-            layer_title = "%s (%s)" % (fname, mname)
-        labels["layer"] = layer_title
+            if field_label is None:
+                field_label = get_label(rfields, field, resource, "fact")
+            method_label = get_mname(method)
+            layer_label = "%s (%s)" % (field_label, method_label)
+            
+        labels["layer"] = layer_label
 
         # Rows title
         if rows_dim:

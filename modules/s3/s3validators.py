@@ -985,16 +985,24 @@ class IS_LOCATION(Validator):
         level = self.level
         if level == "L0":
             # Use cached countries. This returns name if id is for a country.
-            ok = current.gis.get_country(value)
+            try:
+                location_id = int(value)
+            except ValueError:
+                ok = False
+            else:
+                ok = current.gis.get_country(location_id)
         else:
             db = current.db
             table = db.gis_location
             query = (table.id == value) & (table.deleted == False)
             if level:
-                if isinstance(level, list):
+                if not hasattr(level, "strip") and \
+                       (hasattr(level, "__getitem__") or \
+                        hasattr(level, "__iter__")):
+                    # List or Tuple
                     if None in level:
                         # None needs special handling
-                        level.remove(None)
+                        level = [l for l in level if l is not None]
                         query &= ((table.level.belongs(level)) | \
                                   (table.level == None))
                     else:
@@ -1587,7 +1595,7 @@ class IS_LOCATION_SELECTOR2(Validator):
     """
 
     def __init__(self,
-                 levels=["L1", "L2", "L3"],
+                 levels=("L1", "L2", "L3"),
                  error_message = None,
                  ):
 

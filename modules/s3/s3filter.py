@@ -56,7 +56,7 @@ from s3rest import S3Method
 from s3resource import S3FieldSelector, S3ResourceField, S3URLQuery
 from s3utils import s3_unicode, S3TypeConverter
 from s3validators import *
-from s3widgets import S3DateWidget, S3DateTimeWidget, S3GroupedOptionsWidget, S3MultiSelectWidget, S3OrganisationHierarchyWidget, S3RadioOptionsWidget, s3_grouped_checkboxes_widget
+from s3widgets import S3DateWidget, S3DateTimeWidget, S3GroupedOptionsWidget, S3MultiSelectWidget, S3OrganisationHierarchyWidget, S3RadioOptionsWidget, s3_grouped_checkboxes_widget, S3SelectChosenWidget
 
 # =============================================================================
 class S3FilterWidget(object):
@@ -907,7 +907,12 @@ class S3LocationFilter(S3FilterWidget):
             ids = set()
             for row in rows:
                 _row = getattr(row, "gis_location") if joined else row
-                path = _row.path.split("/")
+                path = _row.path
+                if path:
+                    path = path.split("/")
+                else:
+                    # Build it
+                    path = current.gis.update_location_tree(_row)
                 if path:
                     ids |= set(path)
             # Build lookup table for name_l10n
@@ -1143,6 +1148,9 @@ class S3OptionsFilter(S3FilterWidget):
                     filter = opts.get("filter", False),
                     header = opts.get("header", False),
                     selectedList = opts.get("selectedList", 3))
+        elif widget_type == "chosen":
+            widget_class = "chosen-filter-widget"
+            w = S3SelectChosenWidget()
         # Radio is just GroupedOpts with multiple=False
         #elif widget_type == "radio":
         #    widget_class = "radio-filter-widget"
@@ -1418,6 +1426,9 @@ class S3FilterForm(object):
         if not form_id:
             form_id = "filter-form"
         attr["_id"] = form_id
+
+        # Prevent issues with Webkit-based browsers & Back buttons
+        attr["_autocomplete"] = "off"
 
         opts = self.opts
 

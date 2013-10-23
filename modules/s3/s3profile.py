@@ -77,6 +77,8 @@ class S3Profile(S3CRUD):
             @param attr: controller attributes for the request
         """
 
+        response = current.response
+
         tablename = self.tablename
         get_config = current.s3db.get_config
 
@@ -87,73 +89,86 @@ class S3Profile(S3CRUD):
                 title = r.record.name
             except:
                 title = current.T("Profile Page")
+        elif callable(title):
+            title = title(r)
 
         # Page Header
         header = get_config(tablename, "profile_header")
         if not header:
             header = H2(title, _class="profile_header")
+        elif callable(header):
+            header = header(r)
 
-        output = dict(title=title,
-                      header=header)
+        output = dict(title=title, header=header)
 
         # Get the page widgets
         widgets = get_config(tablename, "profile_widgets")
+        if widgets:
 
-        # Index the widgets by their position in the config
-        for index, widget in enumerate(widgets):
-            widget["index"] = index
-            
-        if r.representation == "dl":
-            # Ajax-update of one datalist
-            get_vars = r.get_vars
-            index = r.get_vars.get("update", None)
-            if index:
-                try:
-                    index = int(index)
-                except ValueError:
-                    datalist = ""
-                else:
-                    # @ToDo: Check permissions to the Resource & do something different if no permission
-                    datalist = self._datalist(r, widgets[index], **attr)
-            output["item"] = datalist
-        else:
-            # Default page-load
-            rows = []
-            if widgets:
-                append = rows.append
-                odd = True
-                for widget in widgets:
-                    w_type = widget["type"]
-                    if odd:
-                        row = DIV(_class="row profile")
-                    colspan = widget.get("colspan", 1)
-                    if w_type == "map":
-                        row.append(self._map(r, widget, **attr))
-                        if colspan == 2:
-                            append(row)
-                    elif w_type == "comments":
-                        row.append(self._comments(r, widget, **attr))
-                        if colspan == 2:
-                            append(row)
-                    elif w_type == "datalist":
-                        row.append(self._datalist(r, widget, **attr))
-                        if colspan == 2:
-                            append(row)
+            # Index the widgets by their position in the config
+            for index, widget in enumerate(widgets):
+                widget["index"] = index
+
+            if r.representation == "dl":
+                # Ajax-update of one datalist
+                get_vars = r.get_vars
+                index = r.get_vars.get("update", None)
+                if index:
+                    try:
+                        index = int(index)
+                    except ValueError:
+                        datalist = ""
                     else:
-                        raise
-                    if odd:
-                        odd = False
-                    else:
-                        odd = True
-                        append(row)
+                        # @ToDo: Check permissions to the Resource & do
+                        # something different if no permission
+                        datalist = self._datalist(r, widgets[index], **attr)
+                output["item"] = datalist
             else:
-                # Method not supported for this resource
-                # @ToDo Some kind of 'Page not Configured'?
-                r.error(405, r.ERROR.BAD_METHOD)
+                # Default page-load
+                rows = []
+                append = rows.append
+                row = None
+                for widget in widgets:
 
-            output["rows"] = rows
+                    # Render the widget
+                    w_type = widget["type"]
+                    if w_type == "map":
+                        w = self._map(r, widget, **attr)
+                    elif w_type == "comments":
+                        w = self._comments(r, widget, **attr)
+                    elif w_type == "datalist":
+                        w = self._datalist(r, widget, **attr)
+                    else:
+                        if response.s3.debug:
+                            raise SyntaxError("Unsupported widget type %s" %
+                                              w_type)
+                        else:
+                            # ignore
+                            continue
 
-            current.response.view = self._view(r, "profile.html")
+                    colspan = widget.get("colspan", 1)
+                    if colspan > 1 and row:
+                        # Close previous row
+                        append(row)
+                        row = None
+                        
+                    if row is None:
+                        # Start new row
+                        row = DIV(_class="row profile")
+                        
+                    # Append widget to row
+                    row.append(w)
+                    
+                    if colspan > 1 or len(row) > 1:
+                        # Close this row
+                        append(row)
+                        row = None
+
+                output["rows"] = rows
+                response.view = self._view(r, "profile.html")
+
+        else:
+            output["rows"] = []
 
         return output
 
@@ -259,7 +274,7 @@ class S3Profile(S3CRUD):
         listid = "profile-list-%s-%s" % (tablename, widget["index"])
 
         # Page size
-        pagesize = 4
+        pagesize = widget.get("pagesize", 4)
         representation = r.representation
         if representation == "dl":
             # Ajax-update
@@ -352,15 +367,19 @@ class S3Profile(S3CRUD):
             c, f = tablename.split("_", 1)
             c = widget.get("create_controller", c)
             f = widget.get("create_function", f)
-            create = A(I(_class="icon icon-plus-sign small-add"),
-                       _href=URL(c=c, f=f, args=["create.popup"], vars=vars),
-                       _class="s3_modal",
-                       _title=title_create,
-                       )
+            add_url = URL(c=c, f=f, args=["create.popup"], vars=vars)
+            if callable(insert):
+                create = insert(r, title_create, add_url)
+            else:
+                create = A(I(_class="icon icon-plus-sign small-add"),
+                        _href=add_url,
+                        _class="s3_modal",
+                        _title=title_create,
+                        )
         else:
             create = ""
 
-        if numrows > pagesize:
+        if pagesize and numrows > pagesize:
             # Button to display the rest of the records in a Modal
             more = numrows - pagesize
             vars = {}
