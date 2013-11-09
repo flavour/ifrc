@@ -37,9 +37,6 @@ def mission():
             next_url = r.url(component="", method="profile")
             if r.component_name == "alert":
                 s3db.configure(tablename,
-                               # Open up the Select page
-                               # @ToDo: Integrate this into main page
-                               # Widget? Custom Create method?
                                create_next=URL(f="alert",
                                                args=["[id]", "select"]),
                                update_next=next_url,
@@ -94,9 +91,73 @@ def mission():
                               # (rheader includes the title)
                               notitle=lambda r: {"title": ""} \
                                              if r.component else None,
-                              rheader=s3db.deploy_mission_rheader)
+                              rheader=s3db.deploy_rheader)
 
 # =============================================================================
+def human_resource():
+    """
+        RESTful CRUD Controller
+
+        @todo: use for imports of RDRT members (with automatic application)
+    """
+
+    # Tweak settings for RDRT
+    settings.hrm.staff_experience = True
+    settings.hrm.use_skills = True
+    settings.search.filter_manager = True
+
+    # Add application component
+    # @todo: move into HRM model
+    s3db.add_component("deploy_human_resource_application",
+                       hrm_human_resource="human_resource_id")
+
+    q = s3base.S3FieldSelector("human_resource_application.active") == True
+    output = s3db.hrm_human_resource_controller(extra_filter=q)
+    if isinstance(output, dict) and "title" in output:
+        output["title"] = T("RDRT Members")
+    return output
+
+# -----------------------------------------------------------------------------
+def person():
+    """
+        'Members' RESTful CRUD Controller
+        - currently used as "member profile"
+
+        @todo: replace by S3Profile page
+    """
+
+    # Tweak settings for RDRT
+    settings.hrm.staff_experience = "experience"
+    settings.hrm.vol_experience = "experience"
+    settings.hrm.use_skills = True
+    settings.search.filter_manager = True
+
+    return s3db.hrm_person_controller()
+
+# -----------------------------------------------------------------------------
+def application():
+    """
+        Custom workflow to manually create standing applications
+        for deployments (for staff/volunteers)
+    """
+
+    # Tweak settings for RDRT
+    settings.hrm.staff_experience = True
+    settings.hrm.use_skills = True
+    settings.search.filter_manager = True
+
+    def prep(r):
+        if not r.method:
+            r.method = "select"
+        if r.method == "select":
+            r.custom_action = s3db.deploy_application
+        return True
+    s3.prep = prep
+
+    #return s3db.hrm_human_resource_controller()
+    return s3_rest_controller("hrm", "human_resource")
+
+# -----------------------------------------------------------------------------
 def human_resource_assignment():
     """ RESTful CRUD Controller """
 
@@ -107,19 +168,39 @@ def human_resource_assignment():
     s3.prep = prep
 
     return s3_rest_controller()
-    
+
 # =============================================================================
 def alert():
     """ RESTful CRUD Controller """
 
+    # Tweak settings for RDRT
+    settings.hrm.staff_experience = True
+    settings.hrm.use_skills = True
+    settings.search.filter_manager = True
+    
+    # Add application component
+    # @todo: move into HRM model
+    s3db.add_component("deploy_human_resource_application",
+                       hrm_human_resource="human_resource_id")
+
     def prep(r):
         if r.component:
-            if r.component_name == "response":
+            if r.component.alias == "select":
+                if not r.method:
+                    r.method = "select"
+                if r.method == "select":
+                    r.custom_action = s3db.deploy_alert_select_recipients
+            elif r.component_name == "response":
                 s3db.configure(r.component.tablename,
                                deletable = False,
                                editable = False,
                                insertable = False,
                                )
+            elif r.component_name == "recipient":
+                if r.record.message_id:
+                    s3db.configure(r.component.tablename,
+                                   insertable=False,
+                                   deletable=False)
         else:
             if r.record:
                 if r.record.message_id:
@@ -148,106 +229,42 @@ def alert():
     def postp(r, output):
         if r.component:
             if r.component_name == "recipient":
-                # Open should open the Member, not the Link
-                # Delete should remove the Link, not the Member
+                # Open should open the member profile, not the link
                 s3.actions = [dict(label=str(READ),
                                    _class="action-btn read",
                                    url=URL(f="person",
-                                           vars={"human_resource.id":"[id]"})),
-                              dict(label=str(DELETE),
-                                   _class="delete-btn",
-                                   url=URL(f="alert",
-                                           args=[r.id, "recipient", "[id]", "delete"])),
-                              ]
+                                           vars={"human_resource.id":"[id]"}))]
+                if not r.record.message_id:
+                    # Delete should remove the Link, not the Member
+                    s3.actions.append(dict(label=str(DELETE),
+                                           _class="delete-btn",
+                                           url=URL(f="alert",
+
+
+                                                   args=[r.id,
+                                                         "recipient",
+                                                         "[id]",
+                                                         "delete"])))
         else:
             # Delete should only be possible if the Alert hasn't yet been sent
             table = r.table
-            query = (table.message_id == None)
-            rows = db(query).select(table.id)
+            rows = db(table.message_id == None).select(table.id)
             restrict = [str(row.id) for row in rows]
             s3.actions = [dict(label=str(READ),
                                _class="action-btn read",
-                               url=URL(f="alert", args="[id]")),
+                               url=URL(f="alert",
+                                       args="[id]")),
                           dict(label=str(DELETE),
                                _class="delete-btn",
                                restrict=restrict,
                                url=URL(f="alert",
-                                       args=[r.id, "delete"])),
+                                       args=["[id]", "delete"])),
                           ]
         return output
     s3.postp = postp
 
     return s3_rest_controller(rheader=s3db.deploy_rheader)
 
-# =============================================================================
-def member():
-    """
-        RESTful CRUD Controller (limited to RDRT members)
-
-        @todo: merge into human_resource controller
-    """
-
-    # Tweak settings for RDRT
-    settings.hrm.staff_experience = True
-    settings.hrm.use_skills = True
-    settings.search.filter_manager = True
-
-    s3db.add_component("deploy_human_resource_application",
-                       hrm_human_resource="human_resource_id")
-
-    q = s3base.S3FieldSelector("human_resource_application.active") == True
-    output = s3db.hrm_human_resource_controller(extra_filter=q)
-    if isinstance(output, dict) and "title" in output:
-        output["title"] = T("RDRT Members")
-    return output
-
-# =============================================================================
-def human_resource():
-    """
-        RESTful CRUD Controller, currently used for member profiles
-
-        @todo: filter to RDRT members only (see member-controller)
-        @todo: use for imports of RDRT members (with automatic application)
-    """
-
-    # Tweak settings for RDRT
-    settings.hrm.staff_experience = True
-    settings.hrm.use_skills = True
-    settings.search.filter_manager = True
-
-    return s3db.hrm_human_resource_controller()
-    
-# =============================================================================
-def add_members():
-    """
-        Custom worklfow to manually add RDRT members
-
-        @todo: generalize ("member" term is RDRT specific)
-    """
-
-    def prep(r):
-        if not r.method:
-            r.method = "select"
-        r.custom_action = s3db.deploy_add_members
-        return True
-    s3.prep = prep
-
-    return s3_rest_controller("hrm", "human_resource")
-
-# =============================================================================
-def person():
-    """
-        'Members' RESTful CRUD Controller
-    """
-
-    # Tweak settings for RDRT
-    settings.hrm.staff_experience = "experience"
-    settings.hrm.vol_experience = "experience"
-    settings.hrm.use_skills = True
-    settings.search.filter_manager = True
-
-    return s3db.hrm_person_controller()
-    
 # -----------------------------------------------------------------------------
 def email_inbox():
     """
@@ -270,6 +287,8 @@ def email_inbox():
     table = s3db.msg_email
     s3.filter = (table.inbound == True)
     table.inbound.readable = False
+    table.channel_id.readable = False
+    table.to_address.readable = False
 
     # CRUD Strings
     s3.crud_strings[tablename] = Storage(
@@ -286,7 +305,89 @@ def email_inbox():
                    insertable=False,
                    editable=False)
 
+    s3db.set_method("msg", "email",
+                    method="link",
+                    action=link_response
+                    )
+
+    def postp(r, output):
+        if r.interactive:
+            # Normal Action Buttons
+            s3_action_buttons(r)
+            # Custom Action Buttons
+            s3.actions += [dict(label=str(T("Link to Mission")),
+                                _class="action-btn link",
+                                url=URL(f="email_inbox",
+                                        args=["[id]", "link"])),
+                           ]
+
+        return output
+    s3.postp = postp
+
     return s3_rest_controller("msg", "email")
+
+# -----------------------------------------------------------------------------
+def link_response(r, **attr):
+    """
+        Manually link an email to a Mission
+    """
+
+    if r.http == "POST":
+        session.confirmation = T("Message Linked")
+        redirect(URL(f="email_inbox"))
+
+    formstyle = s3.crud.formstyle
+    if not callable(formstyle):
+        # Unsupported
+        raise
+
+    form = DIV()
+    message_id = r.record.message_id
+    htable = s3db.hrm_human_resource
+    ptable = db.pr_person
+    ctable = s3db.pr_contact
+    query = (ctable.contact_method == "EMAIL") & \
+            (ctable.value == r.record.from_address) & \
+            (ctable.pe_id == ptable.pe_id) & \
+            (ptable.id == htable.person_id)
+    hr = db(query).select(htable.id,
+                          limitby=(0, 1)).first()
+    if hr:
+        # Show read-only view
+        pass
+    else:
+        # @ToDo: Search based on Name?
+        if not hr:
+            # Select HR
+            pass
+
+    comment = None
+    # Show Dropdown for Missions
+    id = "mission_id"
+    label = T("Mission")
+    widget = SELECT()
+    row = formstyle(id, label, widget, comment, hidden=False)
+    form.append(row)
+
+    # Show Message
+    id = "subject"
+    label = T("Subject")
+    widget = INPUT(_value=r.record.subject,
+                   _readonly=True)
+    row = formstyle(id, label, widget, comment, hidden=False)
+    form.append(row)
+    id = "body"
+    label = T("Message")
+    widget = TEXTAREA(_value=r.record.body,
+                      _readonly=True)
+    row = formstyle(id, label, widget, comment, hidden=False)
+    form.append(row)
+
+    output = dict(title=T("Link Response to Mission"),
+                  form=form,
+                  )
+    response.view = "deploy/link_response.html"
+    return output
 
 # -----------------------------------------------------------------------------
 def email_channel():
