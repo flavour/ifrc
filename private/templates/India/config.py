@@ -38,7 +38,7 @@ datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
 settings.auth.registration_requires_approval = True
 settings.auth.registration_requires_verification = False
 settings.auth.registration_requests_organisation = True
-settings.auth.registration_organisation_required = True
+#settings.auth.registration_organisation_required = True
 settings.auth.registration_requests_site = False
 
 # Approval emails get sent to all admins
@@ -133,7 +133,7 @@ settings.L10n.thousands_separator = ","
 # - we want this on when running s3translate but off in normal usage as we use the English names to lookup icons in render_posts
 #settings.L10n.translate_cms_series = True
 # Uncomment this to Translate Location Names
-settings.L10n.translate_gis_location = True
+#settings.L10n.translate_gis_location = True
 
 # Restrict the Location Selector to just certain countries
 settings.gis.countries = ["IN"]
@@ -2638,7 +2638,7 @@ def customize_gis_location(**attr):
                 s3.dl_pagelength = 12
                 s3.dl_rowsize = 2
 
-                # Just show specific States
+                # Just show In L1s
                 s3.filter = (table.L0 == "India") & (table.level == "L1")
                 # Default 5 triggers an AJAX call, we should load all by default
                 s3.dl_pagelength = 13

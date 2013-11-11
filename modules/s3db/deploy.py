@@ -258,6 +258,9 @@ class S3DeploymentModel(S3Model):
         add_component("deploy_alert",
                       deploy_mission="mission_id")
 
+        add_component("deploy_response",
+                      deploy_mission="mission_id")
+
         # CRUD Strings
         crud_strings[tablename] = Storage(
             title_create = T("New Mission"),
@@ -623,7 +626,8 @@ class S3DeploymentAlertModel(S3Model):
         T = current.T
         record = r.record
         # Always redirect to the Mission Profile
-        next_url = URL(f="mission", args=[record.mission_id, "profile"])
+        mission_id = record.mission_id
+        next_url = URL(f="mission", args=[mission_id, "profile"])
 
         # Check whether the alert has already been sent
         # - alerts should be read-only after creation
@@ -647,9 +651,9 @@ class S3DeploymentAlertModel(S3Model):
 
         # Send Message
 
-        # Embed the alert_id to parse replies
+        # Embed the mission_id to parse replies
         # = @ToDo: Use a Message Template to add Footer (very simple one for RDRT)
-        message = "%s\nalert_id:%s:" % (record.body, alert_id)
+        message = "%s\n:mission_id:%s:" % (record.body, mission_id)
 
         # Lookup from_address
         # @ToDo: Allow multiple channels to be defined &
@@ -752,10 +756,11 @@ def deploy_rheader(r, tabs=[], profile=False):
                                                     prefix="header",
                                                     columns=columns)
                 title = "%s: %s" % (title, record.name)
-                data = render("location_id",
-                            "code",
-                            "created_on",
-                            "status")
+                data = render("event_type_id",
+                              "location_id",
+                              "code",
+                              "created_on",
+                              "status")
                 if profile:
                     crud_button = S3CRUD.crud_button
                     edit_btn = crud_button(current.T("Edit"),
