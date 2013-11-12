@@ -491,6 +491,13 @@ class S3OrganisationModel(S3Model):
                           org_organisation=dict(name="summary",
                                                 joinby="organisation_id"))
 
+        # Needs
+        add_component("req_organisation_needs",
+                      org_organisation = dict(name="needs",
+                                              joinby="organisation_id",
+                                              multiple=False,
+                                              ))
+
         # Requests
         #add_component("req_req",
         #              org_organisation = "donated_by_id")
@@ -1945,6 +1952,13 @@ class S3SiteModel(S3Model):
         # Procurement Plans
         add_component("proc_plan",
                       org_site="site_id")
+
+        # Needs
+        add_component("req_site_needs",
+                      org_site = dict(name="needs",
+                                      joinby="site_id",
+                                      multiple=False,
+                                      ))
 
         # Requests
         add_component("req_req",

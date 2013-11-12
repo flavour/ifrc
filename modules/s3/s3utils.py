@@ -996,10 +996,17 @@ def s3_orderby_fields(table, orderby, expr=False):
         elif isinstance(item, str):
             fn, direction = (item.strip().split() + ["asc"])[:2]
             tn, fn = ([tablename] + fn.split(".", 1))[-2:]
-            try:
-                f = s3db.table(tn)[fn]
-            except (AttributeError, KeyError):
-                continue
+            if tn:
+                try:
+                    f = s3db.table(tn)[fn]
+                except (AttributeError, KeyError):
+                    continue
+            else:
+                if current.response.s3.debug:
+                    raise SyntaxError('Tablename prefix required for orderby="%s"' % item)
+                else:
+                    # Ignore
+                    continue
             if expr and direction[:3] == "des":
                 f = ~f
         else:
