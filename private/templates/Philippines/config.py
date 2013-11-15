@@ -36,11 +36,16 @@ datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
 # System Settings
 # -----------------------------------------------------------------------------
 # Authorization Settings
-# Should users be allowed to register themselves?
-#settings.security.self_registration = False # Disabled in Prod
-settings.auth.registration_requires_approval = True
-settings.auth.registration_requires_verification = False
-settings.auth.registration_requests_organisation = True
+# Users can self-register
+#settings.security.self_registration = False
+# Users need to verify their email
+settings.auth.registration_requires_verification = True
+# Users don't need to be approved
+#settings.auth.registration_requires_approval = True
+# Organisation links are either done automatically
+# - by registering with official domain of Org
+# or Manually by Call Center staff
+#settings.auth.registration_requests_organisation = True
 #settings.auth.registration_organisation_required = True
 settings.auth.registration_requests_site = False
 
@@ -60,12 +65,12 @@ settings.auth.show_utc_offset = False
 
 settings.auth.show_link = False
 
-settings.auth.record_approval = True
-settings.auth.record_approval_required_for = ["org_organisation"]
+#settings.auth.record_approval = True
+#settings.auth.record_approval_required_for = ["org_organisation"]
 
 # -----------------------------------------------------------------------------
 # Security Policy
-#settings.security.policy = 6 # Realms
+settings.security.policy = 5 # Apply Controller, Function and Table ACLs
 settings.security.map = True
 
 # Owner Entity
@@ -1648,12 +1653,30 @@ def customize_org_facility_fields():
     """
 
     s3db = current.s3db
+    tablename = "org_facility"
     table = s3db.org_facility
     table.location_id.represent = s3db.gis_LocationRepresent(sep=" | ")
     table.modified_by.represent = s3_auth_user_represent_name
     table.modified_on.represent = datetime_represent
     table.comments.comment = None
     table.phone1.label = T("Phone")
+
+    # CRUD strings
+    ADD_FAC = T("Add Site")
+    current.response.s3.crud_strings[tablename] = Storage(
+        title_create = ADD_FAC,
+        title_display = T("Site Details"),
+        title_list = T("Sites"),
+        title_update = T("Edit Site"),
+        title_search = T("Search Sites"),
+        subtitle_create = ADD_FAC,
+        label_list_button = T("List Sites"),
+        label_create_button = ADD_FAC,
+        label_delete_button = T("Delete Site"),
+        msg_record_created = T("Site Added"),
+        msg_record_modified = T("Site Updated"),
+        msg_record_deleted = T("Site Canceled"),
+        msg_list_empty = T("No Sites registered"))
 
     list_fields = ["name",
                    "site_facility_type.facility_type_id",
@@ -1703,7 +1726,7 @@ def customize_org_facility_fields():
                                 "comments",
                                 )
 
-    s3db.configure("org_facility",
+    s3db.configure(tablename,
                    crud_form = crud_form,
                    list_fields = list_fields,
                    )
@@ -2378,11 +2401,11 @@ def customize_pr_person(**attr):
                                             represent,
                                             orderby = "org_site.name")
             from s3layouts import S3AddResourceLink
-            site_field.comment = S3AddResourceLink(c="org", f="office",
+            site_field.comment = S3AddResourceLink(c="org", f="facility",
                                                    vars={"child": "site_id"},
-                                                   label=T("Add New Office"),
-                                                   title=T("Office"),
-                                                   tooltip=T("If you don't see the Office in the list, you can add a new one by clicking link 'Add New Office'."))
+                                                   label=T("Add New Site"),
+                                                   title=T("Site"),
+                                                   tooltip=T("If you don't see the Site in the list, you can add a new one by clicking link 'Add New Site'."))
 
             # Best to have no labels when only 1 field in the row
             s3db.pr_contact.value.label = ""
@@ -2394,6 +2417,7 @@ def customize_pr_person(**attr):
             hr_fields = ["organisation_id",
                          "job_title_id",
                          "site_id",
+                         "site_contact",
                          ]
             if r.method in ("create", "update"):
                 # Context from a Profile page?"
@@ -2430,6 +2454,7 @@ def customize_pr_person(**attr):
                            "last_name",
                            (T("Job Title"), "human_resource.job_title_id"),
                            (T("Site"), "human_resource.site_id"),
+                           (T("Site Contact"), "human_resource.site_contact"),
                            ]
             
             # Don't include Email/Phone for unauthenticated users
@@ -2626,6 +2651,8 @@ settings.req.requester_is_author = False
 #settings.req.comittter_is_author = False
 # Uncomment to allow Donations to be made without a matching Request
 #settings.req.commit_without_request = True
+# Set the Requester as being an HR for the Site if no HR record yet & as Site contact if none yet exists
+settings.req.requester_to_site = True
 
 def customize_req_req(**attr):
     """

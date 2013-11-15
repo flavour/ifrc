@@ -1349,16 +1349,19 @@ S3OptionsFilter({
     @staticmethod
     def req_onaccept(form):
         """
+            After DB I/O
         """
 
         db = current.db
         s3db = current.s3db
         request = current.request
         settings = current.deployment_settings
+        tablename = "req_req"
         table = s3db.req_req
+        form_vars = form.vars
 
-        id = form.vars.id
-        if "is_template" in form.vars and form.vars.is_template:
+        id = form_vars.id
+        if form_vars.get("is_template", None):
             is_template = True
             f = "req_template"
         else:
@@ -1377,9 +1380,56 @@ S3OptionsFilter({
                                                          )
                     db(table.id == id).update(req_ref = code)
 
-        # Configure the next page to go to based on the request type
-        tablename = "req_req"
+        if settings.get_req_requester_to_site():
+            requester_id = form_vars.get("requester_id", None)
+            if requester_id:
+                site_id = form_vars.get("site_id", None)
+                # If the requester has no HR record, then create one
+                hrtable = s3db.hrm_human_resource
+                query = (hrtable.person_id == requester_id)
+                exists = db(query).select(hrtable.id,
+                                          hrtable.organisation_id,
+                                          hrtable.site_id,
+                                          hrtable.site_contact,
+                                          limitby=(0, 1)
+                                          ).first()
+                if exists:
+                    if site_id and not exists.site_id:
+                        # Check that the Request site belongs to this Org
+                        stable = s3db.org_site
+                        site = db(stable.site_id == site_id).select(stable.organisation_id,
+                                                                    limitby=(0, 1)
+                                                                    ).first()
+                        # @ToDo: Think about branches
+                        if site and site.organisation_id == exists.organisation_id:
+                            # Set the HR record as being for this site
+                            exists.update(site_id = site_id)
+                            s3db.hrm_human_resource_onaccept(exists)
+                elif site_id:
+                    # Lookup the Org for the site
+                    stable = s3db.org_site
+                    site = db(stable.site_id == site_id).select(stable.organisation_id,
+                                                                limitby=(0, 1)
+                                                                ).first()
+                    # Is there already a site_contact for this site?
+                    ltable = s3db.hrm_human_resource_site
+                    query = (ltable.site_id == site_id) & \
+                            (ltable.site_contact == True)
+                    already = db(query).select(ltable.id,
+                                               limitby=(0, 1)
+                                               ).first()
+                    if already:
+                        site_contact = False
+                    else:
+                        site_contact = True
+                    hr_id = hrtable.insert(person_id = requester_id,
+                                           organisation_id = site.organisation_id,
+                                           site_id = site_id,
+                                           site_contact = site_contact,
+                                           )
+                    s3db.hrm_human_resource_onaccept(Storage(id=hr_id))
 
+        # Configure the next page to go to based on the request type
         if is_template:
             s3db.configure(tablename,
                            create_next = URL(c="req",
@@ -1392,8 +1442,8 @@ S3OptionsFilter({
         elif not settings.get_req_inline_forms():
             if table.type.default:
                 type = table.type.default
-            elif "type" in form.vars:
-                type = int(form.vars.type)
+            elif "type" in form_vars:
+                type = int(form_vars.type)
             else:
                 type = 1
             if type == 1 and settings.has_module("inv"):
@@ -2411,7 +2461,7 @@ class S3CommitModel(S3Model):
 
         ctable = s3db.req_commit
 
-        site_id = form_vars.get(site_id, None)
+        site_id = form_vars.get("site_id", None)
         if site_id:
             # Set location_id to location of site
             stable = s3db.org_site
@@ -3958,6 +4008,7 @@ def req_render_reqs(listid, resource, rfields, record,
                )
 
     # Edit Bar
+    T = current.T
     permit = current.auth.s3_has_permission
     table = db.req_req
     if permit("update", table, record_id=record_id):
@@ -3967,7 +4018,7 @@ def req_render_reqs(listid, resource, rfields, record,
                                vars={"refresh": listid,
                                      "record": record_id}),
                      _class="s3_modal",
-                     _title=current.T("Edit Request"),
+                     _title=T("Edit Request"),
                      )
     else:
         edit_btn = ""
@@ -3988,6 +4039,18 @@ def req_render_reqs(listid, resource, rfields, record,
     #if priority == 3:
     #    # Apply additional highlighting for High Priority
     #    item_class = "%s disaster" % item_class
+
+    commit_btn = A(I(" ", _class="icon icon-truck"),
+                   " ",
+                   T("DONATE"),
+                   _href=URL(c="req", f="commit",
+                             args=["create.popup"],
+                             vars={"req_id": record_id,
+                                   "refresh": listid},
+                             ),
+                   _class="s3_modal btn",
+                   _title=T("Donate to this Request"),
+                   )
 
     # Render the item
     item = DIV(DIV(card_label,
@@ -4014,6 +4077,9 @@ def req_render_reqs(listid, resource, rfields, record,
                                ),
                            _class="media",
                            ),
+                       DIV(commit_btn,
+                           _class="media pull-right",
+                           ),
                        _class="media-body",
                        ),
                    _class="media",
@@ -4036,6 +4102,15 @@ def req_customize_commit_fields():
     tablename = "req_commit"
     table = s3db.req_commit
 
+    request = current.request
+    if "create" in request.args:
+        req_id = request.get_vars.get("req_id", None)
+        if req_id:
+            table.req_id.default = req_id
+        elif not current.deployment_settings.get_req_commit_without_request():
+            current.session.error = T("Not allowed to Donate without matching to a Request!")
+            redirect(URL(c="req", f="req", args=["datalist"]))
+
     # CRUD strings
     #ADD_COMMIT = T("Make Donation")
     ADD_COMMIT = T("Add Donation")
@@ -4056,11 +4131,12 @@ def req_customize_commit_fields():
 
     field = table.organisation_id
     field.readable = True
-    field.writable = True
+    field.writable = False
 
     field = table.committer_id
-    field.requires = IS_ADD_PERSON_WIDGET2()
-    field.widget = S3AddPersonWidget2(controller="pr")
+    field.writable = False
+    #field.requires = IS_ADD_PERSON_WIDGET2()
+    #field.widget = S3AddPersonWidget2(controller="pr")
 
     # Which levels of Hierarchy are we using?
     hierarchy = current.gis.get_location_hierarchy()
@@ -4068,10 +4144,10 @@ def req_customize_commit_fields():
     if len(current.deployment_settings.get_gis_countries()) == 1:
         levels.remove("L0")
 
-    field = table.location_id
-    field.represent = s3db.gis_LocationRepresent(sep=" | ")
-    field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-    field.widget = S3LocationSelectorWidget2(levels=levels)
+    #field = table.location_id
+    #field.represent = s3db.gis_LocationRepresent(sep=" | ")
+    #field.requires = IS_LOCATION_SELECTOR2(levels=levels)
+    #field.widget = S3LocationSelectorWidget2(levels=levels)
 
     field = table.comments
     field.label = T("Donation")
@@ -4091,7 +4167,14 @@ def req_customize_commit_fields():
                    #"location_id",
                    ]
 
-    crud_form = S3SQLCustomForm(*list_fields)
+    user = current.auth.user
+    if not user or not user.organisation_id:
+        # Only a User representing an Org can commit for an Org
+        table.organisation_id.writable = False
+        crud_fields = [f for f in list_fields if f != "organisation_id"]
+        crud_form = S3SQLCustomForm(*crud_fields)
+    else:
+        crud_form = S3SQLCustomForm(*list_fields)
 
     filter_widgets = [
         S3TextFilter(["committer_id$first_name",
