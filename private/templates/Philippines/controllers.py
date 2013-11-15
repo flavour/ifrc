@@ -24,34 +24,44 @@ class index(S3CustomController):
         s3.jquery_ready.append('''$('#myCarousel').carousel()''')
 
         # Latest 4 Requests
-        from s3.s3resource import S3FieldSelector
         s3db = current.s3db
-        # Organisations
-        s3.customize_org_needs_fields()
-        layout = s3.render_org_needs # defined in config.py
-        listid = "org_reqs"
+        s3db.req_customize_req_fields()
+        listid = "latest_reqs"
+        layout = s3db.req_render_reqs
         limit = 4
-        list_fields = s3db.get_config("req_organisation_needs",
-                                      "list_fields")
+        list_fields = s3db.get_config("req_req", "list_fields")
 
-
-        resource = s3db.resource("req_organisation_needs")
+        resource = s3db.resource("req_req")
+        #resource.add_filter(S3FieldSelector("series_id$name") == "Request")
         # Order with most recent first
         orderby = "date desc"
-        output["org_reqs"] = latest_records(resource, layout, listid, limit, list_fields, orderby)
+        output["latest_reqs"] = latest_records(resource, layout, listid, limit, list_fields, orderby)
 
-        # Sites
-        s3.customize_site_needs_fields()
-        layout = s3.render_site_needs # defined in config.py
-        listid = "site_reqs"
-        limit = 4
-        list_fields = s3db.get_config("req_site_needs",
-                                      "list_fields")
+        # Latest 4 Offers
+        s3db.req_customize_commit_fields()
+        listid = "latest_offers"
+        layout = s3db.req_render_commits
+        #limit = 4
 
-        resource = s3db.resource("req_site_needs")
+        resource = s3db.resource("req_commit")
+        #resource.add_filter(S3FieldSelector("series_id$name") == "Offer")
         # Order with most recent first
-        orderby = "date desc"
-        output["site_reqs"] = latest_records(resource, layout, listid, limit, list_fields, orderby)
+        #orderby = "date desc"
+        output["latest_offers"] = latest_records(resource, layout, listid, limit, list_fields, orderby)
+
+        # What We Do
+        table = s3db.cms_post
+        ltable = s3db.cms_post_module
+        query = (ltable.module == "default") & \
+                (ltable.resource == "index") & \
+                (ltable.post_id == table.id) & \
+                (table.deleted != True)
+        item = current.db(query).select(table.body,
+                                        limitby=(0, 1)).first()
+        if item:
+            output["what_we_do"] = DIV(XML(item.body))
+        else:
+            output["what_we_do"] = ""
 
         self._view(THEME, "index.html")
         return output
@@ -93,16 +103,5 @@ def latest_records(resource, layout, listid, limit, list_fields, orderby):
         data = dl
 
     return data
-
-# =============================================================================
-class time(S3CustomController):
-    """ Custom page to display opportunities to donate Time """
-
-    # -------------------------------------------------------------------------
-    def __call__(self):
-        """ Main entry point, configuration """
-
-        self._view(THEME, "time.html")
-        return dict()
 
 # END =========================================================================

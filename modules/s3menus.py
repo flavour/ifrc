@@ -972,7 +972,6 @@ class S3OptionsMenu(object):
                       check=manager_mode)(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
                         M("Search Training Participants", f="training"),
                         M("Import Participant List", f="training", m="import"),
                     ),
@@ -1067,7 +1066,6 @@ class S3OptionsMenu(object):
                       check=manager_mode)(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
                         M("Search Training Participants", f="training"),
                         M("Import Participant List", f="training", m="import"),
                     ),
@@ -1224,8 +1222,7 @@ class S3OptionsMenu(object):
                         #M("Search Requested Items", f="req_item", m="search"),
                     ),
                     M("Commitments", c="req", f="commit", check=use_commit)(
-                        M("List All"),
-                        M("Search", m="search"),
+                        M("List All")
                     ),
                 )
 
@@ -1708,7 +1705,6 @@ class S3OptionsMenu(object):
                         M("New", m="create"),
                         M("List All"),
                         M("List Recurring Requests", f="req_template"),
-                        M("Search", m="search"),
                         M("Map", m="map"),
                         M("Report", m="report"),
                         M("Search All Requested Items", f="req_item",
@@ -1717,8 +1713,7 @@ class S3OptionsMenu(object):
                           m="search", check=req_skills),
                     ),
                     M("Commitments", f="commit", check=use_commit)(
-                        M("List All"),
-                        M("Search", m="search"),
+                        M("List All")
                     ),
                     M("Items", c="supply", f="item")(
                         M("New", m="create"),

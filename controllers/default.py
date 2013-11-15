@@ -108,6 +108,7 @@ def index():
         table = s3db.cms_post
         ltable = s3db.cms_post_module
         query = (ltable.module == module) & \
+                ((ltable.resource == None) | (ltable.resource == "index")) & \
                 (ltable.post_id == table.id) & \
                 (table.deleted != True)
         item = db(query).select(table.body,
@@ -232,8 +233,11 @@ def index():
                                       )
             s3.jquery_ready.append(
 '''$('#manage_facility_select').change(function(){
- $('#manage_facility_btn').attr('href',S3.Ap.concat('/default/site/',$('#manage_facility_select').val()))
-})''')
+ $('#manage_facility_btn').attr('href',S3.Ap.concat('/default/site/',$('#manage_facility_select').val()))})
+$('#manage_facility_btn').click(function(){
+if ( ($('#manage_facility_btn').attr('href').toString())===S3.Ap.concat('/default/site/None') )
+{$("#manage_facility_box").append("<div class='alert alert-error'>%s</div>")
+return false}})''' % (T("Please Select a Facility")))
         else:
             manage_facility_box = ""
 

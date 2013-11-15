@@ -337,7 +337,6 @@ class S3OptionsMenu(default.S3OptionsMenu):
                       check=manager_mode)(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
                         M("Search Training Participants", f="training"),
                         M("Import Participant List", f="training", m="import"),
                     ),
@@ -462,7 +461,6 @@ class S3OptionsMenu(default.S3OptionsMenu):
                       check=manager_mode)(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
                         M("Search Training Participants", f="training"),
                         M("Import Participant List", f="training", m="import"),
                     ),
@@ -640,8 +638,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         #M("Search Requested Items", f="req_item", m="search"),
                     ),
                     M("Commitments", c="req", f="commit", check=use_commit)(
-                        M("List All"),
-                        M("Search", m="search"),
+                        M("List All")
                     ),
                 )
 
@@ -714,7 +711,8 @@ class S3OptionsMenu(default.S3OptionsMenu):
                    ),
                    M("RDRT Members",
                      c="deploy", f="human_resource", m="summary")(
-                        M("Add RDRT Members", c="deploy", f="application", m="select"),
+                        M("Add Member", c="deploy", f="application", m="select"),
+                        M("Import Members", c="deploy", f="person", m="import"),
                    ),
                )
 

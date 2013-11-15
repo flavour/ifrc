@@ -159,6 +159,7 @@ class S3DeploymentModel(S3Model):
                                type="datalist",
                                list_fields = [
                                     "created_on",
+                                    "mission_id",
                                     "human_resource_id$id",
                                     "human_resource_id$person_id",
                                     "human_resource_id$organisation_id",
@@ -728,7 +729,7 @@ def deploy_rheader(r, tabs=[], profile=False):
 
         # Tabs
         tabs = [(T("Message"), None),
-                (T("Recipients (%(number)s)") %
+                (T("Recipients (%(number)s Total)") %
                    dict(number=recipients),
                  "recipient"),
                ]
@@ -738,7 +739,10 @@ def deploy_rheader(r, tabs=[], profile=False):
         rheader_tabs = s3_rheader_tabs(r, tabs)
 
         rheader = DIV(TABLE(TR(TH("%s: " % table.mission_id.label),
-                               table.mission_id.represent(record.mission_id),
+                               A(table.mission_id.represent(record.mission_id),
+                                 _href=URL(f="mission",
+                                           args=[record.mission_id, "profile"])
+                               ),
                                send_button,
                                ),
                             TR(TH("%s: " % table.subject.label),
@@ -772,8 +776,8 @@ def deploy_rheader(r, tabs=[], profile=False):
                                            _href=r.url(method="update"))
                     data.append(edit_btn)
                 rheader = DIV(H2(title),
-                            data,
-                            _class="profile-header")
+                              data,
+                              _class="profile-header")
             else:
                 rheader = H2(title)
 
@@ -903,6 +907,11 @@ def deploy_render_alert(listid,
         @param record: the record
         @param attr: additional attributes
     """
+    
+    T = current.T
+    MEMBER = T("Member")
+    MEMBERS = T("Members")
+    RECIPIENTS = "%s: " % T("Recipients")
 
     pkey = "deploy_alert.id"
 
@@ -914,6 +923,55 @@ def deploy_render_alert(listid,
         # template
         record_id = None
         item_id = "%s-[id]" % listid
+
+    # Recipients, aggregated by region
+    s3db = current.s3db
+    rtable = s3db.deploy_alert_recipient
+    htable = s3db.hrm_human_resource
+    otable = s3db.org_organisation
+    left = [htable.on(htable.id==rtable.human_resource_id),
+            otable.on(otable.id==htable.organisation_id)]
+    query = (rtable.alert_id == record_id) & \
+            (rtable.deleted != True)
+    region = otable.region_id
+    rcount = htable.id.count()
+    rows = current.db(query).select(region, rcount, left=left, groupby=region)
+
+    if rows:
+        represent = otable.region_id.represent
+        regions = represent.bulk([row[region] for row in rows])
+        none=None
+        recipients = []
+        for row in rows:
+            region_id = row[region]
+            num = row[rcount]
+            if region_id:
+                region_name = regions.get(region_id)
+            else:
+                region_name = T("No Region")
+            region_filter = {
+                "recipient.human_resource_id$" \
+                "organisation_id$region_id__belongs": region_id
+            }
+            link = URL(f = "alert",
+                       args = [record_id, "recipient"],
+                       vars = region_filter)
+            recipient = SPAN("%s (" % region_name,
+                             A("%s %s" % (num,
+                                          MEMBER if num == 1 else MEMBERS),
+                               _href=URL(f = "alert",
+                                         args = [record_id, "recipient"],
+                                         vars = region_filter),
+                             ), ")")
+            if region_id:
+                recipients.extend([recipient, ", "])
+            else:
+                none = [recipient, ", "]
+        if none:
+            recipients.extend(none)
+        recipients = TAG[""](recipients[:-1])
+    else:
+        recipients = current.messages["NONE"]
 
     item_class = "thumbnail"
 
@@ -941,6 +999,9 @@ def deploy_render_alert(listid,
                    toolbox,
                    DIV(DIV(DIV(subject,
                                _class="card-title"),
+                           DIV(#RECIPIENTS,
+                               recipients,
+                               _class="card-category"),
                            _class="media-heading"),
                        DIV(created_on, _class="card-subtitle"),
                        DIV(body, _class="alert-message-body s3-truncate"),
@@ -970,6 +1031,7 @@ def deploy_render_response(listid,
         @param attr: additional attributes
     """
 
+    T = current.T
     pkey = "deploy_response.id"
 
     # Construct the item ID
@@ -985,6 +1047,29 @@ def deploy_render_response(listid,
 
     row = record["_row"]
     human_resource_id = row["hrm_human_resource.id"]
+    mission_id = row["deploy_response.mission_id"]
+
+    # Member deployed?
+    # @todo: bulk lookup instead of per-card
+    table = current.s3db.deploy_human_resource_assignment
+    query = (table.mission_id == mission_id) & \
+            (table.human_resource_id == human_resource_id) & \
+            (table.deleted != True)
+    row = current.db(query).select(table.id, limitby=(0, 1)).first()
+    if row:
+        deploy_action = A(I(" ", _class="icon icon-deployed"),
+                          SPAN(T("Member Deployed"), _class="card-action"),
+                          _class="action-lnk")
+    else:
+        deploy_action = A(I(" ", _class="icon icon-deploy"),
+                          SPAN(T("Deploy this Member"), _class="card-action"),
+                          _href=URL(f="mission",
+                                    args=[mission_id,
+                                          "human_resource_assignment",
+                                          "create"
+                                         ],
+                                    vars={"member_id": human_resource_id}),
+                          _class="action-lnk")
 
     profile_url = URL(f="human_resource", args=[human_resource_id])
     profile_title = current.T("Open Member Profile (in a new tab)")
@@ -1022,6 +1107,9 @@ def deploy_render_response(listid,
                            _class="media-heading"),
                        DIV(created_on, _class="card-subtitle"),
                        DIV(message, _class="response-message-body s3-truncate"),
+                       DIV(deploy_action,
+                           _class="card-actions",
+                       ),
                        _class="media-body",
                    ),
                    _class="media",

@@ -313,7 +313,7 @@ def ns_only(f, required=True, branches=True, updateable=True):
         not_filterby = None
         not_filter_opts = []
     else:
-        btable = db.org_organisation_branch
+        btable = current.s3db.org_organisation_branch
         rows = db(btable.deleted != True).select(btable.branch_id)
         branches = [row.branch_id for row in rows]
         not_filterby = "id"
@@ -749,6 +749,34 @@ def customize_pr_person(**attr):
     return attr
 
 settings.ui.customize_pr_person = customize_pr_person
+
+# -----------------------------------------------------------------------------
+def customize_req_commit(**attr):
+    """
+        Customize req_commit controller
+    """
+
+    # Request is mandatory
+    field = current.s3db.req_commit.req_id
+    field.requires = field.requires.other
+
+    return attr
+
+settings.ui.customize_req_commit = customize_req_commit
+
+# -----------------------------------------------------------------------------
+def customize_req_req(**attr):
+    """
+        Customize req_req controller
+    """
+
+    # Request is mandatory
+    field = current.s3db.req_commit.req_id
+    field.requires = field.requires.other
+
+    return attr
+
+settings.ui.customize_req_req = customize_req_req
 
 # -----------------------------------------------------------------------------
 def customize_survey_series(**attr):

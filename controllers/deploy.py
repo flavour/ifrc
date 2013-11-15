@@ -34,7 +34,7 @@ def mission():
         if r.id:
             # Mission-specific workflows return to the profile page
             tablename = r.tablename if not r.component else r.component.tablename
-            next_url = r.url(component="", method="profile")
+            next_url = r.url(component="", method="profile", vars={})
             if r.component_name == "alert":
                 s3db.configure(tablename,
                                create_next=URL(f="alert",
@@ -47,14 +47,29 @@ def mission():
                                create_next=next_url,
                                update_next=next_url,
                                delete_next=next_url)
-                s3.cancel = next_url
+            s3.cancel = next_url
+            if r.component_name == "human_resource_assignment":
+                get_vars = r.get_vars
+                if "member_id" in get_vars:
+                    # Deploy-this-member action
+                    member_id = get_vars["member_id"]
+                    if str(member_id).isdigit():
+                        # Check if this member exists, otherwise ignore
+                        htable = s3db.hrm_human_resource
+                        query = (htable.id == member_id) & \
+                                (htable.deleted != True)
+                        row = db(query).select(htable.id, limitby=(0, 1)).first()
+                        if row:
+                            field = s3db.deploy_human_resource_assignment \
+                                        .human_resource_id
+                            field.default = row.id
+                            field.writable = False
+                            field.comment = None
             if not r.component and r.method == "profile":
-                created_on = s3db.deploy_alert.created_on
-                created_on.represent = lambda d: \
-                                       s3base.S3DateTime.datetime_represent(d, utc=True)
-                created_on = s3db.deploy_response.created_on
-                created_on.represent = lambda d: \
-                                       s3base.S3DateTime.datetime_represent(d, utc=True)
+                represent = lambda d: \
+                            s3base.S3DateTime.datetime_represent(d, utc=True)
+                s3db.deploy_alert.created_on.represent = represent
+                s3db.deploy_response.created_on.represent = represent
                 s3base.s3_trunk8(lines=1)
         else:
             # All other workflows return to the summary page
@@ -97,8 +112,6 @@ def mission():
 def human_resource():
     """
         RESTful CRUD Controller
-
-        @todo: use for imports of RDRT members (with automatic application)
     """
 
     # Tweak settings for RDRT
@@ -121,9 +134,8 @@ def human_resource():
 def person():
     """
         'Members' RESTful CRUD Controller
-        - currently used as "member profile"
-
-        @todo: replace by S3Profile page
+            - currently used as "member profile"
+            - used for Imports
     """
 
     # Tweak settings for RDRT
@@ -132,7 +144,24 @@ def person():
     settings.hrm.use_skills = True
     settings.search.filter_manager = True
 
-    return s3db.hrm_person_controller()
+    # @todo: move into HRM model
+    s3db.add_component("deploy_human_resource_application",
+                       hrm_human_resource="human_resource_id")
+
+    # Replace default title in imports:
+    retitle = lambda r: {"title": T("Import Members")} \
+                        if r.method == "import" else None
+    
+    return s3db.hrm_person_controller(replace_option=None,
+                                      csv_extra_fields=[
+                                            dict(label="Deployable",
+                                                 value="true"),
+                                            # Assume volunteer if not
+                                            # specified in CSV
+                                            dict(label="Type",
+                                                 value="volunteer"),
+                                      ],
+                                      retitle=retitle)
 
 # -----------------------------------------------------------------------------
 def application():
@@ -197,6 +226,34 @@ def alert():
                                insertable = False,
                                )
             elif r.component_name == "recipient":
+                settings.search.filter_manager = False
+                from s3.s3filter import S3TextFilter, S3OptionsFilter
+                recipient_filters = [
+                    s3base.S3TextFilter([
+                            "human_resource_id$person_id$first_name",
+                            "human_resource_id$person_id$middle_name",
+                            "human_resource_id$person_id$last_name",
+                        ],
+                        label=current.T("Name"),
+                    ),
+                    s3base.S3OptionsFilter(
+                        "human_resource_id$organisation_id",
+                        widget="multiselect",
+                        filter=True,
+                        header="",
+                        hidden=True,
+                    ),
+                ]
+                if settings.get_org_regions():
+                    recipient_filters.insert(1,
+                        s3base.S3HierarchyFilter(
+                            "human_resource_id$organisation_id$region_id",
+                            lookup="org_region",
+                            hidden=True,
+                        )
+                    )
+                s3db.configure(r.component.tablename,
+                               filter_widgets=recipient_filters)
                 if r.record.message_id:
                     s3db.configure(r.component.tablename,
                                    insertable=False,
@@ -263,7 +320,9 @@ def alert():
         return output
     s3.postp = postp
 
-    return s3_rest_controller(rheader=s3db.deploy_rheader)
+    return s3_rest_controller(rheader=s3db.deploy_rheader,
+                              hide_filter={"recipient": False,
+                                           "_default": True})
 
 # -----------------------------------------------------------------------------
 def email_inbox():
