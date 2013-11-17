@@ -498,6 +498,21 @@ div.dl {
     clear: left;
 }
 
+/* Cards */
+.card_1_line,
+.card_manylines {
+    font-size: 12px;
+    padding-top: 4px;
+    color: #666;
+    padding-bottom: 2px;
+}
+.card_1_line {
+    height: 14px; /* Height needs to be same with or without contents */
+    margin-bottom: 0;
+    text-overflow: none;
+    overflow: hidden;
+}
+
 /* Display view */
 .item-container {
     width: 100%;
@@ -522,6 +537,7 @@ ul.ui-autocomplete {
 }
 
 /* Required Field indicator */
+.error,
 .req {
     color: red;
     font-weight: bold;
@@ -905,12 +921,12 @@ span.tab_next_inactive a {
 
 .box_top {
    border-top: #bbb 1px solid;
-   padding-top: 10px;
+   padding-top: 8px;
 }
 
 .box_bottom {
    border-bottom: #bbb 1px solid;
-   padding-bottom: 10px;
+   padding-bottom: 8px;
 }
 
 .form-horizontal .control-group.box_top {
@@ -919,7 +935,7 @@ span.tab_next_inactive a {
 }
 
 .form-horizontal .control-group.box_bottom {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     max-width: 680px;
 }
 

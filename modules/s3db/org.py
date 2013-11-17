@@ -1923,6 +1923,7 @@ class S3SiteModel(S3Model):
                                         default=False,
                                         readable=False,
                                         writable=False),
+                                  Field("comments", "text"),
                                   *s3_ownerstamp())
 
         # ---------------------------------------------------------------------
@@ -1949,6 +1950,11 @@ class S3SiteModel(S3Model):
                                   widget=widget,
                                   comment=comment
                                   )
+
+        # Custom Method for S3SiteAutocompleteWidget
+        self.set_method("org", "site",
+                        method="search_ac",
+                        action=self.site_search_ac)
 
         # Custom Method for S3SiteAddressAutocompleteWidget
         self.set_method("org", "site",
@@ -2148,6 +2154,93 @@ class S3SiteModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def site_search_ac(r, **attr):
+        """
+            JSON search method for S3SiteAutocompleteWidget
+
+            @param r: the S3Request
+            @param attr: request attributes
+        """
+
+        response = current.response
+        resource = r.resource
+
+        # Query comes in pre-filtered to accessible & deletion_status
+        # Respect response.s3.filter
+        resource.add_filter(response.s3.filter)
+
+        _vars = current.request.get_vars
+
+        # JQueryUI Autocomplete uses "term" instead of "value"
+        # (old JQuery Autocomplete uses "q" instead of "value")
+        value = _vars.term or _vars.value or _vars.q or None
+
+        # We want to do case-insensitive searches
+        # (default anyway on MySQL/SQLite, but not PostgreSQL)
+        value = value.lower().strip()
+
+        filter = _vars.get("filter", None)
+
+        if filter and value:
+            if filter == "~":
+                query = (S3FieldSelector("name").lower().like(value + "%"))
+            else:
+                output = current.xml.json_message(False, 400,
+                                "Unsupported filter! Supported filters: ~")
+                raise HTTP(400, body=output)
+        else:
+            output = current.xml.json_message(False, 400,
+                            "Missing options! Require: filter & value")
+            raise HTTP(400, body=output)
+
+        resource.add_filter(query)
+
+        settings = current.deployment_settings
+        MAX_SEARCH_RESULTS = settings.get_search_max_results()
+        limit = int(_vars.limit or MAX_SEARCH_RESULTS)
+        if (not limit or limit > MAX_SEARCH_RESULTS) and resource.count() > MAX_SEARCH_RESULTS:
+            output = jsons([dict(id="",
+                                 name="Search results are over %d. Please input more characters." \
+                                 % MAX_SEARCH_RESULTS)])
+        else:
+            s3db = current.s3db
+
+            # Fields to return
+            fields = ["site_id",
+                      "name",
+                      ]
+
+            fields += settings.get_org_site_autocomplete_fields()
+
+            rows = resource.select(fields,
+                                   start=0,
+                                   limit=limit,
+                                   orderby="name",
+                                   as_rows=True)
+            output = []
+            append = output.append
+            for row in rows:
+                instance_type = row.get("org_site.instance_type", None)
+                location = row.get("gis_location", None)
+                org = row.get("org_organisation.name", None)
+                row = row.org_site
+                record = dict(id = row.site_id,
+                              name = row.name,
+                              )
+                if instance_type:
+                    record["instance_type"] = instance_type
+                if location:
+                    record["location"] = location
+                if org:
+                    record["org"] = org
+                append(record)
+            output = jsons(output)
+
+        response.headers["Content-Type"] = "application/json"
+        return output
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def site_search_address_ac(r, **attr):
         """
             JSON search method for S3SiteAddressAutocompleteWidget
@@ -2158,7 +2251,6 @@ class S3SiteModel(S3Model):
 
         response = current.response
         resource = r.resource
-        table = resource.table
 
         # Query comes in pre-filtered to accessible & deletion_status
         # Respect response.s3.filter
@@ -2175,18 +2267,20 @@ class S3SiteModel(S3Model):
         # (default anyway on MySQL/SQLite, but not PostgreSQL)
         value = value.lower().strip()
 
-        filter = _vars.filter
+        filter = _vars.get("filter", None)
 
         if filter and value:
-
             if filter == "~":
                 query = (S3FieldSelector("name").lower().like(value + "%")) | \
                         (S3FieldSelector("location_id$address").lower().like(value + "%"))
-
             else:
                 output = current.xml.json_message(False, 400,
                                 "Unsupported filter! Supported filters: ~")
                 raise HTTP(400, body=output)
+        else:
+            output = current.xml.json_message(False, 400,
+                            "Missing options! Require: filter & value")
+            raise HTTP(400, body=output)
 
         resource.add_filter(query)
 
@@ -2200,21 +2294,25 @@ class S3SiteModel(S3Model):
             s3db = current.s3db
 
             # Fields to return
-            fields = ["site_id", "name", "location_id$address"]
-            rows = resource.select([f.name for f in fields],
+            fields = ["site_id",
+                      "name",
+                      "location_id$address",
+                      ]
+            rows = resource.select(fields,
                                    start=0,
                                    limit=limit,
-                                   orderby=field,
+                                   orderby="name",
                                    as_rows=True)
             output = []
             append = output.append
             for row in rows:
                 address = row.gis_location.address
+                row = row.org_site
+                record = dict(id = row.site_id,
+                              name = row.name,
+                              )
                 if address:
-                    name = "%s, %s" % (row.org_site.name, address)
-                else:
-                    name = row.org_site.name
-                record = dict(id = row.org_site.site_id, name = name)
+                    record["address"] = address
                 append(record)
             output = jsons(output)
 
@@ -2578,6 +2676,7 @@ class S3FacilityModel(S3Model):
                   context = {"location": "location_id",
                              "organisation": "organisation_id",
                              "org_group": "organisation_id$group_membership.group_id",
+                             "request": "req.id",
                              },
                   crud_form = crud_form,
                   deduplicate = self.org_facility_duplicate,
@@ -3679,10 +3778,14 @@ class org_SiteRepresent(S3Represent):
     def __init__(self,
                  translate=False,
                  show_link=False,
-                 multiple=False):
+                 multiple=False,
+                 show_type=True,
+                 ):
 
-        # Need a custom lookup
-        self.lookup_rows = self.custom_lookup_rows
+        self.show_type = show_type
+        if show_type or show_link:
+            # Need a custom lookup
+            self.lookup_rows = self.custom_lookup_rows
         # Need a custom representation
         fields = ["name"]
 
@@ -3838,19 +3941,20 @@ class org_SiteRepresent(S3Represent):
         """
 
         name = row["org_site.name"]
-        instance_type = row["org_site.instance_type"]
-        facility_type = row.get("org_facility_type.name", None)
-
         if not name:
             return self.default
 
-        if facility_type:
-            # These need to be translated
-            name = "%s (%s)" % (name, current.T(facility_type))
-        else:
-            instance_type = current.auth.org_site_types.get(instance_type, None)
-            if instance_type:
-                name = "%s (%s)" % (name, instance_type)
+        if self.show_type:
+            instance_type = row["org_site.instance_type"]
+            facility_type = row.get("org_facility_type.name", None)
+
+            if facility_type:
+                # These need to be translated
+                name = "%s (%s)" % (name, current.T(facility_type))
+            else:
+                instance_type = current.auth.org_site_types.get(instance_type, None)
+                if instance_type:
+                    name = "%s (%s)" % (name, instance_type)
 
         return s3_unicode(name)
 

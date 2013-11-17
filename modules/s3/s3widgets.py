@@ -996,7 +996,7 @@ class S3AutocompleteWidget(FormWidget):
                              _class="string",
                              _value=represent.encode("utf-8")),
                        DIV(_id="%s_throbber" % dummy_input,
-                           _class="throbber hide"),
+                           _class="throbber input_throbber hide"),
                        INPUT(**attr),
                        requires = field.requires
                        )
@@ -1542,19 +1542,19 @@ class S3DateTimeWidget(FormWidget):
         # Update limits of another widget?
         set_min = opts.get("set_min", None)
         set_max = opts.get("set_max", None)
-        onclose = """function(selectedDate){"""
+        onclose = '''function(selectedDate){'''
         onclear = ""
         if set_min:
-            onclose += """$('#%s').%s('option','minDate',selectedDate)\n""" % \
+            onclose += '''$('#%s').%s('option','minDate',selectedDate)\n''' % \
                        (set_min, widget)
-            onclear += """$('#%s').%s('option','minDate',null)\n""" % \
+            onclear += '''$('#%s').%s('option','minDate',null)\n''' % \
                        (set_min, widget)
         if set_max:
-            onclose += """$('#%s').%s('option','maxDate',selectedDate)""" % \
+            onclose += '''$('#%s').%s('option','maxDate',selectedDate)''' % \
                        (set_max, widget)
-            onclear += """$('#%s').%s('option','minDate',null)""" % \
+            onclear += '''$('#%s').%s('option','minDate',null)''' % \
                        (set_max, widget)
-        onclose += """}"""
+        onclose += '''}'''
 
         # Translate Python format-strings
         date_format = settings.get_L10n_date_format().replace("%Y", "yy") \
@@ -1895,7 +1895,7 @@ def S3GenericAutocompleteTemplate(post_process,
                          _class="string",
                          value=represent),
                    DIV(_id="%s_throbber" % dummy_input,
-                       _class="throbber hide"),
+                       _class="throbber input_throbber hide"),
                    INPUT(**attr),
                    requires = field.requires
                    )
@@ -2447,7 +2447,7 @@ class S3HumanResourceAutocompleteWidget(FormWidget):
                              _class="string",
                              _value=represent.encode("utf-8")),
                        DIV(_id="%s_throbber" % dummy_input,
-                           _class="throbber hide"),
+                           _class="throbber input_throbber hide"),
                        INPUT(**attr),
                        requires = field.requires
                        )
@@ -2865,7 +2865,7 @@ class S3LocationAutocompleteWidget(FormWidget):
                              _class="string",
                              value=represent),
                        DIV(_id="%s_throbber" % dummy_input,
-                           _class="throbber hide"),
+                           _class="throbber input_throbber hide"),
                        INPUT(**attr),
                        requires = field.requires
                        )
@@ -3001,7 +3001,8 @@ class S3LocationSelectorWidget(FormWidget):
         location_selector_loaded = s3.gis.location_selector_loaded
         # @ToDo: Don't insert JS snippets when location_selector already loaded
 
-        appname = current.request.application
+        request = current.request
+        appname = request.application
 
         locations = s3db.gis_location
         ctable = s3db.gis_config
@@ -3016,6 +3017,12 @@ class S3LocationSelectorWidget(FormWidget):
         defaults = dict(_type = "text",
                         value = (value != None and str(value)) or "")
         attr = StringWidget._attributes(field, defaults, **attributes)
+        if request.controller == "appadmin":
+            # Don't use this widget in appadmin
+            return TAG[""](INPUT(**attr),
+                           requires=IS_NULL_OR(IS_LOCATION()),
+                           )
+
         # Hide the real field
         attr["_class"] = "hide"
 
@@ -4116,6 +4123,12 @@ class S3LocationSelectorWidget2(FormWidget):
                         value = (value != None and str(value)) or "")
         attr = StringWidget._attributes(field, defaults, **attributes)
 
+        if request.controller == "appadmin":
+            # Don't use this widget in appadmin
+            return TAG[""](INPUT(**attr),
+                           requires=IS_NULL_OR(IS_LOCATION()),
+                           )
+
         # Parent INPUT field, will be hidden
         parent_input = INPUT(_name="parent",
                              _id="%s_parent" % fieldname,
@@ -4910,7 +4923,7 @@ class S3PersonAutocompleteWidget(FormWidget):
                              _class="string",
                              _value=represent),
                        DIV(_id="%s_throbber" % dummy_input,
-                           _class="throbber hide"),
+                           _class="throbber input_throbber hide"),
                        INPUT(hideerror=self.hideerror, **attr),
                        requires = field.requires
                        )
@@ -4999,7 +5012,7 @@ class S3PentityAutocompleteWidget(FormWidget):
                              _class="string",
                              _value=represent),
                        DIV(_id="%s_throbber" % dummy_input,
-                           _class="throbber hide"),
+                           _class="throbber input_throbber hide"),
                        INPUT(hideerror=self.hideerror, **attr),
                        requires = field.requires
                        )
@@ -5054,7 +5067,7 @@ class S3SelectChosenWidget(OptionsWidget):
         s3.scripts.append("/%s/static/scripts/%s" % (current.request.application,
                                                      script))
         # @ToDo: Can we not determine a # selector? (faster)
-        script = """$('[name="%s"]').chosen();""" % field.name
+        script = '''$('[name="%s"]').chosen();''' % field.name
         s3.jquery_ready.append(script)
         return OptionsWidget.widget(field, value, **attributes)
 
@@ -5127,7 +5140,7 @@ class S3SiteAutocompleteWidget(FormWidget):
                              _class="string",
                              _value=represent),
                        DIV(_id="%s_throbber" % dummy_input,
-                           _class="throbber hide"),
+                           _class="throbber input_throbber hide"),
                        INPUT(**attr),
                        requires = field.requires
                        )
@@ -5191,7 +5204,7 @@ class S3SiteAddressAutocompleteWidget(FormWidget):
                              _class="string",
                              _value=represent),
                        DIV(_id="%s_throbber" % dummy_input,
-                           _class="throbber hide"),
+                           _class="throbber input_throbber hide"),
                        INPUT(**attr),
                        requires = field.requires
                        )
@@ -5772,7 +5785,7 @@ def search_ac(r, **attr):
 
     # JQueryUI Autocomplete uses "term" instead of "value"
     # (old JQuery Autocomplete uses "q" instead of "value")
-    value = _vars.value or _vars.term or _vars.q or None
+    value = _vars.term or _vars.value or _vars.q or None
 
     # We want to do case-insensitive searches
     # (default anyway on MySQL/SQLite, but not PostgreSQL)
@@ -5792,9 +5805,10 @@ def search_ac(r, **attr):
 
         # Default fields to return
         fields = ["id", fieldname]
-        if resource.tablename == "org_site":
-            # Simpler to provide an exception case than write a whole new class
-            fields.append("instance_type")
+        # Now using custom method
+        #if resource.tablename == "org_site":
+        #    # Simpler to provide an exception case than write a whole new class
+        #    fields.append("instance_type")
 
         filter = _vars.filter
         if filter == "~":
