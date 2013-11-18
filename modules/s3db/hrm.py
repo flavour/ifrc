@@ -39,6 +39,7 @@ __all__ = ["S3HRModel",
            "hrm_map_popup",
            "hrm_rheader",
            "hrm_competency_controller",
+           "hrm_experience_controller",
            "hrm_group_controller",
            "hrm_human_resource_controller",
            "hrm_person_controller",
@@ -47,6 +48,9 @@ __all__ = ["S3HRModel",
            "hrm_cv",
            "hrm_configure_pr_group_membership",
            "hrm_human_resource_onaccept",
+           #"hrm_render_competencies",
+           #"hrm_render_trainings",
+           #"hrm_render_experience",
            ]
 
 import datetime
@@ -116,10 +120,11 @@ class S3HRModel(S3Model):
         controller = request.controller
         group = request.get_vars.get("group", None)
         if not group:
-            if controller in ["hrm", "org", "inv", "cr", "hms", "req"]:
-                group = "staff"
-            elif controller == "vol":
+            if controller == "vol":
                 group = "volunteer"
+            #elif controller in ("hrm", "org", "inv", "cr", "hms", "req"):
+            else:
+                group = "staff"
 
         # =========================================================================
         # Departments
@@ -1797,7 +1802,8 @@ class S3HRSkillModel(S3Model):
                                         ondelete = "RESTRICT")
 
         configure("hrm_competency_rating",
-                  deduplicate=self.hrm_competency_rating_duplicate)
+                  deduplicate = self.hrm_competency_rating_duplicate
+                  )
 
         # ---------------------------------------------------------------------
         # Competencies
@@ -1846,10 +1852,10 @@ class S3HRSkillModel(S3Model):
             msg_list_empty = T("Currently no Skills registered"))
 
         configure("hrm_competency",
-                  deduplicate = self.hrm_competency_duplicate,
                   context = {"person": "person_id",
-                             #"organisation": "organisation_id",
                              },
+                  deduplicate = self.hrm_competency_duplicate,
+                  list_layout = hrm_render_competencies
                   )
 
         # =====================================================================
@@ -2175,15 +2181,14 @@ class S3HRSkillModel(S3Model):
         # Users can add their own but these are confirmed only by specific roles
         #
 
-        participant_id_comment = self.pr_person_comment(
-                                    T("Participant"),
-                                    T("Type the first few characters of one of the Participant's names."),
-                                    child="person_id")
         tablename = "hrm_training"
         table = define_table(tablename,
                              # @ToDo: Create a way to add new people to training as staff/volunteers
                              person_id(empty=False,
-                                       comment = participant_id_comment,
+                                       comment = self.pr_person_comment(
+                                        T("Participant"),
+                                        T("Type the first few characters of one of the Participant's names."),
+                                        child="person_id"),
                                        ),
                              # Just used when created from participation in an Event
                              Field("training_event_id", db.hrm_training_event,
@@ -2293,15 +2298,18 @@ class S3HRSkillModel(S3Model):
 
         # Resource Configuration
         configure(tablename,
-                  onaccept=hrm_training_onaccept,
-                  ondelete=hrm_training_onaccept,
-                  deduplicate=self.hrm_training_duplicate,
-                  filter_widgets=filter_widgets,
-                  report_options=report_options,
+                  context = {"person": "person_id",
+                             },
+                  deduplicate = self.hrm_training_duplicate,
+                  filter_widgets = filter_widgets,
                   list_fields = ["course_id",
                                  "date",
                                  "hours",
-                                 ]
+                                 ],
+                  list_layout = hrm_render_trainings,
+                  onaccept = hrm_training_onaccept,
+                  ondelete = hrm_training_onaccept,
+                  report_options = report_options,
                   )
 
         # =====================================================================
@@ -3126,6 +3134,7 @@ class S3HRExperienceModel(S3Model):
                        context = {"person": "person_id",
                                   "organisation": "organisation_id",
                                   },
+                       list_layout = hrm_render_experience,
                        )
 
         # ---------------------------------------------------------------------
@@ -4594,7 +4603,11 @@ def hrm_rheader(r, tabs=[],
 
 # =============================================================================
 def hrm_competency_controller():
-    """ RESTful CRUD controller used to allow searching for people by Skill"""
+    """
+        RESTful CRUD controller
+         - used for Searching for people by Skill
+         - used for Adding/Editing on Profile page
+    """
 
     if current.session.s3.hrm.mode is not None:
         current.session.error = current.T("Access denied")
@@ -4606,66 +4619,115 @@ def hrm_competency_controller():
     s3db = current.s3db
     s3 = current.response.s3
 
-    stable = s3db.hrm_skill
-    hrm_skill_opts = {}
-    if auth.s3_has_permission("read", stable):
-        skills = db(stable.deleted == False).select(stable.id, stable.name)
+    if "search" in current.request.args:
+        stable = s3db.hrm_skill
+        hrm_skill_opts = {}
+        if auth.s3_has_permission("read", stable):
+            skills = db(stable.deleted == False).select(stable.id, stable.name)
 
-        for skill in skills:
-            hrm_skill_opts[skill.id] = skill.name
+            for skill in skills:
+                hrm_skill_opts[skill.id] = skill.name
 
-    hrm_competency_opts = {}
-    ctable = s3db.hrm_competency_rating
-    if auth.s3_has_permission("read", ctable):
-        records = db(ctable.deleted == False).select(ctable.id, ctable.name)
+        hrm_competency_opts = {}
+        ctable = s3db.hrm_competency_rating
+        if auth.s3_has_permission("read", ctable):
+            records = db(ctable.deleted == False).select(ctable.id, ctable.name)
 
-        for record in records:
-            hrm_competency_opts[record.id] = record.name
+            for record in records:
+                hrm_competency_opts[record.id] = record.name
 
-    # @ToDo:we need this hierarchical, so that selecting a Skill  
-    # provides just the appropriate set of Competency Ratings for that skill
-    hrm_skill_search = S3Search(
-        advanced=(hrm_skill_simple_search_widget("advanced"),
-                  S3SearchOptionsWidget(
-                      name="human_competency",
-                      label=T("Skills"),
-                      field="skill_id",
-                      cols = 2,
-                      options = hrm_skill_opts,
-                      ),
-                  S3SearchOptionsWidget(
-                      name="human_competency_rating",
-                      label=T("Competency"),
-                      field="competency_id",
-                      cols = 2,
-                      options = hrm_competency_opts,
-                  )
-                  )
-    )    
+        # @ToDo: Replace with S3Filter
+        # @ToDo:we need this hierarchical, so that selecting a Skill  
+        # provides just the appropriate set of Competency Ratings for that skill
+        hrm_skill_search = S3Search(
+            advanced=(hrm_skill_simple_search_widget("advanced"),
+                      S3SearchOptionsWidget(
+                          name="human_competency",
+                          label=T("Skills"),
+                          field="skill_id",
+                          cols = 2,
+                          options = hrm_skill_opts,
+                          ),
+                      S3SearchOptionsWidget(
+                          name="human_competency_rating",
+                          label=T("Competency"),
+                          field="competency_id",
+                          cols = 2,
+                          options = hrm_competency_opts,
+                      )
+                      )
+            )    
 
-    s3db.configure(tablename = "hrm_competency", \
-                   search_method = hrm_skill_search)
+        s3db.configure(tablename = "hrm_competency",
+                       # @ToDo: Replace with S3Filter
+                       search_method = hrm_skill_search,
+                       )
+
+    def prep(r):
+        if r.method in ("create", "create.popup"):
+            # Coming from Profile page
+            person_id = current.request.get_vars.get("~.person_id", None)
+            if person_id:
+                field = s3db.hrm_competency.person_id
+                field.default = person_id
+                field.readable = field.writable = False
+
+        return True
+    s3.prep = prep
 
     def postp(r,output):
+        if r.interactive:
+            # Custom action button to add the member to a team    
+            S3CRUD.action_buttons(r)
 
-        # Custom action button to add the member to a team    
-        S3CRUD.action_buttons(r)
-        
-        args = ["[id]", "group_membership"]
-        s3.actions.append(dict(label=str(T("Add to a Team")),
-                                         _class="action-btn",
-                                         url = URL(f = "person",
-                                                   args = args))
-                          )
-
+            args = ["[id]", "group_membership"]
+            s3.actions.append(dict(label=str(T("Add to a Team")),
+                                             _class="action-btn",
+                                             url = URL(f = "person",
+                                                       args = args))
+                              )
         return output
+    s3.postp = postp
 
-    s3.postp = postp    
     return current.rest_controller("hrm", "competency",
-                                   csv_stylesheet=("hrm", "competency.xsl"),
-                                   csv_template=("hrm", "competency"))
+                                   # @ToDo: Create these if-required
+                                   #csv_stylesheet = ("hrm", "competency.xsl"),
+                                   #csv_template = ("hrm", "competency")
+                                   )
 
-# ---------------------------------------------------------------------        
+# =============================================================================
+def hrm_experience_controller():
+    """
+        Experience Controller, defined in the model for use from
+        multiple controllers for unified menus
+         - used for Adding/Editing on Profile page
+    """
+
+    if current.session.s3.hrm.mode is not None:
+        current.session.error = current.T("Access denied")
+        redirect(URL(f="index"))
+
+    def prep(r):
+        if r.method in ("create", "create.popup"):
+            # Coming from Profile page
+            person_id = current.request.get_vars.get("~.person_id", None)
+            if person_id:
+                field = current.s3db.hrm_experience.person_id
+                field.default = person_id
+                field.readable = field.writable = False
+
+        return True
+    current.response.s3.prep = prep
+
+    output = current.rest_controller("hrm", "experience",
+                                     # @ToDo: Create these if-required
+                                     #csv_stylesheet = ("hrm", "experience.xsl"),
+                                     #csv_template = ("hrm", "experience"),
+                                     hide_filter = False,
+                                     )
+    return output
+
+# =============================================================================
 def hrm_skill_simple_search_widget(type):
 
     T = current.T
@@ -4856,10 +4918,37 @@ def hrm_human_resource_controller(extra_filter=None):
             return True
         elif method == "profile":
             # Configure Widgets
-            s3db.pr_address
+            s3db.pr_address # Load normal model
             list_fields = s3db.get_config("pr_address",
                                           "list_fields")
             list_fields.append("comments")
+            # Load normal model
+            # Show Date without Time
+            s3db.hrm_training.date.represent = lambda d: \
+                S3DateTime.date_represent(d, utc=True)
+            s3db.configure("hrm_training",
+                           list_fields = ["course_id",
+                                          "training_event_id$site_id",
+                                          "date",
+                                          "hours",
+                                          "grade",
+                                          "comments", 
+                                          ],
+                           )
+            s3db.hrm_experience # Load normal model
+            s3db.configure("hrm_experience",
+                           list_fields = ["organisation_id",
+                                          "organisation",
+                                          "job_title_id",
+                                          "job_title",
+                                          "start_date",
+                                          "end_date",
+                                          "hours",
+                                          "place",
+                                          "person_id",
+                                          "comments",
+                                          ],
+                           )
 
             db = current.db
             table = r.table
@@ -4882,8 +4971,6 @@ def hrm_human_resource_controller(extra_filter=None):
                                    type = "datalist",
                                    tablename = "pr_contact",
                                    orderby = "priority asc",
-                                   #context = "person",
-                                   #default = default,
                                    filter = S3FieldSelector("pe_id") == pe_id,
                                    icon = "icon-phone",
                                    # Default renderer:
@@ -4893,8 +4980,6 @@ def hrm_human_resource_controller(extra_filter=None):
                                   title_create = "Add New Address",
                                   type = "datalist",
                                   tablename = "pr_address",
-                                  #context = "person",
-                                  #default = default,
                                   filter = S3FieldSelector("pe_id") == pe_id,
                                   icon = "icon-home",
                                   # Default renderer:
@@ -4904,41 +4989,37 @@ def hrm_human_resource_controller(extra_filter=None):
                                  title_create = "Add New Skill",
                                  type = "datalist",
                                  tablename = "hrm_competency",
-                                 context = "person",
-                                 #default = default,
-                                 #filter = S3FieldSelector("person_id") == person_id,
+                                 filter = S3FieldSelector("person_id") == person_id,
                                  icon = "icon-comment-alt",
-                                 #list_layout = render_skills,
+                                 # Default renderer:
+                                 #list_layout = hrm_render_competencies,
                                  )
-            training_widget = dict(label = "Trainings",
-                                   title_create = "Add New Training",
-                                   type = "datalist",
-                                   tablename = "hrm_training",
-                                   context = "person",
-                                   #default = default,
-                                   #filter = S3FieldSelector("person_id") == person_id,
-                                   icon = "icon-truck",
-                                   #list_layout = render_training,
-                                   )
+            trainings_widget = dict(label = "Trainings",
+                                    title_create = "Add New Training",
+                                    type = "datalist",
+                                    tablename = "hrm_training",
+                                    filter = S3FieldSelector("person_id") == person_id,
+                                    icon = "icon-wrench",
+                                    # Default renderer:
+                                    #list_layout = hrm_render_trainings,
+                                    )
             experience_widget = dict(label = "Experience",
                                      title_create = "Add New Experience",
                                      type = "datalist",
                                      tablename = "hrm_experience",
-                                     context = "person",
-                                     #default = default,
-                                     #filter = S3FieldSelector("person_id") == person_id,
+                                     filter = S3FieldSelector("person_id") == person_id,
                                      icon = "icon-truck",
-                                     #list_layout = render_training,
+                                     # Default renderer:
+                                     #list_layout = hrm_render_experience,
                                      )
             docs_widget = dict(label = "Documents",
                                title_create = "Add New Document",
                                type = "datalist",
                                tablename = "doc_document",
-                               #context = "person",
-                               #default = default,
                                filter = S3FieldSelector("doc_id") == record.doc_id,
                                icon = "icon-paperclip",
-                               #list_layout = render_docs,
+                               # Default renderer:
+                               #list_layout = s3db.doc_render_documents,
                                )
             s3db.configure("hrm_human_resource",
                            profile_title = "%s : %s" % (s3.crud_strings["hrm_human_resource"].title_display, 
@@ -4956,7 +5037,7 @@ def hrm_human_resource_controller(extra_filter=None):
                            profile_widgets = [contacts_widget,
                                               address_widget,
                                               skills_widget,
-                                              training_widget,
+                                              trainings_widget,
                                               experience_widget,
                                               docs_widget,
                                               ])
@@ -5114,7 +5195,18 @@ def hrm_human_resource_controller(extra_filter=None):
                 s3.jquery_ready.append(
 '''S3.start_end_date('hrm_human_resource_start_date','hrm_human_resource_end_date')''')
 
-                S3CRUD.action_buttons(r, deletable=settings.get_hrm_deletable())
+                if current.request.controller == "deploy":
+                    # Open Profile page
+                    read_url = URL(args = ["[id]", "profile"])
+                    update_url = URL(args = ["[id]", "profile"])
+                else:
+                    # Standard CRUD buttons
+                    read_url = None
+                    update_url = None
+                S3CRUD.action_buttons(r,
+                                      deletable = settings.get_hrm_deletable(),
+                                      read_url = read_url,
+                                      update_url = update_url)
                 if "msg" in settings.modules and \
                    current.auth.permission.has_permission("update",
                                                           c="hrm",
@@ -5431,6 +5523,7 @@ def hrm_training_controller():
         Training Controller, defined in the model for use from
         multiple controllers for unified menus
          - used for Searching for Participants
+         - used for Adding/Editing on Profile page
     """
 
     if current.session.s3.hrm.mode is not None:
@@ -5450,21 +5543,33 @@ def hrm_training_controller():
                            ]
             s3db = current.s3db
             s3db.configure("hrm_training",
-                           insertable=False,
-                           list_fields=list_fields)
-            if r.method == "report":
+                           #insertable = False,
+                           listadd = False,
+                           list_fields = list_fields,
+                           )
+
+            if r.method in ("create", "create.popup"):
+                # Coming from Profile page
+                person_id = current.request.get_vars.get("~.person_id", None)
+                if person_id:
+                    field = s3db.hrm_training.person_id
+                    field.default = person_id
+                    field.readable = field.writable = False
+
+            elif r.method == "report":
                 s3db.configure("hrm_training",
                                extra_fields=["date"])
                 table = s3db.hrm_training
                 table.year = Field.Lazy(hrm_training_year)
                 table.month = Field.Lazy(hrm_training_month)
+
         return True
     current.response.s3.prep = prep
 
     output = current.rest_controller("hrm", "training",
-                                     csv_stylesheet=("hrm", "training.xsl"),
-                                     csv_template=("hrm", "training"),
-                                     hide_filter=False,
+                                     csv_stylesheet = ("hrm", "training.xsl"),
+                                     csv_template = ("hrm", "training"),
+                                     hide_filter = False,
                                      )
     return output
 
@@ -5525,7 +5630,8 @@ def hrm_training_event_controller():
                            (current.messages.ORGANISATION, "organisation"),
                            ]
             current.s3db.configure("hrm_training",
-                                   list_fields=list_fields)
+                                   list_fields = list_fields
+                                   )
         return True
     s3.prep = prep
 
@@ -5713,5 +5819,398 @@ def hrm_configure_pr_group_membership():
     s3db.configure("pr_group_membership",
                    list_fields=list_fields,
                    orderby=orderby)
+
+# =============================================================================
+def hrm_render_competencies(listid, resource, rfields, record, 
+                            type = None,
+                            **attr):
+    """
+        Custom dataList item renderer for Skills on the HRM Profile
+
+        @param listid: the HTML ID for this list
+        @param resource: the S3Resource to render
+        @param rfields: the S3ResourceFields to render
+        @param record: the record as dict
+        @param attr: additional HTML attributes for the item
+    """
+
+    pkey = "hrm_competency.id"
+
+    # Construct the item ID
+    if pkey in record:
+        record_id = record[pkey]
+        item_id = "%s-%s" % (listid, record_id)
+    else:
+        # template
+        item_id = "%s-[id]" % listid
+
+    item_class = "thumbnail"
+
+    raw = record._row
+    title = record["hrm_competency.skill_id"]
+    organisation = raw["hrm_competency.organisation_id"] or ""
+    if organisation:
+        #org_url = URL(c="org", f="organisation", args=[organisation, "profile"])
+        org_url = URL(c="org", f="organisation", args=[organisation])
+        organisation = P(I(_class="icon-sitemap"),
+                         " ",
+                         SPAN(A(record["hrm_competency.organisation_id"],
+                                _href=org_url)
+                              ),
+                         " ",
+                         _class="card_1_line",
+                         )
+    competency = raw["hrm_competency.competency_id"] or ""
+    if competency:
+        competency = P(I(_class="icon-certificate"),
+                       " ",
+                       SPAN(record["hrm_competency.competency_id"]),
+                       " ",
+                       _class="card_1_line",
+                       )
+    comments = raw["hrm_competency.comments"] or ""
+
+    # Edit Bar
+    permit = current.auth.s3_has_permission
+    table = current.s3db.hrm_competency
+    if permit("update", table, record_id=record_id):
+        if current.request.controller == "vol":
+            controller = "vol"
+        else:
+            controller = "hrm"
+        edit_btn = A(I(" ", _class="icon icon-edit"),
+                     _href=URL(c=controller, f="competency",
+                               args=[record_id, "update.popup"],
+                               vars={"refresh": listid,
+                                     "record": record_id}),
+                     _class="s3_modal",
+                     _title=current.T("Edit Skill"),
+                     )
+    else:
+        edit_btn = ""
+    if permit("delete", table, record_id=record_id):
+        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+                       _class="dl-item-delete",
+                       )
+    else:
+        delete_btn = ""
+    edit_bar = DIV(edit_btn,
+                   delete_btn,
+                   _class="edit-bar fright",
+                   )
+
+    # Render the item
+    item = DIV(DIV(I(_class="icon"),
+                   SPAN(" %s" % title,
+                        _class="card-title"),
+                   edit_bar,
+                   _class="card-header",
+                   ),
+               DIV(DIV(DIV(organisation,
+                           competency,
+                           P(SPAN(comments),
+                             " ",
+                             _class="card_manylines",
+                             ),
+                           _class="media",
+                           ),
+                       _class="media-body",
+                       ),
+                   _class="media",
+                   ),
+               _class=item_class,
+               _id=item_id,
+               )
+
+    return item
+
+# =============================================================================
+def hrm_render_experience(listid, resource, rfields, record, 
+                          type = None,
+                          **attr):
+    """
+        Custom dataList item renderer for Experience on the HRM Profile
+
+        @param listid: the HTML ID for this list
+        @param resource: the S3Resource to render
+        @param rfields: the S3ResourceFields to render
+        @param record: the record as dict
+        @param attr: additional HTML attributes for the item
+    """
+
+    pkey = "hrm_experience.id"
+
+    # Construct the item ID
+    if pkey in record:
+        record_id = record[pkey]
+        item_id = "%s-%s" % (listid, record_id)
+    else:
+        # template
+        item_id = "%s-[id]" % listid
+
+    item_class = "thumbnail"
+
+    raw = record._row
+    job_title = raw["hrm_experience.job_title_id"]
+    if job_title:
+        job_title = record["hrm_experience.job_title_id"]
+    else:
+        # Try free-text field
+        job_title = raw["hrm_experience.job_title"] or ""
+    organisation = raw["hrm_experience.organisation_id"]
+    if organisation:
+        #org_url = URL(c="org", f="organisation", args=[organisation, "profile"])
+        org_url = URL(c="org", f="organisation", args=[organisation])
+        organisation = P(I(_class="icon-sitemap"),
+                         " ",
+                         SPAN(A(record["hrm_experience.organisation_id"],
+                                _href=org_url),
+                              ),
+                         " ",
+                         _class="card_1_line",
+                         )
+    else:
+        # Try free-text field
+        organisation = raw["hrm_experience.organisation"] or ""
+        if organisation:
+            organisation = P(I(_class="icon-sitemap"),
+                             " ",
+                             SPAN(organisation),
+                             " ",
+                             _class="card_1_line",
+                             )
+
+    place = raw["hrm_experience.place"] or ""
+    if place:
+        place = P(I(_class="icon-home"),
+                  " ",
+                  SPAN(place),
+                  " ",
+                  _class="card_1_line",
+                  )
+
+    hours = raw["hrm_experience.hours"] or ""
+    if hours:
+        hours = P(I(_class="icon-time"),
+                  " ",
+                  SPAN(hours),
+                  " ",
+                  _class="card_1_line",
+                  )
+
+    super = raw["hrm_experience.person_id"] or ""
+    if super:
+        #person_url = URL(c="hrm", f="person", args=[super, "profile"])
+        person_url = URL(c="hrm", f="person", args=[super])
+        super = P(I(_class="icon-user"),
+                  " ",
+                  SPAN(A(record["hrm_experience.person_id"],
+                         _href=person_url)
+                       ),
+                  " ",
+                  _class="card_1_line",
+                  )
+
+    start_date = raw["hrm_experience.start_date"]
+    end_date = raw["hrm_experience.start_date"]
+    if start_date or end_date:
+        if start_date and end_date:
+            dates = "%s - %s" % (record["hrm_experience.start_date"],
+                                 record["hrm_experience.end_date"],
+                                 )
+        elif start_date:
+            dates = "%s - " % record["hrm_experience.start_date"]
+        else:
+            dates = " - %s" % record["hrm_experience.end_date"]
+        date = P(I(_class="icon-calendar"),
+                 " ",
+                 SPAN(dates),
+                 " ",
+                 _class="card_1_line",
+                 )
+    else:
+        date = ""
+
+    comments = raw["hrm_experience.comments"] or ""
+
+    # Edit Bar
+    permit = current.auth.s3_has_permission
+    table = current.s3db.hrm_experience
+    if permit("update", table, record_id=record_id):
+        if current.request.controller == "vol":
+            controller = "vol"
+        else:
+            controller = "hrm"
+        edit_btn = A(I(" ", _class="icon icon-edit"),
+                     _href=URL(c=controller, f="experience",
+                               args=[record_id, "update.popup"],
+                               vars={"refresh": listid,
+                                     "record": record_id}),
+                     _class="s3_modal",
+                     _title=current.T("Edit Experience"),
+                     )
+    else:
+        edit_btn = ""
+    if permit("delete", table, record_id=record_id):
+        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+                       _class="dl-item-delete",
+                       )
+    else:
+        delete_btn = ""
+    edit_bar = DIV(edit_btn,
+                   delete_btn,
+                   _class="edit-bar fright",
+                   )
+
+    # Render the item
+    item = DIV(DIV(I(_class="icon"),
+                   SPAN(" %s" % job_title,
+                        _class="card-title"),
+                   edit_bar,
+                   _class="card-header",
+                   ),
+               DIV(DIV(DIV(organisation,
+                           place,
+                           date,
+                           hours,
+                           super,
+                           P(SPAN(comments),
+                             " ",
+                             _class="card_manylines",
+                             ),
+                           _class="media",
+                           ),
+                       _class="media-body",
+                       ),
+                   _class="media",
+                   ),
+               _class=item_class,
+               _id=item_id,
+               )
+
+    return item
+
+# =============================================================================
+def hrm_render_trainings(listid, resource, rfields, record, 
+                         type = None,
+                         **attr):
+    """
+        Custom dataList item renderer for Trainings on the HRM Profile
+
+        @param listid: the HTML ID for this list
+        @param resource: the S3Resource to render
+        @param rfields: the S3ResourceFields to render
+        @param record: the record as dict
+        @param attr: additional HTML attributes for the item
+    """
+
+    pkey = "hrm_training.id"
+
+    # Construct the item ID
+    if pkey in record:
+        record_id = record[pkey]
+        item_id = "%s-%s" % (listid, record_id)
+    else:
+        # template
+        item_id = "%s-[id]" % listid
+
+    item_class = "thumbnail"
+
+    raw = record._row
+    title = record["hrm_training.course_id"]
+    date = raw["hrm_training.date"] or ""
+    if date:
+        date = P(I(_class="icon-calendar"),
+                 " ",
+                 SPAN(record["hrm_training.date"]),
+                 " ",
+                 _class="card_1_line",
+                 )
+    grade = raw["hrm_training.grade"] or ""
+    if grade:
+        grade = P(I(_class="icon-certificate"),
+                  " ",
+                  SPAN(record["hrm_training.grade"]),
+                  " ",
+                  _class="card_1_line",
+                  )
+    hours = raw["hrm_training.hours"] or ""
+    if hours:
+        hours = P(I(_class="icon-time"),
+                  " ",
+                  SPAN(hours),
+                  " ",
+                  _class="card_1_line",
+                  )
+    site = raw["hrm_training_event.site_id"] or ""
+    if site:
+        #site_id = raw["hrm_training_event.site_id"]
+        #site_url = URL(c="org", f="site", args=[site_id, "profile"])
+        site_url = "#"
+        site = P(I(_class="icon-home"),
+                 " ",
+                 SPAN(A(record["hrm_training_event.site_id"],
+                        _href=site_url)
+                      ),
+                 " ",
+                 _class="card_1_line",
+                 )
+    comments = raw["hrm_training.comments"] or ""
+
+    # Edit Bar
+    permit = current.auth.s3_has_permission
+    table = current.s3db.hrm_training
+    if permit("update", table, record_id=record_id):
+        if current.request.controller == "vol":
+            controller = "vol"
+        else:
+            controller = "hrm"
+        edit_btn = A(I(" ", _class="icon icon-edit"),
+                     _href=URL(c=controller, f="training",
+                               args=[record_id, "update.popup"],
+                               vars={"refresh": listid,
+                                     "record": record_id}),
+                     _class="s3_modal",
+                     _title=current.T("Edit Training"),
+                     )
+    else:
+        edit_btn = ""
+    if permit("delete", table, record_id=record_id):
+        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+                       _class="dl-item-delete",
+                       )
+    else:
+        delete_btn = ""
+    edit_bar = DIV(edit_btn,
+                   delete_btn,
+                   _class="edit-bar fright",
+                   )
+
+    # Render the item
+    item = DIV(DIV(I(_class="icon"),
+                   SPAN(" %s" % title,
+                        _class="card-title"),
+                   edit_bar,
+                   _class="card-header",
+                   ),
+               DIV(DIV(DIV(site,
+                           date,
+                           hours,
+                           grade,
+                           P(SPAN(comments),
+                             " ",
+                             _class="card_manylines",
+                             ),
+                           _class="media",
+                           ),
+                       _class="media-body",
+                       ),
+                   _class="media",
+                   ),
+               _class=item_class,
+               _id=item_id,
+               )
+
+    return item
 
 # END =========================================================================

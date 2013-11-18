@@ -48,6 +48,8 @@ settings.auth.registration_requires_verification = True
 #settings.auth.registration_requests_organisation = True
 #settings.auth.registration_organisation_required = True
 settings.auth.registration_requests_site = False
+# Uncomment this to allow Admin to see Organisations in user Admin even if the Registration doesn't request this
+settings.auth.admin_sees_organisation = True
 
 # Approval emails get sent to all admins
 settings.mail.approver = "ADMIN"
@@ -1390,6 +1392,7 @@ def customize_gis_location(**attr):
 
                 location = r.record
                 record_id = location.id
+                # Override context as that's a Path
                 default = "~.(location)=%s" % record_id
                 map_widget = dict(label = "Map",
                                   type = "map",
@@ -1431,7 +1434,7 @@ def customize_gis_location(**attr):
                                    tablename = "req_req",
                                    context = "location",
                                    default = default,
-                                   filter = S3FieldSelector("req_status").belongs(0, 1),
+                                   filter = S3FieldSelector("req_status").belongs([0, 1]),
                                    icon = "icon-flag",
                                    layer = "Requests",
                                    # provided by Catalogue Layer
@@ -1910,7 +1913,7 @@ def customize_org_facility(**attr):
                                    type = "datalist",
                                    tablename = "req_req",
                                    context = "site",
-                                   filter = S3FieldSelector("req_status").belongs(0, 1),
+                                   filter = S3FieldSelector("req_status").belongs([0, 1]),
                                    icon = "icon-flag",
                                    show_on_map = False, # Since they will show within Sites
                                    list_layout = s3db.req_render_reqs,
@@ -2209,7 +2212,7 @@ def customize_org_organisation(**attr):
                                    type = "datalist",
                                    tablename = "req_req",
                                    context = "organisation",
-                                   filter = ("req_status").belongs(0, 1),
+                                   filter = ("req_status").belongs([0, 1]),
                                    icon = "icon-flag",
                                    layer = "Requests",
                                    # provided by Catalogue Layer
@@ -2754,7 +2757,7 @@ def customize_req_req(**attr):
         else:
             s3db.req_customize_req_fields()
         if r.method in ("datalist", "datalist.dl"):
-            s3.filter = (r.table.req_status.belongs(0, 1))
+            s3.filter = (r.table.req_status.belongs([0, 1]))
         elif r.method == "profile":
             # Customise tables used by widgets
             s3db.req_customize_commit_fields()

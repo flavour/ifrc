@@ -829,6 +829,7 @@ class S3PersonModel(S3Model):
         table.age_group = Field.Lazy(self.pr_person_age_group)
 
         # Search method
+        # @ToDo: Replace with S3Filter
         pr_person_search = S3Search(
             name="person_search_simple",
             label=T("Name and/or ID"),
@@ -863,7 +864,9 @@ class S3PersonModel(S3Model):
 
         # Resource configuration
         self.configure(tablename,
-                       super_entity = ("pr_pentity", "sit_trackable"),
+                       crud_form = crud_form,
+                       deduplicate = self.person_deduplicate,
+                       extra = "last_name",
                        list_fields = ["id",
                                       "first_name",
                                       "middle_name",
@@ -873,13 +876,12 @@ class S3PersonModel(S3Model):
                                       (T("Age"), "age"),
                                       (messages.ORGANISATION, "human_resource.organisation_id"),
                                       ],
-                       crud_form = crud_form,
-                       onaccept = self.pr_person_onaccept,
-                       search_method = pr_person_search,
-                       deduplicate = self.person_deduplicate,
                        main = "first_name",
-                       extra = "last_name",
+                       onaccept = self.pr_person_onaccept,
                        realm_components = ["presence"],
+                       # @ToDo: Replace with S3Filter
+                       search_method = pr_person_search,
+                       super_entity = ("pr_pentity", "sit_trackable"),
                        )
 
         person_id_comment = pr_person_comment(
@@ -5818,9 +5820,19 @@ def pr_render_address(listid, resource, rfields, record,
     comments = raw["pr_address.comments"] or ""
 
     addr_street = raw["gis_location.addr_street"] or ""
+    if addr_street:
+        addr_street = P(I(_class="icon-home"),
+                        " ",
+                        SPAN(addr_street),
+                        " ",
+                        _class="card_1_line",
+                        )
+
     addr_postcode = raw["gis_location.addr_postcode"] or ""
     if addr_postcode:
-        addr_postcode = P(SPAN(addr_postcode),
+        addr_postcode = P(I(_class="icon-envelope-alt"),
+                          " ",
+                          SPAN(addr_postcode),
                           " ",
                           _class="card_1_line",
                           )
@@ -5831,7 +5843,9 @@ def pr_render_address(listid, resource, rfields, record,
             locations.append(l)
     if len(locations):
         location = " | ".join(locations)
-        location = P(SPAN(location),
+        location = P(I(_class="icon-globe"),
+                     " ",
+                     SPAN(location),
                      " ",
                      _class="card_1_line",
                      )
@@ -5870,12 +5884,7 @@ def pr_render_address(listid, resource, rfields, record,
                    edit_bar,
                    _class="card-header",
                    ),
-               DIV(DIV(DIV(P(I(_class="icon-home"),
-                             " ",
-                             SPAN(addr_street),
-                             " ",
-                             _class="card_1_line",
-                             ),
+               DIV(DIV(DIV(addr_street,
                            addr_postcode,
                            location,
                            P(SPAN(comments),
