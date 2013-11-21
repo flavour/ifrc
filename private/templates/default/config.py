@@ -327,6 +327,8 @@ settings.L10n.decimal_separator = "."
 
 # -----------------------------------------------------------------------------
 # Organisations
+# Uncomment to use an Autocomplete for Organisation lookup fields
+#settings.org.autocomplete = True
 # Enable the use of Organisation Branches
 #settings.org.branches = True
 # Enable the use of Organisation Regions
@@ -480,6 +482,8 @@ settings.L10n.decimal_separator = "."
 #settings.req.items_ask_purpose = False
 # Uncomment to disable the Commit step in the workflow & simply move direct to Ship
 #settings.req.use_commit = False
+# Uncomment to have Donations include a 'Value' field
+#settings.req.commit_value = True
 # Uncomment to allow Donations to be made without a matching Request
 #settings.req.commit_without_request = True
 # Uncomment if the User Account logging the Commitment is NOT normally the Committer

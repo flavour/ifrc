@@ -312,33 +312,49 @@ class S3HRModel(S3Model):
         else:
             default_site = auth.user.site_id if auth.is_logged_in() else None
 
+        if settings.get_org_autocomplete():
+            org_widget = S3OrganisationAutocompleteWidget(default_from_profile=True)
+        else:
+            org_widget = None
+
+        if settings.get_org_site_autocomplete():
+            if settings.get_org_site_address_autocomplete():
+                site_widget = S3SiteAddressAutocompleteWidget()
+            else:
+                site_widget = S3SiteAutocompleteWidget()
+            site_comment = DIV(_class="tooltip",
+                               _title="%s|%s" % (T("Requested By Facility"),
+                                                 T("Enter some characters to bring up a list of possible matches")))
+        else:
+            site_widget = None
+            site_comment = None
+        
         tablename = "hrm_human_resource"
         realms = auth.permission.permitted_realms(tablename, method="create")
         table = define_table(tablename,
                              super_link("track_id", "sit_trackable"),
                              super_link("doc_id", "doc_entity"),
                              organisation_id(
+                               empty = not settings.get_hrm_org_required(),
                                label = organisation_label,
                                requires = self.org_organisation_requires(required=True,
                                                                          realms=realms),
-                              #widget = None,
-                               widget=S3OrganisationAutocompleteWidget(
-                                   default_from_profile=True),
-                               empty = not settings.get_hrm_org_required(),
+                               widget = org_widget,
                                ),
                              super_link("site_id", "org_site",
-                                        label=settings.get_org_site_label(),
+                                        comment = site_comment,
+                                        default = default_site,
+                                        #empty = False,
+                                        label = settings.get_org_site_label(),
                                         instance_types = auth.org_site_types,
                                         orderby = "org_site.name",
                                         realms = realms,
                                         not_filterby = "obsolete",
                                         not_filter_opts = [True],
-                                        default = default_site,
                                         readable = True,
                                         writable = True,
-                                        #empty = False,
                                         represent = self.org_site_represent,
-                                        #widget = S3SiteAutocompleteWidget(),
+                                        widget = site_widget,
                                         ),
                              self.pr_person_id(
                                widget=S3AddPersonWidget(controller="hrm"),
@@ -623,6 +639,10 @@ class S3HRModel(S3Model):
             # Job Titles
             add_component("hrm_job_title_human_resource",
                           hrm_human_resource="human_resource_id")
+
+        # Deploy (RDRT)
+        add_component("deploy_human_resource_application",
+                      hrm_human_resource="human_resource_id")
 
         # Availability
         #add_component("hrm_availability",
@@ -1080,7 +1100,7 @@ class S3HRModel(S3Model):
         request_gender = settings.get_pr_request_gender()
         home_phone = settings.get_pr_request_home_phone()
 
-        htable = r.table
+        htable = db.hrm_human_resource
         ptable = db.pr_person
         ctable = s3db.pr_contact
         fields = [htable.organisation_id,
@@ -1609,6 +1629,11 @@ class S3HRSkillModel(S3Model):
 
         group = request.get_vars.get("group", None)
 
+        if settings.get_org_autocomplete():
+            widget = S3OrganisationAutocompleteWidget(default_from_profile=True)
+        else:
+            widget = None
+
         # ---------------------------------------------------------------------
         # Skill Types
         # - optional hierarchy of skills
@@ -1823,9 +1848,8 @@ class S3HRSkillModel(S3Model):
                              # This field can only be filled-out by specific roles
                              # Once this has been filled-out then the other fields are locked
                              organisation_id(label = T("Confirming Organization"),
-                                             #widget = S3OrganisationAutocompleteWidget(
-                                             #           default_from_profile=True),
                                              comment = None,
+                                             widget = widget,
                                              writable = False,
                                              ),
                              Field("from_certification", "boolean",
@@ -1962,10 +1986,10 @@ class S3HRSkillModel(S3Model):
         table = define_table(tablename,
                              person_id(),
                              self.hrm_job_title_id(),
-                             organisation_id(empty=False,
-                                             #widget = S3OrganisationAutocompleteWidget(
-                                             #           default_from_profile=True),
-                                             label=T("Credentialling Organization")),
+                             organisation_id(empty = False,
+                                             label = T("Credentialling Organization"),
+                                             widget = widget,
+                                             ),
                              Field("performance_rating", "integer",
                                    label = T("Performance Rating"),
                                    requires = IS_IN_SET(hrm_pass_fail_opts,  # Default to pass/fail (can override to 5-levels in Controller)
@@ -2333,7 +2357,7 @@ class S3HRSkillModel(S3Model):
                                              readable = is_admin or not filter_certs,
                                              writable = is_admin or not filter_certs,
                                              label = label,
-                                             #widget = S3OrganisationAutocompleteWidget(),
+                                             widget = widget,
                                              ),
                              Field("expiry", "integer",
                                    label = T("Expiry (months)")),
@@ -2414,9 +2438,8 @@ class S3HRSkillModel(S3Model):
                              # This field can only be filled-out by specific roles
                              # Once this has been filled-out then the other fields are locked
                              organisation_id(label = T("Confirming Organization"),
-                                             widget = S3OrganisationAutocompleteWidget(
-                                                        default_from_profile=True),
                                              comment = None,
+                                             widget = widget,
                                              writable = False,
                                              ),
                              Field("from_training", "boolean",
@@ -3058,6 +3081,11 @@ class S3HRExperienceModel(S3Model):
         T = current.T
         person_id = self.pr_person_id
 
+        if current.deployment_settings.get_org_autocomplete():
+            org_widget = S3OrganisationAutocompleteWidget(default_from_profile=True)
+        else:
+            org_widget = None
+
         # =====================================================================
         # Professional Experience (Mission Record)
         #
@@ -3072,10 +3100,7 @@ class S3HRExperienceModel(S3Model):
         tablename = "hrm_experience"
         table = self.define_table(tablename,
                                   person_id(),
-                                  self.org_organisation_id(
-                                    widget = S3OrganisationAutocompleteWidget(
-                                                default_from_profile=True)
-                                    ),
+                                  self.org_organisation_id(widget = org_widget),
                                   # Alternate free-text form especially suitable for volunteers
                                   Field("organisation",
                                         readable = False,
@@ -5821,9 +5846,7 @@ def hrm_configure_pr_group_membership():
                    orderby=orderby)
 
 # =============================================================================
-def hrm_render_competencies(listid, resource, rfields, record, 
-                            type = None,
-                            **attr):
+def hrm_render_competencies(listid, resource, rfields, record, **attr):
     """
         Custom dataList item renderer for Skills on the HRM Profile
 
@@ -5925,9 +5948,7 @@ def hrm_render_competencies(listid, resource, rfields, record,
     return item
 
 # =============================================================================
-def hrm_render_experience(listid, resource, rfields, record, 
-                          type = None,
-                          **attr):
+def hrm_render_experience(listid, resource, rfields, record, **attr):
     """
         Custom dataList item renderer for Experience on the HRM Profile
 
@@ -6091,9 +6112,7 @@ def hrm_render_experience(listid, resource, rfields, record,
     return item
 
 # =============================================================================
-def hrm_render_trainings(listid, resource, rfields, record, 
-                         type = None,
-                         **attr):
+def hrm_render_trainings(listid, resource, rfields, record, **attr):
     """
         Custom dataList item renderer for Trainings on the HRM Profile
 
