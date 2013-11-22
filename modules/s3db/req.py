@@ -228,11 +228,12 @@ class S3RequestModel(S3Model):
                                   #      label = T("Neighborhood")),
                                   # Donations: What will the Items be used for?; People: Task Details
                                   s3_comments("purpose",
-                                              label=T("Purpose"),
+                                              comment = "",
+                                              label = T("Purpose"),
                                               # Only-needed for summary mode (unused)
                                               #represent = self.req_purpose_represent,
                                               represent = s3_string_represent,
-                                              comment=""),
+                                              ),
                                   Field("is_template", "boolean",
                                         label = T("Recurring Request?"),
                                         represent = s3_yes_no_represent,
@@ -3903,6 +3904,7 @@ def req_add_from_template(req_id):
 def req_customize_req_fields():
     """
         Customize req_req fields for the Home page & dataList view
+        - this assumes Simple Requests (i.e. type 'Other')
     """
 
     # Truncate purpose field
@@ -3945,55 +3947,83 @@ def req_customize_req_fields():
                                  "site_id$comments",
                                  ]
 
-    # If the Requester is blank, then lookup default Site Contact
-    script = \
+    table.type.default = 9 # Other
+
+    field = table.purpose
+    field.label = T("Request")
+    field.requires = IS_NOT_EMPTY(error_message=T("Please enter details of the Request"))
+    field.represent = lambda body: XML(s3_URLise(body))
+
+    field = table.date
+    field.label = T("Date")
+    # Make mandatory
+    requires = field.requires
+    field.requires = requires.other
+
+    field = table.site_id
+    site_id = request.get_vars.get("~.(site)", None)
+    if site_id:
+        field.default = site_id
+        field.readable = field.writable = False
+        # Lookup Site Contact
+        script = \
+'''var fieldname='req_req_requester_id'
+var real_input=$('#'+fieldname)
+$.when(S3.addPersonWidgetReady(fieldname)).then(
+function(status){real_input.data('lookup_contact')(fieldname,%s)},
+function(status){s3_debug(status)},
+function(status){s3_debug(status)})''' % site_id
+        current.response.s3.jquery_ready.append(script)
+    else:
+        # If the Requester is blank, then lookup default Site Contact
+        script = \
 '''$('#req_req_site_id').change(function(){
  var site_id=$(this).val()
  if(site_id){
   var fieldname='req_req_requester_id'
-  var selector='#'+fieldname
-  var real_input=$(selector)
+  var real_input=$('#'+fieldname)
   if(!real_input.val()&&!$('#req_req_requester_id_full_name').val()){
-   lookup_contact=real_input.data('lookup_contact')
-   lookup_contact(fieldname,site_id)
+   real_input.data('lookup_contact')(fieldname,site_id)
 }}})'''
-    current.response.s3.jquery_ready.append(script)
+        current.response.s3.jquery_ready.append(script)
 
-    requires = table.date.requires
-    table.date.requires = requires.other
+        organisation_id = request.get_vars.get("~.(organisation)", None)
+        if organisation_id:
+            # Restrict to Sites belonging to this Org
+            # @ToDo: Handle Branches
+            filterby = "organisation_id"
+            filter_opts = [organisation_id]
+            # No need to use Site Autocomplete in this case
+            field.widget = None
+        else:
+            filterby = None
+            filter_opts = []
+
+        field.label = T("Requested for Site")
+        #site_represent = s3db.org_SiteRepresent(show_link=False,
+        #                                        show_type=False)
+        site_represent = S3Represent(lookup="org_site")
+        field.represent = site_represent
+        field.requires = IS_ONE_OF(db, "org_site.site_id",
+                                   site_represent,
+                                   filterby = filterby,
+                                   filter_opts = filter_opts,
+                                   not_filterby = "obsolete",
+                                   not_filter_opts = [True],
+                                   orderby = "org_site.name",
+                                   sort = True,
+                                   )
+        field.comment = S3AddResourceLink(c="org", f="facility",
+                                          vars = dict(child="site_id",
+                                                      parent="req"),
+                                          title=T("Add New Site"),
+                                          )
+
+    db.org_site.location_id.represent = s3db.gis_LocationRepresent(sep=" | ")
 
     field = table.requester_id
     field.requires = IS_ADD_PERSON_WIDGET2()
     field.widget = S3AddPersonWidget2(controller="pr")
-
-    field = table.site_id
-    field.label = T("Requested for Site")
-    #site_represent = s3db.org_SiteRepresent(show_link=False,
-    #                                        show_type=False)
-    site_represent = S3Represent(lookup="org_site")
-    field.represent = site_represent
-    field.requires = IS_ONE_OF(db, "org_site.site_id",
-                               site_represent,
-                               orderby = "org_site.name",
-                               filterby = "obsolete",
-                               filter_opts = [False],
-                               sort = True,
-                               )
-    field.comment = S3AddResourceLink(c="org", f="facility",
-                                      vars = dict(child="site_id",
-                                                  parent="req"),
-                                      title=T("Add New Site"),
-                                      )
-
-    db.org_site.location_id.represent = s3db.gis_LocationRepresent(sep=" | ")
-
-    table.type.default = 9 # Other
-    table.date.label = T("Date")
-
-    field = table.purpose
-    field.label = T("Request")
-    field.required = True
-    field.represent = lambda body: XML(s3_URLise(body))
 
     # Which levels of Hierarchy are we using?
     hierarchy = current.gis.get_location_hierarchy()
@@ -4002,17 +4032,16 @@ def req_customize_req_fields():
         levels.remove("L0")
 
     filter_widgets = [
-        #S3TextFilter(["committer_id$first_name",
-        #              "committer_id$middle_name",
-        #              "committer_id$last_name",
-        #              "site_id$name",
-        #              "comments",
-        #              "req_id$name",
-        #              "organisation_id$name"
-        #              ],
-        #             label = T("Search")
-        #             comment=T("Search for a commitment by Committer name, Request ID, Site or Organization."),
-        #             ),
+        S3TextFilter(["requester_id$first_name",
+                      "requester_id$middle_name",
+                      "requester_id$last_name",
+                      "site_id$name",
+                      "purpose",
+                      #"comments",
+                      ],
+                     label = T("Search"),
+                     comment=T("Search for a request by Site name, Requester name or free text."),
+                     ),
         #S3OptionsFilter("transit_status",
         #                label = T("Transit Status"),
         #                options = s3db.req_status_opts,
@@ -4029,12 +4058,7 @@ def req_customize_req_fields():
                          #hidden=True,
                          ),
         S3OptionsFilter("site_id",
-                        label=T("Requested For Facility"),
-                        widget="multiselect",
-                        hidden=True,
-                        ),
-        S3OptionsFilter("created_by",
-                        label=T("Logged By"),
+                        label=T("Requested For Site"),
                         widget="multiselect",
                         hidden=True,
                         ),
@@ -4053,20 +4077,28 @@ def req_customize_req_fields():
         #             hidden=True,
         #             ),
         ]
+    # @ToDo: deployment_setting
+    if current.auth.s3_has_role("EDITOR"):
+        filter_widgets.insert(-1, S3OptionsFilter("created_by",
+                                                  label=T("Logged By"),
+                                                  widget="multiselect",
+                                                  hidden=True,
+                                                  ))
 
     # Return to Requests view after create/update/delete (unless done via Modal)
     url_next = URL(c="req", f="req", args="datalist")
 
     s3db.configure(tablename,
-                   crud_form = crud_form,
-                   filter_widgets = filter_widgets,
                    create_next = url_next,
+                   crud_form = crud_form,
                    delete_next = url_next,
-                   update_next = url_next,
+                   filter_formstyle = filter_formstyle,
+                   filter_widgets = filter_widgets,
                    # We want the Create form to be in a modal, not inline, for consistency
                    listadd = False,
                    list_fields = list_fields,
                    list_layout = req_render_reqs,
+                   update_next = url_next,
                    )
 
     return table
@@ -4167,7 +4199,7 @@ def req_render_reqs(listid, resource, rfields, record, **attr):
     else:
         edit_btn = ""
     if permit("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        delete_btn = A(I(" ", _class="icon icon-trash"),
                        _class="dl-item-delete",
                        )
     else:
@@ -4216,6 +4248,7 @@ def req_render_reqs(listid, resource, rfields, record, **attr):
 
     #if permit("create", table):
     if auth.is_logged_in():
+        _class="s3_modal btn"
         commit_url = URL(c="req", f="commit",
                          args=["create.popup"],
                          vars={"req_id": record_id,
@@ -4224,6 +4257,7 @@ def req_render_reqs(listid, resource, rfields, record, **attr):
                                },
                          )
     else:
+        _class="btn"
         next = "/%s/req/commit/create?req_id=%s" % (current.request.application,
                                                     record_id)
         commit_url = URL(c="default", f="user",
@@ -4235,7 +4269,7 @@ def req_render_reqs(listid, resource, rfields, record, **attr):
                    " ",
                    T("DONATE"),
                    _href=commit_url,
-                   _class="s3_modal btn",
+                   _class=_class,
                    _title=T("Donate to this Request"),
                    )
 
@@ -4363,6 +4397,7 @@ def req_customize_commit_fields():
     if editor:
         field.requires = IS_ADD_PERSON_WIDGET2()
         field.widget = S3AddPersonWidget2(controller="pr")
+        field.default = None
     else:
         field.writable = False
 
@@ -4447,15 +4482,16 @@ def req_customize_commit_fields():
     url_next = URL(c="req", f="req", args="datalist")
 
     s3db.configure(tablename,
-                   crud_form = crud_form,
-                   filter_widgets = filter_widgets,
                    create_next = url_next,
+                   crud_form = crud_form,
                    delete_next = url_next,
-                   update_next = url_next,
+                   filter_formstyle = filter_formstyle,
+                   filter_widgets = filter_widgets,
                    # We want the Create form to be in a modal, not inline, for consistency
                    listadd = False,
                    list_fields = list_fields,
                    list_layout = req_render_commits,
+                   update_next = url_next,
                    )
 
     return table
@@ -4557,7 +4593,7 @@ def req_render_commits(listid, resource, rfields, record, **attr):
     else:
         edit_btn = ""
     if permit("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        delete_btn = A(I(" ", _class="icon icon-trash"),
                        _class="dl-item-delete",
                        )
     else:
@@ -4603,5 +4639,43 @@ def req_render_commits(listid, resource, rfields, record, **attr):
                )
 
     return item
+
+# -----------------------------------------------------------------------------
+def filter_formstyle(row_id, label, widget, comment, hidden=False):
+    """
+        Custom Formstyle for FilterForm
+
+        @param row_id: HTML id for the row
+        @param label: the label
+        @param widget: the form widget
+        @param comment: the comment
+        @param hidden: whether the row should initially be hidden or not
+    """
+
+    if hidden:
+        _class = "advanced hide"
+    else:
+        _class= ""
+
+    if not label:
+        label = ""
+
+    if comment:
+        if current.response.s3.rtl:
+            dir = "fleft"
+        else:
+            dir = "fright"
+        comment = DIV(_class = "tooltip %s" % dir,
+                      _title = "%s|%s" % (label[0][:-1], comment),
+                      )
+    else:
+        comment = ""
+
+    return DIV(label,
+               widget,
+               comment,
+               _id=row_id,
+               _class=_class,
+               )
 
 # END =========================================================================

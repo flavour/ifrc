@@ -57,6 +57,7 @@ class S3DeploymentModel(S3Model):
     names = ["deploy_event_type",
              "deploy_mission",
              "deploy_mission_id",
+             "deploy_mission_document",
              "deploy_role_type",
              "deploy_human_resource_application",
              "deploy_human_resource_assignment",
@@ -193,6 +194,7 @@ class S3DeploymentModel(S3Model):
                                      "start_date",
                                      "end_date",
                                      "role_type_id",
+                                     "rating",
                                  ],
                                  tablename = "deploy_human_resource_assignment",
                                  context = "mission",
@@ -296,6 +298,7 @@ class S3DeploymentModel(S3Model):
                                 linkto=URL(f="mission",
                                            args=["[id]", "profile"]),
                                 show_link=True)
+                                
         mission_id = S3ReusableField("mission_id", table,
                                      requires = IS_ONE_OF(db,
                                                           "deploy_mission.id",
@@ -305,6 +308,16 @@ class S3DeploymentModel(S3Model):
                                      ondelete = "CASCADE",
                                      )
 
+        # ---------------------------------------------------------------------
+        # Link table to link documents to missions, responses or assignments
+        #
+        tablename = "deploy_mission_document"
+        table = define_table(tablename,
+                             mission_id(),
+                             self.msg_message_id(),
+                             self.doc_document_id(),
+                            )
+                            
         # ---------------------------------------------------------------------
         # Role Type ('Sector' in RDRT)
         # - used to classify Assignments & Trainings
@@ -768,14 +781,15 @@ def deploy_rheader(r, tabs=[], profile=False):
         recipients = db(query).count()
 
         unsent = not r.record.message_id
-        if recipients and unsent:
-            send_button = S3CRUD.crud_button(T("Send Alert"),
-                                             _href=URL(c="deploy", f="alert",
-                                                       args=[alert_id, "send"]),
-                                             #_id="send-alert-btn",
-                                             )
-        else:
-            send_button = ""
+        if unsent:
+            send_button = BUTTON(T("Send Alert"), _class="alert-send-btn")
+            if recipients:
+                send_button.update(_onclick="window.location.href='%s';" %
+                                            URL(c="deploy",
+                                                f="alert",
+                                                args=[alert_id, "send"]))
+            else:
+                send_button.update(_disabled="disabled")
 
         # Tabs
         tabs = [(T("Message"), None),
@@ -795,7 +809,7 @@ def deploy_rheader(r, tabs=[], profile=False):
                             TR(TH("%s: " % table.subject.label),
                                record.subject
                                ),
-                            ), rheader_tabs)
+                            ), rheader_tabs, _class="alert-rheader")
 
     elif resourcename == "mission":
 
@@ -1291,6 +1305,7 @@ def deploy_render_human_resource_assignment(listid, resource, rfields, record,
                        render("deploy_human_resource_assignment.start_date",
                               "deploy_human_resource_assignment.end_date",
                               "deploy_human_resource_assignment.role_type_id",
+                              "deploy_human_resource_assignment.rating",
                        ),
                        _class="media-body",
                    ),

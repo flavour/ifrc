@@ -344,7 +344,7 @@ def render_contacts(listid, resource, rfields, record, **attr):
         title_update = ""
     # Deletions failing due to Integrity Errors
     #if permit("delete", table, record_id=person_id):
-    #    delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+    #    delete_btn = A(I(" ", _class="icon icon-trash"),
     #                   _class="dl-item-delete",
     #                   )
     #else:
@@ -494,7 +494,7 @@ def render_locations(listid, resource, rfields, record, **attr):
     # else:
         # edit_btn = ""
     # if permit("delete", table, record_id=record_id):
-        # delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        # delete_btn = A(I(" ", _class="icon icon-trash"),
                        # _class="dl-item-delete",
                       # )
     # else:
@@ -673,7 +673,7 @@ def render_locations_profile(listid, resource, rfields, record, **attr):
     # else:
         # edit_btn = ""
     # if permit("delete", table, record_id=record_id):
-        # delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        # delete_btn = A(I(" ", _class="icon icon-trash"),
                        # _class="dl-item-delete",
                        # )
     # else:
@@ -760,6 +760,50 @@ def render_sites(listid, resource, rfields, record, **attr):
         logo = DIV(IMG(_class="media-object"),
                    _class="pull-left")
 
+    facility_status = raw["org_site_status.facility_status"] or ""
+    if facility_status:
+        if facility_status == 1:
+            icon = "thumbs-up-alt"
+            colour = "green"
+        elif facility_status == 2:
+            icon = "thumbs-down-alt"
+            colour = "amber"
+        elif facility_status == 3:
+            icon = "reply-all"
+            colour = "red"
+        elif facility_status == 4:
+            icon = "remove"
+            colour = "red"
+        elif facility_status == 99:
+            icon = "question"
+            colour = ""
+        facility_status = P(#I(_class="icon-%s" % icon),
+                            #" ",
+                            SPAN("%s: %s" % (T("Status"), record["org_site_status.facility_status"])),
+                            " ",
+                            _class="card_1_line %s" % colour,
+                            )
+    power_supply_type = raw["org_site_status.power_supply_type"] or ""
+    if power_supply_type:
+        if power_supply_type == 1:
+            icon = "thumbs-up-alt"
+            colour = "green"
+        elif power_supply_type == 2:
+            icon = "cogs"
+            colour = "amber"
+        elif power_supply_type == 98:
+            icon = "question"
+            colour = "amber"
+        elif power_supply_type == 99:
+            icon = "remove"
+            colour = "red"
+        power_supply_type = P(#I(_class="icon-%s" % icon),
+                              #" ",
+                              SPAN("%s: %s" % (T("Power"), record["org_site_status.power_supply_type"])),
+                              " ",
+                              _class="card_1_line %s" % colour,
+                              )
+
     # Edit Bar
     permit = current.auth.s3_has_permission
     table = current.db.org_facility
@@ -780,7 +824,7 @@ def render_sites(listid, resource, rfields, record, **attr):
     else:
         edit_btn = ""
     if permit("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        delete_btn = A(I(" ", _class="icon icon-trash"),
                        _class="dl-item-delete",
                        )
     else:
@@ -814,6 +858,8 @@ def render_sites(listid, resource, rfields, record, **attr):
                      " ",
                      _class="card_1_line",
                      ),
+                   facility_status,
+                   power_supply_type,
                    P(comments,
                      _class="card_manylines s3-truncate",
                      ),
@@ -880,7 +926,7 @@ def render_organisations(listid, resource, rfields, record, **attr):
         # template
         item_id = "%s-[id]" % listid
 
-    item_class = "thumbnail span6"
+    item_class = "thumbnail span6" # span6 for 2 cols
 
     raw = record._row
     name = record["org_organisation.name"]
@@ -943,7 +989,7 @@ def render_organisations(listid, resource, rfields, record, **attr):
     else:
         edit_btn = ""
     if permit("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        delete_btn = A(I(" ", _class="icon icon-trash"),
                        _class="dl-item-delete",
                       )
     else:
@@ -1042,7 +1088,7 @@ def render_org_needs(listid, resource, rfields, record, **attr):
         # template
         item_id = "%s-[id]" % listid
 
-    item_class = "thumbnail span6"
+    item_class = "thumbnail"
 
     raw = record._row
     logo = raw["org_organisation.logo"]
@@ -1100,7 +1146,7 @@ def render_org_needs(listid, resource, rfields, record, **attr):
     else:
         edit_btn = ""
     if permit("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        delete_btn = A(I(" ", _class="icon icon-trash"),
                        _class="dl-item-delete",
                       )
     else:
@@ -1171,7 +1217,7 @@ def render_site_needs(listid, resource, rfields, record, **attr):
         # template
         item_id = "%s-[id]" % listid
 
-    item_class = "thumbnail span6"
+    item_class = "thumbnail"
 
     raw = record._row
     logo = raw["org_organisation.logo"]
@@ -1238,7 +1284,7 @@ def render_site_needs(listid, resource, rfields, record, **attr):
     else:
         edit_btn = ""
     if permit("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        delete_btn = A(I(" ", _class="icon icon-trash"),
                        _class="dl-item-delete",
                       )
     else:
@@ -1727,6 +1773,8 @@ def customize_org_facility_fields():
                    "human_resource.person_id",
                    #"contact",
                    "phone1",
+                   "status.facility_status",
+                   "status.power_supply_type",
                    "comments",
                    ]
 
@@ -1762,6 +1810,11 @@ def customize_org_facility_fields():
                                 #    label = T("Needs"),
                                 #    multiple = False,
                                 #),
+                                S3SQLInlineComponent(
+                                    "status",
+                                    label = T("Status"),
+                                    multiple = False,
+                                ),
                                 "comments",
                                 )
 
@@ -1835,9 +1888,21 @@ def customize_org_facility(**attr):
                                      widget="multiselect",
                                      hidden=True,
                                     ),
-                    S3OptionsFilter(name="facility_search_type",
+                    S3OptionsFilter(name="type",
                                     label=T("Type"),
                                     field="site_facility_type.facility_type_id",
+                                    widget="multiselect",
+                                    hidden=True,
+                                    ),
+                    S3OptionsFilter(name="status",
+                                    label=T("Status"),
+                                    field="status.facility_status",
+                                    widget="multiselect",
+                                    hidden=True,
+                                    ),
+                    S3OptionsFilter(name="power",
+                                    label=T("Power Supply"),
+                                    field="status.power_supply_type",
                                     widget="multiselect",
                                     hidden=True,
                                     ),
@@ -2005,6 +2070,10 @@ def customize_org_facility(**attr):
             #table.phone1.readable = table.phone1.writable = False
             table.phone2.readable = table.phone2.writable = False
             table.email.readable = table.email.writable = False
+
+        elif r.representation == "geojson":
+            # Don't represent facility_status, but just show integers
+            s3db.org_site_status.facility_status.represent = None
 
         return True
     s3.prep = custom_prep

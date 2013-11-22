@@ -14,7 +14,7 @@
  </div>
  <div class='carousel-caption'>
   <h1>{{=settings.get_system_name()}}<br></h1>
-  <p>{{=T("Improving disaster prevention, preparedness and response in Libya.")}}</p>
+  <p>{{=T("Improving civil society coordination in Libya.")}}</p>
   {{if not auth.is_logged_in():}}
   <p>
    <a href='/{{=appname}}/default/user/login' class='btn btn-custom btn-login'><i class='icon-signin'></i> {{=T("LOGIN")}} </a>
@@ -28,16 +28,16 @@
  <div class='container'>
   <div class='row'>
    <div class='span4 first_stl'>
+    <h2><a href='/{{=appname}}/vol/person/create'><i class='icon-user'></i> {{=T("Volunteer")}}</a></li></h2>
+    <p class='quote mb4'>{{=T("Volunteer your time to help others.")}}</p>
+   </div>
+   <div class='span4 stl'>
     <h2><a href='/{{=appname}}/req/req/create'><i class='icon-flag'></i> {{=T("Make a Request")}}</a></li></h2>
     <p class='quote mb4'>{{=T("Phone the call center to make a Request for anything, including goods or volunteers.")}}</p>
    </div>
    <div class='span4 stl'>
     <h2><a href='/{{=appname}}/req/req/datalist'><i class='icon-truck'></i> {{=T("Donate in Kind")}}</a></li></h2>
     <p class='quote mb4'>{{=T("Donations can be matched to Requests.")}}</p>
-   </div>
-   <div class='span4 stl'>
-    <h2><a href='/{{=appname}}/org/organisation/datalist?needs.money=True'><i class='icon-dollar'></i> {{=T("Money")}}</a></li></h2>
-    <p class='quote mb4'>{{=T("Donating money is the best way to provide support as relief agencies can then use this flexibly.")}}</p>
    </div>
   </div>
  </div>
