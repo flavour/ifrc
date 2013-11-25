@@ -745,6 +745,7 @@ S3OptionsFilter({
 
                 # @ToDo: Fix for human_resource_id -> person_id
                 if settings.get_req_requester_from_site():
+                    T = current.T
                     # Filter the list of Contacts to those for the site
                     table.requester_id.widget = None
                     jquery_ready.append('''
@@ -808,6 +809,7 @@ S3OptionsFilter({
 
                 # @ToDo: Fix for human_resource_id -> person_id
                 if settings.get_req_requester_from_site():
+                    T = current.T
                     # Filter the list of Contacts to those for the site
                     table.requester_id.widget = None
                     current.response.s3.jquery_ready.append('''
