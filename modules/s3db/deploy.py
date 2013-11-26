@@ -317,7 +317,7 @@ class S3DeploymentModel(S3Model):
                              mission_id(),
                              self.msg_message_id(),
                              self.doc_document_id(),
-                            )
+                             *s3_meta_fields())
                             
         # ---------------------------------------------------------------------
         # Role Type ('Sector' in RDRT)
@@ -655,6 +655,7 @@ class S3DeploymentAlertModel(S3Model):
                   crud_form = crud_form,
                   #editable = False,
                   insertable = False,
+                  update_onaccept = self.deploy_response_update_onaccept,
                   )
 
         # CRUD Strings
@@ -754,6 +755,60 @@ class S3DeploymentAlertModel(S3Model):
         current.session.confirmation = T("Alert Sent")
         redirect(next_url)
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def deploy_response_update_onaccept(form):
+        """
+            Update the doc_id in all attachments (doc_document) to the
+            hrm_human_resource the response is linked to.
+
+            @param form: the form
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        data = form.vars
+        if not data or "id" not in data:
+            return
+
+        # Get message ID and human resource ID
+        if "human_resource_id" not in data or "message_id" not in data:
+            rtable = s3db.deploy_response
+            response = db(rtable.id == data.id) \
+                         .select(rtable.human_resource_id,
+                                 rtable.message_id,
+                                 limitby=(0, 1)).first()
+            if not response:
+                return
+            human_resource_id = response.human_resource_id
+            message_id = response.message_id
+        else:
+            human_resource_id = data.human_resource_id
+            message_id = data.message_id
+
+        # Update doc_id in all attachments (if any)
+        dtable = s3db.doc_document
+        ltable = s3db.deploy_mission_document
+        query = (ltable.message_id == response.message_id) & \
+                (dtable.id == ltable.document_id) & \
+                (ltable.deleted == False) & \
+                (dtable.deleted == False)
+        print query
+        attachments = db(query).select(dtable.id)
+        print attachments
+        if attachments:
+            # Get the doc_id from the hrm_human_resource
+            doc_id = None
+            if human_resource_id:
+                htable = s3db.hrm_human_resource
+                hr = db(htable.id == human_resource_id) \
+                       .select(htable.doc_id, limitby=(0, 1)).first()
+                if hr:
+                    doc_id = hr.doc_id
+            db(dtable.id.belongs(attachments)).update(doc_id=doc_id)
+        return
+            
 # =============================================================================
 def deploy_rheader(r, tabs=[], profile=False):
     """ Deployment Resource Headers """
@@ -1116,7 +1171,7 @@ def deploy_render_response(listid, resource, rfields, record, **attr):
 
     row = record["_row"]
     raw = record._row
-    human_resource_id = row["hrm_human_resource.id"]
+    human_resource_id = raw["hrm_human_resource.id"]
     mission_id = row["deploy_response.mission_id"]
 
     db = current.db
@@ -1184,18 +1239,19 @@ def deploy_render_response(listid, resource, rfields, record, **attr):
                 _class="profile-data",
                 )
 
-    profile_url = URL(f="human_resource", args=[human_resource_id, "profile"])
-    profile_title = current.T("Open Member Profile (in a new tab)")
-
     if human_resource_id:
         person_id = record["hrm_human_resource.person_id"]
+        profile_url = URL(f="human_resource", args=[human_resource_id, "profile"])
+        profile_title = T("Open Member Profile (in a new tab)")
+        person = A(person_id,
+                   _href=profile_url,
+                   _target="_blank",
+                   _title=profile_title)
     else:
         person_id = "%s (%s)" % \
                     (T("Unknown"), record["msg_message.from_address"])
-    person = A(person_id,
-               _href=profile_url,
-               _target="_blank",
-               _title=profile_title)
+        person = person_id
+
     organisation = record["hrm_human_resource.organisation_id"]
 
     created_on = record["deploy_response.created_on"]
@@ -1211,9 +1267,15 @@ def deploy_render_response(listid, resource, rfields, record, **attr):
     if documents:
         if not isinstance(documents, list):
             documents = [documents]
-        doc_list = UL(_class="dropdown-menu",
+        bootstrap = current.response.s3.formstyle == "bootstrap"
+        if bootstrap:
+            docs = UL(_class="dropdown-menu",
                       _role="menu",
                       )
+        else:
+            docs = SPAN(_id="attachments",
+                        _class="profile-data-value",
+                        )
         retrieve = db.doc_document.file.retrieve
         for doc in documents:
             try:
@@ -1222,23 +1284,42 @@ def deploy_render_response(listid, resource, rfields, record, **attr):
                 doc_name = current.messages["NONE"]
             doc_url = URL(c="default", f="download",
                           args=[doc])
-            doc_item = LI(A(I(_class="icon-file"),
-                            " ",
-                            doc_name,
-                            _href=doc_url,
-                            ),
-                          _role="menuitem",
-                          )
-            doc_list.append(doc_item)
-        docs = DIV(A(I(_class="icon-paper-clip"),
-                     SPAN(_class="caret"),
-                     _class="btn dropdown-toggle",
-                     _href="#",
-                     **{"_data-toggle": "dropdown"}
-                     ),
-                   doc_list,
-                   _class="btn-group attachments dropdown pull-right",
-                   )
+            if bootstrap:
+                doc_item = LI(A(I(_class="icon-file"),
+                                " ",
+                                doc_name,
+                                _href=doc_url,
+                                ),
+                              _role="menuitem",
+                              )
+            else:
+                doc_item = A(I(_class="icon-file"),
+                             " ",
+                             doc_name,
+                             _href=doc_url,
+                             )
+            docs.append(doc_item)
+            docs.append(", ")
+        if bootstrap:
+            docs = DIV(A(I(_class="icon-paper-clip"),
+                         SPAN(_class="caret"),
+                         _class="btn dropdown-toggle",
+                         _href="#",
+                         **{"_data-toggle": "dropdown"}
+                         ),
+                       doc_list,
+                       _class="btn-group attachments dropdown pull-right",
+                       )
+        else:
+            # Remove final comma
+            docs.components.pop()
+            docs = DIV(LABEL("%s:" % T("Attachments"),
+                             _class = "profile-data-label",
+                             _for="attachments",
+                             ),
+                       docs,
+                       _class = "profile-data",
+                       )
     else:
         docs = ""
 
@@ -1890,8 +1971,8 @@ def deploy_response_select_mission(r, **attr):
             action_vars["hr_id"] = hr_id
 
         s3 = response.s3
-        s3.actions = [dict(label=str(T("Link to Mission")),
-                           _class="action-btn link",
+        s3.actions = [dict(label=str(T("Select Mission")),
+                           _class="action-btn",
                            url=URL(f="email_inbox",
                                    args=[r.id, "select"],
                                    vars=action_vars,
