@@ -127,6 +127,15 @@ def audit_write(method, tablename, form, record, representation):
 settings.security.audit_write = audit_write
 
 # -----------------------------------------------------------------------------
+# CMS
+# Uncomment to use Bookmarks in Newsfeed
+settings.cms.bookmarks = True
+# Uncomment to use Rich Text editor in Newsfeed
+settings.cms.richtext = True
+# Uncomment to show tags in Newsfeed
+settings.cms.show_tags = True
+
+# -----------------------------------------------------------------------------
 # Inventory Management
 # Uncomment to customise the label for Facilities in Inventory Management
 settings.inv.facility_label = "Facility"

@@ -1010,15 +1010,27 @@ class S3RSSModel(S3ChannelModel):
         table = define_table(tablename,
                              # Instance
                              super_link("channel_id", "msg_channel"),
-                             Field("name",
-                                   length = 255,
-                                   unique = True),
-                             Field("description"),
+                             Field("name", length=255, unique=True,
+                                   label = T("Name"),
+                                   ),
+                             Field("description",
+                                   label = T("Description"),
+                                   ),
                              Field("enabled", "boolean",
                                    label = T("Enabled?"),
                                    represent = s3_yes_no_represent,
                                    ),
-                             Field("url"),
+                             Field("url",
+                                   label = T("URL"),
+                                   requires = IS_URL(),
+                                   ),
+                             s3_datetime(label = T("Last Polled"),
+                                         writable = False
+                                         ),
+                             Field("etag",
+                                   label = T("ETag"),
+                                   writable = False
+                                   ),
                              *s3_meta_fields())
 
         self.configure(tablename,
@@ -1552,6 +1564,10 @@ class S3TwitterModel(S3Model):
                                                       [T("Out")])[0],
                                    label = T("Direction"),
                                    ),
+                             Field("msg_id", # Twitter Message ID
+                                   readable = False,
+                                   writable = False,
+                                   ),
                              *s3_meta_fields())
 
         table.created_on.readable = True
@@ -1793,12 +1809,14 @@ class S3TwitterSearchModel(S3ChannelModel):
             S3Method for interactive requests
         """
 
+        id = r.id
         tablename = r.tablename
-        current.s3task.async("msg_twitter_search", args=[r.id])
+        current.s3task.async("msg_twitter_search", args=[id])
         current.session.confirmation = \
             current.T("The search request has been submitted, so new messages should appear shortly - refresh to see them")
-        # @ToDo: Filter to this Search
-        redirect(URL(f="twitter_result"))
+        # Filter results to this Search
+        redirect(URL(f="twitter_result",
+                     vars={"~.search_id": id}))
 
     # -----------------------------------------------------------------------------
     @staticmethod
@@ -1813,7 +1831,7 @@ class S3TwitterSearchModel(S3ChannelModel):
         current.s3task.async("msg_process_keygraph", args=[r.id])
         current.session.confirmation = \
             current.T("The search results are now being processed with KeyGraph")
-        # @ToDo: Link to results
+        # @ToDo: Link to KeyGraph results
         redirect(URL(f="twitter_result"))
 
 # =============================================================================

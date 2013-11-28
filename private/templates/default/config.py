@@ -123,13 +123,13 @@ settings.base.guided_tour = True
 #    ("fr", "Français"),
 #    ("de", "Deutsch"),
 #    ("el", "ελληνικά"),
+#    ("es", "Español"),
 #    ("it", "Italiano"),
 #    ("ja", "日本語"),
 #    ("ko", "한국어"),
 #    ("pt", "Português"),
 #    ("pt-br", "Português (Brasil)"),
 #    ("ru", "русский"),
-#    ("es", "Español"),
 #    ("tl", "Tagalog"),
 #    ("ur", "اردو"),
 #    ("vi", "Tiếng Việt"),
@@ -318,6 +318,15 @@ settings.L10n.decimal_separator = "."
 #settings.ui.interim_save = True
 
 # -----------------------------------------------------------------------------
+# CMS
+# Uncomment to use Bookmarks in Newsfeed
+#settings.cms.bookmarks = True
+# Uncomment to use Rich Text editor in Newsfeed
+#settings.cms.richtext = True
+# Uncomment to show tags in Newsfeed
+#settings.cms.show_tags = True
+
+# -----------------------------------------------------------------------------
 # Persons
 # Uncomment to hide fields in S3AddPersonWidget[2]
 #settings.pr.request_dob = False
@@ -390,6 +399,8 @@ settings.L10n.decimal_separator = "."
 #settings.hrm.vol_experience = False
 # Uncomment to show the Organisation name in HR represents
 #settings.hrm.show_organisation = True
+# Uncomment to consolidate tabs into a single CV
+#settings.hrm.cv_tab = True
 # Uncomment to disable the use of Volunteer Awards
 #settings.hrm.use_awards = False
 # Uncomment to disable the use of HR Certificates

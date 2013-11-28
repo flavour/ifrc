@@ -31,12 +31,21 @@ __all__ = ["S3ContentModel",
            "S3ContentMapModel",
            "S3ContentOrgModel",
            #"S3ContentOrgGroupModel",
+           "S3ContentUserModel",
            "cms_index",
            "cms_rheader",
            "cms_customize_post_fields",
            "cms_render_posts",
            "S3CMS",
            ]
+
+try:
+    import json # try stdlib (Python 2.6)
+except ImportError:
+    try:
+        import simplejson as json # try external module
+    except:
+        import gluon.contrib.simplejson as json # fallback to pure-Python module
 
 from gluon import *
 from gluon.storage import Storage
@@ -67,6 +76,7 @@ class S3ContentModel(S3Model):
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
+        set_method = self.set_method
         settings = current.deployment_settings
 
         # ---------------------------------------------------------------------
@@ -241,11 +251,16 @@ class S3ContentModel(S3Model):
 
         add_component("cms_post_module", cms_post="post_id")
 
-        add_component("cms_tag",
-                      cms_post=Storage(link="cms_post_tag",
-                                       joinby="post_id",
-                                       key="tag_id",
-                                       actuate="hide"))
+        add_component("cms_post_user", cms_post=dict(name="bookmark",
+                                                     joinby="post_id"))
+
+        add_component("cms_tag", cms_post=dict(link="cms_tag_post",
+                                               joinby="post_id",
+                                               key="tag_id",
+                                               actuate="hide"))
+
+        # For FilterWidget
+        add_component("cms_post_tag", cms_post="post_id")
 
         add_component("cms_post_organisation",
                       cms_post=dict(joinby="post_id",
@@ -257,11 +272,27 @@ class S3ContentModel(S3Model):
         add_component("event_event_post", cms_post="post_id")
 
         # For Profile to filter appropriately
-        add_component("event_event",
-                      cms_post=Storage(link="event_event_post",
-                                       joinby="post_id",
-                                       key="event_id",
-                                       actuate="hide"))
+        add_component("event_event", cms_post=dict(link="event_event_post",
+                                                   joinby="post_id",
+                                                   key="event_id",
+                                                   actuate="hide"))
+
+        # Custom Methods
+        set_method("cms", "post",
+                   method="add_tag",
+                   action=self.cms_add_tag)
+
+        set_method("cms", "post",
+                   method="remove_tag",
+                   action=self.cms_remove_tag)
+
+        set_method("cms", "post",
+                   method="add_bookmark",
+                   action=self.cms_add_bookmark)
+
+        set_method("cms", "post",
+                   method="remove_bookmark",
+                   action=self.cms_remove_bookmark)
 
         # ---------------------------------------------------------------------
         # Modules/Resources <> Posts link table
@@ -478,6 +509,175 @@ class S3ContentModel(S3Model):
             if person:
                 db(table.id == post_id).update(person_id=person_id)
 
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def cms_add_tag(r, **attr):
+        """
+            Add a Tag to a Post
+
+            S3Method for interactive requests
+            - designed to be called as an afterTagAdded callback to tag-it.js
+        """
+
+        post_id = r.id
+        if not post_id or len(r.args) < 3:
+            raise HTTP(501, current.messages.BADMETHOD)
+
+        tag = r.args[2]
+        db = current.db
+        ttable = db.cms_tag
+        ltable = db.cms_tag_post
+        exists = db(ttable.name == tag).select(ttable.id,
+                                               ttable.deleted,
+                                               ttable.deleted_fk,
+                                               limitby=(0, 1)
+                                               ).first()
+        if exists:
+            tag_id = exists.id
+            if exists.deleted:
+                if exists.deleted_fk:
+                    data = json.loads(exists.deleted_fk)
+                    data["deleted"] = False
+                else:
+                    data = dict(deleted=False)
+                db(ttable.id == tag_id).update(**data)
+        else:
+            tag_id = ttable.insert(name=tag)
+        query = (ltable.tag_id == tag_id) & \
+                (ltable.post_id == post_id)
+        exists = db(query).select(ltable.id,
+                                  ltable.deleted,
+                                  ltable.deleted_fk,
+                                  limitby=(0, 1)
+                                  ).first()
+        if exists:
+            if exists.deleted:
+                if exists.deleted_fk:
+                    data = json.loads(exists.deleted_fk)
+                    data["deleted"] = False
+                else:
+                    data = dict(deleted=False)
+                db(ltable.id == exists.id).update(**data)
+        else:
+            ltable.insert(post_id = post_id,
+                          tag_id = tag_id,
+                          )
+
+        output = current.xml.json_message(True, 200, "Tag Added")
+        current.response.headers["Content-Type"] = "application/json"
+        return output
+
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def cms_remove_tag(r, **attr):
+        """
+            Remove a Tag from a Post
+
+            S3Method for interactive requests
+            - designed to be called as an afterTagRemoved callback to tag-it.js
+        """
+
+        post_id = r.id
+        if not post_id or len(r.args) < 3:
+            raise HTTP(501, current.messages.BADMETHOD)
+
+        tag = r.args[2]
+        db = current.db
+        ttable = db.cms_tag
+        exists = db(ttable.name == tag).select(ttable.id,
+                                               ttable.deleted,
+                                               limitby=(0, 1)
+                                               ).first()
+        if exists:
+            tag_id = exists.id
+            ltable = db.cms_tag_post
+            query = (ltable.tag_id == tag_id) & \
+                    (ltable.post_id == post_id)
+            exists = db(query).select(ltable.id,
+                                      ltable.deleted,
+                                      limitby=(0, 1)
+                                      ).first()
+            if exists and not exists.deleted:
+                resource = current.s3db.resource("cms_tag_post", exists.id)
+                resource.delete()
+
+        output = current.xml.json_message(True, 200, "Tag Removed")
+        current.response.headers["Content-Type"] = "application/json"
+        return output
+
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def cms_add_bookmark(r, **attr):
+        """
+            Bookmark a Post
+
+            S3Method for interactive requests
+        """
+
+        post_id = r.id
+        user = current.auth.user
+        user_id = user and user.id
+        if not post_id or not user_id:
+            raise HTTP(501, current.messages.BADMETHOD)
+
+        db = current.db
+        ltable = db.cms_post_user
+        query = (ltable.post_id == post_id) & \
+                (ltable.user_id == user_id)
+        exists = db(query).select(ltable.id,
+                                  ltable.deleted,
+                                  ltable.deleted_fk,
+                                  limitby=(0, 1)
+                                  ).first()
+        if exists:
+            link_id = exists.id
+            if exists.deleted:
+                if exists.deleted_fk:
+                    data = json.loads(exists.deleted_fk)
+                    data["deleted"] = False
+                else:
+                    data = dict(deleted=False)
+                db(ltable.id == link_id).update(**data)
+        else:
+            link_id = ltable.insert(post_id = post_id,
+                                    user_id = user_id,
+                                    )
+
+        output = current.xml.json_message(True, 200, "Bookmark Added")
+        current.response.headers["Content-Type"] = "application/json"
+        return output
+
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def cms_remove_bookmark(r, **attr):
+        """
+            Remove a Bookmark for a Post
+
+            S3Method for interactive requests
+        """
+
+        post_id = r.id
+        user = current.auth.user
+        user_id = user and user.id
+        if not post_id or not user_id:
+            raise HTTP(501, current.messages.BADMETHOD)
+
+        db = current.db
+        ltable = db.cms_post_user
+        query = (ltable.post_id == post_id) & \
+                (ltable.user_id == user_id)
+        exists = db(query).select(ltable.id,
+                                  ltable.deleted,
+                                  limitby=(0, 1)
+                                  ).first()
+        if exists and not exists.deleted:
+            resource = current.s3db.resource("cms_post_user", exists.id)
+            resource.delete()
+
+        output = current.xml.json_message(True, 200, "Bookmark Removed")
+        current.response.headers["Content-Type"] = "application/json"
+        return output
+
 # =============================================================================
 class S3ContentMapModel(S3Model):
     """
@@ -548,6 +748,31 @@ class S3ContentOrgGroupModel(S3Model):
                                   self.cms_post_id(empty=False),
                                   self.org_group_id(empty=False),
                                   *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return dict()
+
+# =============================================================================
+class S3ContentUserModel(S3Model):
+    """
+        Link Posts to Users to allow Users to Bookmark posts
+    """
+
+    names = ["cms_post_user",
+             ]
+
+    def model(self):
+
+        # ---------------------------------------------------------------------
+        # Users <> Posts link table
+        #
+        tablename = "cms_post_user"
+        self.define_table(tablename,
+                          self.cms_post_id(empty=False),
+                          Field("user_id", current.auth.settings.table_user),
+                          *s3_meta_fields())
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
@@ -798,6 +1023,7 @@ def cms_customize_post_fields():
     """
 
     s3db = current.s3db
+    settings = current.deployment_settings
 
     # Hide Labels when just 1 column in inline form
     s3db.doc_document.file.label = ""
@@ -837,8 +1063,11 @@ def cms_customize_post_fields():
     field.represent = s3db.gis_LocationRepresent(sep=" | ")
     field.requires = IS_LOCATION_SELECTOR2(levels=levels)
     field.widget = S3LocationSelectorWidget2(levels=levels)
-    
-    table.body.represent = lambda body: XML(s3_URLise(body))
+
+    if settings.get_cms_richtext():
+        table.body.represent = lambda body: XML(body)
+    else:
+        table.body.represent = lambda body: XML(s3_URLise(body))
 
     list_fields = ["series_id",
                    "location_id",
@@ -849,6 +1078,34 @@ def cms_customize_post_fields():
                    "document.file",
                    #"event_post.event_id",
                    ]
+
+    if settings.get_cms_show_tags():
+        list_fields.append("tag.name")
+        s3 = current.response.s3
+        if s3.debug:
+            s3.scripts.append("/%s/static/scripts/tag-it.js" % current.request.application)
+        else:
+            s3.scripts.append("/%s/static/scripts/tag-it.min.js" % current.request.application)
+        if current.auth.s3_has_permission("update", current.db.cms_tag_post):
+            readonly = '''afterTagAdded:function(event,ui){
+ if(ui.duringInitialization){return}
+ var post_id=$(this).attr('data-post_id')
+ var url=S3.Ap.concat('/cms/post/',post_id,'/add_tag/',ui.tagLabel)
+ $.getS3(url)
+},afterTagRemoved:function(event,ui){
+ var post_id=$(this).attr('data-post_id')
+ var url=S3.Ap.concat('/cms/post/',post_id,'/remove_tag/',ui.tagLabel)
+ $.getS3(url)
+},'''
+        else:
+            readonly = '''readOnly:true'''
+        script = \
+'''S3.tagit=function(){$('.s3-tags').tagit({autocomplete:{source:'%s'},%s})}
+S3.tagit()
+S3.redraw_fns.push('tagit')''' % (URL(c="cms", f="tag",
+                                      args="search_ac.json"),
+                                  readonly)
+        s3.jquery_ready.append(script)
 
     s3db.configure("cms_post",
                    list_fields = list_fields,
@@ -887,13 +1144,21 @@ def cms_render_posts(listid, resource, rfields, record,
     org_field = "cms_post_organisation.organisation_id"
 
     raw = record._row
-    series = record["cms_post.series_id"]
+    series_id = raw["cms_post.series_id"]
     date = record["cms_post.date"]
     body = record["cms_post.body"]
 
-    location = record["cms_post.location_id"]
     location_id = raw["cms_post.location_id"]
-    location_url = URL(c="gis", f="location", args=[location_id, "profile"])
+    if location_id:
+        location = record["cms_post.location_id"]
+        location_url = URL(c="gis", f="location", args=[location_id, "profile"])
+        location = SPAN(A(location,
+                          _href=location_url,
+                          ),
+                        _class="location-title",
+                        )
+    else:
+        location = ""
 
     person_id = raw["cms_post.person_id"]
     if person_id:
@@ -962,18 +1227,43 @@ def cms_render_posts(listid, resource, rfields, record,
         card_person = DIV(organisation,
                           _class="card-person",
                           )
-    
-    T = current.T
-    translate = current.deployment_settings.get_L10n_translate_cms_series()
-    if translate:
-        title = T(series)
+
+    permit = current.auth.s3_has_permission
+    settings = current.deployment_settings
+    table = db.cms_post
+    updateable = permit("update", table, record_id=record_id)
+
+    if settings.get_cms_show_tags():
+        tags = raw["cms_tag.name"]
+        if tags or updateable:
+            tag_list = UL(_class="s3-tags",
+                          )
+            tag_list["_data-post_id"] = record_id
+        else:
+            tag_list = ""
+        if tags:
+            if not isinstance(tags, list):
+                tags = [tags]#.split(", ")
+            for tag in tags:
+                tag_item = LI(tag)
+                tag_list.append(tag_item)
+        tags = tag_list
     else:
-        title = series
+        tags = ""
+
+    T = current.T
+    if series_id:
+        series = record["cms_post.series_id"]
+        translate = settings.get_L10n_translate_cms_series()
+        if translate:
+            title = T(series)
+        else:
+            title = series
+    else:
+        title = series = ""
 
     # Edit Bar
-    permit = current.auth.s3_has_permission
-    table = db.cms_post
-    if permit("update", table, record_id=record_id):
+    if updateable:
         edit_btn = A(I(" ", _class="icon icon-edit"),
                      _href=URL(c="cms", f="newsfeed",
                                args=[record_id, "update.popup"],
@@ -1047,58 +1337,40 @@ def cms_render_posts(listid, resource, rfields, record,
             item_class = "%s disaster" % item_class
 
     # Render the item
-    # @ToDo: Review for generalisability
-    if "newsfeed" not in request.args and series == "Event":
-        item = DIV(DIV(SPAN(date,
-                            _class="date-title event",
-                            ),
-                       SPAN(A(location,
-                              _href=location_url,
-                              ),
-                            _class="location-title",
-                            ),
-                       edit_bar,
-                       _class="card-header",
-                       ),
-                   DIV(avatar,
-                       DIV(DIV(body,
-                               card_person,
-                               _class="media",
-                               ),
-                           _class="media-body",
-                           ),
-                       _class="media",
-                       ),
-                   docs,
-                   _class=item_class,
-                   _id=item_id,
-                   )
+    if series == "Event" and "newsfeed" not in request.args:
+        # Events on Homepage have a different header
+        header = DIV(SPAN(date,
+                          _class="date-title event",
+                          ),
+                     location,
+                     edit_bar,
+                     _class="card-header",
+                     )
     else:
-        item = DIV(DIV(card_label,
-                       SPAN(A(location,
-                              _href=location_url,
-                              ),
-                            _class="location-title",
-                            ),
-                       SPAN(date,
-                            _class="date-title",
-                            ),
-                       edit_bar,
-                       _class="card-header",
-                       ),
-                   DIV(avatar,
-                       DIV(DIV(body,
-                               card_person,
-                               _class="media",
-                               ),
-                           _class="media-body",
+        header = DIV(card_label,
+                     location,
+                     SPAN(date,
+                          _class="date-title",
+                          ),
+                     edit_bar,
+                     _class="card-header",
+                     )
+
+    item = DIV(header,
+               DIV(avatar,
+                   DIV(DIV(body,
+                           card_person,
+                           _class="media",
                            ),
-                       _class="media",
+                       _class="media-body",
                        ),
-                   docs,
-                   _class=item_class,
-                   _id=item_id,
-                   )
+                   _class="media",
+                   ),
+               tags,
+               docs,
+               _class=item_class,
+               _id=item_id,
+               )
 
     return item
 

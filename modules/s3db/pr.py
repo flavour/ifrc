@@ -1240,9 +1240,9 @@ class S3PersonModel(S3Model):
         limit = int(_vars.limit or 0)
         MAX_SEARCH_RESULTS = current.deployment_settings.get_search_max_results()
         if (not limit or limit > MAX_SEARCH_RESULTS) and resource.count() > MAX_SEARCH_RESULTS:
-            output = jsons([dict(id="",
-                                 name="Search results are over %d. Please input more characters." \
-                                     % MAX_SEARCH_RESULTS)])
+            output = json.dumps([dict(id="",
+                                      name="Search results are over %d. Please input more characters." \
+                                          % MAX_SEARCH_RESULTS)])
         else:
             fields = ["id",
                       "first_name",
@@ -2490,16 +2490,19 @@ class S3PersonEducationModel(S3Model):
             msg_list_empty = T("No education details currently registered"))
 
         self.configure("pr_education",
-                       deduplicate=self.pr_education_deduplicate,
-                       list_fields=["id",
-                                    "person_id",
-                                    "year",
-                                    "level",
-                                    "award",
-                                    "major",
-                                    "grade",
-                                    "institute",
-                                    ],
+                       context = {"person": "person_id",
+                                  },
+                       deduplicate = self.pr_education_deduplicate,
+                       list_fields = ["id",
+                                      # Normally accessed via component
+                                      #"person_id",
+                                      "year",
+                                      "level",
+                                      "award",
+                                      "major",
+                                      "grade",
+                                      "institute",
+                                      ],
                        orderby = ~table.year,
                        sortby = [[1, "desc"]]
                        )

@@ -1881,7 +1881,14 @@ class S3HRSkillModel(S3Model):
                   context = {"person": "person_id",
                              },
                   deduplicate = self.hrm_competency_duplicate,
-                  list_layout = hrm_render_competencies
+                  list_fields = ["id",
+                                 # Normally accessed via component
+                                 #"person_id",
+                                 "skill_id",
+                                 "competency_id",
+                                 "comments",
+                                 ],
+                  list_layout = hrm_render_competencies,
                   )
 
         # =====================================================================
@@ -2328,13 +2335,14 @@ class S3HRSkillModel(S3Model):
                              },
                   deduplicate = self.hrm_training_duplicate,
                   filter_widgets = filter_widgets,
-                  list_fields = ["course_id",
-                                 "date",
+                  list_fields = ["date",
+                                 "course_id",
                                  "hours",
                                  ],
                   list_layout = hrm_render_trainings,
                   onaccept = hrm_training_onaccept,
                   ondelete = hrm_training_onaccept,
+                  orderby = ~table.date,
                   report_options = report_options,
                   )
 
@@ -3161,7 +3169,17 @@ class S3HRExperienceModel(S3Model):
                        context = {"person": "person_id",
                                   "organisation": "organisation_id",
                                   },
+                       list_fields = ["id",
+                                      # Normally accessed via component
+                                      #"person_id",
+                                      "start_date",
+                                      "end_date",
+                                      "organisation_id",
+                                      "job_title_id",
+                                      "comments",
+                                      ],
                        list_layout = hrm_render_experience,
+                       orderby = ~table.start_date,
                        )
 
         # ---------------------------------------------------------------------
@@ -4328,6 +4346,7 @@ def hrm_rheader(r, tabs=[],
                 group = "volunteer"
             else:
                 group = "staff"
+        use_cv = settings.get_hrm_cv_tab()
         experience_tab = None
         service_record = ""
         tbl = TABLE(TR(TH(name,
@@ -4446,11 +4465,11 @@ def hrm_rheader(r, tabs=[],
                                       ),
                                     _style="margin-bottom:10px;"
                                     )
-                if vol_experience == "both":
+                if vol_experience == "both" and not use_cv:
                     experience_tab2 = (T("Experience"), "experience")
-            elif vol_experience == "experience":
+            elif vol_experience == "experience" and not use_cv:
                 experience_tab = (T("Experience"), "experience")
-        elif settings.get_hrm_staff_experience() == "experience":
+        elif settings.get_hrm_staff_experience() == "experience" and not use_cv:
             experience_tab = (T("Experience"), "experience")
 
         if settings.get_hrm_use_certificates():
@@ -4468,7 +4487,7 @@ def hrm_rheader(r, tabs=[],
         else:
             description_tab = None
 
-        if settings.get_hrm_use_education():
+        if settings.get_hrm_use_education() and not use_cv:
             education_tab = (T("Education"), "education")
         else:
             education_tab = None
@@ -4478,7 +4497,7 @@ def hrm_rheader(r, tabs=[],
         else:
             id_tab = None
 
-        if settings.get_hrm_use_skills():
+        if settings.get_hrm_use_skills() and not use_cv:
             skills_tab = (T("Skills"), "competency")
         else:
             skills_tab = None
@@ -4493,10 +4512,13 @@ def hrm_rheader(r, tabs=[],
         else:
             teams_tab = None
 
-        if settings.get_hrm_use_trainings():
+        if settings.get_hrm_use_trainings() and not use_cv:
             trainings_tab = (T("Trainings"), "training")
         else:
             trainings_tab = None
+
+        if use_cv:
+            trainings_tab = (T("CV"), "cv")
 
         if profile:
             # Configure for personal mode
@@ -4691,8 +4713,8 @@ def hrm_competency_controller():
                        )
 
     def prep(r):
-        if r.method in ("create", "create.popup"):
-            # Coming from Profile page
+        if r.method in ("create", "create.popup", "update", "update.popup"):
+            # Coming from Profile page?
             person_id = current.request.get_vars.get("~.person_id", None)
             if person_id:
                 field = s3db.hrm_competency.person_id
@@ -4735,8 +4757,8 @@ def hrm_experience_controller():
         redirect(URL(f="index"))
 
     def prep(r):
-        if r.method in ("create", "create.popup"):
-            # Coming from Profile page
+        if r.method in ("create", "create.popup", "update", "update.popup"):
+            # Coming from Profile page?
             person_id = current.request.get_vars.get("~.person_id", None)
             if person_id:
                 field = current.s3db.hrm_experience.person_id
@@ -5529,7 +5551,7 @@ def hrm_person_controller(**attr):
     else:
         orgname = None
 
-    _attr = dict(rheader=s3db.hrm_rheader,
+    _attr = dict(rheader=hrm_rheader,
                  orgname=orgname,
                  replace_option=T("Remove existing data before import"),
                  csv_template="staff",
@@ -5575,8 +5597,8 @@ def hrm_training_controller():
                            list_fields = list_fields,
                            )
 
-            if r.method in ("create", "create.popup"):
-                # Coming from Profile page
+            if r.method in ("create", "create.popup", "update", "update.popup"):
+                # Coming from Profile page?
                 person_id = current.request.get_vars.get("~.person_id", None)
                 if person_id:
                     field = s3db.hrm_training.person_id
@@ -5671,8 +5693,8 @@ def hrm_training_event_controller():
     s3.postp = postp
 
     output = current.rest_controller("hrm", "training_event",
-                                     hide_filter=False,
-                                     rheader=hrm_rheader,
+                                     hide_filter = False,
+                                     rheader = hrm_rheader,
                                      )
     return output
 
@@ -5680,87 +5702,111 @@ def hrm_training_event_controller():
 def hrm_cv(r, **attr):
     """
         Curriculum Vitae
-        - page with multiple DataTables
-
-        Work in-progress
+        - Custom Profile page with multiple DataTables:
+        * Education
+        * Experience
+        * Training
+        * Skills
     """
 
-    if r.representation == "html" and \
-       r.name == "person" and r.id and not r.component:
-
+    if r.name == "person" and r.id and not r.component and \
+       r.representation in ("html", "aadata"):
         T = current.T
         s3db = current.s3db
+        settings = current.deployment_settings
+        tablename = r.tablename
+        if r.controller == "vol":
+            controller = "vol"
+        else:
+            controller = "hrm"
 
-        resource = s3db.resource("hrm_training")
-        resource.add_filter(S3FieldSelector("person_id") == r.id)
+        def dt_row_actions(component):
+            return lambda r, listid: [
+                {"label": T("Open"),
+                 "url": r.url(component=component,
+                              component_id="[id]",
+                              method="update.popup",
+                              vars={"refresh": listid}),
+                 "_class": "action-btn edit s3_modal",
+                },
+                {"label": T("Delete"),
+                 "url": r.url(component=component,
+                              component_id="[id]",
+                              method="delete"),
+                 "_class": "action-btn delete-btn delete-btn-ajax",
+                },
+            ]
 
-        # Maintain RHeader for consistency
-        if attr.get("rheader"):
-            rheader = attr["rheader"](r)
-            if rheader:
-                output["rheader"] = rheader
+        profile_widgets = []
+        if settings.get_hrm_use_education():
+            education_widget = dict(label = "Education",
+                                    title_create = "Add Education",
+                                    type = "datatable",
+                                    actions = dt_row_actions("education"),
+                                    tablename = "pr_education",
+                                    context = "person",
+                                    create_controller = controller,
+                                    create_function = "person",
+                                    create_component = "education",
+                                    colspan = 2,
+                                    pagesize = None, # all records
+                                    )
+            profile_widgets.append(education_widget)
+        vol_experience = settings.get_hrm_vol_experience()
+        if vol_experience in ("both", "experience"):
+            experience_widget = dict(label = "Experience",
+                                     title_create = "Add Experience",
+                                     type = "datatable",
+                                     actions = dt_row_actions("experience"),
+                                     tablename = "hrm_experience",
+                                     context = "person",
+                                     create_controller = controller,
+                                     create_function = "person",
+                                     create_component = "experience",
+                                     colspan = 2,
+                                     pagesize = None, # all records
+                                     )
+            profile_widgets.append(experience_widget)
+        if settings.get_hrm_use_trainings():
+            training_widget = dict(label = "Training",
+                                   title_create = "Add Training",
+                                   type = "datatable",
+                                   actions = dt_row_actions("training"),
+                                   tablename = "hrm_training",
+                                   context = "person",
+                                   create_controller = controller,
+                                   create_function = "person",
+                                   create_component = "training",
+                                   colspan = 2,
+                                   pagesize = None, # all records
+                                   )
+            profile_widgets.append(training_widget)
+        if settings.get_hrm_use_skills():
+            skills_widget = dict(label = "Skills",
+                                 title_create = "Add Skill",
+                                 type = "datatable",
+                                 actions = dt_row_actions("competency"),
+                                 tablename = "hrm_competency",
+                                 context = "person",
+                                 create_controller = controller,
+                                 create_function = "person",
+                                 create_component = "competency",
+                                 colspan = 2,
+                                 pagesize = None, # all records
+                                 )
+            profile_widgets.append(skills_widget)
 
-        output["title"] = T("CV")
-        current.response.view = "hrm/cv.html"
-        return output
+        s3db.configure(tablename,
+                       # Maintain normal rheader for consistency
+                       profile_header = hrm_rheader,
+                       profile_widgets = profile_widgets,
+                       )
 
-    else:
-        raise HTTP(501, current.messages.BADMETHOD)
-
-# =============================================================================
-def hrm_cv_inline(r, **attr):
-    """
-        Curriculum Vitae
-        - Custom Form including multiple inline components
-    """
-
-    if r.representation == "html" and \
-       r.name == "person" and r.id and not r.component:
-
-        T = current.T
-        s3db = current.s3db
-
-        # Custom Form
-        crud_form = S3SQLCustomForm(
-            S3SQLInlineComponent("training",
-                                 label = T("Trainings"),
-                                 fields = ["course_id",
-                                           "date",
-                                           #"end_date",
-                                           "hours",
-                                           ],
-                                 ),
-            S3SQLInlineComponent("education",
-                                 label = T("Education"),
-                                 fields = ["level",
-                                           "award",
-                                           "institute",
-                                           "year",
-                                           "major",
-                                           "grade",
-                                           ],
-                                 ),
-            )
-
-        crud = S3CRUD()
-        crud.resource = s3db.resource("pr_person")
-        crud.tablename = "pr_person"
-        crud.record_id = r.id
-        crud.request = r
-        crud.sqlform = crud_form
-        crud.settings = current.response.s3.crud
-        crud.table = s3db.pr_person
-        #output = crud.read(r, **attr)
-        output = crud.update(r, **attr)
-
-        # Maintain RHeader for consistency
-        if attr.get("rheader"):
-            rheader = attr["rheader"](r)
-            if rheader:
-                output["rheader"] = rheader
-
-        output["title"] = T("CV")
-        #current.response.view = "hrm/cv.html"
+        profile = S3Profile()
+        profile.tablename = tablename
+        profile.request = r
+        output = profile.profile(r, **attr)
+        current.response.title = T("CV")
         return output
 
     else:
