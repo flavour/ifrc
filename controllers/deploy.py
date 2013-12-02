@@ -19,7 +19,7 @@ def index():
     module_name = settings.modules[module].name_nice
     response.title = module_name
     return dict(module_name=module_name)
-    
+
 # =============================================================================
 def mission():
     """ RESTful CRUD Controller """
@@ -57,15 +57,13 @@ def mission():
                             (htable.deleted != True)
                     row = db(query).select(htable.id, limitby=(0, 1)).first()
                     if row:
-                        field = s3db.deploy_assignment \
-                                    .human_resource_id
+                        field = s3db.deploy_assignment.human_resource_id
                         field.default = row.id
                         field.writable = False
                         field.comment = None
                 elif r.method == "create":
                     atable = s3db.deploy_assignment
                     atable.end_date.writable = atable.end_date.readable = False
-                    atable.rating.writable = atable.rating.readable = False
             if not r.component and r.method == "profile":
                 represent = lambda d: \
                             s3base.S3DateTime.datetime_represent(d, utc=True)
@@ -115,7 +113,7 @@ def response_message():
 
     return s3_rest_controller("deploy", "response",
                               custom_crud_buttons = {"list_btn": None})
-    
+
 # =============================================================================
 def human_resource():
     """
@@ -154,7 +152,7 @@ def person():
     # Replace default title in imports:
     retitle = lambda r: {"title": T("Import Members")} \
                         if r.method == "import" else None
-    
+
     return s3db.hrm_person_controller(replace_option=None,
                                       csv_extra_fields=[
                                             dict(label="Deployable",
@@ -241,7 +239,7 @@ def alert():
     settings.hrm.staff_experience = True
     settings.hrm.use_skills = True
     settings.search.filter_manager = True
-    
+
     def prep(r):
         if r.component:
             if r.component.alias == "select":
