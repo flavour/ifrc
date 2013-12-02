@@ -1297,15 +1297,36 @@ def twitter_search():
     table.is_processed.readable = False
     table.is_searched.readable = False
 
-    # @ToDo: I'm sure there will be other language oddities to fix
     langs = settings.get_L10n_languages().keys()
-    if "en-gb" in langs:
-        langs.remove("en-gb")
-        langs.insert(0, "en")
-    table.lang.requires = IS_IN_SET(langs)
+
+    # Tweak languages to those supported by Twitter
+    # List according to Twitter 1.1 API https://dev.twitter.com/docs/api/1.1/get/help/languages
+    # @Todo Fetch list directly from Twitter
+    langs_supported = ['fr', 'en', 'ar', 'ja', 'es', 'de', 'it', 'id', 'pt', 'ko', 'tr', 'ru', 'nl', 'fil',
+                       'msa', 'zh-tw', 'zh-cn', 'hi', 'no', 'sv', 'fi', 'da', 'pl', 'hu', 'fa', 'he', 'ur', 'th']
+
+    substitute_list = {"en-gb": "en",
+                       "pt-br": "pt"}
+
+    new_langs = []
     lang_default = current.response.s3.language
-    if lang_default == "en-gb":
-        lang_default = "en"
+
+    for l in langs:
+        if l in langs_supported:
+            new_langs.append(l)
+        else:
+            supported_substitute = substitute_list.get(l)
+            if supported_substitute and supported_substitute not in langs:
+                new_langs.append(supported_substitute)
+                if lang_default == l:
+                    lang_default = supported_substitute
+            else:
+                if lang_default == l:
+                    lang_default = 'en'
+
+    langs = new_langs
+
+    table.lang.requires = IS_IN_SET(langs)
     table.lang.default = lang_default
 
     comment = "Add the keywords separated by single spaces."

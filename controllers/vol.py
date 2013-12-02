@@ -748,12 +748,12 @@ def person():
 # -----------------------------------------------------------------------------
 def person_search():
     """
-        Person REST controller
+        Human Resource REST controller
         - limited to just search_ac for use in Autocompletes
         - allows differential access permissions
     """
 
-    # Filter
+    # Filter to just Volunteers
     s3.filter = (s3db.hrm_human_resource.type == 2)
 
     s3.prep = lambda r: r.method == "search_ac"
