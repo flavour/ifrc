@@ -204,6 +204,7 @@ class S3DeploymentModel(S3Model):
                                      "end_date",
                                      "sector_id",
                                      "appraisal.rating",
+                                     "mission_id",
                                  ],
                                  context = "mission",
                                  list_layout = deploy_render_assignment,
@@ -904,9 +905,7 @@ class S3DeploymentAlertModel(S3Model):
                 (dtable.id == ltable.document_id) & \
                 (ltable.deleted == False) & \
                 (dtable.deleted == False)
-        print query
         attachments = db(query).select(dtable.id)
-        print attachments
         if attachments:
             # Get the doc_id from the hrm_human_resource
             doc_id = None
@@ -1138,13 +1137,13 @@ def deploy_render_profile_toolbox(resource,
                      _title=crud_string(tablename, "title_update"))
         toolbox.append(edit_btn)
     elif open_url:
-        open_btn = A(I(" ", _class="icon icon-open"),
+        open_btn = A(I(" ", _class="icon icon-file-alt"),
                      _href=open_url,
                      _title=crud_string(tablename, "title_display"))
         toolbox.append(open_btn)
 
     if has_permission("delete", table, record_id=record_id):
-        delete_btn = A(I(" ", _class="icon icon-remove-sign"),
+        delete_btn = A(I(" ", _class="icon icon-trash"),
                        _class="dl-item-delete",
                        _title=crud_string(tablename, "label_delete_button"))
         toolbox.append(delete_btn)
@@ -1351,18 +1350,15 @@ def deploy_render_response(listid, resource, rfields, record, **attr):
         table = s3db.deploy_assignment
         query = (table.human_resource_id == human_resource_id) & \
                 (table.deleted != True)
-        dcount = table.id.count()
-        row = db(query).select(dcount).first()
-        if row:
-            dcount = row[dcount]
-        else:
-            dcount = None
+        dcount = db(query).count()
 
         table = s3db.hrm_appraisal
         htable = s3db.hrm_human_resource
         query = (htable.id == human_resource_id) & \
                 (htable.person_id == table.person_id) & \
-                (table.deleted != True)
+                (table.deleted != True) & \
+                (table.rating != None) & \
+                (table.rating > 0)
         avgrat = table.rating.avg()
         row = db(query).select(avgrat).first()
         if row:
@@ -1482,8 +1478,7 @@ def deploy_render_response(listid, resource, rfields, record, **attr):
 
     # Render the item
     item = DIV(DIV(A(IMG(_class="media-object",
-                         _src=URL(c="static",
-                                  f="themes",
+                         _src=URL(c="static", f="themes",
                                   args=["IFRC", "img", "email.png"]),
                          ),
                          _class="pull-left",
@@ -1575,27 +1570,48 @@ def deploy_render_assignment(listid, resource, rfields, record,
                                          limitby=(0, 1)).first()
     permit = current.auth.s3_has_permission
     if appraisal and permit("update", atable, record_id=appraisal.id):
+        if current.response.s3.crud.formstyle == "bootstrap":
+            _class = "btn"
+        else:
+            _class = "action-btn"
+        EDIT_APPRAISAL = T("Open Appraisal")
         upload_btn = A(I(" ", _class="icon icon-paperclip"),
+                       EDIT_APPRAISAL,
                        _href=URL(c="deploy", f="person",
-                                 args=[person_id, "appraisal", appraisal.id, "update.popup"]),
-                       _class="s3_modal",
-                       _title=T("Upload Appraisal"),
+                                 args=[person_id, "appraisal",
+                                       appraisal.id, "update.popup"],
+                                 vars={"refresh": listid,
+                                       "record": record_id,
+                                       },
+                                 ),
+                       _class="s3_modal %s" % _class,
+                       _title=EDIT_APPRAISAL,
                        )
         toolbox.insert(0, upload_btn)
     elif permit("update", resource.table, record_id=record_id):
         # Currently we assume that anyone who can edit the assignment can upload the appraisal
+        if current.response.s3.crud.formstyle == "bootstrap":
+            _class = "btn"
+        else:
+            _class = "action-btn"
+        UPLOAD_APPRAISAL = T("Upload Appraisal")
         upload_btn = A(I(" ", _class="icon icon-paperclip"),
+                       UPLOAD_APPRAISAL,
                        _href=URL(c="deploy", f="person",
-                                 args=[person_id, "appraisal", "create.popup"]),
-                       _class="s3_modal",
-                       _title=T("Upload Appraisal"),
+                                 args=[person_id, "appraisal", "create.popup"],
+                                 vars={"mission_id": raw["deploy_assignment.mission_id"],
+                                       "refresh": listid,
+                                       "record": record_id,
+                                       },
+                                 ),
+                       _class="s3_modal %s" % _class,
+                       _title=UPLOAD_APPRAISAL,
                        )
         toolbox.insert(0, upload_btn)
 
     # Render the item
     item = DIV(DIV(A(IMG(_class="media-object",
-                         _src=URL(c="static",
-                                  f="themes",
+                         _src=URL(c="static", f="themes",
                                   args=["IFRC", "img", "member.png"]),
                          ),
                      _class="pull-left",
@@ -2330,11 +2346,12 @@ def deploy_response_select_mission(r, **attr):
                             TR(TH("%s: " % T("Message Text")),
                                ),
                             ),
-                            record.body,
+                            DIV(record.body, _class="message-body s3-truncate"),
                             attachments,
                             )
         output["rheader"] = rheader
-
+        s3_trunk8(lines=5)
+        
         response.view = "list_filter.html"
         return output
 
