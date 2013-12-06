@@ -1207,7 +1207,6 @@ class S3OptionsMenu(object):
                     M("Facilities", c="inv", f="facility")(
                         M("New", m="create", t="org_facility"),
                         M("List All"),
-                        #M("Search", m="search"),
                     ),
                     M("Facility Types", c="inv", f="facility_type",
                       restrict=[ADMIN])(
@@ -1276,9 +1275,9 @@ class S3OptionsMenu(object):
                         M("New", m="create"),
                         M("List All"),
                     ),
-                    M("Facilities", c="org", f="facility")(
+                    M("Facilities", c="org", f="facility", m="summary")(
                         M("New", m="create"),
-                        M("List All"),
+                        M("List All", m="summary"),
                     ),
                     M("Facility Types", c="org", f="facility_type",
                       restrict=[ADMIN])(
@@ -1463,11 +1462,9 @@ class S3OptionsMenu(object):
                         #M("Search", m="search"),
                         M("Import", m="import")
                     ),
-                    M("Facilities", f="facility")(
+                    M("Facilities", f="facility", m="summary")(
                         M("New", m="create"),
-                        M("List All"),
-                        M("Map", m="map"),
-                        M("Search", m="search"),
+                        M("List All", m="summary"),
                         M("Import", m="import")
                     ),
                     M("Organization Types", f="organisation_type",

@@ -77,8 +77,8 @@ class S3MainMenu(default.S3MainMenu):
                 MM("Request Supplies", f="req", m="create", vars={"type": 1}),
                 MM("Request People", f="req", m="create", vars={"type": 3})
             ),
-            MM("Locations", c="org", f="facility")(
-                MM("Facilities", c="org", f="facility", m="search"),
+            MM("Locations", c="org", f="facility", m="summary")(
+                MM("Facilities", c="org", f="facility", m="summary"),
                 MM("Create a Facility", c="org", f="facility", m="create")
             ),
             MM("Contacts", c="hrm", f="staff")(
@@ -157,9 +157,9 @@ class S3MainMenu(default.S3MainMenu):
 
         auth = current.auth
         logged_in = auth.is_logged_in()
-        self_registration = current.deployment_settings.get_security_self_registration()
 
         if not logged_in:
+            self_registration = current.deployment_settings.get_security_self_registration()
             request = current.request
             login_next = URL(args=request.args, vars=request.vars)
             if request.controller == "default" and \
@@ -180,16 +180,23 @@ class S3MainMenu(default.S3MainMenu):
                         )
         else:
             # Logged-in
-            menu_auth = MM(auth.user.email, c="default", f="user",
+            filter_manager = current.deployment_settings.get_search_filter_manager()
+            user = auth.user
+            menu_auth = MM(user.email, c="default", f="user",
                            translate=False, link=False, _id="auth_menu_email",
                            **attr)(
                             MM("Logout", m="logout", _id="auth_menu_logout",
-                               icon="icon-off"),
+                               icon="icon-off",
+                               ),
                             MM("Profile", c="default", f="person", m="update",
-                               icon="icon-user"
+                               icon="icon-user",
+                               ),
+                            MM("Saved Filters", c="pr", f="filter", m="datalist",
+                               vars={"~.pe_id": user.pe_id},
+                               icon="icon-filter",
                                ),
                             MM("Change Password", m="change_password",
-                               icon="icon-lock"
+                               icon="icon-lock",
                                ),
                             # @ToDo:
                             #SEP(),
@@ -315,11 +322,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
         #inv_recv_search = crud_strings.inv_recv.title_search
 
         return M()(
-                    M("Facilities", c="inv", f="facility")(
+                    M("Facilities", c="inv", f="facility", m="summary")(
                         M("New", m="create"),
-                        M("List All"),
-                        M("Map", m="map"),
-                        M("Search", m="search"),
+                        M("List All", m="summary"),
                         M("Import", m="import")
                     ),
                     M("Warehouse Stock", c="inv", f="inv_item")(
@@ -374,12 +379,10 @@ class S3OptionsMenu(default.S3OptionsMenu):
         #ADMIN = current.session.s3.system_roles.ADMIN
 
         return M(c="org")(
-                    M("Facilities", f="facility")(
+                    M("Facilities", f="facility", m="summary")(
                         M("New", m="create"),
-                        M("List All"),
+                        M("List All", m="summary"),
                         #M("Review/Approve New", m="review"),
-                        M("Map", m="map"),
-                        M("Search", m="search"),
                         M("Import", m="import")
                     ),
                     M("Organizations", f="organisation")(
