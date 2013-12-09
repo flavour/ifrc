@@ -1994,7 +1994,7 @@ def customize_org_facility(**attr):
 
                 record = r.record
                 record_id = record.id
-                # @ToDo: Add this Site on the Map
+                # @ToDo: Center on the Site
                 map_widget = dict(label = "Map",
                                   type = "map",
                                   context = "site",
@@ -2066,7 +2066,36 @@ def customize_org_facility(**attr):
                 else:
                     # @ToDo: Placeholder
                     logo = "#"
-                s3db.configure("org_facility",
+
+                # Add primary resource to map
+                # Lookup Marker (type-dependent)
+                ftable = s3db.org_facility
+                ltable = s3db.org_site_facility_type
+                query = (ftable == record_id) & \
+                        (ftable.site_id == ltable.site_id)
+                facility_type = db(query).select(ltable.facility_type_id,
+                                                 limitby = (0, 1)
+                                                 ).first()
+                # Lookup Marker
+                if facility_type:
+                    layer_filter = "facility_type.facility_type_id=%s" % \
+                                        facility_type.id
+                else:
+                    layer_filter = ""
+                marker = current.gis.get_marker(controller = "org",
+                                                function = "facility",
+                                                filter = layer_filter)
+                tablename = "org_facility"
+                layer = dict(name = record.name,
+                             id = "profile-header-%s-%s" % (tablename, record_id),
+                             active = True,
+                             tablename = r.tablename,
+                             url = "/%s/org/facility.geojson?facility.id=%s" % \
+                                (r.application, record_id),
+                             marker = marker,
+                             )
+
+                s3db.configure(tablename,
                                list_fields = list_fields,
                                profile_title = "%s : %s" % (s3.crud_strings["org_facility"].title_list, 
                                                             name),
@@ -2092,6 +2121,7 @@ def customize_org_facility(**attr):
                                                       _class="s3-truncate"),
                                                     _class="profile_header",
                                                     ),
+                               profile_layers = [layer],
                                profile_widgets = [reqs_widget,
                                                   map_widget,
                                                   commits_widget,
