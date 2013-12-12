@@ -2030,8 +2030,9 @@ class S3HRSkillModel(S3Model):
                                    label = T("Performance Rating"),
                                    # Default to pass/fail (can override to 5-levels in Controller)
                                    # @ToDo: Build this onaccept of hrm_appraisal
-                                   requires = IS_IN_SET(hrm_pass_fail_opts,
-                                                        zero=None),
+                                   requires = IS_NULL_OR(
+                                                IS_IN_SET(hrm_pass_fail_opts)
+                                                ),
                                    represent = lambda opt: \
                                        hrm_performance_opts.get(opt,
                                                                 UNKNOWN_OPT)),
@@ -5106,7 +5107,7 @@ def hrm_competency_controller():
     return current.rest_controller("hrm", "competency",
                                    # @ToDo: Create these if-required
                                    #csv_stylesheet = ("hrm", "competency.xsl"),
-                                   #csv_template = ("hrm", "competency")
+                                   #csv_template = ("hrm", "competency"),
                                    )
 
 # =============================================================================
@@ -5328,10 +5329,10 @@ def hrm_human_resource_controller(extra_filter=None):
         if extra_filter is not None:
             r.resource.add_filter(extra_filter)
         method = r.method
+        deploy = r.controller == "deploy"
         if method in ("form", "lookup"):
             return True
         elif method == "profile":
-            deploy = r.controller == "deploy"
             # Configure Widgets
             s3db.pr_address # Load normal model
             list_fields = s3db.get_config("pr_address",
@@ -5479,7 +5480,6 @@ def hrm_human_resource_controller(extra_filter=None):
                            )
         elif method == "summary":
             s3.crud_strings["hrm_human_resource"]["title_list"] = T("Staff & Volunteers")
-            deploy = r.controller == "deploy"
 
             # Which levels of Hierarchy are we using?
             hierarchy = current.gis.get_location_hierarchy()
@@ -5626,7 +5626,7 @@ def hrm_human_resource_controller(extra_filter=None):
                                       ],
                            )
             s3.filter = None
-        elif r.representation in ("geojson", "plain"):
+        elif r.representation in ("geojson", "plain") or deploy:
             # No filter
             pass
         else:
