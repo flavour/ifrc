@@ -1901,6 +1901,12 @@ class S3Config(Storage):
         """
         return self.project.get("activities", False)
 
+    def get_project_activity_types(self):
+        """
+            Use Activity Types in Activities & Projects
+        """
+        return self.project.get("activity_types", False)
+
     def get_project_codes(self):
         """
             Use Codes in Projects
@@ -1912,6 +1918,12 @@ class S3Config(Storage):
             Label project_location as 'Community'
         """
         return self.project.get("community", False)
+
+    def get_project_hazards(self):
+        """
+            Use Hazards in 3W Projects
+        """
+        return self.project.get("hazards", False)
 
     #def get_project_locations_from_countries(self):
     #    """
@@ -1926,11 +1938,23 @@ class S3Config(Storage):
         """
         return self.project.get("milestones", False)
 
+    def get_project_projects(self):
+        """
+            Link Activities to Projects
+        """
+        return self.project.get("projects", False)
+
     def get_project_sectors(self):
         """
             Use Sectors in Projects
         """
         return self.project.get("sectors", True)
+
+    def get_project_themes(self):
+        """
+            Use Themes in 3W Projects
+        """
+        return self.project.get("themes", False)
 
     def get_project_theme_percentages(self):
         """

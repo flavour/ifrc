@@ -45,6 +45,7 @@ __all__ = ["S3PersonEntity",
            "S3ImageLibraryModel",
            # Representation Methods
            "pr_get_entities",
+           "pr_RoleRepresent",
            "pr_PersonEntityRepresent",
            "pr_PersonRepresent",
            "pr_person_phone_represent",
@@ -320,10 +321,11 @@ class S3PersonEntity(S3Model):
                   onvalidation=self.pr_role_onvalidation)
 
         # Reusable fields
+        pr_role_represent = pr_RoleRepresent()
         role_id = S3ReusableField("role_id", table,
                                   requires = IS_ONE_OF(db, "pr_role.id",
-                                                       self.pr_role_represent),
-                                  represent = self.pr_role_represent,
+                                                       pr_role_represent),
+                                  represent = pr_role_represent,
                                   label = T("Role"),
                                   ondelete = "CASCADE")
 
@@ -1862,6 +1864,7 @@ class S3AddressModel(S3Model):
 
         T = current.T
         messages = current.messages
+        s3 = current.response.s3
         settings = current.deployment_settings
 
         # ---------------------------------------------------------------------
@@ -1899,7 +1902,7 @@ class S3AddressModel(S3Model):
 
         # CRUD Strings
         ADD_ADDRESS = T("Add Address")
-        current.response.s3.crud_strings[tablename] = Storage(
+        s3.crud_strings[tablename] = Storage(
             title_create = ADD_ADDRESS,
             title_display = T("Address Details"),
             title_list = T("Addresses"),
@@ -1916,7 +1919,8 @@ class S3AddressModel(S3Model):
         # Which levels of Hierarchy are we using?
         hierarchy = current.gis.get_location_hierarchy()
         levels = hierarchy.keys()
-        if len(settings.get_gis_countries()) == 1:
+        if len(settings.get_gis_countries()) == 1 or \
+           s3.gis.config.region_location_id:
             levels.remove("L0")
         # Display in reverse order, like Addresses
         levels.reverse()
@@ -4024,6 +4028,65 @@ def pr_get_entities(pe_ids=None,
             return repr_grp
         else:
             return repr_all
+
+# =============================================================================
+class pr_RoleRepresent(S3Represent):
+    """ Representations of pr_role IDs """
+
+    def __init__(self,
+                 show_link=False,
+                 multiple=False,
+                 translate=True):
+        """
+            Constructor
+            
+            @param show_link: whether to add a URL to representations
+            @param multiple: web2py list-type (all values will be lists)
+            @param translate: translate all representations (using T)
+        """
+
+        self.fields = ["pe_id", "role"]
+
+        super(pr_RoleRepresent, self).__init__(lookup="pr_role",
+                                               fields=self.fields,
+                                               show_link=show_link,
+                                               translate=translate,
+                                               multiple=multiple)
+
+    # ---------------------------------------------------------------------
+    def represent_row(self,row):
+        """
+            Represent a Row
+
+            @param row: the Row
+        """
+
+        entity = current.s3db.pr_pentity_represent(row.pe_id)
+        return "%s: %s" % (entity, row.role)
+
+    # ---------------------------------------------------------------------
+    def lookup_rows(self, key, values, fields=[]):
+        """
+            Lookup all rows referenced by values.
+
+            @param key: the key Field
+            @param values: the values
+            @param fields: the fields to retrieve
+        """
+
+        if not fields:
+            table = self.table
+            fields = [table[f] for f in self.fields]
+
+        rows = self._lookup_rows(key, values, fields=fields)
+
+        # Bulk represent the pe_ids: this stores the representations
+        # in current.s3db.pr_pentity_represent, thereby preventing
+        # a row-by-row lookup when calling it from represent_row():
+        pe_ids = [row.pe_id for row in rows]
+        current.s3db.pr_pentity_represent.bulk(pe_ids)
+
+        return rows
 
 # =============================================================================
 class pr_PersonEntityRepresent(S3Represent):

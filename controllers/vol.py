@@ -783,7 +783,7 @@ def person_search():
 def group():
     """
         Team controller
-        - uses the group table from PR
+        - uses the group table from PR, but filtered to just 'Relief Teams'
     """
 
     return s3db.hrm_group_controller()
@@ -1024,30 +1024,22 @@ def training_event():
     return s3db.hrm_training_event_controller()
 
 # -----------------------------------------------------------------------------
+def competency():
+    """ RESTful CRUD controller used to allow searching for people by Skill"""
+
+    table = s3db.hrm_human_resource
+    s3.filter = ((table.type == 2) & \
+                 (s3db.hrm_competency.person_id == table.person_id))
+    return s3db.hrm_competency_controller()
+
+# -----------------------------------------------------------------------------
 def credential():
     """ Credentials Controller """
 
     table = s3db.hrm_human_resource
     s3.filter = ((table.type == 2) & \
                  (s3db.hrm_credential.person_id == table.person_id))
-
-    def prep(r):
-        table = r.table
-        if r.method in ("create", "create.popup", "update", "update.popup"):
-            # Coming from Profile page?
-            person_id = r.get_vars.get("~.person_id", None)
-            if person_id:
-                field = table.person_id
-                field.default = person_id
-                field.readable = field.writable = False
-        if r.record:
-            table.person_id.comment = None
-            table.person_id.writable = False
-        return True
-    s3.prep = prep
-
-    output = s3_rest_controller()
-    return output
+    return s3db.hrm_credential_controller()
 
 # -----------------------------------------------------------------------------
 def experience():
@@ -1057,15 +1049,6 @@ def experience():
     s3.filter = ((table.type == 2) & \
                  (s3db.hrm_experience.person_id == table.person_id))
     return s3db.hrm_experience_controller()
-
-# -----------------------------------------------------------------------------
-def competency():
-    """ RESTful CRUD controller used to allow searching for people by Skill"""
-
-    table = s3db.hrm_human_resource
-    s3.filter = ((table.type == 2) & \
-                 (s3db.hrm_competency.person_id == table.person_id))
-    return s3db.hrm_competency_controller()
 
 # -----------------------------------------------------------------------------
 def person_search():

@@ -40,6 +40,7 @@ __all__ = ["S3HRModel",
            "hrm_map_popup",
            "hrm_rheader",
            "hrm_competency_controller",
+           "hrm_credential_controller",
            "hrm_experience_controller",
            "hrm_group_controller",
            "hrm_human_resource_controller",
@@ -1629,6 +1630,7 @@ class S3HRSkillModel(S3Model):
         db = current.db
         auth = current.auth
         request = current.request
+        s3 = current.response.s3
         settings = current.deployment_settings
 
         job_title_id = self.hrm_job_title_id
@@ -1648,7 +1650,7 @@ class S3HRSkillModel(S3Model):
         # Shortcuts
         add_component = self.add_component
         configure = self.configure
-        crud_strings = current.response.s3.crud_strings
+        crud_strings = s3.crud_strings
         define_table = self.define_table
         super_link = self.super_link
 
@@ -2207,7 +2209,8 @@ class S3HRSkillModel(S3Model):
         # Which levels of Hierarchy are we using?
         hierarchy = current.gis.get_location_hierarchy()
         levels = hierarchy.keys()
-        if len(settings.get_gis_countries()) == 1:
+        if len(settings.get_gis_countries()) == 1 or \
+           s3.gis.config.region_location_id:
             levels.remove("L0")
 
         filter_widgets = [
@@ -2332,13 +2335,11 @@ class S3HRSkillModel(S3Model):
                          ),
             S3LocationFilter("person_id$location_id",
                              levels=["L1", "L2"],
-                             label=T("Location"),
-                             #represent="%(name)s",
                              widget="multiselect",
                              ),
             S3OptionsFilter("course_id",
-                            label=T("Course"),
-                            represent="%(name)s",
+                            # Doesn't support translations
+                            #represent="%(name)s",
                             widget="multiselect",
                             ),
             S3OptionsFilter("training_event_id$site_id",
@@ -2347,7 +2348,6 @@ class S3HRSkillModel(S3Model):
                             widget="multiselect",
                             ),
             S3DateFilter("date",
-                         label=T("Date"),
                          hide_time=True,
                          ),
             ]
@@ -4970,8 +4970,7 @@ def hrm_rheader(r, tabs=[],
         tabs = [(T("Training Event Details"), None),
                 (T("Participants"), "participant")]
         rheader_tabs = s3_rheader_tabs(r, tabs)
-        rheader = DIV(TABLE(
-                            TR(TH("%s: " % table.course_id.label),
+        rheader = DIV(TABLE(TR(TH("%s: " % table.course_id.label),
                                table.course_id.represent(record.course_id)),
                             TR(TH("%s: " % table.site_id.label),
                                table.site_id.represent(record.site_id)),
@@ -4986,8 +4985,7 @@ def hrm_rheader(r, tabs=[],
         if current.deployment_settings.get_hrm_use_skills():
             tabs.append((T("Skill Equivalence"), "certificate_skill"))
         rheader_tabs = s3_rheader_tabs(r, tabs)
-        rheader = DIV(TABLE(
-                            TR(TH("%s: " % table.name.label),
+        rheader = DIV(TABLE(TR(TH("%s: " % table.name.label),
                                record.name),
                             ),
                       rheader_tabs)
@@ -4997,8 +4995,7 @@ def hrm_rheader(r, tabs=[],
         tabs = [(T("Course Details"), None),
                 (T("Course Certificates"), "course_certificate")]
         rheader_tabs = s3_rheader_tabs(r, tabs)
-        rheader = DIV(TABLE(
-                            TR(TH("%s: " % table.name.label),
+        rheader = DIV(TABLE(TR(TH("%s: " % table.name.label),
                                record.name),
                             ),
                       rheader_tabs)
@@ -5008,8 +5005,7 @@ def hrm_rheader(r, tabs=[],
         tabs = [(T("Program Details"), None),
                 (T("Volunteer Hours"), "person")]
         rheader_tabs = s3_rheader_tabs(r, tabs)
-        rheader = DIV(TABLE(
-                            TR(TH("%s: " % table.name.label),
+        rheader = DIV(TABLE(TR(TH("%s: " % table.name.label),
                                record.name),
                             ),
                       rheader_tabs)
@@ -5108,6 +5104,39 @@ def hrm_competency_controller():
                                    # @ToDo: Create these if-required
                                    #csv_stylesheet = ("hrm", "competency.xsl"),
                                    #csv_template = ("hrm", "competency"),
+                                   )
+
+# =============================================================================
+def hrm_credential_controller():
+    """
+        RESTful CRUD controller
+         - could be used for Searching for people by Skill
+         - used for Adding/Editing on Profile page
+    """
+
+    if current.session.s3.hrm.mode is not None:
+        current.session.error = current.T("Access denied")
+        redirect(URL(f="index"))
+
+    def prep(r):
+        table = r.table
+        if r.method in ("create", "create.popup", "update", "update.popup"):
+            # Coming from Profile page?
+            person_id = r.get_vars.get("~.person_id", None)
+            if person_id:
+                field = table.person_id
+                field.default = person_id
+                field.readable = field.writable = False
+        if r.record:
+            table.person_id.comment = None
+            table.person_id.writable = False
+        return True
+    current.response.s3.prep = prep
+
+    return current.rest_controller("hrm", "credential",
+                                   # @ToDo: Create these if-required
+                                   #csv_stylesheet = ("hrm", "credential.xsl"),
+                                   #csv_template = ("hrm", "credential"),
                                    )
 
 # =============================================================================
@@ -5484,7 +5513,8 @@ def hrm_human_resource_controller(extra_filter=None):
             # Which levels of Hierarchy are we using?
             hierarchy = current.gis.get_location_hierarchy()
             levels = hierarchy.keys()
-            if len(settings.get_gis_countries()) == 1:
+            if len(settings.get_gis_countries()) == 1 or \
+               s3.gis.config.region_location_id:
                 levels.remove("L0")
 
             filter_widgets = [
@@ -6183,6 +6213,9 @@ def hrm_cv(r, **attr):
         if r.controller == "vol":
             controller = "vol"
             vol = True
+        elif r.controller == "deploy":
+            controller = "deploy"
+            vol = False
         else:
             controller = "hrm"
             vol = False
@@ -6559,9 +6592,8 @@ def hrm_render_competency(listid, resource, rfields, record, **attr):
     permit = current.auth.s3_has_permission
     table = current.s3db.hrm_competency
     if permit("update", table, record_id=record_id):
-        if current.request.controller == "vol":
-            controller = "vol"
-        else:
+        controller = current.request.controller
+        if controller not in ("vol", "deploy"):
             controller = "hrm"
         edit_btn = A(I(" ", _class="icon icon-edit"),
                      _href=URL(c=controller, f="competency",
@@ -6660,9 +6692,8 @@ def hrm_render_credential(listid, resource, rfields, record, **attr):
     permit = current.auth.s3_has_permission
     table = current.s3db.hrm_credential
     if permit("update", table, record_id=record_id):
-        if current.request.controller == "vol":
-            controller = "vol"
-        else:
+        controller = current.request.controller
+        if controller not in ("vol", "deploy"):
             controller = "hrm"
         edit_btn = A(I(" ", _class="icon icon-edit"),
                      _href=URL(c=controller, f="credential",
@@ -6845,9 +6876,8 @@ def hrm_render_experience(listid, resource, rfields, record, **attr):
     permit = current.auth.s3_has_permission
     table = current.s3db.hrm_experience
     if permit("update", table, record_id=record_id):
-        if current.request.controller == "vol":
-            controller = "vol"
-        else:
+        controller = current.request.controller
+        if controller not in ("vol", "deploy"):
             controller = "hrm"
         edit_btn = A(I(" ", _class="icon icon-edit"),
                      _href=URL(c=controller, f="experience",
@@ -6985,9 +7015,8 @@ def hrm_render_training(listid, resource, rfields, record, **attr):
     permit = current.auth.s3_has_permission
     table = current.s3db.hrm_training
     if permit("update", table, record_id=record_id):
-        if current.request.controller == "vol":
-            controller = "vol"
-        else:
+        controller = current.request.controller
+        if controller not in ("vol", "deploy"):
             controller = "hrm"
         edit_btn = A(I(" ", _class="icon icon-edit"),
                      _href=URL(c=controller, f="training",
