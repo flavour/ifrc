@@ -2909,6 +2909,7 @@ class S3ProjectLocationModel(S3Model):
 
         settings = current.deployment_settings
         community = settings.get_project_community()
+        mode_3w = settings.get_project_mode_3w()
 
         messages = current.messages
         NONE = messages["NONE"]
@@ -2941,9 +2942,12 @@ class S3ProjectLocationModel(S3Model):
                                 ),
                              # % breakdown by location
                              Field("percentage", "decimal(3,2)",
-                                   label = T("Percentage"),
+                                   comment = T("Amount of the Project Budget spent at this location"), 
                                    default = 0,
+                                   label = T("Percentage"),
+                                   readable = mode_3w,
                                    requires = IS_DECIMAL_IN_RANGE(0, 1),
+                                   writable = mode_3w,
                                    ),
                              s3_comments(),
                              *s3_meta_fields())
@@ -6120,13 +6124,13 @@ def project_rheader(r):
         append = tabs.append
         if settings.get_project_multiple_organisations():
             append((T("Organizations"), "organisation"))
+        if settings.get_project_community():
+            append((T("Communities"), "location"))
+        elif not mode_task:
+            append((T("Locations"), "location"))
         if settings.get_project_theme_percentages():
             append((T("Themes"), "theme"))
         if mode_3w:
-            if settings.get_project_community():
-                append((T("Communities"), "location"))
-            else:
-                append((T("Locations"), "location"))
             append((T("Beneficiaries"), "beneficiary"))
         if settings.get_project_milestones():
             append((T("Milestones"), "milestone"))
