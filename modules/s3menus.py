@@ -471,8 +471,7 @@ class S3OptionsMenu(object):
                     M("Assets", f="asset")(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
-                        M("Report", m="report"),
+                        M("Report", m="report2"),
                         M("Import", m="import", p="create"),
                     ),
                     #M("Brands", f="brand",
@@ -483,8 +482,7 @@ class S3OptionsMenu(object):
                     M("Items", f="item")(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
-                        M("Report", m="report"),
+                        M("Report", m="report2"),
                         M("Import", f="catalog_item", m="import", p="create"),
                     ),
                     M("Item Categories", f="item_category",
@@ -1200,8 +1198,7 @@ class S3OptionsMenu(object):
                     M("Items", c="supply", f="item")(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
-                        M("Report", m="report"),
+                        M("Report", m="report2"),
                         M("Import", f="catalog_item", m="import", p="create"),
                     ),
                     # Catalog Items moved to be next to the Item Categories
@@ -1740,8 +1737,7 @@ class S3OptionsMenu(object):
                     M("Items", c="supply", f="item")(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
-                        M("Report", m="report"),
+                        M("Report", m="report2"),
                         M("Import", m="import", p="create"),
                     ),
                     # Catalog Items moved to be next to the Item Categories
@@ -1840,7 +1836,6 @@ class S3OptionsMenu(object):
                     M("Vehicle Types", f="item")(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
                     ),
                 )
 

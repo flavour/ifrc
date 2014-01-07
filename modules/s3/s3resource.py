@@ -1794,7 +1794,7 @@ class S3Resource(object):
                  orderby=None,
                  distinct=False,
                  getids=False,
-                 listid=None,
+                 list_id=None,
                  layout=None):
         """
             Generate a data list of this resource
@@ -1807,7 +1807,7 @@ class S3Resource(object):
             @param distinct: distinct-flag for DB query
             @param getids: return the record IDs of all records matching the
                            query (used in search to create a filter)
-            @param listid: the list identifier
+            @param list_id: the list identifier
             @param layout: custom renderer function (see S3DataList.render)
 
             @return: tuple (S3DataList, numrows, ids), where numrows represents
@@ -1843,7 +1843,7 @@ class S3Resource(object):
         dl = S3DataList(self,
                         fields,
                         data["rows"],
-                        listid=listid,
+                        list_id=list_id,
                         start=start,
                         limit=limit,
                         total=numrows,
@@ -4390,44 +4390,6 @@ class S3Resource(object):
         return axisfilter
 
     # -------------------------------------------------------------------------
-    @classmethod
-    def sortleft(cls, joins):
-        """
-            Sort a list of left-joins by their interdependency
-
-            @param joins: the list of joins
-        """
-
-        if len(joins) <= 1:
-            return joins
-        r = list(joins)
-
-        tables = current.db._adapter.tables
-
-        append = r.append
-        head = None
-        for i in xrange(len(joins)):
-            join = r.pop(0)
-            head = join
-            tablenames = tables(join.second)
-            for j in r:
-                try:
-                    tn = j.first._tablename
-                except AttributeError:
-                    tn = str(j.first)
-                if tn in tablenames:
-                    head = None
-                    break
-            if head is not None:
-                break
-            else:
-                append(join)
-        if head is not None:
-            return [head] + cls.sortleft(r)
-        else:
-            raise RuntimeError("circular left-join dependency")
-
-    # -------------------------------------------------------------------------
     def prefix_selector(self, selector):
         """
             Helper method to ensure consistent prefixing of field selectors
@@ -6877,12 +6839,8 @@ class S3ResourceFilter(object):
 
         left_joins = self.get_left_joins()
         if left_joins:
-            try:
-                left_joins = resource.sortleft(left_joins)
-            except:
-                pass
-            left = left_joins
-            joins = ", ".join([str(j) for j in left_joins])
+            left = S3LeftJoins(resource.tablename, left_joins)
+            joins = ", ".join([str(j) for j in left.as_list()])
         else:
             left = None
             joins = None

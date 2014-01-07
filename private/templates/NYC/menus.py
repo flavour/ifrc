@@ -89,7 +89,7 @@ class S3MainMenu(default.S3MainMenu):
                 #MM("People Registry", c="pr", f="index")
             ),                
             MM("Resources", c="inv", f="index")(
-                MM("Assets", c="asset", f="asset", m="search"),
+                MM("Assets", c="asset", f="asset"),
                 MM("Inventory", c="inv", f="inv_item", m="search"),
                 MM("Stock Counts", c="inv", f="adj"),
                 MM("Shipments", c="inv", f="send")
@@ -361,8 +361,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     M("Items", c="supply", f="item")(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
-                        M("Report", m="report"),
+                        M("Report", m="report2"),
                         M("Import", f="catalog_item", m="import", p="create"),
                     ),
                     M("Item Categories", c="supply", f="item_category",
@@ -466,8 +465,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                       restrict=[SUPER])(
                         M("New", m="create"),
                         M("List All"),
-                        M("Search", m="search"),
-                        M("Report", m="report"),
+                        M("Report", m="report2"),
                         M("Import", f="catalog_item", m="import", p="create"),
                     ),
                     M("Item Categories", c="supply", f="item_category",

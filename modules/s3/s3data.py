@@ -913,38 +913,39 @@ class S3DataList(object):
                  start=None,
                  limit=None,
                  total=None,
-                 listid=None,
+                 list_id=None,
                  layout=None,
                  row_layout=None):
         """
             Constructor
 
             @param resource: the S3Resource
-            @param list_fields: the list fields (list of field selector strings)
+            @param list_fields: the list fields
+                                (list of field selector strings)
             @param records: the records
             @param start: index of the first item
             @param limit: maximum number of items
             @param total: total number of available items
-            @param listid: the HTML ID for this list
-            @param layout: item renderer (optional) as
-                           function(listid, resource, rfields, record)
+            @param list_id: the HTML ID for this list
+            @param layout: item renderer (optional) as function
+                           (list_id, item_id, resource, rfields, record)
             @param row_layout: row renderer (optional) as
-                               function(listid, resource, rowsize, items)
+                               function(list_id, resource, rowsize, items)
         """
 
         self.resource = resource
         self.list_fields = list_fields
         self.records = records
 
-        if listid is None:
-            self.listid = "datalist"
+        if list_id is None:
+            self.list_id = "datalist"
         else:
-            self.listid = listid
+            self.list_id = list_id
 
         if layout is not None:
             self.layout = layout
         else:
-            self.layout = self.render
+            self.layout = S3DataListLayout()
         self.row_layout = row_layout
 
         self.start = start if start else 0
@@ -980,19 +981,21 @@ class S3DataList(object):
         list_fields = self.list_fields
         rfields = resource.resolve_selectors(list_fields)[0]
 
-        listid = self.listid
+        list_id = self.list_id
         render = self.layout
         render_row = self.row_layout
 
         if not rowsize:
             rowsize = 1
-        
+
+        pkey = str(resource._id)
+
         records = self.records
         if records is not None:
             items = [
                 DIV(T("Total Records: %(numrows)s") % {"numrows": self.total},
                     _class="dl-header",
-                    _id="%s-header" % listid)
+                    _id="%s-header" % list_id)
             ]
             if empty is None:
                 empty = resource.crud.crud_string(resource.tablename,
@@ -1007,7 +1010,15 @@ class S3DataList(object):
                 row = []
                 col_idx = 0
                 for record in group:
-                    item = render(listid,
+                    
+                    if pkey in record:
+                        item_id = "%s-%s" % (list_id, record[pkey])
+                    else:
+                        # template
+                        item_id = "%s-[id]" % list_id
+
+                    item = render(list_id,
+                                  item_id,
                                   resource,
                                   rfields,
                                   record)
@@ -1019,7 +1030,7 @@ class S3DataList(object):
 
                 _class = "dl-row %s" % ((row_idx % 2) and "even" or "odd")
                 if render_row:
-                    row = render_row(listid,
+                    row = render_row(list_id,
                                      resource,
                                      rowsize,
                                      row)
@@ -1036,7 +1047,7 @@ class S3DataList(object):
 
         dl = DIV(items,
                  _class="dl",
-                 _id=listid,
+                 _id=list_id,
                  )
 
         dl_data = {"startindex": start,
@@ -1087,63 +1098,146 @@ class S3DataList(object):
             group = list(islice(iterable, length))
         raise StopIteration
             
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def render(listid, resource, rfields, record, **attr):
-        """
-            Default item renderer
-            - not normally used, instead a custom renderer is normally defined
+# =============================================================================
+class S3DataListLayout(object):
+    """ DataList default layout """
 
-            @param listid: the HTML ID for this list
+    item_class = "thumbnail"
+
+    # ---------------------------------------------------------------------
+    def __call__(self, list_id, item_id, resource, rfields, record):
+        """
+            Wrapper for render_item.
+
+            @param list_id: the HTML ID of the list
+            @param item_id: the HTML ID of the item
             @param resource: the S3Resource to render
             @param rfields: the S3ResourceFields to render
             @param record: the record as dict
-            @param attr: additional HTML attributes for the item
         """
 
-        pkey = str(resource._id)
-
-        # Construct the item ID
-        if pkey in record:
-            item_id = "%s-%s" % (listid, record[pkey])
-        else:
-            # template
-            item_id = "%s-[id]" % listid
-
-        # Add classes passed from caller (e.g. even/odd)
-        item_class = "dl-item"
-        caller_class = attr.get("_class", None)
-        if caller_class:
-            item_class = "%s %s" % (item_class, caller_class)
-
         # Render the item
-        item = DIV(_class=item_class, _id=item_id)
-        for rfield in rfields:
+        item = DIV(_id=item_id, _class=self.item_class)
 
-            if not rfield.show:
-                continue
+        header = self.render_header(list_id,
+                                    item_id,
+                                    resource,
+                                    rfields,
+                                    record)
+        if header is not None:
+            item.append(header)
 
-            colname = rfield.colname
-            if colname == pkey or colname not in record:
-                continue
-            value = record[colname]
-            value_id = "%s-%s" % (item_id, rfield.colname.replace(".", "_"))
-
-            table_class = "%s-tbl-%s" % (listid, rfield.tname)
-            field_class = "%s-fld-%s" % (listid, rfield.fname)
-
-            label = LABEL("%s:" % rfield.label,
-                          _for = value_id,
-                          _class = "dl-field-label")
-            item.append(DIV(label,
-                            DIV(value,
-                                _class = "dl-field-value",
-                                _id = value_id),
-                            _class = "dl-field %s %s" % (table_class,
-                                                         field_class)))
+        body = self.render_body(list_id,
+                                item_id,
+                                resource,
+                                rfields,
+                                record)
+        if body is not None:
+            item.append(body)
 
         return item
+        
+    # ---------------------------------------------------------------------
+    def render_header(self, list_id, item_id, resource, rfields, record):
+        """
+            @todo: Render the card header
 
+            @param list_id: the HTML ID of the list
+            @param item_id: the HTML ID of the item
+            @param resource: the S3Resource to render
+            @param rfields: the S3ResourceFields to render
+            @param record: the record as dict
+        """
+        
+        #DIV(
+            #I(_class="icon"),
+            #SPAN(" %s" % title, _class="card-title"),
+            #toolbox,
+            #_class="card-header",
+        #),
+        return None
+    
+    # ---------------------------------------------------------------------
+    def render_body(self, list_id, item_id, resource, rfields, record):
+        """
+            Render the card body
+            
+            @param list_id: the HTML ID of the list
+            @param item_id: the HTML ID of the item
+            @param resource: the S3Resource to render
+            @param rfields: the S3ResourceFields to render
+            @param record: the record as dict
+        """
+        
+        pkey = str(resource._id)
+        body = DIV(_class="media-body")
+
+        render_column = self.render_column
+        for rfield in rfields:
+
+            if not rfield.show or rfield.colname == pkey:
+                continue
+
+            column = render_column(item_id, rfield, record)
+            if column is not None:
+                table_class = "dl-table-%s" % rfield.tname
+                field_class = "dl-field-%s" % rfield.fname
+                body.append(DIV(column,
+                                _class = "dl-field %s %s" % (table_class,
+                                                             field_class)))
+
+        return DIV(body, _class="media")
+    
+    # ---------------------------------------------------------------------
+    def render_icon(self, list_id, resource):
+        """
+            @todo: Render a body icon
+
+            @param list_id: the HTML ID of the list
+            @param resource: the S3Resource to render
+        """
+
+        return None
+
+    # ---------------------------------------------------------------------
+    def render_toolbox(self, list_id, resource, record):
+        """
+            @todo: Render the toolbox
+
+            @param list_id: the HTML ID of the list
+            @param resource: the S3Resource to render
+            @param record: the record as dict
+        """
+
+        return None
+
+    # ---------------------------------------------------------------------
+    def render_column(self, item_id, rfield, record):
+        """
+            Render a data column.
+
+            @param item_id: the HTML element ID of the item
+            @param rfield: the S3ResourceField for the column
+            @param record: the record (from S3Resource.select)
+        """
+        
+        colname = rfield.colname
+        if colname not in record:
+            return None
+            
+        value = record[colname]
+        value_id = "%s-%s" % (item_id, rfield.colname.replace(".", "_"))
+        
+        label = LABEL("%s:" % rfield.label,
+                      _for = value_id,
+                      _class = "dl-field-label")
+        
+        value = SPAN(value,
+                     _id = value_id,
+                     _class = "dl-field-value")
+
+        return TAG[""](label, value)
+ 
 # =============================================================================
 class S3PivotTable(object):
     """ Class representing a pivot table of a resource """
@@ -1682,7 +1776,6 @@ class S3PivotTable(object):
              maxrows=None,
              maxcols=None,
              least=False,
-             url=None,
              represent=True):
         """
             Render the pivot table data as JSON-serializable dict
@@ -1706,7 +1799,7 @@ class S3PivotTable(object):
                 cols: [cols[index, value, label, total]],
                 
                 total: <grand total>,
-                filter: [url, rows selector, cols selector]
+                filter: [rows selector, cols selector]
             }
         """
 
@@ -2014,8 +2107,7 @@ class S3PivotTable(object):
 
         # Filter-URL and axis selectors
         prefix = resource.prefix_selector
-        output["filter"] = (str(url) if url else None,
-                            prefix(rows_dim) if rows_dim else None,
+        output["filter"] = (prefix(rows_dim) if rows_dim else None,
                             prefix(cols_dim) if cols_dim else None)
 
         return output

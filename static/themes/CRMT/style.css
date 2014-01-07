@@ -164,7 +164,8 @@ h2.summary {
 }
 
 #summary-tabs #table,
-#summary-tabs #charts {
+#summary-tabs #charts,
+#summary-tabs #report {
     padding: 92px 20px 20px 20px;
 }
 
@@ -427,4 +428,8 @@ div.map_legend_panel {
 .pt-hide-chart,
 .pt-toggle-table {
     display: none;
+}
+
+#page-footer #footer-copyrights {
+    border-top: 0;
 }
