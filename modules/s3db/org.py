@@ -30,6 +30,8 @@
 __all__ = ["S3OrganisationModel",
            "S3OrganisationBranchModel",
            "S3OrganisationGroupModel",
+           "S3OrganisationGroupPersonModel",
+           "S3OrganisationGroupTeamModel",
            "S3OrganisationLocationModel",
            "S3OrganisationResourceModel",
            "S3OrganisationSectorModel",
@@ -1055,15 +1057,18 @@ class S3OrganisationGroupModel(S3Model):
         T = current.T
         db = current.db
 
+        add_component = self.add_component
         configure = self.configure
         define_table = self.define_table
+        super_link = self.super_link
 
         # ---------------------------------------------------------------------
         # Organization Groups
         #
         tablename = "org_group"
         table = define_table(tablename,
-                             self.super_link("pe_id", "pr_pentity"),
+                             super_link("doc_id", "doc_entity"),
+                             super_link("pe_id", "pr_pentity"),
                              Field("name", notnull=True, unique=True,
                                    length=128,
                                    label=T("Name")),
@@ -1112,7 +1117,7 @@ class S3OrganisationGroupModel(S3Model):
             label = "Group"
 
         configure(tablename,
-                  super_entity = "pr_pentity",
+                  super_entity = ("doc_entity", "pr_pentity"),
                   )
 
         represent = S3Represent(lookup=tablename)
@@ -1129,9 +1134,17 @@ class S3OrganisationGroupModel(S3Model):
                                    ondelete="CASCADE",
                                    )
 
-        self.add_component("org_group_membership",
-                           org_group=dict(name="membership",
-                                          joinby="group_id"))
+        add_component("org_group_membership",
+                      org_group=dict(name="membership",
+                                     joinby="group_id"))
+
+        add_component("pr_group",
+                      org_group=dict(name="group",
+                                     joinby="org_group_id",
+                                     key="group_id",
+                                     link="org_group_team",
+                                     actuate="replace",
+                                     ))
 
         # ---------------------------------------------------------------------
         # Group membership
@@ -1190,6 +1203,63 @@ class S3OrganisationGroupModel(S3Model):
                                  deleted_fk = json.dumps(deleted_fk))
             org_update_affiliations("org_group_membership", record)
         return
+
+# =============================================================================
+class S3OrganisationGroupPersonModel(S3Model):
+    """
+        Link table between Organisation Groups & Persons
+    """
+
+    names = ["org_group_person"]
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Link table between Organisation Groups & Persons
+        #
+        tablename = "org_group_person"
+        table = self.define_table(tablename,
+                                  self.org_group_id(ondelete="CASCADE",
+                                                    required=True,
+                                                    ),
+                                  self.pr_person_id(ondelete="CASCADE",
+                                                    required=True,
+                                                    ),
+                                  *s3_meta_fields())
+
+        # Pass names back to global scope (s3.*)
+        return dict()
+
+# =============================================================================
+class S3OrganisationGroupTeamModel(S3Model):
+    """
+        Link table between Organisation Groups & Teams
+    """
+
+    names = ["org_group_team"]
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Link table between Organisation Groups & Teams
+        #
+        tablename = "org_group_team"
+        table = self.define_table(tablename,
+                                  self.org_group_id("org_group_id",
+                                                    ondelete="CASCADE",
+                                                    required=True,
+                                                    ),
+                                  self.pr_group_id(ondelete="CASCADE",
+                                                   required=True,
+                                                   ),
+                                  *s3_meta_fields())
+
+        # Pass names back to global scope (s3.*)
+        return dict()
 
 # =============================================================================
 class S3OrganisationLocationModel(S3Model):
@@ -2264,6 +2334,7 @@ class S3SiteModel(S3Model):
 
         response = current.response
         resource = r.resource
+        settings = current.deployment_settings
 
         # Query comes in pre-filtered to accessible & deletion_status
         # Respect response.s3.filter
@@ -2284,10 +2355,15 @@ class S3SiteModel(S3Model):
                             "Missing option! Require value")
             raise HTTP(400, body=output)
 
+        # Construct query
         query = (S3FieldSelector("name").lower().like(value + "%"))
+
+        # Add template specific search criteria
+        for field in settings.get_org_site_autocomplete_fields():
+            query |= (S3FieldSelector(field).lower().like(value + "%"))
+
         resource.add_filter(query)
 
-        settings = current.deployment_settings
         MAX_SEARCH_RESULTS = settings.get_search_max_results()
         limit = int(_vars.limit or MAX_SEARCH_RESULTS)
         if (not limit or limit > MAX_SEARCH_RESULTS) and resource.count() > MAX_SEARCH_RESULTS:
@@ -2295,13 +2371,15 @@ class S3SiteModel(S3Model):
                                       name="Search results are over %d. Please input more characters." \
                                           % MAX_SEARCH_RESULTS)])
         else:
+            from s3.s3widgets import set_match_strings
             s3db = current.s3db
 
-            # Fields to return
-            fields = ["site_id",
-                      "name",
-                      ]
+            # default fields to return 
+            fields = ["name",
+                      "site_id",
+                     ]
 
+            # Add template specific fields to return
             fields += settings.get_org_site_autocomplete_fields()
 
             rows = resource.select(fields,
@@ -2312,19 +2390,28 @@ class S3SiteModel(S3Model):
             output = []
             append = output.append
             for row in rows:
-                instance_type = row.get("org_site.instance_type", None)
-                location = row.get("gis_location", None)
-                org = row.get("org_organisation.name", None)
-                row = row.org_site
-                record = dict(id = row.site_id,
-                              name = row.name,
-                              )
-                if instance_type:
-                    record["instance_type"] = instance_type
-                if location:
-                    record["location"] = location.as_dict()
-                if org:
-                    record["org"] = org
+                # Populate record
+                _row = row.get("org_site", row)
+                record = {"id": _row.site_id,
+                          "name": _row.name,
+                          }
+
+                # Populate fields only if present
+                L1 = row.get("gis_location.L1", None)
+                if L1:
+                    record["L1"] = L1
+                L2 = row.get("gis_location.L2", None)
+                if L2:
+                    record["L2"] = L2
+                L3 = row.get("gis_location.L3", None)
+                if L3:
+                    record["L3"] = L3
+                L4 = row.get("gis_location.L4", None)
+                if L4:
+                    record["L4"] = L4
+
+                # Populate match information (if applicable)
+                set_match_strings(record, value)
                 append(record)
             output = json.dumps(output)
 
@@ -2364,7 +2451,7 @@ class S3SiteModel(S3Model):
         if filter and value:
             if filter == "~":
                 query = (S3FieldSelector("name").lower().like(value + "%")) | \
-                        (S3FieldSelector("location_id$address").lower().like(value + "%"))
+                        (S3FieldSelector("location_id$addr_street").lower().like(value + "%"))
             else:
                 output = current.xml.json_message(False, 400,
                                 "Unsupported filter! Supported filters: ~")
@@ -2388,7 +2475,7 @@ class S3SiteModel(S3Model):
             # Fields to return
             fields = ["site_id",
                       "name",
-                      "location_id$address",
+                      "location_id$addr_street",
                       ]
             rows = resource.select(fields,
                                    start=0,
@@ -2398,8 +2485,8 @@ class S3SiteModel(S3Model):
             output = []
             append = output.append
             for row in rows:
-                address = row.gis_location.address
-                row = row.org_site
+                address = row.get("gis_location.addr_street", None)
+                row = row.get("org_site", row)
                 record = dict(id = row.site_id,
                               name = row.name,
                               )
@@ -2901,7 +2988,7 @@ class S3FacilityModel(S3Model):
 
         # Pass names back to global scope (s3.*)
         return dict(org_facility_type_id = facility_type_id,
-                    org_facility_geojson = self.org_facility_geojson
+                    org_facility_geojson = self.org_facility_geojson,
                     )
 
     # -------------------------------------------------------------------------
@@ -3221,11 +3308,12 @@ class S3OfficeModel(S3Model):
 
         T = current.T
         db = current.db
+        s3 = current.response.s3
         messages = current.messages
         settings = current.deployment_settings
         add_component = self.add_component
         configure = self.configure
-        crud_strings = current.response.s3.crud_strings
+        crud_strings = s3.crud_strings
         define_table = self.define_table
         super_link = self.super_link
 
@@ -3293,9 +3381,9 @@ class S3OfficeModel(S3Model):
         #
         tablename = "org_office"
         table = define_table(tablename,
+                             super_link("doc_id", "doc_entity"),
                              super_link("pe_id", "pr_pentity"),
                              super_link("site_id", "org_site"),
-                             super_link("doc_id", "doc_entity"),
                              Field("name", notnull=True,
                                    length=64, # Mayon Compatibility
                                    label=T("Name")),
@@ -3361,131 +3449,95 @@ class S3OfficeModel(S3Model):
             msg_record_deleted=T("Office deleted"),
             msg_list_empty=T("No Offices currently registered"))
 
-        # Search Method
         if settings.get_org_branches():
             ORGANISATION = T("Organization/Branch")
             comment = T("Search for office by organization or branch.")
         else:
             ORGANISATION = T("Organization")
             comment = T("Search for office by organization.")
-        search_method = S3Search(
-            simple=(),
-            advanced=(S3SearchSimpleWidget(
-                        name="office_search_text",
-                        label=T("Search"),
-                        comment=T("Search for office by text."),
-                        field=["name", "comments", "email"]
-                      ),
-                      S3SearchOptionsWidget(
-                        name="office_search_org",
-                        label=ORGANISATION,  
-                        comment=comment,
-                        field="organisation_id",
-                        represent="%(name)s",
-                        cols=3
-                      ),
-                      S3SearchOptionsWidget(
-                        name="office_search_L0",
-                        field="location_id$L0",
-                        location_level="L0",
-                        cols=3
-                      ),
-                      S3SearchOptionsWidget(
-                        name="office_search_L1",
-                        field="location_id$L1",
-                        location_level="L1",
-                        cols=3
-                      ),
-                      S3SearchOptionsWidget(
-                        name="office_search_L2",
-                        field="location_id$L2",
-                        location_level="L2",
-                        cols=3
-                      ),
-                      # Disabled until fixed (which will be in new S3FilterForm)
-                      #S3SearchLocationWidget(
-                      #  name="office_search_map",
-                      #  label=T("Map"),
-                      #),
-            ))
+
+        # Which levels of Hierarchy are we using?
+        hierarchy = current.gis.get_location_hierarchy()
+        levels = hierarchy.keys()
+        if len(settings.get_gis_countries()) == 1 or \
+           s3.gis.config.region_location_id:
+            levels.remove("L0")
+
+        text_fields = ["name",
+                       "code",
+                       "comments",
+                       "organisation_id$name",
+                       "organisation_id$acronym",
+                       ]
+
+        list_fields = ["id",
+                       "name",
+                       "organisation_id", # Filtered in Component views
+                       "office_type_id",
+                       ]
+
+        for level in levels:
+            lfield = "location_id$%s" % level
+            text_fields.append(lfield)
+
+        list_fields += [(T("Address"), "location_id$addr_street"),
+                        "phone1",
+                        "email",
+                        ]
 
         filter_widgets = [
-                S3TextFilter(["name",
-                              "code",
-                              "comments",
-                              "organisation_id$name",
-                              "organisation_id$acronym",
-                              "location_id$name",
-                              "location_id$L1",
-                              "location_id$L2",
-                              ],
-                             label=T("Name"),
-                             _class="filter-search",
+                S3TextFilter(text_fields,
+                             label=T("Search"),
+                             #_class="filter-search",
                              ),
                 #S3OptionsFilter("office_type_id",
                 #                label=T("Type"),
-                #                represent="%(name)s",
                 #                widget="multiselect",
-                #                cols=3,
                 #                #hidden=True,
                 #                ),
                 S3OptionsFilter("organisation_id",
-                                label=messages.ORGANISATION,
+                                label=ORGANISATION,
+                                comment=comment,
                                 represent="%(name)s",
                                 widget="multiselect",
-                                cols=3,
                                 #hidden=True,
                                 ),
                 S3LocationFilter("location_id",
                                  label=T("Location"),
-                                 levels=["L0", "L1", "L2"],
+                                 levels=levels,
                                  widget="multiselect",
-                                 cols=3,
                                  #hidden=True,
                                  ),
                 ]
 
         configure(tablename,
-                  super_entity=("pr_pentity", "org_site"),
-                  onaccept=self.org_office_onaccept,
-                  deduplicate=self.org_office_duplicate,
-                  filter_widgets=filter_widgets,
-                  search_method=search_method,
-                  list_fields=["id",
-                               "name",
-                               "organisation_id", # Filtered in Component views
-                               "office_type_id",
-                               (messages.COUNTRY, "location_id$L0"),
-                               "location_id$L1",
-                               "location_id$L2",
-                               "location_id$L3",
-                               #"location_id$L4",
-                               (T("Address"), "location_id$addr_street"),
-                               "phone1",
-                               "email"
-                               ],
                   context = {"location": "location_id",
                              "organisation": "organisation_id",
                              "org_group": "organisation_id$group_membership.group_id",
                              },
-                  realm_components=["contact_emergency",
-                                    "config",
-                                    "image",
-                                    "req",
-                                    "send",
-                                    "human_resource_site",
-                                    "note",
-                                    "contact",
-                                    "role",
-                                    "asset",
-                                    "commit",
-                                    "inv_item",
-                                    "document",
-                                    "recv",
-                                    "address",
-                                    ],
-                  update_realm=True,
-                 )
+                  deduplicate = self.org_office_duplicate,
+                  filter_widgets = filter_widgets,
+                  list_fields = list_fields,
+                  onaccept = self.org_office_onaccept,
+                  realm_components = ["contact_emergency",
+                                      "config",
+                                      "image",
+                                      "req",
+                                      "send",
+                                      "human_resource_site",
+                                      "note",
+                                      "contact",
+                                      "role",
+                                      "asset",
+                                      "commit",
+                                      "inv_item",
+                                      "document",
+                                      "recv",
+                                      "address",
+                                      ],
+                  super_entity = ("doc_entity", "pr_pentity", "org_site"),
+                  update_realm = True,
+                  )
 
         if settings.get_org_summary():
             add_component("org_office_summary",
@@ -4219,7 +4271,7 @@ def org_site_top_req_priority(row, tablename="org_facility"):
 
 # =============================================================================
 def org_rheader(r, tabs=[]):
-    """ Organisation/Office/Facility page headers """
+    """ Organisation/Office/Facility/Group page headers """
 
     if r.representation != "html":
         # RHeaders only used in interactive views
@@ -4369,6 +4421,19 @@ def org_rheader(r, tabs=[]):
         if settings.has_module("inv"):
             # Build footer
             s3db.inv_rfooter(r, record)
+
+    elif tablename == "org_group":
+        tabs = [(T("Basic Details"), None),
+                (T("Member Organizations"), "membership"),
+                (T("Groups"), "group"),
+                (T("Attachments"), "document"),
+                ]
+        rheader_tabs = s3_rheader_tabs(r, tabs)
+        rheader = DIV(TABLE(TR(
+                            TH("%s: " % table.name.label),
+                            record.name,
+                            )),
+                      rheader_tabs)
 
     elif tablename in ("org_organisation_type", "org_office_type"):
         tabs = [(T("Basic Details"), None),
@@ -4822,10 +4887,11 @@ def org_office_controller():
     s3.postp = postp
 
     output = current.rest_controller("org", "office",
-                                     hide_filter=False,
+                                     hide_filter = False,
                                      # Don't allow components with components (such as document) to breakout from tabs
-                                     native=False,
-                                     rheader=org_rheader)
+                                     native = False,
+                                     rheader = org_rheader,
+                                     )
     return output
 
 # =============================================================================

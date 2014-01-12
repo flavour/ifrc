@@ -28,10 +28,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -120,7 +119,8 @@
                     // Update existing, so blur does not remove
                     // the selection again:
                     existing = {value: item.id,
-                                label: item.label};
+                                label: item.label
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -170,10 +170,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -252,7 +251,9 @@
                     real_input.val(id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: item.name};
+                    existing = {value: item.id,
+                                name: item.name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -377,10 +378,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -462,7 +462,9 @@
                     real_input.val(item.id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: ui.item.name};
+                    existing = {value: item.id,
+                                name: ui.item.name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -534,10 +536,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -617,7 +618,9 @@
                     real_input.val(item.id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: name};
+                    existing = {value: item.id,
+                                name: name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -669,10 +672,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -755,7 +757,9 @@
                     real_input.val(item.id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: item.name};
+                    existing = {value: item.id,
+                                name: item.name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -856,10 +860,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -939,7 +942,9 @@
                     real_input.val(item.id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: name};
+                    existing = {value: item.id,
+                                name: name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -1029,10 +1034,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -1116,7 +1120,9 @@
                     real_input.val(item.id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: item.name};
+                    existing = {value: item.id,
+                                name: item.name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -1157,30 +1163,49 @@
             // No Match
             return item.label;
         }
-        var name = item.name;
-        var address = item.address;
-        if (address) {
-            name += ' (' + address + ')';
-        }
-        var location = item.location;
-        if (location) {
-            location = represent_location(location);
-            name += ' (' + location + ')';
-        }
-        var org = item.org;
-        var instance_type = item.instance_type;
-        if (org || instance_type) {
-            if (instance_type) {
-                name += ' (' + S3.org_site_types[item.instance_type];
-                if (org) {
-                    name += ', ' + org;
-                }
-                name += ')';
-            } else {
-                name += ' (' + org + ')';
+
+        if (item.match_type) {
+            // use next gen site autocomplete
+            var label = item.match_string + '<b>' + item.next_string + '</b>';
+            var context = '';
+            if (item.match_type == 'name') {
+                context = item.L1;
             }
+            else {
+                context = item.name;
+            }
+            if (context != '' && item.next_string) {
+                label += ' - ' + context;
+            }
+            return label;
         }
-        return name;
+        else {
+            // use old site auto complete
+            var name = item.name;
+            var address = item.address;
+            if (address) {
+                name += ' (' + address + ')';
+            }
+            var location = item.location;
+            if (location) {
+                location = represent_location(location);
+                name += ' (' + location + ')';
+            }
+            var org = item.org;
+            var instance_type = item.instance_type;
+            if (org || instance_type) {
+                if (instance_type) {
+                    name += ' (' + S3.org_site_types[item.instance_type];
+                    if (org) {
+                        name += ', ' + org;
+                    }
+                    name += ')';
+                } else {
+                    name += ' (' + org + ')';
+                }
+            }
+            return name;
+        }
     }
 
     /**
@@ -1203,10 +1228,9 @@
         var value = real_input.val();
         if (value) {
             // Store existing data in case of cancel
-            var existing = {
-                value: value,
-                name: dummy_input.val()
-            };
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
         } else {
             var existing;
         }
@@ -1290,7 +1314,9 @@
                     real_input.val(item.id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: item.name};
+                    existing = {value: item.id,
+                                name: item.name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');
@@ -1338,8 +1364,23 @@
         var url = S3.Ap.concat('/org/site/search_address_ac');
 
         var real_input = $('#' + input);
+        // Bootstrap overides .hide :/
+        real_input.hide();
+
+        var value = real_input.val();
+        if (value) {
+            // Store existing data in case of cancel
+            var existing = {value: value,
+                            name: dummy_input.val()
+                            };
+        } else {
+            var existing;
+        }
+        real_input.data('existing', existing);
+
         // Have the URL editable after setup (e.g. to Filter by Organisation)
         real_input.data('url', url);
+
         if (real_input.parent().hasClass('controls')) {
             // Bootstrap
             var create = real_input.next().find('.s3_add_resource_link');
@@ -1412,7 +1453,9 @@
                     real_input.val(item.id).change();
                     // Update existing, so blur does not remove
                     // the selection again:
-                    existing = {value: item.id, name: item.name};
+                    existing = {value: item.id,
+                                name: item.name
+                                };
                 } else {
                     // No Match & no ability to create new
                     dummy_input.val('');

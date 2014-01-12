@@ -457,19 +457,19 @@ class S3AddPersonWidget(FormWidget):
                                  _class="action-btn"),
                                A(T("Remove selection"),
                                  _href="#",
-                                 _onclick='''S3.select_person_clear_form();''',
+                                 _onclick='''S3.select_person_clear_form()''',
                                  _id="clear_form_link",
                                  _class="action-btn hide",
-                                 _style="padding-left:15px;"),
+                                 _style="padding-left:15px"),
                                A(T("Edit Details"),
                                  _href="#",
-                                 _onclick='''S3.select_person_edit_form();''',
+                                 _onclick='''S3.select_person_edit_form()''',
                                  _id="edit_selected_person_link",
                                  _class="action-btn hide",
-                                 _style="padding-left:15px;"),
+                                 _style="padding-left:15px"),
                                DIV(_id="person_load_throbber",
                                    _class="throbber hide",
-                                   _style="padding-left:85px;"),
+                                   _style="padding-left:85px"),
                                _class="w2p_fw"),
                             TD(),
                             _id="select_from_registry_row",
@@ -483,13 +483,13 @@ class S3AddPersonWidget(FormWidget):
             ac_row = ""
             select_row = TR(TD(A(T("Edit Details"),
                                  _href="#",
-                                 _onclick='''S3.select_person_edit_form();''',
+                                 _onclick='''S3.select_person_edit_form()''',
                                  _id="edit_selected_person_link",
                                  _class="action-btn hide",
-                                 _style="padding-left:15px;"),
+                                 _style="padding-left:15px"),
                                DIV(_id="person_load_throbber",
                                    _class="throbber hide",
-                                   _style="padding-left:85px;"),
+                                   _style="padding-left:85px"),
                                _class="w2p_fw"),
                             TD(),
                             _id="select_from_registry_row",
@@ -5886,6 +5886,17 @@ def s3_richtext_widget(field, value):
                     _class="richtext %s" % (field.type),
                     value=value,
                     requires=field.requires)
+
+# =============================================================================
+def set_match_strings(matchDict, value):
+    for key in matchDict:
+        if not isinstance(matchDict[key], str):
+            continue
+        if matchDict[key][:len(value)].lower() == value:
+            matchDict["match_type"] = key
+            matchDict["match_string"] = value
+            matchDict["next_string"] = matchDict[key][len(value):]
+            break
 
 # =============================================================================
 def search_ac(r, **attr):

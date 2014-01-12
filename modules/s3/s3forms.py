@@ -1587,6 +1587,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
 
         fname = self._formname(separator = "_")
         field = Field(fname, "text",
+                      comment = options.get("comment", None),
                       label = label,
                       widget = self,
                       default = self.extract(resource, None),
@@ -2199,6 +2200,11 @@ class S3SQLInlineComponent(S3SQLSubForm):
                     # Add master record ID if linked directly
                     if not actuate_link or not link:
                         values[component.fkey] = master[pkey]
+                    else:
+                        # Check whether the component is a link table and we're linking to that via something like pr_person from hrm_human_resource
+                        fkey = component.fkey
+                        if fkey in component.fields and fkey not in values:
+                            values[fkey] = master[pkey]
                         
                     # Apply defaults
                     for f, v in defaults.iteritems():

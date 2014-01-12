@@ -176,6 +176,11 @@ button:hover,
     color: #ffffff;
 }
 
+#list-add h3 {
+    background: none;
+    border: none;
+}
+
 /* News Feed */
 .span6 .export_xls {
     margin-top: -5px;
@@ -186,6 +191,10 @@ button:hover,
     background: none;
     border: none;
     padding: 0;
+    margin: 0;
+}
+b.red {
+    /* If form is margin 0 then this needs to be too */
     margin: 0;
 }
 .ui-widget-content {

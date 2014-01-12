@@ -202,7 +202,8 @@ settings.L10n.decimal_separator = "."
 # Thousands separator for numbers (defaults to space)
 settings.L10n.thousands_separator = ","
 # Unsortable 'pretty' date format
-settings.L10n.date_format = T("%d-%b-%y")
+#settings.L10n.date_format = T("%d-%b-%Y")
+settings.L10n.date_format = "%d-%b-%Y"
 # Make last name in person/user records mandatory
 settings.L10n.mandatory_lastname = True
 # Uncomment this to Translate Layer Names
@@ -283,6 +284,8 @@ settings.hrm.use_education = True
 settings.hrm.organisation_label = "National Society / Branch"
 # Uncomment to consolidate tabs into a single CV
 settings.hrm.cv_tab = True
+# Uncomment to consolidate tabs into Staff Record
+settings.hrm.record_tab = True
 
 # RDRT
 settings.deploy.hr_label = "Member"
