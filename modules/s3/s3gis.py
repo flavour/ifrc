@@ -2165,6 +2165,9 @@ class GIS(object):
         tooltips = {}
         attributes = {}
         represents = {}
+        _pkey = table[pkey]
+        # Ensure there are no ID represents to confuse things
+        _pkey.represent = None
         if format == "geojson":
             if popup_fields or attr_fields:
                 # Build the Attributes &/Popup Tooltips now so that representations can be
@@ -2187,19 +2190,29 @@ class GIS(object):
                                        represent=True)
 
                 rfields = data["rfields"]
-                popup_cols = []
                 attr_cols = []
+                _popup_cols = {}
                 for f in rfields:
                     fname = f.fname
                     selector = f.selector
-                    if fname in popup_fields or selector in popup_fields:
-                        popup_cols.append(f.colname)
+                    if fname in popup_fields:
+                        _popup_cols[fname] = f.colname
+                    elif selector in popup_fields:
+                        _popup_cols[selector] = f.colname
                     if fname in attr_fields or selector in attr_fields:
                         attr_cols.append(f.colname)
 
+                # Want to control sort order
+                popup_cols = []
+                for f in popup_fields:
+                    colname = _popup_cols.get(f, None)
+                    if colname:
+                        popup_cols.append(colname)
+
                 rows = data["rows"]
+                _pkey = str(_pkey)
                 for row in rows:
-                    record_id = int(row[str(table[pkey])])
+                    record_id = int(row[_pkey])
                     if attr_cols:
                         attribute = {}
                         for fieldname in attr_cols:
@@ -5966,6 +5979,24 @@ class MAP(DIV):
         if marker_max_width != 30:
             options["max_w"] = marker_max_width
 
+        #########
+        # Colours
+        #########
+
+        # Keep these in sync with s3.gis.js
+        cluster_fill = settings.get_gis_cluster_fill() 
+        if cluster_fill and cluster_fill != '8087ff':
+            options["cluster_fill"] = cluster_fill
+        cluster_stroke = settings.get_gis_cluster_stroke() 
+        if cluster_stroke and cluster_stroke != '2b2f76':
+            options["cluster_stroke"] = cluster_stroke
+        select_fill = settings.get_gis_select_fill() 
+        if select_fill and select_fill != 'ffdc33':
+            options["select_fill"] = select_fill
+        select_stroke = settings.get_gis_select_stroke() 
+        if select_stroke and select_stroke != 'ff9933':
+            options["select_stroke"] = select_stroke
+
         ########
         # Layout
         ########
@@ -6628,7 +6659,7 @@ def addFeatureResources(feature_resources):
                 url = "%s&track=1" % url
             opacity = layer.get("opacity", row.opacity)
             cluster_attribute = layer.get("cluster_attribute",
-                                          row.cluster_attribute)
+                                          row.cluster_attribute) or CLUSTER_ATTRIBUTE
             cluster_distance = layer.get("cluster_distance",
                                          row.cluster_distance)
             cluster_threshold = layer.get("cluster_threshold",

@@ -29,7 +29,7 @@
         if (value) {
             // Store existing data in case of cancel
             var existing = {value: value,
-                            name: dummy_input.val()
+                            label: dummy_input.val()
                             };
         } else {
             var existing;
@@ -632,8 +632,7 @@
                 }
                 return false;
             }
-        })
-        .data('ui-autocomplete')._renderItem = function(ul, item) {
+        }).data('ui-autocomplete')._renderItem = function(ul, item) {
             var label = represent(item);
             return $('<li>').data('item.autocomplete', item)
                             .append('<a>' + label + '</a>')
