@@ -3761,18 +3761,18 @@ def hrm_programme_hours_month(row):
     """
 
     try:
-        thisdate = row["programme_hours.date"]
+        thisdate = row["hrm_programme_hours.date"]
     except AttributeError:
         return current.messages["NONE"]
     if not thisdate:
         return current.messages["NONE"]
 
-    thisdate = thisdate.date()
+    #thisdate = thisdate.date()
     month = thisdate.month
     year = thisdate.year
-    first = date(year, month, 1)
+    first = datetime.date(year, month, 1)
 
-    return first
+    return first.strftime("%y-%m")
 
 # =============================================================================
 def hrm_programme_hours_onaccept(form):
