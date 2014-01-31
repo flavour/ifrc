@@ -71,7 +71,7 @@ from gluon.html import *
 from s3codec import S3Codec
 from s3crud import S3CRUD
 from s3forms import S3SQLDefaultForm
-from s3utils import s3_debug
+from s3utils import s3_debug, s3_unicode
 from s3validators import IS_IN_SET, IS_ONE_OF, IS_ONE_OF_EMPTY
 from s3widgets import S3PentityAutocompleteWidget
 
