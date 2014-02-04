@@ -28,6 +28,7 @@ class S3MainMenu(default.S3MainMenu):
         # Additional menus
         current.menu.personal = cls.menu_personal()
         current.menu.dashboard = cls.menu_dashboard()
+        current.menu.org = cls.menu_org()
 
         return main_menu
 
@@ -110,8 +111,9 @@ class S3MainMenu(default.S3MainMenu):
 
         DB = S3DashBoardMenuLayout
         request = current.request
+        controller = request.controller
 
-        if request.controller == "vol":
+        if controller == "vol":
             dashboard = DB()(
                 DB("VOLUNTEERS",
                     c="vol",
@@ -129,7 +131,7 @@ class S3MainMenu(default.S3MainMenu):
                     #DB("Skills", f="skill"),
                     DB("Job Titles", f="job_title")
                 ))
-        elif request.controller in ("hrm", "org"):
+        elif controller in ("hrm", "org"):
             dashboard = DB()(
                 DB("STAFF",
                     c="hrm",
@@ -157,7 +159,7 @@ class S3MainMenu(default.S3MainMenu):
                     DB("Job Titles", f="job_title")
                 ))
 
-        elif request.controller == "default" and request.function == "index":
+        elif controller == "default" and request.function == "index":
 
             dashboard = DB(_id="dashboard")(
                 DB("Staff", c="hrm", f="staff", m="search",
@@ -194,6 +196,14 @@ class S3MainMenu(default.S3MainMenu):
             dashboard = None
 
         return dashboard
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def menu_org(cls):
+        """ Custom Organisation Menu """
+
+        OM = S3OrgMenuLayout
+        return OM()
 
     # -------------------------------------------------------------------------
     @classmethod

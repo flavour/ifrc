@@ -3401,11 +3401,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         s3db = current.s3db
 
         # Define a filtered component with single value
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=5))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": 5,
+                                         },
+                           )
 
         # Define the resource
         resource = s3db.resource("org_organisation", components=["test"])
@@ -3420,11 +3422,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
                          str((table.office_type_id == 5)))
 
         # Define a filtered component with single value in list
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=[5]))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": [5],
+                                         },
+                           )
         resource = s3db.resource("org_organisation", components=["test"])
         component = resource.components["test"]
         table = component.table
@@ -3432,11 +3436,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
                          str((table.office_type_id == 5)))
 
         # Define a filtered component with value list
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=[4, 5]))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": [4, 5],
+                                         },
+                           )
         resource = s3db.resource("org_organisation", components=["test"])
         component = resource.components["test"]
         table = component.table
@@ -3444,11 +3450,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
                          str((table.office_type_id.belongs(4,5))))
 
         # Define a filtered component with empty filter value list
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=[]))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": [],
+                                         },
+                           )
         resource = s3db.resource("org_organisation", components=["test"])
         component = resource.components["test"]
         self.assertEqual(component.filter, None)
@@ -3464,11 +3472,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         s3db = current.s3db
 
         # Define a filtered component
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=5))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": 5,
+                                         },
+                           )
 
         # Define the resource
         resource = s3db.resource("org_organisation")
@@ -3494,11 +3504,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         org_test_office = s3db.org_office.with_alias("org_test_office")
 
         # Define a filtered component
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=5))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": 5,
+                                         },
+                           )
 
         # Define the resource
         resource = s3db.resource("org_organisation")
@@ -3559,11 +3571,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         org_office_type = s3db.org_office_type
         org_test_office = s3db.org_office.with_alias("org_test_office")
 
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=5))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": 5,
+                                         },
+                           )
 
         resource = s3db.resource("org_organisation")
         fields = ["id", "name", "test.name", "test.office_type_id$name"]
@@ -3624,11 +3638,13 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         row = resource.select(["id"], limit=1, as_rows=True)[0]
         type_id = row.id
 
-        s3db.add_component("org_office",
-                           org_organisation = dict(name="test",
-                                                   joinby="organisation_id",
-                                                   filterby="office_type_id",
-                                                   filterfor=type_id))
+        s3db.add_components("org_organisation",
+                            org_office = {"name": "test",
+                                          "joinby": "organisation_id",
+                                          "filterby": "office_type_id",
+                                          "filterfor": type_id,
+                                         },
+                           )
         
         resource = current.s3db.resource("org_organisation", uid="FCTESTORG")
         fields = ["id", "name", "test.name", "test.office_type_id$name"]
@@ -3730,20 +3746,20 @@ class ResourceFilteredComponentTests(unittest.TestCase):
 
         current.auth.override = True
         s3db = current.s3db
-        s3db.add_component("org_office",
-                      org_organisation=dict(name="fieldoffice",
-                                            joinby="organisation_id",
-                                            filterby="office_type_id",
-                                            filterfor=5
-                                            )
-                      )
-        s3db.add_component("org_office",
-                      org_organisation=dict(name="hq",
-                                            joinby="organisation_id",
-                                            filterby="office_type_id",
-                                            filterfor=4
-                                            )
-                      )
+        s3db.add_components("org_organisation",
+                            org_office = ({"name": "fieldoffice",
+                                           "joinby": "organisation_id",
+                                           "filterby": "office_type_id",
+                                           "filterfor": 5,
+                                          },
+                                          {"name": "hq",
+                                           "joinby": "organisation_id",
+                                           "filterby": "office_type_id",
+                                           "filterfor": 4,
+                                          },
+                                         ),
+                           )
+                           
         resource = s3db.resource("org_organisation")
         self.assertEqual(str(resource.components.fieldoffice.filter), \
                          "(org_fieldoffice_office.office_type_id = 5)")
@@ -3759,6 +3775,467 @@ class ResourceFilteredComponentTests(unittest.TestCase):
         self.assertTrue(resource.components.office._length > 0)
         self.assertTrue(resource.components.fieldoffice._length is None)
         self.assertTrue(resource.components.hq._length is None)
+
+# =============================================================================
+class ResourceDeleteTests(unittest.TestCase):
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def setUpClass(cls):
+
+        s3db = current.s3db
+
+        # Create super-entity
+        s3db.super_entity("del_super",
+                          "del_super_id",
+                          {"del_master": "DEL Master"})
+
+        # Define master table
+        master = s3db.define_table("del_master",
+                                   s3db.super_link("del_super_id",
+                                                   "del_super"),
+                                   *s3_meta_fields())
+
+        current.db.commit()
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def tearDownClass(cls):
+
+        # Drop test tables
+        db = current.db
+        db.del_master.drop()
+        db.del_super.drop()
+
+        current.db.commit()
+
+    # -------------------------------------------------------------------------
+    def setUp(self):
+
+        s3db = current.s3db
+
+        # Make master instance type of super
+        s3db.configure("del_master", super_entity = "del_super")
+
+        # Create the master record and link it to the SE
+        master_table = s3db.del_master
+        master_id = master_table.insert()
+        s3db.update_super(master_table, {"id": master_id})
+        self.master_id = master_id
+
+        current.db.commit()
+        current.auth.override = True
+
+    # -------------------------------------------------------------------------
+    def tearDown(self):
+
+        # Remove test records
+        db = current.db
+        db(db.del_master._id>0).delete()
+        db(db.del_super._id>0).delete()
+        db.commit()
+        
+        current.auth.override = False
+
+    # -------------------------------------------------------------------------
+    def testArchiveSimple(self):
+        """ Test archiving of a record """
+
+        s3db = current.s3db
+        s3db.clear_config("del_master", "super_entity")
+        
+        master_id = self.master_id
+
+        # Delete the master record
+        resource = s3db.resource("del_master", id=master_id)
+        success = resource.delete()
+        self.assertEqual(success, 1)
+        self.assertEqual(current.manager.error, None)
+
+        # Master record is deleted
+        table = s3db.del_master
+        record = table[master_id]
+        self.assertTrue(record.deleted)
+
+    # -------------------------------------------------------------------------
+    def testArchiveCascade(self):
+        """
+            Test archiving of a record which is referenced by
+            other records
+        """
+
+        s3db = current.s3db
+        s3db.clear_config("del_master", "super_entity")
+
+        master_id = self.master_id
+
+        # Define component table
+        component = s3db.define_table("del_component",
+                                      Field("del_master_id",
+                                            s3db.del_master,
+                                            ondelete="CASCADE"),
+                                      *s3_meta_fields())
+        s3db.add_components("del_master",
+                            del_component="del_master_id")
+
+        try:
+            # Create a component record
+            component_id = component.insert(del_master_id=master_id)
+            component_record = component[component_id]
+            self.assertNotEqual(component_record, None)
+            current.db.commit()
+
+            # Delete the master record
+            resource = s3db.resource("del_master", id=master_id)
+            success = resource.delete()
+            self.assertEqual(success, 1)
+            self.assertEqual(current.manager.error, None)
+
+            # Master record is deleted
+            table = s3db.del_master
+            record = table[master_id]
+            self.assertTrue(record.deleted)
+
+            # Component record is deleted and unlinked
+            component_record = component[component_id]
+            self.assertTrue(component_record.deleted)
+            self.assertEqual(component_record.del_master_id, None)
+
+        finally:
+            component.drop()
+            del current.model.components["del_master"]["component"]
+
+    # -------------------------------------------------------------------------
+    def testArchiveSetNull(self):
+        """
+            Test archiving of a record which is referenced by
+            other records
+        """
+
+        s3db = current.s3db
+        s3db.clear_config("del_master", "super_entity")
+
+        master_id = self.master_id
+
+        # Define component table
+        component = s3db.define_table("del_component",
+                                      Field("del_master_id",
+                                            s3db.del_master,
+                                            ondelete="SET NULL"),
+                                      *s3_meta_fields())
+        s3db.add_components("del_master",
+                            del_component="del_master_id")
+
+        try:
+            # Create a component record
+            component_id = component.insert(del_master_id=master_id)
+            component_record = component[component_id]
+            self.assertNotEqual(component_record, None)
+            current.db.commit()
+
+            # Delete the master record
+            resource = s3db.resource("del_master", id=master_id)
+            success = resource.delete()
+            self.assertEqual(success, 1)
+            self.assertEqual(current.manager.error, None)
+
+            # Master record is deleted
+            table = s3db.del_master
+            record = table[master_id]
+            self.assertTrue(record.deleted)
+
+            # Component record is not deleted, but unlinked
+            component_record = component[component_id]
+            self.assertFalse(component_record.deleted)
+            self.assertEqual(component_record.del_master_id, None)
+            
+        finally:
+            component.drop()
+            del current.model.components["del_master"]["component"]
+
+    # -------------------------------------------------------------------------
+    def testArchiveRestrict(self):
+        """
+            Test archiving of a record which is referenced by
+            other records
+        """
+
+
+        s3db = current.s3db
+        s3db.clear_config("del_master", "super_entity")
+
+        master_id = self.master_id
+
+        # Define component table
+        component = s3db.define_table("del_component",
+                                      Field("del_master_id",
+                                            s3db.del_master,
+                                            ondelete="RESTRICT"),
+                                      *s3_meta_fields())
+        s3db.add_components("del_master",
+                            del_component="del_master_id")
+
+        try:
+            # Create a component record
+            component_id = component.insert(del_master_id=master_id)
+            component_record = component[component_id]
+            self.assertNotEqual(component_record, None)
+            current.db.commit()
+
+            # Delete the master record
+            resource = s3db.resource("del_master", id=master_id)
+            success = resource.delete()
+            self.assertEqual(success, 0)
+            self.assertEqual(current.manager.error, resource.ERROR.INTEGRITY_ERROR)
+
+            # Master record is not deleted
+            table = s3db.del_master
+            record = table[master_id]
+            self.assertFalse(record.deleted)
+
+            # Component record is not deleted and still linked
+            component_record = component[component_id]
+            self.assertFalse(component_record.deleted)
+            self.assertEqual(component_record.del_master_id, master_id)
+
+        finally:
+            component.drop()
+            del current.model.components["del_master"]["component"]
+            
+    # -------------------------------------------------------------------------
+    def testArchiveSuper(self):
+        """
+            Test archiving of a super-entity instance record
+        """
+
+        s3db = current.s3db
+
+        master_id = self.master_id
+
+        # Get the super_id
+        table = s3db.del_master
+        record = table[master_id]
+        super_id = record["del_super_id"]
+
+        # Delete the master record
+        resource = s3db.resource("del_master", id=master_id)
+        success = resource.delete()
+        self.assertEqual(success, 1)
+        self.assertEqual(current.manager.error, None)
+
+        # Master record is deleted
+        record = table[master_id]
+        self.assertTrue(record.deleted)
+        self.assertEqual(record.del_super_id, None)
+
+        # Super-record is deleted
+        stable = s3db.del_super
+        srecord = stable[super_id]
+        self.assertTrue(srecord.deleted)
+
+    # -------------------------------------------------------------------------
+    def testArchiveSuperCascade(self):
+        """
+            Test archiving of a super-entity instance record
+            where the super-record is referenced by other records
+            with CASCADE constraint
+        """
+
+        s3db = current.s3db
+
+        master_id = self.master_id
+
+        # Define component table
+        component = s3db.define_table("del_component",
+                                      s3db.super_link("del_super_id",
+                                                      "del_super",
+                                                      ondelete="CASCADE"),
+                                      *s3_meta_fields())
+        s3db.add_components("del_super",
+                            del_component="del_super_id")
+
+        try:
+            # Get the super_id
+            table = s3db.del_master
+            record = table[master_id]
+            super_id = record["del_super_id"]
+
+            # Create a component record
+            component_id = component.insert(del_super_id=super_id)
+            component_record = component[component_id]
+            self.assertNotEqual(component_record, None)
+            current.db.commit()
+
+            # Delete the master record
+            resource = s3db.resource("del_master", id=master_id)
+            success = resource.delete()
+            self.assertEqual(success, 1)
+            self.assertEqual(current.manager.error, None)
+
+            # Master record is deleted
+            record = table[master_id]
+            self.assertTrue(record.deleted)
+            self.assertEqual(record.del_super_id, None)
+
+            # Super-record is deleted
+            stable = s3db.del_super
+            srecord = stable[super_id]
+            self.assertTrue(srecord.deleted)
+
+            # Component record is deleted
+            crecord = component[component_id]
+            self.assertTrue(crecord.deleted)
+            self.assertEqual(crecord.del_super_id, None)
+            
+        finally:
+            component.drop()
+            del current.model.components["del_super"]["component"]
+
+    # -------------------------------------------------------------------------
+    def testArchiveSuperSetNull(self):
+        """
+            Test archiving of a super-entity instance record
+            where the super-record is referenced by other records
+            with SET NULL constraint
+        """
+
+        s3db = current.s3db
+
+        master_id = self.master_id
+
+        # Define component table
+        component = s3db.define_table("del_component",
+                                      s3db.super_link("del_super_id",
+                                                      "del_super",
+                                                      ondelete="SET NULL"),
+                                      *s3_meta_fields())
+        s3db.add_components("del_super",
+                            del_component="del_super_id")
+
+        try:
+            # Get the super_id
+            table = s3db.del_master
+            record = table[master_id]
+            super_id = record["del_super_id"]
+
+            # Create a component record
+            component_id = component.insert(del_super_id=super_id)
+            component_record = component[component_id]
+            self.assertNotEqual(component_record, None)
+            current.db.commit()
+
+            # Delete the master record
+            resource = s3db.resource("del_master", id=master_id)
+            success = resource.delete()
+            self.assertEqual(success, 1)
+            self.assertEqual(current.manager.error, None)
+
+            # Master record is deleted
+            record = table[master_id]
+            self.assertTrue(record.deleted)
+            self.assertEqual(record.del_super_id, None)
+
+            # Super-record is deleted
+            stable = s3db.del_super
+            srecord = stable[super_id]
+            self.assertTrue(srecord.deleted)
+
+            # Component record is not deleted, but unlinked
+            crecord = component[component_id]
+            self.assertFalse(crecord.deleted)
+            self.assertEqual(crecord.del_super_id, None)
+            
+        finally:
+            component.drop()
+            del current.model.components["del_super"]["component"]
+
+    # -------------------------------------------------------------------------
+    def testArchiveSuperRestrict(self):
+        """
+            Test archiving of a super-entity instance record
+            where the super-record is referenced by other records
+            with RESTRICT constraint
+        """
+
+        s3db = current.s3db
+
+        master_id = self.master_id
+
+        # Define component table
+        component = s3db.define_table("del_component",
+                                      s3db.super_link("del_super_id",
+                                                      "del_super",
+                                                      ondelete="RESTRICT"),
+                                      *s3_meta_fields())
+        s3db.add_components("del_super",
+                            del_component="del_super_id")
+
+        try:
+            # Get the super_id
+            table = s3db.del_master
+            record = table[master_id]
+            super_id = record["del_super_id"]
+
+            # Create a component record
+            component_id = component.insert(del_super_id=super_id)
+            component_record = component[component_id]
+            self.assertNotEqual(component_record, None)
+            current.db.commit()
+
+            # Delete the master record
+            resource = s3db.resource("del_master", id=master_id)
+            success = resource.delete()
+            self.assertEqual(success, 0)
+            self.assertEqual(current.manager.error, resource.ERROR.INTEGRITY_ERROR)
+
+            # Master record is not deleted
+            record = table[master_id]
+            self.assertFalse(record.deleted)
+            self.assertEqual(record.del_super_id, super_id)
+
+            # Super-record is not deleted
+            stable = s3db.del_super
+            srecord = stable[super_id]
+            self.assertFalse(srecord.deleted)
+
+            # Component record is not deleted and still unlinked
+            crecord = component[component_id]
+            self.assertFalse(crecord.deleted)
+            self.assertEqual(crecord.del_super_id, super_id)
+            
+        finally:
+            component.drop()
+            del current.model.components["del_super"]["component"]
+            
+    ## -------------------------------------------------------------------------
+    #def testDeleteSimple(self):
+        #""" Test hard deletion of a record """
+
+        #raise NotImplementedError
+
+    ## -------------------------------------------------------------------------
+    #def testDeleteCascade(self):
+        #"""
+            #Test hard deletion of a record which is referenced by
+            #other records
+        #"""
+        
+        #raise NotImplementedError
+
+    ## -------------------------------------------------------------------------
+    #def testDeleteSuper(self):
+        #""" Test hard deletion of a super-entity instance record """
+
+        #raise NotImplementedError
+
+    ## -------------------------------------------------------------------------
+    #def testDeleteSuperCascade(self):
+        #"""
+            #Test hard deletion of a super-entity instance record
+            #where the super-record is referenced by other records
+        #"""
+
+        #raise NotImplementedError
 
 # =============================================================================
 def run_suite(*test_classes):
@@ -3801,7 +4278,7 @@ if __name__ == "__main__":
         #ResourceInsertTest,
         #ResourceSelectTests,
         #ResourceUpdateTests,
-        #ResourceDeleteTests,
+        ResourceDeleteTests,
 
         #ResourceApproveTests,
         #ResourceRejectTests,

@@ -396,12 +396,13 @@ class S3Msg(object):
         if isinstance(pe_id, list):
             # Add an entry per recipient
             listindex = 0
+            insert = table.insert
             for id in pe_id:
                 try:
-                    table.insert(message_id = message_id,
-                                 pe_id = id,
-                                 contact_method = contact_method,
-                                 system_generated = system_generated)
+                    insert(message_id = message_id,
+                           pe_id = id,
+                           contact_method = contact_method,
+                           system_generated = system_generated)
                     listindex = listindex + 1
                 except:
                     return listindex

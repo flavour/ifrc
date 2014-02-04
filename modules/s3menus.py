@@ -574,13 +574,12 @@ class S3OptionsMenu(object):
 
         return M(c="cap")(
                     M("Alerts", f="alert", vars={'alert.is_template': 'false'})(
-                        M("List alerts", f="alert", vars={'alert.is_template': 'false'}),
-                        M("Create alert", f="alert", m="create"),
-                        M("Search & Subscribe", m="search"),
+                        M("List All", f="alert", vars={'alert.is_template': 'false'}),
+                        M("Create Alert", f="alert", m="create"),
                     ),
                     M("Templates", f="template", vars={'alert.is_template': 'true'})(
-                        M("List templates", f="template", vars={'alert.is_template': 'true'}),
-                        M("Create template", f="template", m="create"),
+                        M("List All", f="template", vars={'alert.is_template': 'true'}),
+                        M("Create Template", f="template", m="create"),
                     ),
                     #M("CAP Profile", f="profile")(
                     #    M("Edit profile", f="profile")
@@ -710,18 +709,15 @@ class S3OptionsMenu(object):
 
         return M(c="dvi")(
                     #M("Home", f="index"),
-                    M("Body Recovery", f="recreq")(
+                    M("Recovery Requests", f="recreq")(
                         M("New Request", m="create"),
                         M("List Current",
                           vars={"recreq.status":"1,2,3"}),
-                        M("List All"),
                     ),
                     M("Dead Bodies", f="body")(
                         M("New", m="create"),
-                        M("List all"),
                         M("List unidentified",
-                          vars=dict(status="unidentified")),
-                        M("Search", m="search"),
+                          vars={"identification.status": "None"}),
                         M("Report by Age/Gender", m="report",
                           vars=dict(rows="age_group",
                                     cols="gender",
@@ -1530,7 +1526,6 @@ class S3OptionsMenu(object):
         return M(c="pr", restrict=ADMIN)(
                     M("Person", f="person")(
                         M("Add Person", m="create"),
-                        M("Search", f="index"),
                         M("List All"),
                     ),
                     M("Groups", f="group")(

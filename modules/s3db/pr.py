@@ -132,7 +132,7 @@ class S3PersonEntity(S3Model):
         T = current.T
         auth_settings = current.auth.settings
 
-        add_component = self.add_component
+        add_components = self.add_components
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
@@ -176,13 +176,6 @@ class S3PersonEntity(S3Model):
                              Field("type"),
                              Field("pe_label", length=128))
 
-        # Search method
-        #pentity_search = S3Search(name = "pentity_search_simple",
-        #                          label = T("Name and/or ID"),
-        #                          comment = "",
-        #                          field = ["pe_label"])
-        #pentity_search.pentity_represent = pr_pentity_represent
-
         # Resource configuration
         configure(tablename,
                   list_fields = ["instance_type", "type", "pe_label"],
@@ -190,10 +183,53 @@ class S3PersonEntity(S3Model):
                   deletable=False,
                   listadd=False,
                   onaccept=self.pr_pentity_onaccept,
-                  #search_method=pentity_search,
                   referenced_by=[(auth_settings.table_membership_name, "for_pe")]
                   )
 
+        # Components
+        pe_id = super_key(table)
+        add_components(tablename,
+                       # PR components
+                       pr_address=pe_id,
+                       pr_contact=(# All contact information:
+                                   pe_id,
+                                   # Email addresses:
+                                   {"name": "email",
+                                    "joinby": "pe_id",
+                                    "filterby": "contact_method",
+                                    "filterfor": ["EMAIL"],
+                                   },
+                                   # Mobile phone numbers:
+                                   {"name": "phone",
+                                    "joinby": "pe_id",
+                                    "filterby": "contact_method",
+                                    "filterfor": ["SMS"],
+                                   },
+                                  ),
+                       pr_contact_emergency=pe_id,
+                       pr_image=pe_id,
+                       pr_note=pe_id,
+                       pr_role=pe_id,
+                       pr_saved_search=pe_id,
+                       pr_physical_description={"joinby": pe_id,
+                                                "multiple": False,
+                                               },
+                       # DVI components
+                       dvi_effects={"joinby": pe_id,
+                                    "multiple": False,
+                                   },
+                       dvi_checklist={"joinby": pe_id,
+                                      "multiple": False,
+                                     },
+                       dvi_identification={"joinby": pe_id,
+                                           "multiple": False,
+                                          },
+                       # Map Configs 'Saved Maps'
+                       #   - Personalised configurations
+                       #   - OU configurations (Organisation/Branch/Facility/Team)
+                       gis_config=pe_id,
+                      )
+                      
         # Reusable fields
         pr_pe_label = S3ReusableField("pe_label", length=128,
                                       label = T("ID Tag Number"),
@@ -205,46 +241,7 @@ class S3PersonEntity(S3Model):
                         method="search_ac",
                         action=self.pe_search_ac)
 
-        # Components
-        pe_id = super_key(table)
-        add_component("pr_address", pr_pentity=pe_id)
-        add_component("pr_contact", pr_pentity=pe_id)
-        # Email
-        add_component("pr_contact",
-                      pr_pentity=dict(name="email",
-                                      joinby="pe_id",
-                                      filterby="contact_method",
-                                      filterfor=["EMAIL"],
-                                      ))
-        # Mobile Phone
-        add_component("pr_contact",
-                      pr_pentity=dict(name="phone",
-                                      joinby="pe_id",
-                                      filterby="contact_method",
-                                      filterfor=["SMS"],
-                                      ))
-        add_component("pr_contact_emergency", pr_pentity=pe_id)
-        add_component("pr_image", pr_pentity=pe_id)
-        add_component("pr_note", pr_pentity=pe_id)
-        add_component("pr_physical_description",
-                      pr_pentity=dict(joinby=pe_id,
-                                      multiple=False))
-        add_component("pr_role", pr_pentity=pe_id)
-        add_component("pr_saved_search", pr_pentity=pe_id)
-        add_component("dvi_checklist",
-                      pr_pentity=dict(joinby=pe_id,
-                                      multiple=False))
-        add_component("dvi_effects",
-                      pr_pentity=dict(joinby=pe_id,
-                                      multiple=False))
-        add_component("dvi_identification",
-                      pr_pentity=dict(joinby=pe_id,
-                                      multiple=False))
-        # Map Configs 'Saved Maps'
-        #   - Personalised configurations
-        #   - OU configurations (Organisation/Branch/Facility/Team)
-        add_component("gis_config", pr_pentity=pe_id)
-
+                      
         # ---------------------------------------------------------------------
         # Person <-> User
         #
@@ -320,6 +317,11 @@ class S3PersonEntity(S3Model):
         configure(tablename,
                   onvalidation=self.pr_role_onvalidation)
 
+        # Components
+        add_components(tablename,
+                       pr_affiliation="role_id",
+                      )
+
         # Reusable fields
         pr_role_represent = pr_RoleRepresent()
         role_id = S3ReusableField("role_id", table,
@@ -328,8 +330,6 @@ class S3PersonEntity(S3Model):
                                   represent = pr_role_represent,
                                   label = T("Role"),
                                   ondelete = "CASCADE")
-
-        add_component("pr_affiliation", pr_role="role_id")
 
         # ---------------------------------------------------------------------
         # Affiliation
@@ -706,7 +706,7 @@ class S3PersonModel(S3Model):
 
         define_table = self.define_table
         super_link = self.super_link
-        add_component = self.add_component
+        add_components = self.add_components
 
         # ---------------------------------------------------------------------
         # Person
@@ -831,19 +831,22 @@ class S3PersonModel(S3Model):
         table.age = Field.Lazy(self.pr_person_age)
         table.age_group = Field.Lazy(self.pr_person_age_group)
 
-        # Search method
-        # @ToDo: Replace with S3Filter
-        pr_person_search = S3Search(
-            name="person_search_simple",
-            label=T("Name and/or ID"),
-            comment=T("To search for a person, enter any of the first, middle or last names and/or an ID number of a person, separated by spaces. You may use % as wildcard. Press 'Search' without input to list all persons."),
-            field=["pe_label",
-                   "first_name",
-                   "middle_name",
-                   "last_name",
-                   "local_name",
-                   "identity.value"
-                   ])
+        # Filter widgets
+        filter_widgets = [
+            S3TextFilter(["pe_label",
+                          "first_name",
+                          "middle_name",
+                          "last_name",
+                          "local_name",
+                          "identity.value"
+                         ],
+                         label=T("Name and/or ID"),
+                         comment=T("To search for a person, enter any of the "
+                                   "first, middle or last names and/or an ID "
+                                   "number of a person, separated by spaces. "
+                                   "You may use % as wildcard."),
+                        ),
+        ]
 
         # Custom Form
         crud_form = S3SQLCustomForm("first_name",
@@ -882,8 +885,7 @@ class S3PersonModel(S3Model):
                        main = "first_name",
                        onaccept = self.pr_person_onaccept,
                        realm_components = ["presence"],
-                       # @ToDo: Replace with S3Filter
-                       search_method = pr_person_search,
+                       filter_widgets = filter_widgets,
                        super_entity = ("pr_pentity", "sit_trackable"),
                        )
 
@@ -919,47 +921,48 @@ class S3PersonModel(S3Model):
                    action=self.pr_person_lookup)
 
         # Components
-        add_component("pr_group_membership", pr_person="person_id")
-        add_component("pr_identity", pr_person="person_id")
-        add_component("pr_education", pr_person="person_id")
-        add_component("pr_person_details", pr_person=dict(joinby="person_id",
-                                                          multiple=False))
-        add_component("pr_save_search", pr_person="person_id")
-        add_component("msg_subscription", pr_person="person_id")
-
-        add_component("member_membership", pr_person="person_id")
-
-        # Users
-        add_component("auth_user", pr_person=dict(link="pr_person_user",
-                                                  joinby="pe_id",
-                                                  key="user_id",
-                                                  fkey="id",
-                                                  pkey="pe_id",
-                                                  ))
-
-        # HR Record
-        add_component("hrm_human_resource", pr_person="person_id")
-
-        # Skills
-        add_component("hrm_certification", pr_person="person_id")
-        add_component("hrm_competency", pr_person="person_id")
-        add_component("hrm_credential", pr_person="person_id")
-        add_component("hrm_training", pr_person="person_id")
-
-        # Experience
-        add_component("hrm_experience", pr_person="person_id")
-        add_component("hrm_programme_hours", pr_person=dict(name="hours",
-                                                            joinby="person_id"))
-
-        # Appraisals
-        add_component("hrm_appraisal", pr_person="person_id")
-
-        # Awards
-        add_component("vol_volunteer_award", pr_person=dict(name="award",
-                                                            joinby="person_id"))
-
-        # Assets
-        add_component("asset_asset", pr_person="assigned_to_id")
+        add_components(tablename,
+                       # Personal Data
+                       pr_identity="person_id",
+                       pr_education="person_id",
+                       pr_person_details={"joinby": "person_id",
+                                          "multiple": False,
+                                         },
+                       # Saved Searches and Subscriptions
+                       pr_save_search="person_id",
+                       msg_subscription="person_id",
+                       # Group Memberships
+                       pr_group_membership="person_id",
+                       # Organisation Memberships
+                       member_membership="person_id",
+                       # User account
+                       auth_user={"link": "pr_person_user",
+                                  "joinby": "pe_id",
+                                  "key": "user_id",
+                                  "fkey": "id",
+                                  "pkey": "pe_id",
+                                 },
+                       # HR Records
+                       hrm_human_resource="person_id",
+                       # Skills
+                       hrm_certification="person_id",
+                       hrm_competency="person_id",
+                       hrm_credential="person_id",
+                       hrm_training="person_id",
+                       # Experience
+                       hrm_experience="person_id",
+                       hrm_programme_hours={"name": "hours",
+                                            "joinby": "person_id",
+                                           },
+                       # Appraisals
+                       hrm_appraisal="person_id",
+                       # Awards
+                       vol_volunteer_award={"name": "award",
+                                            "joinby": "person_id",
+                                           },
+                       # Assets
+                       asset_asset="assigned_to_id",
+                      )
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
@@ -1245,9 +1248,9 @@ class S3PersonModel(S3Model):
         limit = int(_vars.limit or 0)
         MAX_SEARCH_RESULTS = current.deployment_settings.get_search_max_results()
         if (not limit or limit > MAX_SEARCH_RESULTS) and resource.count() > MAX_SEARCH_RESULTS:
-            output = json.dumps([dict(id="",
-                                      name="Search results are over %d. Please input more characters." \
-                                          % MAX_SEARCH_RESULTS)])
+            output = json.dumps([
+                dict(label=str(current.T("There are more than %(max)s results, please input more characters.") % dict(max=MAX_SEARCH_RESULTS)))
+                ])
         else:
             fields = ["id",
                       "first_name",
@@ -1529,7 +1532,9 @@ class S3GroupModel(S3Model):
                                    )
 
         # Components
-        self.add_component("pr_group_membership", pr_group="group_id")
+        self.add_components(tablename,
+                            pr_group_membership="group_id",
+                           )
 
         # ---------------------------------------------------------------------
         # Group membership
@@ -2814,8 +2819,9 @@ class S3SubscriptionModel(S3Model):
                                                     options=email_format_opts)),
                                   *s3_meta_fields())
 
-        self.add_component("pr_subscription_resource",
-                           pr_subscription="subscription_id")
+        self.add_components(tablename,
+                            pr_subscription_resource="subscription_id",
+                           )
 
         # ---------------------------------------------------------------------
         tablename = "pr_subscription_resource"
@@ -5748,7 +5754,7 @@ def pr_role_rebuild_path(role_id, skip=[], clear=False):
 def pr_image_represent(image_name,
                        format = None,
                        size = (),
-                      ):
+                       ):
     """
         Get the image that matches the required image type
 
