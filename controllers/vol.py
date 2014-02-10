@@ -231,16 +231,16 @@ def volunteer():
             list_fields = ["person_id$first_name",
                            "person_id$middle_name",
                            "person_id$last_name",
-                          ]
+                           ]
         else:
             list_fields = ["person_id",
-                          ]
+                           ]
         list_fields.extend(["job_title_id",
                             "organisation_id",
                             (settings.get_ui_label_mobile_phone(), "phone.value"),
                             (T("Email"), "email.value"),
                             "location_id",
-                           ])
+                            ])
         if settings.get_hrm_use_trainings():
             list_fields.append("person_id$training.course_id")
         if settings.get_hrm_use_certificates():
@@ -548,9 +548,8 @@ def person():
                         query = (otable.name == org_name) & \
                                 (htable.organisation_id == otable.id) & \
                                 (htable.type == group)
-                        resource = s3base.S3Resource("hrm_human_resource", filter=query)
-                        ondelete = s3db.get_config("hrm_human_resource", "ondelete")
-                        resource.delete(ondelete=ondelete, format="xml", cascade=True)
+                        resource = s3db.resource("hrm_human_resource", filter=query)
+                        resource.delete(format="xml", cascade=True)
     s3mgr.import_prep = import_prep
 
     # CRUD pre-process

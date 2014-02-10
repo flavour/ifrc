@@ -124,6 +124,7 @@ class S3Resource(object):
                  linktable=None,
                  alias=None,
                  components=None,
+                 filter_component=None,
                  include_deleted=False,
                  approved=True,
                  unapproved=False,
@@ -142,6 +143,9 @@ class S3Resource(object):
 
             @param components: list of component aliases
                                to load for this resource
+            @param filter_component: alias of the component the URL filters
+                                     apply for (filters for this component
+                                     must be handled separately)
 
             @param alias: the alias for this resource (internal use only)
             @param parent: the parent resource (internal use only)
@@ -292,7 +296,11 @@ class S3Resource(object):
             [attach(alias, hooks[alias]) for alias in hooks]
 
             # Build query
-            self.build_query(id=id, uid=uid, filter=filter, vars=vars)
+            self.build_query(id=id,
+                             uid=uid,
+                             filter=filter,
+                             vars=vars,
+                             filter_component=filter_component)
             if context:
                 self.add_filter(s3db.context)
 
@@ -427,7 +435,12 @@ class S3Resource(object):
     # -------------------------------------------------------------------------
     # Query handling
     # -------------------------------------------------------------------------
-    def build_query(self, id=None, uid=None, filter=None, vars=None):
+    def build_query(self,
+                    id=None,
+                    uid=None,
+                    filter=None,
+                    vars=None,
+                    filter_component=None):
         """
             Query builder
 
@@ -435,6 +448,9 @@ class S3Resource(object):
             @param uid: record UID or list of record UIDs to include
             @param filter: filtering query (DAL only)
             @param vars: dict of URL query variables
+            @param filter_component: the alias of the component the URL
+                                     filters apply for (filters for this
+                                     component must be handled separately)
         """
 
         # Reset the rows counter
@@ -444,7 +460,8 @@ class S3Resource(object):
                                         id=id,
                                         uid=uid,
                                         filter=filter,
-                                        vars=vars)
+                                        vars=vars,
+                                        filter_component=filter_component)
         return self.rfilter
 
     # -------------------------------------------------------------------------
@@ -1234,14 +1251,12 @@ class S3Resource(object):
 
     # -------------------------------------------------------------------------
     def delete(self,
-               ondelete=None,
                format=None,
                cascade=False,
                replaced_by=None):
         """
             Delete all (deletable) records in this resource
 
-            @param ondelete: on-delete callback
             @param format: the representation format of the request (optional)
             @param cascade: this is a cascade delete (prevents rollbacks/commits)
             @param replaced_by: used by record merger
@@ -1377,8 +1392,7 @@ class S3Resource(object):
                         rresource = define_resource(tn,
                                                     filter=query,
                                                     unapproved=True)
-                        rondelete = rresource.get_config("ondelete")
-                        rresource.delete(ondelete=rondelete, cascade=True)
+                        rresource.delete(cascade=True)
                         if manager.error:
                             break
                     elif rfield.ondelete == "SET NULL":
@@ -1426,8 +1440,7 @@ class S3Resource(object):
                                 linked = define_resource(linked_table,
                                                          filter=query,
                                                          unapproved=True)
-                                ondelete = linked.get_config("ondelete")
-                                linked.delete(ondelete=ondelete, cascade=True)
+                                linked.delete(cascade=True)
                     # Pull back prior error status
                     manager.error = error
                     error = None
@@ -1461,6 +1474,7 @@ class S3Resource(object):
                     audit("delete", prefix, name,
                           record=record_id, representation=format)
                     # On-delete hook
+                    ondelete = get_config("ondelete")
                     if ondelete:
                         callback(ondelete, row)
                     # Commit after each row to not have it rolled back by
@@ -1496,6 +1510,7 @@ class S3Resource(object):
                     audit("delete", prefix, name,
                           record=row[pkey], representation=format)
                     # On-delete hook
+                    ondelete = get_config("ondelete")
                     if ondelete:
                         callback(ondelete, row)
                     # Commit after each row to not have it rolled back by
@@ -1773,6 +1788,10 @@ class S3Resource(object):
             fields.insert(0, table._id.name)
             selectors.insert(0, table._id.name)
 
+        # Skip representation of IDs in data tables
+        id_repr = table._id.represent
+        table._id.represent = None
+
         # Extract the data
         data = self.select(selectors,
                            start=start,
@@ -1784,8 +1803,10 @@ class S3Resource(object):
                            getids=getids,
                            represent=True)
 
-
         rows = data["rows"]
+
+        # Restore ID representation
+        table._id.represent = id_repr
 
         # Empty table - or just no match?
         empty = False
@@ -6429,7 +6450,13 @@ class S3URLQuery(object):
 class S3ResourceFilter(object):
     """ Class representing a resource filter """
 
-    def __init__(self, resource, id=None, uid=None, filter=None, vars=None):
+    def __init__(self,
+                 resource,
+                 id=None,
+                 uid=None,
+                 filter=None,
+                 vars=None,
+                 filter_component=None):
         """
             Constructor
 
@@ -6438,6 +6465,9 @@ class S3ResourceFilter(object):
             @param uid: the record UID (or list of record UIDs)
             @param filter: a filter query (Query or S3ResourceQuery)
             @param vars: the dict of GET vars (URL filters)
+            @param filter_component: the alias of the component the URL
+                                     filters apply for (filters for this
+                                     component must be handled separately)
         """
 
         self.resource = resource
@@ -6512,8 +6542,13 @@ class S3ResourceFilter(object):
                 # Filters
                 add_filter = self.add_filter
                 queries = S3URLQuery.parse(resource, vars)
-                [add_filter(q) for alias in queries
-                               for q in queries[alias]]
+                for alias in queries:
+                    if filter_component == alias:
+                        for q in queries[alias]:
+                            add_filter(q, component=alias, master=False)
+                    else:
+                        for q in queries[alias]:
+                            add_filter(q)
                 self.cfilters = queries
         else:
             # Parent filter
@@ -6951,9 +6986,7 @@ class S3RecordMerger(object):
         if replaced_by is not None:
             replaced_by = {str(id): replaced_by}
         resource = s3db.resource(table, id=id)
-        ondelete = s3db.get_config(resource.tablename, "ondelete")
-        success = resource.delete(ondelete=ondelete,
-                                  replaced_by=replaced_by,
+        success = resource.delete(replaced_by=replaced_by,
                                   cascade=True)
         if not success:
             self.raise_error("Could not delete %s.%s (%s)" %
