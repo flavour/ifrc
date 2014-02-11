@@ -467,6 +467,7 @@ class S3OptionsMenu(object):
                     M("Assets", f="asset")(
                         M("New", m="create"),
                         M("List All"),
+                        M("Map", m="map"),
                         M("Report", m="report2"),
                         M("Import", m="import", p="create"),
                     ),
@@ -504,35 +505,28 @@ class S3OptionsMenu(object):
         """ BUDGET Controller """
 
         return M(c="budget")(
+                    M("Budgets", f="budget")(
+                        M("New", m="create"),
+                    ),
                     M("Parameters", f="parameters"),
                     M("Items", f="item")(
                         M("New", m="create"),
-                        M("List"),
                     ),
                     M("Kits", f="kit")(
                         M("New", m="create"),
-                        M("List"),
                     ),
                     M("Bundles", f="bundle")(
                         M("New", m="create"),
-                        M("List"),
                     ),
                     M("Staff", f="staff")(
                         M("New", m="create"),
-                        M("List"),
                     ),
                     M("Locations", f="location")(
                         M("New", m="create"),
-                        M("List"),
                     ),
                     M("Projects", f="project")(
                         M("New", m="create"),
-                        M("List"),
                     ),
-                    M("Budgets", f="budget")(
-                        M("New", m="create"),
-                        M("List"),
-                    )
                 )
 
     # -------------------------------------------------------------------------
