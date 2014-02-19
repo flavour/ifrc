@@ -34,6 +34,7 @@ __all__ = ["S3HRModel",
            "S3HRExperienceModel",
            "S3HRProgrammeModel",
            "hrm_HumanResourceRepresent",
+           #"hrm_TrainingEventRepresent",
            #"hrm_position_represent",
            "hrm_vars",
            "hrm_compose",
@@ -3868,51 +3869,95 @@ class hrm_HumanResourceRepresent(S3Represent):
         return ", ".join(representation)
         
 # =============================================================================
-def hrm_training_event_represent(id, row=None):
-    """
-        Represent a Training Event
-        - @ToDo: Subclass S3Represent instead
-    """
-
-    if not id:
-        return current.messages["NONE"]
-
-    s3db = current.s3db
-    table = s3db.hrm_training_event
-    ctable = s3db.hrm_course
-    stable = s3db.org_site
-    query = (table.id == id) & \
-            (table.course_id == ctable.id)
-    left = table.on(table.site_id == stable.site_id)
-    event = current.db(query).select(ctable.name,
-                                     ctable.code,
-                                     stable.name,
-                                     table.start_date,
-                                     table.instructor,
-                                     left = left,
-                                     limitby = (0, 1)).first()
-    try:
-        represent = event.hrm_course.name
-    except:
-        return current.messages.UNKNOWN_OPT
-
-    if event.hrm_course.code:
-        represent = "%s (%s)" % (represent, event.hrm_course.code)
-    instructor = event.hrm_training_event.instructor
-    site = event.org_site.name
-    if instructor and site:
-        represent = "%s (%s - %s)" % (represent, instructor, site)
-    elif instructor:
-        represent = "%s (%s)" % (represent, instructor)
-    elif site:
-        represent = "%s (%s)" % (represent, site)
-    start_date = event.hrm_training_event.start_date
-    if start_date:
-        start_date = table.start_date.represent(start_date)
-        represent = "%s [%s]" % (represent, start_date)
-
-    return represent
-
+#class hrm_TrainingEventRepresent(S3Represent):
+#    """ Representation of training_event_id (unused) """
+#
+#    def __init__(self):
+#        """
+#            Constructor
+#        """
+#
+#        super(hrm_TrainingEventRepresent, self).__init__(
+#                                        lookup = "hrm_training_event")
+#
+#    # -------------------------------------------------------------------------
+#    def lookup_rows(self, key, values, fields=[]):
+#        """
+#            Custom rows lookup
+#
+#            @param key: the key Field
+#            @param values: the values
+#            @param fields: unused (retained for API compatibility)
+#        """
+#
+#        s3db = current.s3db
+#        
+#        etable = self.table
+#        ctable = s3db.hrm_course
+#        stable = s3db.org_site
+#
+#        left = [ctable.on(ctable.id == etable.course_id),
+#                stable.on(stable.site_id == etable.site_id),
+#               ]
+#        if len(values) == 1:
+#            query = (key == values[0])
+#        else:
+#            query = key.belongs(values)
+#
+#        rows = current.db(query).select(etable.id,
+#                                        etable.start_date,
+#                                        etable.instructor,
+#                                        ctable.name,
+#                                        ctable.code,
+#                                        stable.name,
+#                                        left = left)
+#        self.queries += 1
+#        return rows
+#                                     
+#    # -------------------------------------------------------------------------
+#    def represent_row(self, row):
+#        """
+#            Represent a row
+#
+#            @param row: the Row
+#        """
+#
+#        # Course details
+#        course = row.get("hrm_course")
+#        if not course:
+#            return current.messages.UNKNOWN_OPT
+#        name = course.get("name")
+#        if not name:
+#            name = current.messages.UNKNOWN_OPT
+#        code = course.get("code")
+#        if code:
+#            representation = ["%s (%s)" % (name, code)]
+#        else:
+#            representation = [name]
+#        append = representation.append
+#
+#        # Venue and instructor
+#        event = row.hrm_training_event
+#        try:       
+#            site = row.org_site.name
+#        except:
+#            site = None
+#        instructor = event.get("instructor")
+#        if instructor and site:
+#            append("(%s - %s)" % (instructor, site))
+#        elif instructor:
+#            append("(%s)" % instructor)
+#        elif site:
+#            append("(%s)" % site)
+#
+#        # Start date
+#        start_date = event.start_date
+#        if start_date:
+#            start_date = self.table.start_date.represent(start_date)
+#            append("[%s]" % start_date)
+#
+#        return " ".join(representation)
+#        
 # =============================================================================
 #def hrm_position_represent(id, row=None):
 #    """
@@ -3940,6 +3985,7 @@ def hrm_training_event_represent(id, row=None):
 #    except:
 #        return current.messages["NONE"]
 #    return represent
+#
 # =============================================================================
 def hrm_human_resource_onaccept(form):
     """ On-accept for HR records """
@@ -4889,7 +4935,6 @@ def hrm_competency_controller():
     s3.postp = postp
 
     return current.rest_controller("hrm", "competency",
-                                   hide_filter=False,
                                    # @ToDo: Create these if-required
                                    #csv_stylesheet = ("hrm", "competency.xsl"),
                                    #csv_template = ("hrm", "competency"),
@@ -4956,7 +5001,6 @@ def hrm_experience_controller():
                                      # @ToDo: Create these if-required
                                      #csv_stylesheet = ("hrm", "experience.xsl"),
                                      #csv_template = ("hrm", "experience"),
-                                     hide_filter = False,
                                      )
     return output
 
@@ -5155,7 +5199,6 @@ def hrm_group_controller():
     output = current.rest_controller("pr", "group",
                                      csv_stylesheet = ("hrm", "group.xsl"),
                                      csv_template = "group",
-                                     hide_filter = False,
                                      rheader = lambda r: \
                                         s3db.pr_rheader(r, tabs=tabs)
                                      )
@@ -5509,8 +5552,7 @@ def hrm_human_resource_controller(extra_filter=None):
         return output
     s3.postp = postp
 
-    output = current.rest_controller("hrm", "human_resource",
-                                     hide_filter=False)
+    output = current.rest_controller("hrm", "human_resource")
     return output
 
 # =============================================================================
@@ -5895,7 +5937,6 @@ def hrm_training_controller():
     output = current.rest_controller("hrm", "training",
                                      csv_stylesheet = ("hrm", "training.xsl"),
                                      csv_template = ("hrm", "training"),
-                                     hide_filter = False,
                                      )
     return output
 
@@ -5970,9 +6011,7 @@ def hrm_training_event_controller():
     s3.postp = postp
 
     output = current.rest_controller("hrm", "training_event",
-                                     hide_filter = False,
-                                     rheader = hrm_rheader,
-                                     )
+                                     rheader = hrm_rheader)
     return output
 
 # =============================================================================

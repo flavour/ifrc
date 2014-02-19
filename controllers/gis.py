@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 
 """
     GIS Controllers
@@ -484,7 +483,6 @@ def location():
                                     gis.get_country(code, key_type="code") or UNKNOWN_OPT)
 
     output = s3_rest_controller(rheader=s3db.gis_rheader,
-                                hide_filter = False,
                                 # CSV column headers, so no T()
                                 csv_extra_fields = [
                                     dict(label="Country",
@@ -673,7 +671,7 @@ def s3_gis_location_parents(r, **attr):
         # @ToDo
         output = dict()
         #return output
-        raise HTTP(501, body=s3mgr.ERROR.BAD_FORMAT)
+        raise HTTP(501, body=current.ERROR.BAD_FORMAT)
 
     elif r.representation == "json":
 
@@ -687,12 +685,12 @@ def s3_gis_location_parents(r, **attr):
                 output = json.dumps(_parents)
                 return output
             else:
-                raise HTTP(404, body=s3mgr.ERROR.NO_MATCH)
+                raise HTTP(404, body=current.ERROR.NO_MATCH)
         else:
-            raise HTTP(404, body=s3mgr.ERROR.BAD_RECORD)
+            raise HTTP(404, body=current.ERROR.BAD_RECORD)
 
     else:
-        raise HTTP(501, body=s3mgr.ERROR.BAD_FORMAT)
+        raise HTTP(501, body=current.ERROR.BAD_FORMAT)
 
 # -----------------------------------------------------------------------------
 def l0():
@@ -1101,9 +1099,7 @@ def config():
         return output
     s3.postp = postp
 
-    output = s3_rest_controller(rheader=s3db.gis_rheader,
-                                hide_filter = False,
-                                )
+    output = s3_rest_controller(rheader=s3db.gis_rheader)
     return output
 
 # -----------------------------------------------------------------------------

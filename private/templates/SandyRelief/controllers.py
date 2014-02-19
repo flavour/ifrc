@@ -63,7 +63,7 @@ class index():
                         A(DIV(T("Fulfill Requests"),
                               _class = "menu-btn-r"),
                           _class = "menu-btn-l",
-                          _href=URL(c="req", f="req", args=["search"])
+                          _href=URL(c="req", f="req")
                           ),
                         _id = "sit_dec_res_box",
                         _class = "menu_box fleft swidth")
@@ -232,7 +232,7 @@ class req():
                             echo)
         else:
             from gluon.http import HTTP
-            raise HTTP(501, resource.ERROR.BAD_FORMAT)
+            raise HTTP(501, current.ERROR.BAD_FORMAT)
         return items
 
 # =============================================================================

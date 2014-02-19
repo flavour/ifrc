@@ -82,7 +82,6 @@ class S3RequestManager(object):
         Request Manager
     """
 
-    DELETED = "deleted"
     RCVARS = "rcvars"
 
     MAX_DEPTH = 10
@@ -103,27 +102,7 @@ class S3RequestManager(object):
         if "s3" not in current.response:
             current.response.s3 = Storage()
 
-        # Error messages
         T = current.T
-        self.ERROR = Storage(
-            BAD_RECORD = T("Record not found"),
-            BAD_METHOD = T("Unsupported method"),
-            METHOD_DISABLED = T("Method disabled"),
-            BAD_FORMAT = T("Unsupported data format"),
-            BAD_REQUEST = T("Invalid request"),
-            BAD_TEMPLATE = T("XSLT stylesheet not found"),
-            BAD_RESOURCE = T("Nonexistent or invalid resource"),
-            PARSE_ERROR = T("XML parse error"),
-            TRANSFORMATION_ERROR = T("XSLT transformation error"),
-            BAD_SOURCE = T("Invalid source"),
-            NO_MATCH = T("No matching element found in the data source"),
-            VALIDATION_ERROR = T("Validation error"),
-            DATA_IMPORT_ERROR = T("Data import error"),
-            NOT_PERMITTED = T("Operation not permitted"),
-            NOT_IMPLEMENTED = T("Not implemented"),
-            INTEGRITY_ERROR = T("Integrity error: record can not be deleted while it is referenced by other records")
-        )
-
         self.LABEL = Storage(CREATE=T("CREATE"),
                              READ=T("READ"),
                              UPDATE=T("UPDATE"),
@@ -153,7 +132,6 @@ class S3RequestManager(object):
         self.search = S3Method()
 
         # Hooks
-        self.permit = current.auth.s3_has_permission
         self.messages = None
         self.import_prep = None
         self.log = None
@@ -476,7 +454,6 @@ class S3Request(object):
 
         # Common settings
         self.UNAUTHORISED = current.T("Not Authorized")
-        self.ERROR = manager.ERROR
 
         # XSLT Paths
         self.XSLT_PATH = "static/formats"
@@ -611,7 +588,7 @@ class S3Request(object):
                                       self.resource.name,
                                       self.id)
             else:
-                manager.error = manager.ERROR.BAD_RECORD
+                manager.error = current.ERROR.BAD_RECORD
                 if self.representation == "html":
                     current.session.error = manager.error
                     self.component = None # => avoid infinite loop
@@ -646,7 +623,7 @@ class S3Request(object):
         if self.link and self.id and self.component_id:
             self.link_id = self.link.link_id(self.id, self.component_id)
             if self.link_id is None:
-                manager.error = manager.ERROR.BAD_RECORD
+                manager.error = current.ERROR.BAD_RECORD
                 if self.representation == "html":
                     current.session.error = manager.error
                     self.component = None # => avoid infinite loop
@@ -937,7 +914,7 @@ class S3Request(object):
                         redirect(URL(r=self, f=self.name, args="search",
                                      vars={"_next": self.url(id="[id]")}))
                     else:
-                        current.session.error = self.ERROR.BAD_RECORD
+                        current.session.error = current.ERROR.BAD_RECORD
                         redirect(URL(r=self, c=self.prefix, f=self.name))
 
         # Pre-process
@@ -958,10 +935,10 @@ class S3Request(object):
                         else:
                             status = pre.get("status", 400)
                             message = pre.get("message",
-                                              self.ERROR.BAD_REQUEST)
+                                              current.ERROR.BAD_REQUEST)
                             self.error(status, message)
             elif not pre:
-                self.error(400, self.ERROR.BAD_REQUEST)
+                self.error(400, current.ERROR.BAD_REQUEST)
 
         # Default view
         if self.representation not in ("html", "popup"):
@@ -993,7 +970,7 @@ class S3Request(object):
             elif http == "DELETE":
                 handler = self.__DELETE()
             else:
-                self.error(405, self.ERROR.BAD_METHOD)
+                self.error(405, current.ERROR.BAD_METHOD)
             # Invoke the method handler
             if handler is not None:
                 output = handler(self, **attr)
@@ -1069,7 +1046,7 @@ class S3Request(object):
                     self.id = resource.get_id()
                     self.uid = resource.get_uid()
                 else:
-                    self.error(404, self.ERROR.BAD_RECORD)
+                    self.error(404, current.ERROR.BAD_RECORD)
                 method = "read"
             else:
                 method = "list"
@@ -1481,7 +1458,7 @@ class S3Request(object):
                                               as_json=True)
             content_type = "application/json"
         else:
-            r.error(501, r.ERROR.BAD_FORMAT)
+            r.error(501, current.ERROR.BAD_FORMAT)
         response = current.response
         response.headers["Content-Type"] = content_type
         return output
@@ -1533,7 +1510,7 @@ class S3Request(object):
                                                as_json=True)
             content_type = "application/json"
         else:
-            r.error(501, r.ERROR.BAD_FORMAT)
+            r.error(501, current.ERROR.BAD_FORMAT)
         response = current.response
         response.headers["Content-Type"] = content_type
         return output
@@ -1652,7 +1629,7 @@ class S3Request(object):
                 redirect(URL(r=self, f="index"))
         else:
             headers = {"Content-Type":"application/json"}
-            print >> sys.stderr, "ERROR: %s" % message
+            current.log.error(message)
             raise HTTP(status,
                        body=current.xml.json_message(success=False,
                                                      statuscode=status,
@@ -1861,7 +1838,7 @@ class S3Request(object):
         stylesheet = os.path.join(folder, path, format, filename)
         if not os.path.exists(stylesheet):
             if not skip_error:
-                self.error(501, "%s: %s" % (self.ERROR.BAD_TEMPLATE,
+                self.error(501, "%s: %s" % (current.ERROR.BAD_TEMPLATE,
                                             stylesheet))
             else:
                 stylesheet = None
@@ -1966,21 +1943,6 @@ class S3Method(object):
                 else:
                     self.method = "list"
 
-            ## In interactive single-record CRUD, open the
-            ## instance record instead of a super-entity record
-            #if r.interactive and \
-               #self.record_id and \
-               #self.method in ("read", "update") and \
-               #self.resource.table._id.name != "id":
-                #record = self.resource[self.record_id]
-                #tablename = record.instance_type
-                #resource = current.s3db.resource(tablename
-                                                 #uid=record.uuid)
-                #resource.load()
-                #if resource.count() == 1:
-                    #self.resource = resource
-                    #self.record_id = resource.records().first()[resource.table._id]
-
         self.prefix = resource.prefix
         self.name = resource.name
         self.tablename = resource.tablename
@@ -1991,18 +1953,34 @@ class S3Method(object):
             return None
 
         if r.interactive:
-            hide_filter = attr.get("hide_filter", None)
+            # hide_filter policy:
+            #
+            #   None            show filters on master,
+            #                   hide for components (default)
+            #   False           show all filters (on all tabs)
+            #   True            hide all filters (on all tabs)
+            #
+            #   dict(alias=setting)     setting per component, alias
+            #                           None means master resource,
+            #                           use special alias _default
+            #                           to specify an alternative
+            #                           default
+            #   
+            hide_filter = attr.get("hide_filter")
             if isinstance(hide_filter, dict):
-                hide_filter = hide_filter.get(r.component_name,
-                              hide_filter.get("_default", None))
+                component_name = r.component_name
+                if component_name in hide_filter:
+                    hide_filter = hide_filter[component_name]
+                elif "_default" in hide_filter:
+                    hide_filter = hide_filter["_default"]
+                else:
+                    hide_filter = None
             if hide_filter is None:
-                # Hide by default until fully migrated:
-                hide_filter = True
-                #hide_filter = r.component is not None
+                hide_filter = r.component is not None
             self.hide_filter = hide_filter
         else:
             self.hide_filter = True
-                          
+
         # Apply method
         if widget_id and hasattr(self, "widget"):
             output = self.widget(r,
@@ -2300,14 +2278,14 @@ def s3_request(*args, **kwargs):
         r = S3Request(*args, **kwargs)
     except SyntaxError:
         error = manager.error
-        print >> sys.stderr, "ERROR: %s" % error
+        current.log.error(error)
         raise HTTP(400,
                     body=xml.json_message(False, 400, message=error),
                     web2py_header=error,
                     **headers)
     except KeyError:
         error = manager.error
-        print >> sys.stderr, "ERROR: %s" % error
+        current.log.error(error)
         raise HTTP(404,
                     body=xml.json_message(False, 404, message=error),
                     web2py_header=error,
