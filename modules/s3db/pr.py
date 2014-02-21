@@ -1796,24 +1796,45 @@ class S3ContactModel(S3Model):
     def pr_contact_onvalidation(form):
         """ Contact form validation """
 
-        vars = form.vars
-        contact_method = vars.contact_method
-        if not contact_method and "id" in vars:
+        formvars = form.vars
+
+        # Get the contact method
+        contact_method = formvars.contact_method
+        if not contact_method and "id" in formvars:
             ctable = current.s3db.pr_contact
-            record = current.db(ctable._id == vars.id).select(
+            record = current.db(ctable._id == formvars.id).select(
                                 ctable.contact_method,
                                 limitby=(0, 1)).first()
             if record:
                 contact_method = record.contact_method
 
+        # Determine the validation rule for the value
         if contact_method == "EMAIL":
-            email, error = IS_EMAIL()(vars.value)
-            if error:
-                form.errors.value = current.T("Enter a valid email")
+            requires = IS_EMAIL(error_message = current.T("Enter a valid email"))
+        elif contact_method == "SMS":
+            if current.deployment_settings \
+                      .get_msg_require_international_phone_numbers():
+                error_message = current.T("Enter phone number in international format like +46783754957")
+            else:
+                error_message = current.T("Enter a valid phone number")
+            requires = IS_PHONE_NUMBER(international = True,
+                                       error_message = error_message)
         elif contact_method in ("SMS", "HOME_PHONE", "WORK_PHONE"):
-            phone, error = IS_MATCH(multi_phone_number_pattern)(vars.value)
+            requires = IS_MATCH(multi_phone_number_pattern,
+                                error_message = current.T("Enter a valid phone number"))
+        else:
+            requires = None
+
+        # Validate the value
+        value = formvars.value
+        if requires:
+            value, error = requires(value)
             if error:
-                form.errors.value = current.T("Enter a valid phone number")
+                form.errors.value = error
+            else:
+                formvars.value = value
+                
+        return
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3070,7 +3091,6 @@ class S3SavedSearch(S3Model):
         from s3.s3xml import S3XML
         import urlparse
 
-        represent = current.manager.represent
         resource = S3Resource(tablename)
 
         if tablename == "project_hazard":
@@ -3125,9 +3145,9 @@ class S3SavedSearch(S3Model):
                                 value = int(value)
                             except ValueError:
                                 pass
-                        rep_value = represent(rfield.field,
-                                              value,
-                                              strip_markup=True)
+                        rep_value = s3_represent_value(rfield.field,
+                                                       value,
+                                                       strip_markup=True)
                         values[index] = rep_value
 
             # Join the nice labels back together

@@ -243,6 +243,10 @@ Thank you
                                       inv_warehouse = T("Warehouse"),
                                       )
 
+        # Name prefixes of tables which must not be manipulated from remote,
+        # CLI can override with auth.override=True
+        self.PROTECTED = ("admin",)
+
     # -------------------------------------------------------------------------
     def define_tables(self, migrate=True, fake_migrate=False):
         """
@@ -1387,20 +1391,26 @@ Thank you
             else:
                 field.readable = field.writable = True
                 #field.default = deployment_settings.get_auth_registration_site_id_default()
+                site_required = deployment_settings.get_auth_registration_site_required()
                 if req_org:
                     from s3validators import IS_ONE_OF_EMPTY
                     requires = IS_ONE_OF_EMPTY(db, "org_site.site_id",
                                                site_represent,
                                                orderby="org_site.name",
                                                sort=True)
+                    if site_required:
+                        site_required = ""
+                    else:
+                        site_required = ''',
+ 'optional': true'''
                     current.response.s3.jquery_ready.append('''
 S3OptionsFilter({
  'triggerName':'organisation_id',
  'targetName':'site_id',
  'lookupField':'site_id',
  'lookupResource':'site',
- 'lookupURL':S3.Ap.concat('/org/sites_for_org/')
-})''')
+ 'lookupURL':S3.Ap.concat('/org/sites_for_org/')%s
+})''' % site_required)
                 else:
                     requires = IS_ONE_OF(db, "org_site.site_id",
                                          site_represent,
@@ -1411,7 +1421,7 @@ S3OptionsFilter({
                 field.comment = DIV(_class="tooltip",
                                     _title="%s|%s" % (T("Facility"),
                                                       T("Select the default site.")))
-                if deployment_settings.get_auth_registration_site_required():
+                if site_required:
                     field.requires = requires
                 else:
                     field.requires = IS_NULL_OR(requires)
@@ -1424,9 +1434,9 @@ S3OptionsFilter({
         if link_user_to_opts:
             link_user_to = utable.link_user_to
             link_user_to_default = deployment_settings.get_auth_registration_link_user_to_default()
-            vars = request.vars
+            req_vars = request.vars
             for type in ["staff", "volunteer", "member"]:
-                if "link_user_to_%s" % type in vars:
+                if "link_user_to_%s" % type in req_vars:
                     link_user_to_default.append(type)
             if link_user_to_default:
                 link_user_to.default = link_user_to_default
@@ -2295,7 +2305,7 @@ S3OptionsFilter({
                 if organisation_id:
                     record["id"] = organisation_id
                     s3db.update_super(otable, record)
-                    current.manager.onaccept(otable, record, method="create")
+                    s3db.onaccept(otable, record, method="create")
                     self.s3_set_record_owner(otable, organisation_id)
 
                 # Update user record
@@ -2415,8 +2425,7 @@ S3OptionsFilter({
             if hr_id:
                 record["id"] = hr_id
                 s3db.update_super(htable, record)
-                current.manager.onaccept(htablename, record,
-                                         method="create")
+                s3db.onaccept(htablename, record, method="create")
 
         return hr_id
 
@@ -4506,7 +4515,6 @@ class S3Permission(object):
         "delete": DELETE,
         "search": READ,
         "report": READ,
-        "report2": READ,
         "map": READ,
         "import": CREATE,
         "review": REVIEW,
