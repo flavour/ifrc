@@ -3907,6 +3907,11 @@ class S3LocationSelectorWidget2(FormWidget):
             else:
                 # Non-std formstyle with just a single row
                 tuple_rows = False
+                #if "form-row" in row["_class"]:
+                #    # Foundation formstyle
+                #    foundation = True
+                #else:
+                #    foundation = False
         else:
             # Unsupported
             raise
@@ -4163,10 +4168,12 @@ class S3LocationSelectorWidget2(FormWidget):
                 address_label = ""
             else:
                 comment = ""
-                address_row = formstyle("%s__row" % id, label, widget, comment, hidden=True)
+                address_row = formstyle("%s__row" % id, label, widget, comment, hidden=hidden)
                 if tuple_rows:
                     address_label = address_row[0]
                     address_row = address_row[1]
+                else:
+                    address_label = ""
         else:
             address_row = ""
             address_label = ""
@@ -4197,6 +4204,8 @@ class S3LocationSelectorWidget2(FormWidget):
                 if tuple_rows:
                     postcode_label = postcode_row[0]
                     postcode_row = postcode_row[1]
+                else:
+                    postcode_label = ""
         else:
             postcode_row = ""
             postcode_label = ""
@@ -4547,6 +4556,7 @@ class S3LocationSelectorWidget2(FormWidget):
             if bootstrap:
                 map_icon = DIV(DIV(BUTTON(I(_class="icon-map"),
                                           label,
+                                          _type="button", # defaults to 'submit' otherwise!
                                           _id=icon_id,
                                           _class="btn gis_loc_select_btn",
                                           ),
@@ -4558,6 +4568,7 @@ class S3LocationSelectorWidget2(FormWidget):
             else:
                 map_icon = DIV(DIV(BUTTON(I(_class="icon-globe"),
                                           label,
+                                          _type="button", # defaults to 'submit' otherwise!
                                           _id=icon_id,
                                           _class="btn gis_loc_select_btn",
                                           ),
@@ -4580,7 +4591,9 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                                     DIV(_class="geocode_success hide"),
                                     DIV(_class="geocode_fail hide"),
                                     BUTTON(T("Geocode"),
-                                           _class="hide"),
+                                           _type="button", # defaults to 'submit' otherwise!
+                                          _class="hide",
+                                          ),
                                     _id="%s_geocode" % fieldname,
                                     _class="controls geocode",
                                     ))
@@ -5125,7 +5138,7 @@ class S3SelectChosenWidget(OptionsWidget):
         s3.scripts.append("/%s/static/scripts/%s" % (current.request.application,
                                                      script))
         # @ToDo: Can we not determine a # selector? (faster)
-        script = '''$('[name="%s"]').chosen();''' % field.name
+        script = '''$('[name="%s"]').chosen()''' % field.name
         s3.jquery_ready.append(script)
         return OptionsWidget.widget(field, value, **attributes)
 
