@@ -43,9 +43,9 @@ __all__ = ["S3RequestModel",
            "req_match",
            "req_add_from_template",
            "req_customize_req_fields",
-           "req_render_reqs",
+           "req_req_list_layout",
            "req_customize_commit_fields",
-           "req_render_commits",
+           "req_commit_list_layout",
            ]
 
 from gluon import *
@@ -4135,16 +4135,16 @@ function(status){s3_debug(status)})''' % site_id
                    # We want the Create form to be in a modal, not inline, for consistency
                    listadd = False,
                    list_fields = list_fields,
-                   list_layout = req_render_reqs,
+                   list_layout = req_req_list_layout,
                    update_next = url_next,
                    )
 
     return table
     
 # =============================================================================
-def req_render_reqs(list_id, item_id, resource, rfields, record):
+def req_req_list_layout(list_id, item_id, resource, rfields, record):
     """
-        Custom dataList item renderer for Requests on the Home page & dataList view
+        Default dataList item renderer for Requests on the Home page & dataList view
 
         @param list_id: the HTML ID of the list
         @param item_id: the HTML ID of the item
@@ -4431,17 +4431,10 @@ def req_customize_commit_fields():
     else:
         field.writable = False
 
-    # Which levels of Hierarchy are we using?
-    hierarchy = current.gis.get_location_hierarchy()
-    levels = hierarchy.keys()
-    if len(current.deployment_settings.get_gis_countries()) == 1 or \
-       s3.gis.config.region_location_id:
-        levels.remove("L0")
-
     #field = table.location_id
     #field.represent = s3db.gis_LocationRepresent(sep=" | ")
-    #field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-    #field.widget = S3LocationSelectorWidget2(levels=levels)
+    # Required
+    #field.requires = IS_LOCATION_SELECTOR2()
 
     field = table.comments
     field.label = T("Donation")
@@ -4489,7 +4482,6 @@ def req_customize_commit_fields():
                      comment=T("Search for a commitment by Committer name, Request ID, Site or Organization."),
                      ),
         S3LocationFilter("location_id",
-                         levels=levels,
                          widget="multiselect",
                          hidden=True,
                          ),
@@ -4521,16 +4513,16 @@ def req_customize_commit_fields():
                    # We want the Create form to be in a modal, not inline, for consistency
                    listadd = False,
                    list_fields = list_fields,
-                   list_layout = req_render_commits,
+                   list_layout = req_commit_list_layout,
                    update_next = url_next,
                    )
 
     return table
     
 # =============================================================================
-def req_render_commits(list_id, item_id, resource, rfields, record):
+def req_commit_list_layout(list_id, item_id, resource, rfields, record):
     """
-        Custom dataList item renderer for Commits on the Home page & dataList view
+        Default dataList item renderer for Commits on the Home page & dataList view
 
         @param list_id: the HTML ID of the list
         @param item_id: the HTML ID of the item

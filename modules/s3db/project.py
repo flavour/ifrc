@@ -198,19 +198,21 @@ class S3ProjectModel(S3Model):
                                                                    T("URL to a Google Calendar to display on the project timeline.")))),
                              # multi_budgets deployments handle on the Budgets Tab
                              Field("budget", "double",
-                                   readable = False if multi_budgets else True,
-                                   writable = False if multi_budgets else True,
                                    label = T("Budget"),
+                                   readable = False if multi_budgets else True,
                                    represent = lambda v: \
-                                    IS_FLOAT_AMOUNT.represent(v, precision=2)),
+                                    IS_FLOAT_AMOUNT.represent(v, precision=2),
+                                   writable = False if multi_budgets else True,
+                                   ),
                              s3_currency(readable = False if multi_budgets else True,
                                          writable = False if multi_budgets else True,
                                          ),
                              Field("objectives", "text",
+                                   label = T("Objectives"),
                                    readable = mode_3w,
-                                   writable = mode_3w,
                                    represent = lambda v: v or NONE,
-                                   label = T("Objectives")),
+                                   writable = mode_3w,
+                                   ),
                              human_resource_id(label=T("Contact Person")),
                              s3_comments(comment=DIV(_class="tooltip",
                                                      _title="%s|%s" % (T("Comments"),
@@ -1608,7 +1610,7 @@ class S3ProjectBeneficiaryModel(S3Model):
     def model(self):
 
         if not current.deployment_settings.has_module("stats"):
-            # Beneficiary Model needs Stats module enabling
+            current.log.warning("Project Beneficiary Model needs Stats module enabling")
             return dict()
 
         T = current.T
@@ -2164,9 +2166,9 @@ class S3ProjectCampaignModel(S3Model):
                              s3_comments("message",
                                          label = T("Message")),
                              location_id(
-                                widget = S3LocationSelectorWidget(
+                                widget = S3LocationSelectorWidget2(
                                     catalog_layers=True,
-                                    polygon=True
+                                    polygons=True
                                     )
                                 ),
                              # @ToDo: Allow selection of which channel message should be sent out on
@@ -4398,6 +4400,15 @@ class S3ProjectTaskModel(S3Model):
                                          "autocomplete": "name",
                                          "autodelete": False,
                                         },
+                       # Activitie - for S3SQLForm field in sub-Table 
+                       project_task_activity={"link": "project_task_activity",
+                                              "joinby": "task_id",
+                                              "key": "activity_id",
+                                              "actuate": "embed",
+                                              "autocomplete": "name",
+                                              "autodelete": False,
+                                              "multiple": False
+                                              },
                        # Milestones
                        project_milestone={"link": "project_task_milestone",
                                           "joinby": "task_id",

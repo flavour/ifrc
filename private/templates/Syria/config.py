@@ -117,12 +117,8 @@ settings.L10n.thousands_separator = ","
 #settings.gis.countries = ["SY"]
 settings.gis.countries = ["SY", "IQ", "LB", "TR", "JO"] #, "EG", "DZ"
 
-# Until we add support to LocationSelector2 to set dropdowns from LatLons
-#settings.gis.check_within_parent_boundaries = False
-# Uncomment to hide Layer Properties tool
-#settings.gis.layer_properties = False
-# Hide unnecessary Toolbar items
-settings.gis.nav_controls = False
+# Disable toolbar
+settings.gis.toolbar = False
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
 
@@ -1646,7 +1642,7 @@ def customize_project_project(**attr):
                                 widget="multiselect"
                                 ),
                 S3LocationFilter("location.location_id",
-                                 levels=["L0", "L1", "L2", "L3"],
+                                 levels=("L0", "L1", "L2", "L3"),
                                  widget="multiselect"),
                 S3OptionsFilter("partner.organisation_id",
                                 label = T("Partners"),

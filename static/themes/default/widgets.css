@@ -226,6 +226,11 @@ textarea.richtext {
    margin-top: -1px;
    min-width: 640px;
 }
+
+#table-container .empty {
+    margin-left: 10px;
+}
+
 .dataTable thead th {
 /* datatables fixed headers must not be transparent, however those aren't used currently & this removes the Sorting Icons
     background: no-repeat scroll right center #F0F3F4;*/
@@ -1249,7 +1254,7 @@ ul.x-tree-root-ct {
     border-top: 0;
 }
 
-/* Vertical arrangement of multi-button multi-select filter widgets */
+/* Vertical arrangement of multi-button multi-select filter widgets such as S3LocationFilter */
 .filter-form .ui-multiselect.ui-widget.ui-state-default.ui-corner-all {
     clear: left;
     float: left;
@@ -1262,6 +1267,7 @@ body.rtl .filter-form .ui-multiselect.ui-widget.ui-state-default.ui-corner-all {
     clear: right;
     float: right;
 }
+/* End */
 
 .widget-org-hierarchy-menu {
     overflow:auto;

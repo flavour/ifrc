@@ -7,19 +7,9 @@ except:
     # Python 2.6
     from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
-from datetime import timedelta
-
-from gluon import current, Field, URL
+from gluon import current
 from gluon.html import *
 from gluon.storage import Storage
-from gluon.validators import IS_NULL_OR, IS_NOT_EMPTY
-
-from s3.s3fields import S3Represent
-from s3.s3resource import S3FieldSelector
-from s3.s3utils import S3DateTime, s3_auth_user_represent_name, s3_avatar_represent, s3_unicode
-from s3.s3validators import IS_INT_AMOUNT, IS_LOCATION_SELECTOR2, IS_ONE_OF
-from s3.s3widgets import S3LocationSelectorWidget2
-from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
 
 T = current.T
 s3 = current.response.s3
@@ -32,8 +22,6 @@ settings = current.deployment_settings
 
     Deployers should ideally not need to edit any other files outside of their template folder
 """
-
-datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
 
 # =============================================================================
 # System Settings
@@ -83,8 +71,8 @@ settings.ui.formstyle = "bootstrap"
 # L10n (Localization) settings
 settings.L10n.languages = OrderedDict([
     ("en", "English"),
+    # Only needed to import the l10n names
     ("ru", "Russian"),
-    ("latin", "Latin"),
 ])
 # Default Language
 settings.L10n.default_language = "en"
@@ -115,6 +103,11 @@ settings.L10n.thousands_separator = ","
 settings.gis.nav_controls = False
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
+# Uncomment to Hide the Toolbar from the main Map
+settings.gis.toolbar = False
+
+# Use PCodes for Locations import
+settings.gis.lookup_code = "PCode"
 
 # -----------------------------------------------------------------------------
 # Enable this for a UN-style deployment
@@ -151,13 +144,6 @@ settings.ui.summary = [#{"common": True,
 settings.search.filter_manager = False
 
 # =============================================================================
-# Module Settings
-
-# -----------------------------------------------------------------------------
-# GIS
-# -----------------------------------------------------------------------------
-settings.gis.lookup_pcode = True
-# =============================================================================
 # Custom Controllers
 
 # -----------------------------------------------------------------------------
@@ -166,8 +152,6 @@ def customize_stats_demographic_data(**attr):
     return attr
 
 settings.ui.customize_stats_demographic_data = customize_stats_demographic_data
-
-# -----------------------------------------------------------------------------
 
 # =============================================================================
 # Modules
