@@ -333,6 +333,8 @@ settings.L10n.decimal_separator = "."
 #settings.ui.export_formats = ["kml", "pdf", "rss", "xls", "xml"]
 # Uncomment to include an Interim Save button on CRUD forms
 #settings.ui.interim_save = True
+# Uncomment to enable glyphicon icons on action buttons (requires bootstrap CSS)
+#settings.ui.use_button_glyphicons = True
 
 # -----------------------------------------------------------------------------
 # CMS
@@ -354,6 +356,8 @@ settings.L10n.decimal_separator = "."
 #settings.pr.reverse_names = True
 # Uncomment to prevent selecting existing users in S3AddPersonWidget
 #settings.pr.select_existing = False
+# Uncomment to allow person imports to match even without email addresses 
+#settings.pr.import_update_requires_email = False
 
 # -----------------------------------------------------------------------------
 # Organisations

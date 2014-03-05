@@ -79,8 +79,8 @@ class S3MainMenu(default.S3MainMenu):
                 #M("Commitments", f="commit")(),
             ),
             homepage("asset")(
-                MM("Assets", c="asset", f="asset"),
-                MM("Items", c="asset", f="item"),
+                MM("Assets", c="asset", f="asset", m="summary"),
+                MM("Items", c="asset", f="item", m="summary"),
             ),
             homepage("survey")(
                 MM("Assessment Templates", c="survey", f="template"),
@@ -406,11 +406,6 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     #    M("New", m="create"),
                     #    #M("Search"),
                     #),
-                    M(SECTORS, f="sector", c="org", restrict=[ADMIN],
-                      check=manager_mode)(
-                        M("New", m="create"),
-                        #M("Search"),
-                    ),
                     #M("My Profile", c="hrm", f="person",
                     #  check=personal_mode, vars=dict(mode="personal")),
                     # This provides the link to switch to the manager mode:
@@ -421,6 +416,13 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     #  check=manager_mode, vars=dict(mode="personal"))
                 )
 
+    # -------------------------------------------------------------------------
+    def org(self):
+        """ Organisation Management """
+
+        # Same as HRM
+        return self.hrm()
+    
     # -------------------------------------------------------------------------
     @staticmethod
     def check_org(org_name):
@@ -651,10 +653,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         #M("Search"),
                         M("Search Shipped Items", f="track_item"),
                     ),
-                    M("Items", c="supply", f="item")(
+                    M("Items", c="supply", f="item", m="summary")(
                         M("New", m="create"),
                         #M("Search"),
-                        M("Report", m="report"),
                         M("Import", f="catalog_item", m="import", p="create"),
                     ),
                     # Catalog Items moved to be next to the Item Categories
@@ -701,6 +702,13 @@ class S3OptionsMenu(default.S3OptionsMenu):
                 )
 
     # -------------------------------------------------------------------------
+    def req(self):
+        """ Requests Management """
+
+        # Same as Inventory
+        return self.inv()
+
+    # -------------------------------------------------------------------------
     def irs(self):
         """ IRS Incident Reporting """
 
@@ -726,20 +734,6 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Incidents", m="report"),
                     ),
                 )
-
-    # -------------------------------------------------------------------------
-    def org(self):
-        """ Organisation Management """
-
-        # Same as HRM
-        return self.hrm()
-    
-    # -------------------------------------------------------------------------
-    def req(self):
-        """ Organisation Management """
-
-        # Same as Inventory
-        return self.inv()
 
     # -------------------------------------------------------------------------
     def event(self):
