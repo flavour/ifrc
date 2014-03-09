@@ -1089,6 +1089,12 @@ class S3Config(Storage):
         else:
             return attr
 
+    def ui_custom_configure(self, tablename):
+        """
+            Get customization callback for a resource
+        """
+        return self.ui.get("custom_configure_%s" % tablename)
+
     def get_ui_export_formats(self):
         """
             Which export formats should we display?
@@ -1840,13 +1846,7 @@ class S3Config(Storage):
         """
             Which extra fields should be returned in S3SiteAutocompleteWidget
         """
-        return self.org.get("site_autocomplete_fields", ["instance_type"])
-
-    def get_org_site_address_autocomplete(self):
-        """
-            Whether site_id Autocomplete fields should search Address fields as well as name
-        """
-        return self.org.get("site_address_autocomplete", False)
+        return self.org.get("site_autocomplete_fields", ("instance_type",))
 
     def get_org_site_last_contacted(self):
         """
