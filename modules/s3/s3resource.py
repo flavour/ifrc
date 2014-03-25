@@ -899,7 +899,9 @@ class S3Resource(object):
             return rows
 
         # Otherwise: initialize output
-        output = {"rfields": dfields, "numrows": totalrows, "ids": ids}
+        output = {"rfields": dfields,
+                  "numrows": 0 if totalrows is None else totalrows,
+                  "ids": ids}
 
         if not rows:
             output["rows"] = []
@@ -3934,6 +3936,38 @@ class S3Resource(object):
         return join
 
     # -------------------------------------------------------------------------
+    def get_reverse_left_join(self):
+        """ Get a reverse left join for this component """
+
+        if self.parent is None:
+            # This isn't a component
+            return None
+        else:
+            ltable = self.parent.table
+
+        rtable = self.table
+        pkey = self.pkey
+        fkey = self.fkey
+
+        if self.linked:
+            return self.linked.get_left_join()
+        elif self.linktable:
+            linktable = self.linktable
+            lkey = self.lkey
+            rkey = self.rkey
+            lquery = (linktable[lkey] == ltable[pkey])
+            DELETED = current.xml.DELETED
+            if DELETED in linktable:
+                lquery &= (linktable[DELETED] != True)
+            rquery = (rtable[fkey] == linktable[rkey])
+            join = [linktable.on(rquery), ltable.on(lquery)]
+        else:
+            lquery = (rtable[fkey] == ltable[pkey])
+            join = [ltable.on(lquery)]
+
+        return join
+
+    # -------------------------------------------------------------------------
     def link_id(self, master_id, component_id):
         """
             Helper method to find the link table entry ID for
@@ -6619,6 +6653,7 @@ class S3ResourceFilter(object):
                 for tn in parent_left:
                     if tn not in left and tn != tablename:
                         left[tn] = parent_left[tn]
+                left[parent.tablename] = resource.get_reverse_left_join()
 
         if as_list:
             return [j for tablename in left for j in left[tablename]]
@@ -7037,7 +7072,7 @@ class S3RecordMerger(object):
         duplicate = None
         query = table._id.belongs([original_id, duplicate_id])
         if "deleted" in table.fields:
-            query &= table.deleted != True
+            query &= (table.deleted != True)
         rows = db(query).select(table.ALL, limitby=(0, 2))
         for row in rows:
             record_id = row[table._id]

@@ -84,37 +84,34 @@ class S3MembersModel(S3Model):
         # Membership Types
         #
         tablename = "member_membership_type"
-        table = define_table(tablename,
-                             Field("name", notnull=True, length=64,
-                                   label=T("Name")),
-                             # Only included in order to be able to set
-                             # realm_entity to filter appropriately
-                             organisation_id(default = root_org,
-                                             readable = is_admin,
-                                             writable = is_admin,
-                                             ),
-                             s3_comments(label=T("Description"), comment=None),
-                             *s3_meta_fields())
+        define_table(tablename,
+                     Field("name", notnull=True, length=64,
+                           label=T("Name")),
+                     # Only included in order to be able to set
+                     # realm_entity to filter appropriately
+                     organisation_id(default = root_org,
+                                     readable = is_admin,
+                                     writable = is_admin,
+                                     ),
+                     s3_comments(label=T("Description"), comment=None),
+                     *s3_meta_fields())
 
+        ADD_MEMBERSHIP_TYPE = T("Create Membership Type")
         crud_strings[tablename] = Storage(
-            title_create = T("Add Membership Type"),
+            label_create = ADD_MEMBERSHIP_TYPE,
             title_display = T("Membership Type Details"),
             title_list = T("Membership Types"),
             title_update = T("Edit Membership Type"),
             title_upload = T("Import Membership Types"),
-            subtitle_create = T("Add New Membership Type"),
             label_list_button = T("List Membership Types"),
-            label_create_button = T("Add Membership Type"),
             label_delete_button = T("Delete Membership Type"),
             msg_record_created = T("Membership Type added"),
             msg_record_modified = T("Membership Type updated"),
             msg_record_deleted = T("Membership Type deleted"),
             msg_list_empty = T("No membership types currently registered"))
 
-        label_create = crud_strings[tablename].label_create_button
-
         represent = S3Represent(lookup=tablename)
-        membership_type_id = S3ReusableField("membership_type_id", table,
+        membership_type_id = S3ReusableField("membership_type_id", "reference %s" % tablename,
                                              sortby = "name",
                                              label = T("Type"),
                                              requires = IS_NULL_OR(
@@ -124,8 +121,8 @@ class S3MembersModel(S3Model):
                                                                       filter_opts=filter_opts)),
                                              represent = represent,
                                              comment=S3AddResourceLink(f="membership_type",
-                                                                       label=label_create,
-                                                                       title=label_create,
+                                                                       label=ADD_MEMBERSHIP_TYPE,
+                                                                       title=ADD_MEMBERSHIP_TYPE,
                                                                        tooltip=T("Add a new membership type to the catalog.")),
                                              ondelete = "SET NULL")
 
@@ -137,59 +134,57 @@ class S3MembersModel(S3Model):
         # Members
         #
         tablename = "member_membership"
-        table = define_table(tablename,
-                             organisation_id(
-                                empty = False,
-                                requires = self.org_organisation_requires(
-                                                updateable = True,
-                                                ),
-                                widget = org_widget,
-                                ),
-                             Field("code",
-                                   label = T("Member ID"),
-                                   #readable = False,
-                                   #writable = False,
-                                   ),
-                             self.pr_person_id(
-                                comment = None,
-                                requires = IS_ADD_PERSON_WIDGET2(),
-                                widget = S3AddPersonWidget2(controller="member"),
-                                ),
-                             membership_type_id(),
-                             # History
-                             s3_date("start_date",
-                                     label = T("Date Joined"),
-                                     ),
-                             s3_date("end_date",
-                                     label = T("Date resigned"),
-                                     ),
-                             Field("membership_fee", "double",
-                                   label = T("Membership Fee"),
-                                   ),
-                             s3_date("membership_paid",
-                                     label = T("Membership Paid")
-                                     ),
-                             # Location (from pr_address component)
-                             self.gis_location_id(readable = False,
-                                                  writable = False),
-                             *s3_meta_fields())
+        define_table(tablename,
+                     organisation_id(
+                        empty = False,
+                        requires = self.org_organisation_requires(
+                                        updateable = True,
+                                        ),
+                        widget = org_widget,
+                      ),
+                      Field("code",
+                            label = T("Member ID"),
+                            #readable = False,
+                            #writable = False,
+                            ),
+                      self.pr_person_id(
+                        comment = None,
+                        requires = IS_ADD_PERSON_WIDGET2(),
+                        widget = S3AddPersonWidget2(controller="member"),
+                      ),
+                      membership_type_id(),
+                      # History
+                      s3_date("start_date",
+                              label = T("Date Joined"),
+                              ),
+                      s3_date("end_date",
+                              label = T("Date resigned"),
+                              ),
+                      Field("membership_fee", "double",
+                            label = T("Membership Fee"),
+                            ),
+                      s3_date("membership_paid",
+                              label = T("Membership Paid")
+                              ),
+                      # Location (from pr_address component)
+                      self.gis_location_id(readable = False,
+                                           writable = False),
+                      Field.Method("paid",
+                                   self.member_membership_paid),
+                      *s3_meta_fields())
 
         crud_strings[tablename] = Storage(
-            title_create = T("Add Member"),
+            label_create = T("Add Member"),
             title_display = T("Member Details"),
             title_list = T("Members"),
             title_update = T("Edit Member"),
             title_upload = T("Import Members"),
-            subtitle_create = T("Add New Member"),
             label_list_button = T("List Members"),
-            label_create_button = T("Add Member"),
             label_delete_button = T("Delete Member"),
             msg_record_created = T("Member added"),
             msg_record_modified = T("Member updated"),
             msg_record_deleted = T("Member deleted"),
             msg_list_empty = T("No Members currently registered"))
-
-        table.paid = Field.Lazy(self.member_membership_paid)
 
         def member_type_opts():
             """
@@ -296,6 +291,26 @@ class S3MembersModel(S3Model):
                   report_options = report_options,
                   filter_widgets = filter_widgets,
                   update_realm = True,
+                  # Default summary
+                  summary = [{"name": "addform",
+                              "common": True,
+                              "widgets": [{"method": "create"}],
+                             },
+                             {"name": "table",
+                              "label": "Table",
+                              "widgets": [{"method": "datatable"}]
+                              },
+                             {"name": "report",
+                              "label": "Report",
+                              "widgets": [{"method": "report",
+                                           "ajax_init": True}]
+                              },
+                             {"name": "map",
+                              "label": "Map",
+                              "widgets": [{"method": "map",
+                                           "ajax_init": True}],
+                              },
+                             ],
                   )
 
         # Components
