@@ -884,7 +884,7 @@ class S3XML(S3Codec):
                tablename in auth.org_site_types:
                 # Lookup the right pre-prepared data for mapping by site_id
                 root = element.getparent()
-                if root.tag == self.TAG.root:
+                if root and root.tag == self.TAG.root:
                     #print self.tostring(root)
                     first = root[0]
                     _tablename = first.get(ATTRIBUTE.name, None)
@@ -2227,6 +2227,7 @@ class S3XML(S3Codec):
                 if hasattr(source, "seek"):
                     source.seek(0)
                 wb = xlrd.open_workbook(file_contents=source.read(),
+                                        # requires xlrd 0.7.x or higher
                                         on_demand=True)
             elif isinstance(source, xlrd.book.Book):
                 # Source is an open work book
