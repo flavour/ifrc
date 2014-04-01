@@ -867,6 +867,7 @@ def render_offices(list_id, item_id, resource, rfields, record):
     return item
 
 # -----------------------------------------------------------------------------
+# @ToDo: Use s3db.org_organisation_list_layout ?
 def render_organisations(list_id, item_id, resource, rfields, record):
     """
         Custom dataList item renderer for Organisations on the Stakeholder Selection Page

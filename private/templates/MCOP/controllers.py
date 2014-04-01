@@ -20,11 +20,20 @@ class index(S3CustomController):
         output = {}
         self._view(THEME, "index.html")
 
+        # Map
+        # Enable Layers by default
+        callback = '''S3.gis.show_map()
+var layer,layers=S3.gis.maps.default_map.layers
+for(var i=0,len=layers.length;i<len;i++){
+ layer=layers[i]
+ layer_name=layer.name
+ if((layer_name=='Alerts')||(layer_name=='Incidents')||(layer_name=='Tasks')){layer.setVisibility(true)}}'''
         gis = current.gis
         #config = gis.get_config()
         #config.zoom = 8
-        map = gis.show_map(width=770,
-                           height=295,
+        map = gis.show_map(width=600,
+                           height=600,
+                           callback=callback,
                            catalogue_layers=True,
                            collapsed=True,
                            save=False,
@@ -32,16 +41,16 @@ class index(S3CustomController):
         output["map"] = map
 
         # Organisations Data List
-        resource = s3db.resource("org_organisation")
+        #resource = s3db.resource("org_organisation")
         
-        datalist, numrows, ids = resource.datalist(list_id = "org_organisation_datalist",
+        #datalist, numrows, ids = resource.datalist(list_id = "org_organisation_datalist",
                                                    #fields=list_fields,
                                                    #start=None,
-                                                   limit=10,
+        #                                           limit=10,
                                                    #orderby=orderby,
-                                                   layout = s3db.org_organisation_list_layout
-                                                   )
-        output["org_organisation_datalist"] = datalist.html()
+        #                                           layout = s3db.org_organisation_list_layout
+        #                                           )
+        #output["org_organisation_datalist"] = datalist.html()
 
         # News Feed Data List
         list_fields = ["series_id",
@@ -54,8 +63,8 @@ class index(S3CustomController):
                        "event_post.event_id",
                        ]
         resource = s3db.resource("cms_post")
-        resource.add_filter(S3FieldSelector("series_id$name").belongs(["Alert", "Incident"]))
-        resource.add_filter(S3FieldSelector("post.series_id") != None)
+        resource.add_filter(S3FieldSelector("series_id$name").belongs(["Alert"]))
+        #resource.add_filter(S3FieldSelector("post.series_id") != None)
         datalist, numrows, ids = resource.datalist(list_id = "cms_post_datalist",
                                                    fields=list_fields,
                                                    #start=None,
@@ -66,8 +75,48 @@ class index(S3CustomController):
                                                    )
         output["cms_post_datalist"] = datalist.html()
 
-        #MCOP News Feed
+        # Incidents Data List
+        resource = s3db.resource("project_project") # Temp: Uses relabelled project_project
+        list_fields = ["name",
+                       "description",
+                       "location.location_id",
+                       "start_date",
+                       "organisation_id",
+                       "organisation_id$logo",
+                       "modified_by",
+                       ]
+        datalist, numrows, ids = resource.datalist(list_id = "project_project_datalist",
+                                                   fields = list_fields,
+                                                   #start=None,
+                                                   limit=5,
+                                                   #list_id=list_id,
+                                                   #orderby=orderby,
+                                                   layout = s3db.project_project_list_layout
+                                                   )
+        output["project_project_datalist"] = datalist.html()
 
+        # Tasks Data List
+        resource = s3db.resource("project_task")
+        list_fields = ["name",
+                       "description",
+                       "location_id",
+                       "date_due",
+                       "pe_id",
+                       "task_project.project_id",
+                       #"organisation_id$logo",
+                       "modified_by",
+                        ]
+        datalist, numrows, ids = resource.datalist(list_id = "project_task_datalist",
+                                                   fields = list_fields,
+                                                   #start=None,
+                                                   limit=5,
+                                                   #list_id=list_id,
+                                                   #orderby=orderby,
+                                                   layout = s3db.project_task_list_layout
+                                                   )
+        output["project_task_datalist"] = datalist.html()
+
+        # MCOP News Feed
         #s3.external_stylesheets.append("http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.css")
         s3.scripts.append("http://www.google.com/jsapi?key=notsupplied-wizard")
         s3.scripts.append("http://www.google.com/uds/solutions/dynamicfeed/gfdynamicfeedcontrol.js")

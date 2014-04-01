@@ -4956,12 +4956,12 @@ def org_facility_controller():
                     # Filter out items which are already in this inventory
                     s3db.inv_prep(r)
 
-                    # remove CRUD generated buttons in the tabs
+                    # remove CRUD-generated buttons in the tabs
                     s3db.configure("inv_inv_item",
-                                   create=False,
-                                   listadd=False,
-                                   editable=False,
-                                   deletable=False,
+                                   create = False,
+                                   deletable = False,
+                                   editable = False,
+                                   listadd = False,
                                    )
 
                 elif cname == "human_resource":
@@ -5474,7 +5474,7 @@ def org_organisation_list_layout(list_id, item_id, resource, rfields, record):
 # =============================================================================
 def org_resource_list_layout(list_id, item_id, resource, rfields, record):
     """
-        Default dataList item renderer for Resources on the Profile pages
+        Default dataList item renderer for Resources on Profile pages
 
         @param list_id: the HTML ID of the list
         @param item_id: the HTML ID of the item
@@ -5491,7 +5491,6 @@ def org_resource_list_layout(list_id, item_id, resource, rfields, record):
     date = record["org_resource.modified_on"]
     quantity = record["org_resource.value"]
     resource_type = record["org_resource.parameter_id"]
-    body = "%s %s" % (quantity, current.T(resource_type))
     comments = raw["org_resource.comments"]
     organisation = record["org_resource.organisation_id"]
     organisation_id = raw["org_resource.organisation_id"]
@@ -5499,9 +5498,9 @@ def org_resource_list_layout(list_id, item_id, resource, rfields, record):
     location_id = raw["org_resource.location_id"]
     location_url = URL(c="gis", f="location",
                        args=[location_id, "profile"])
-    logo = raw["org_organisation.logo"]
 
     org_url = URL(c="org", f="organisation", args=[organisation_id, "profile"])
+    logo = raw["org_organisation.logo"]
     if logo:
         logo = A(IMG(_src=URL(c="default", f="download", args=[logo]),
                      _class="media-object",
@@ -5510,8 +5509,11 @@ def org_resource_list_layout(list_id, item_id, resource, rfields, record):
                  _class="pull-left",
                  )
     else:
-        logo = DIV(IMG(_class="media-object"),
-                   _class="pull-left")
+        # @ToDo: use a dummy logo image
+        logo = A(IMG(_class="media-object"),
+                 _href=org_url,
+                 _class="pull-left",
+                 )
 
     # Edit Bar
     permit = current.auth.s3_has_permission
@@ -5547,9 +5549,8 @@ def org_resource_list_layout(list_id, item_id, resource, rfields, record):
 
     # Render the item
     avatar = logo
-    body = TAG[""](body, BR(), comments)
 
-    item = DIV(DIV(SPAN(" ", _class="card-title"),
+    item = DIV(DIV(SPAN("%s %s" % (quantity, current.T(resource_type)), _class="card-title"),
                    SPAN(A(location,
                           _href=location_url,
                           ),
@@ -5562,8 +5563,8 @@ def org_resource_list_layout(list_id, item_id, resource, rfields, record):
                    _class="card-header",
                    ),
                DIV(avatar,
-                   DIV(DIV(body,
-                           DIV(author,
+                   DIV(DIV(comments,
+                           DIV(author or "" ,
                                " - ",
                                A(organisation,
                                  _href=org_url,
