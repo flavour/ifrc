@@ -344,17 +344,19 @@ class S3CAPModel(S3Model):
                          label = T("Search"),
                          comment = T("Search for an Alert by sender, incident, headline or event."),
                          ),
-        ]
+            ]
 
         configure(tablename,
-                  filter_widgets = filter_widgets)
+                  filter_widgets = filter_widgets,
+                  onvalidation = self.cap_alert_form_validation,
+                  )
 
         # Components
         add_components(tablename,
-                       cap_info="alert_id",
-                       #cap_resource="alert_id",
-                       #cap_area="alert_id",
-                      )
+                       cap_info = "alert_id",
+                       #cap_resource = "alert_id",
+                       #cap_area = "alert_id",
+                       )
 
         if crud_strings["cap_template"]:
             crud_strings[tablename] = crud_strings["cap_template"]
@@ -376,13 +378,14 @@ class S3CAPModel(S3Model):
                 msg_list_empty = T("No alerts to show"))
 
         alert_id = S3ReusableField("alert_id", "reference %s" % tablename,
+                                   comment = T("The alert message containing this information"),
+                                   label = T("Alert"),
+                                   ondelete = "RESTRICT",
+                                   represent = self.alert_represent,
                                    requires = IS_NULL_OR(
                                                 IS_ONE_OF(db, "cap_alert.id",
                                                           self.alert_represent)),
-                                   represent = self.alert_represent,
-                                   label = T("Alert"),
-                                   comment = T("The alert message containing this information"),
-                                   ondelete = "RESTRICT")
+                                   )
 
         # ---------------------------------------------------------------------
         # CAP info segments
@@ -573,13 +576,14 @@ class S3CAPModel(S3Model):
                                   ondelete = "RESTRICT")
 
         configure(tablename,
-                  onaccept=self.info_onaccept)
+                  onaccept = self.info_onaccept,
+                  )
 
         # Components
         add_components(tablename,
-                       cap_resource="info_id",
-                       cap_area="info_id",
-                      )
+                       cap_resource = "info_id",
+                       cap_area = "info_id",
+                       )
 
         # ---------------------------------------------------------------------
         # CAP Resource segments
@@ -604,7 +608,8 @@ class S3CAPModel(S3Model):
         # @ToDo: CRUD Strings
 
         configure(tablename,
-                  onaccept=update_alert_id(tablename))
+                  onaccept = update_alert_id(tablename),
+                  )
 
         # ---------------------------------------------------------------------
         # CAP info area segments
@@ -631,11 +636,12 @@ class S3CAPModel(S3Model):
         # @ToDo: CRUD Strings
 
         configure(tablename,
-                  onaccept=update_alert_id(tablename))
+                  onaccept = update_alert_id(tablename),
+                  )
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
-        return Storage()
+        return dict()
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -751,6 +757,19 @@ class S3CAPModel(S3Model):
         """
 
         return S3CAPModel.list_string_represent(v, S3CAPModel.alert_represent)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_alert_form_validation(form):
+        """
+            On Validation for CAP alert form
+        """
+
+        form_vars = form.vars
+        if form_vars.get("scope") == "Private" and not form_vars.get("addresses"):
+            form.errors["addresses"] = \
+                current.T("'Recipients' field mandatory in case of 'Private' scope")
+        return
 
     # -------------------------------------------------------------------------
     @staticmethod
