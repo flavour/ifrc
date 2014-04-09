@@ -1529,6 +1529,13 @@ class S3Config(Storage):
         """
         return self.cms.get("filter_open", False)
 
+    def get_cms_location_click_filters(self):
+        """
+            Whether clicking on a location in the Newsfeed should activate
+            the filter to that location, instead of opening the profile page
+        """
+        return self.cms.get("location_click_filters", False)
+
     def get_cms_organisation(self):
         """
             Which field to use for the Organisation of Posts:
@@ -1626,6 +1633,12 @@ class S3Config(Storage):
             If set to True then Staff & Volunteers require an email address
         """
         return self.hrm.get("email_required", True)
+
+    def get_hrm_org_dependent_job_titles(self):
+        """
+            If set to True then the Job Titles Catalog is Organisation-dependent (i.e. each root org sees a different Catalog)
+        """
+        return self.hrm.get("org_dependent_job_titles", False)
 
     def get_hrm_org_required(self):
         """
@@ -2042,6 +2055,14 @@ class S3Config(Storage):
         """
         return self.pr.get("import_update_requires_email", True)
 
+    def get_pr_lookup_duplicates(self):
+        """
+            Whether the AddPersonWidget2 does a fuzzy search for duplicates
+
+            NB This setting has no effect with the old AddPersonWidget
+        """
+        return self.pr.get("lookup_duplicates", False)
+
     def get_pr_request_dob(self):
         """ Include Date of Birth in the AddPersonWidget[2] """
         return self.pr.get("request_dob", True)
@@ -2063,6 +2084,8 @@ class S3Config(Storage):
             Whether the AddPersonWidget allows selecting existing PRs
             - set to True if Persons can be found in multiple contexts
             - set to False if just a single context
+
+            NB This setting has no effect with the new AddPersonWidget2
         """
         return self.pr.get("select_existing", True)
 

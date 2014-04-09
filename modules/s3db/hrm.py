@@ -78,6 +78,9 @@ from gluon.storage import Storage
 from ..s3 import *
 from s3layouts import S3AddResourceLink
 
+# Compact JSON encoding
+SEPARATORS = (",", ":")
+
 # =============================================================================
 class S3HRModel(S3Model):
 
@@ -221,6 +224,8 @@ class S3HRModel(S3Model):
             not_filter_opts = (2, 4)
             code_label = T("Staff ID")
 
+        org_dependent_job_titles = settings.get_hrm_org_dependent_job_titles()
+
         tablename = "hrm_job_title"
         define_table(tablename,
                      Field("name", notnull=True,
@@ -228,9 +233,9 @@ class S3HRModel(S3Model):
                            label=T("Name")),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
-                     organisation_id(default = root_org,
-                                     readable = is_admin,
-                                     writable = is_admin,
+                     organisation_id(default = root_org if org_dependent_job_titles else None,
+                                     readable = is_admin if org_dependent_job_titles else False,
+                                     writable = is_admin if org_dependent_job_titles else False,
                                      ),
                      Field("type", "integer",
                            default = hrm_type_default,
@@ -276,10 +281,7 @@ class S3HRModel(S3Model):
                 msg_record_deleted = T("Job Title deleted"),
                 msg_list_empty = T("Currently no entries in the catalog"))
 
-        represent = S3Represent(lookup=tablename, translate=True)
-        job_title_id = S3ReusableField("job_title_id", "reference %s" % tablename,
-            sortby = "name",
-            label = label,
+        if  org_dependent_job_titles:
             requires = IS_NULL_OR(
                         IS_ONE_OF(db, "hrm_job_title.id",
                                   represent,
@@ -287,7 +289,20 @@ class S3HRModel(S3Model):
                                   filter_opts=filter_opts,
                                   not_filterby="type",
                                   not_filter_opts=not_filter_opts,
-                                  )),
+                                  ))
+        else:
+            requires = IS_NULL_OR(
+                        IS_ONE_OF(db, "hrm_job_title.id",
+                                  represent,
+                                  not_filterby="type",
+                                  not_filter_opts=not_filter_opts,
+                                  ))
+
+        represent = S3Represent(lookup=tablename, translate=True)
+        job_title_id = S3ReusableField("job_title_id", "reference %s" % tablename,
+            sortby = "name",
+            label = label,
+            requires = requires,
             represent = represent,
             comment=S3AddResourceLink(c="vol" if group == "volunteer" else "hrm",
                                       f="job_title",
@@ -299,6 +314,7 @@ class S3HRModel(S3Model):
 
         configure("hrm_job_title",
                   deduplicate = self.hrm_job_title_duplicate,
+                  onvalidation = self.hrm_job_title_onvalidation,
                   )
 
         # =========================================================================
@@ -837,8 +853,8 @@ class S3HRModel(S3Model):
 
         if item.tablename == "hrm_department":
             data = item.data
-            name = "name" in data and data.name
-            org = "organisation_id" in data and data.organisation_id
+            name = data.get("name", None)
+            org = data.get("organisation_id", None)
 
             table = item.table
             query = (table.name.lower() == name.lower())
@@ -862,19 +878,35 @@ class S3HRModel(S3Model):
 
         if item.tablename == "hrm_job_title":
             data = item.data
-            name = "name" in data and data.name
-            org = "organisation_id" in data and data.organisation_id
+            name = data.get("name", None)
+            if current.deployment_settings.get_hrm_org_dependent_job_titles():
+                org = data.get("organisation_id", None)
+            else:
+                org = None
+            role_type = data.get("type", None)
 
             table = item.table
             query = (table.name.lower() == name.lower())
             if org:
                 query  = query & (table.organisation_id == org)
+            if role_type:
+                query  = query & (table.type == role_type)
             duplicate = current.db(query).select(table.id,
                                                  limitby=(0, 1)).first()
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
         return
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def hrm_job_title_onvalidation(form):
+        """
+            Ensure Job Titles are not Org-specific unless configured to be so
+        """
+
+        if not current.deployment_settings.get_hrm_org_dependent_job_titles():
+            form.vars["organisation_id"] = None
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -959,7 +991,7 @@ class S3HRModel(S3Model):
         if (not limit or limit > MAX_SEARCH_RESULTS) and resource.count() > MAX_SEARCH_RESULTS:
             output = json.dumps([
                 dict(label=str(current.T("There are more than %(max)s results, please input more characters.") % dict(max=MAX_SEARCH_RESULTS)))
-                ])
+                ], separators=SEPARATORS)
         else:
             fields = ["id",
                       "person_id$first_name",
@@ -983,22 +1015,21 @@ class S3HRModel(S3Model):
             items = []
             iappend = items.append
             for row in rows:
-                item = {"id"     : row["hrm_human_resource.id"],
-                        "first"  : row["pr_person.first_name"],
+                name = Storage(first_name=row["pr_person.first_name"],
+                               middle_name=row["pr_person.middle_name"],
+                               last_name=row["pr_person.last_name"],
+                               )
+                name = s3_fullname(name)
+                item = {"id"    : row["hrm_human_resource.id"],
+                        "name"  : name,
                         }
-                middle_name = row.get("pr_person.middle_name", None)
-                if middle_name:
-                    item["middle"] = middle_name
-                last_name = row.get("pr_person.last_name", None)
-                if last_name:
-                    item["last"] = last_name
                 if show_orgs:
                     item["org"] = row["org_organisation.name"]
                 job_title = row.get("hrm_job_title.name", None)
                 if job_title:
                     item["job"] = job_title
                 iappend(item)
-            output = json.dumps(items)
+            output = json.dumps(items, separators=SEPARATORS)
 
         response.headers["Content-Type"] = "application/json"
         return output
@@ -1099,27 +1130,21 @@ class S3HRModel(S3Model):
 
         # Minimal flattened structure
         item = {}
-        #if first_name:
-        #    item["first_name"] = first_name
-        #if middle_name:
-        #    item["middle_name"] = middle_name
-        #if last_name:
-        #    item["last_name"] = last_name
         if email:
             item["email"] = email
         if mobile_phone:
-            item["mobile_phone"] = mobile_phone
+            item["mphone"] = mobile_phone
         if home_phone:
-            item["home_phone"] = home_phone
+            item["hphone"] = home_phone
         if gender:
-            item["gender"] = gender
+            item["sex"] = gender
         if date_of_birth:
-            item["date_of_birth"] = date_of_birth
+            item["dob"] = date_of_birth
         if occupation:
             item["occupation"] = occupation
         if organisation_id:
-            item["organisation_id"] = organisation_id
-        output = json.dumps(item)
+            item["org_id"] = organisation_id
+        output = json.dumps(item, separators=SEPARATORS)
 
         current.response.headers["Content-Type"] = "application/json"
         return output

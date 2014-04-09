@@ -282,6 +282,8 @@ settings.hrm.filter_certificates = True
 settings.hrm.show_organisation = True
 # Uncomment to allow HRs to have multiple Job Titles
 settings.hrm.multiple_job_titles = True
+# Uncomment to have each root Org use a different Job Title Catalog
+settings.hrm.org_dependent_job_titles = True
 # Uncomment to disable the use of HR Credentials
 settings.hrm.use_credentials = False
 # Uncomment to enable the use of HR Education
@@ -292,6 +294,10 @@ settings.hrm.organisation_label = "National Society / Branch"
 settings.hrm.cv_tab = True
 # Uncomment to consolidate tabs into Staff Record
 settings.hrm.record_tab = True
+
+# Uncomment to do a search for duplicates in the new AddPersonWidget2
+# - not yet ready
+#settings.pr.lookup_duplicates = True
 
 # RDRT
 settings.deploy.hr_label = "Member"

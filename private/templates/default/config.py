@@ -348,6 +348,8 @@ settings.L10n.decimal_separator = "."
 #settings.cms.bookmarks = True
 # Uncomment to use have Filter form in Newsfeed be open by default
 #settings.cms.filter_open = True
+# Uncomment to adjust filters in Newsfeed when clicking on locations instead of opening the profile page
+#settings.cms.location_click_filters = True
 # Uncomment to use Rich Text editor in Newsfeed
 #settings.cms.richtext = True
 # Uncomment to show Events in Newsfeed
@@ -370,6 +372,8 @@ settings.L10n.decimal_separator = "."
 # Persons
 # Uncomment to allow person imports to match even without email addresses 
 #settings.pr.import_update_requires_email = False
+# Uncomment to a fuzzy search for duplicates in the new AddPersonWidget2
+#settings.pr.lookup_duplicates = True
 # Uncomment to hide fields in S3AddPersonWidget[2]
 #settings.pr.request_dob = False
 #settings.pr.request_gender = False
@@ -377,7 +381,7 @@ settings.L10n.decimal_separator = "."
 #settings.pr.request_home_phone = True
 # Uncomment to reverse the order of Names
 #settings.pr.reverse_names = True
-# Uncomment to prevent selecting existing users in S3AddPersonWidget
+# Uncomment to prevent selecting existing users in the old S3AddPersonWidget
 #settings.pr.select_existing = False
 # Uncomment to prevent showing HR details in S3PersonAutocompleteWidget results
 #settings.pr.search_shows_hr_details = False
@@ -436,6 +440,8 @@ settings.L10n.decimal_separator = "."
 #settings.hrm.filter_certificates = True
 # Uncomment to allow HRs to have multiple Job Titles
 #settings.hrm.multiple_job_titles = True
+# Uncomment to have each root Org use a different Job Title Catalog
+#settings.hrm.org_dependent_job_titles = True
 # Uncomment to hide the Staff resource
 #settings.hrm.show_staff = False
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.

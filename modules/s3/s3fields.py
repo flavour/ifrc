@@ -45,9 +45,9 @@ from gluon.storage import Storage
 from gluon.languages import lazyT
 
 from s3navigation import S3ScriptItem
-from s3utils import S3DateTime, s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode
+from s3utils import S3DateTime, s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode, S3MarkupStripper
 from s3validators import IS_ONE_OF, IS_UTC_DATETIME
-from s3widgets import S3AutocompleteWidget, S3DateWidget, S3DateTimeWidget
+from s3widgets import S3DateWidget, S3DateTimeWidget
 
 try:
     db = current.db
@@ -1011,8 +1011,6 @@ def s3_meta_fields():
         Normal meta-fields added to every table
     """
 
-    utable = current.auth.settings.table_user
-
     # Approver of a record
     s3_meta_approved_by = S3ReusableField("approved_by", "integer",
                                           readable=False,
@@ -1071,8 +1069,6 @@ def s3_roles_permitted(name="roles_permitted", **attr):
         List of Roles Permitted to access a resource
         - used by CMS
     """
-
-    from s3validators import IS_ONE_OF
 
     T = current.T
     represent = S3Represent(lookup="auth_group", fields=["role"])
@@ -1143,7 +1139,7 @@ def s3_currency(name="currency", **attr):
         attr["requires"] = IS_IN_SET(currency_opts.keys(),
                                      zero=None)
     if "writable" not in attr:
-         attr["writable"] = settings.get_fin_currency_writable()
+        attr["writable"] = settings.get_fin_currency_writable()
 
     f = S3ReusableField(name, length=3,
                         **attr)
@@ -1158,6 +1154,9 @@ def s3_date(name="date", **attr):
             default == "now" (in addition to usual meanings)
             past = x months
             future = x months
+
+        @ToDo: Different default field name in case we need to start supporting
+               Oracle, where 'date' is a reserved word
     """
 
     if "past" in attr:
@@ -1280,7 +1279,7 @@ def s3_date(name="date", **attr):
 # =============================================================================
 def s3_datetime(name="date", **attr):
     """
-        Return a standard Datetime field
+        Return a standard DateTime field
 
         Additional options to normal S3ReusableField:
             default = "now" (in addition to usual meanings)
@@ -1288,6 +1287,9 @@ def s3_datetime(name="date", **attr):
             widget = "date" (in addition to usual meanings)
             past = x hours
             future = x hours
+
+        @ToDo: Different default field name in case we need to start supporting
+               Oracle, where 'date' is a reserved word
     """
 
     if "past" in attr:

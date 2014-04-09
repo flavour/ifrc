@@ -716,12 +716,9 @@ class S3Request(object):
 
         elif method == "clear" and not self.component:
             s3_remove_last_record_id(self.tablename)
-            if "_next" in self.vars:
-                request_vars = dict(_next=self._next)
-            else:
-                request_vars = {}
             self.next = URL(r=self, f=self.name)
             return lambda r, **attr: None
+            
         elif self.transformable():
             transform = True
 
@@ -1330,7 +1327,6 @@ class S3Request(object):
             del vars["format"]
 
         args = []
-        read = False
 
         cname = self.component_name
 
@@ -1569,7 +1565,8 @@ class S3Request(object):
         else:
             # Always load the model first (otherwise it would
             # override the custom settings when loaded later)
-            if tablename not in current.db:
+            db = current.db
+            if tablename not in db:
                 table = db.table(tablename)
             customise = current.deployment_settings.customise_resource(tablename)
             if customise:

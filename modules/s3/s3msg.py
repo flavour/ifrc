@@ -1642,6 +1642,38 @@ class S3Msg(object):
         if not channel:
             return "No Such RSS Channel: %s" % channel_id
 
+        # http://pythonhosted.org/feedparser
+        import feedparser
+        if channel.etag:
+            # http://pythonhosted.org/feedparser/http-etag.html
+            # NB This won't help for a server like Drupal 7 set to not allow caching & hence generating a new ETag/Last Modified each request!
+            d = feedparser.parse(channel.url, etag=channel.etag)
+        elif channel.date:
+            d = feedparser.parse(channel.url, modified=channel.date.utctimetuple())
+        else:
+            # We've not polled this feed before
+            d = feedparser.parse(channel.url)
+
+        if d.bozo:
+            # Something doesn't seem right
+            S3Msg.update_channel_status(channel_id,
+                                        status=d.bozo_exception.message,
+                                        period=(300, 3600))
+            return
+
+        # Update ETag/Last-polled
+        now = current.request.utcnow
+        data = dict(date=now)
+        etag = d.get("etag", None)
+        if etag:
+            data["etag"] = etag
+        db(query).update(**data)
+        
+        from time import mktime, struct_time
+        gis = current.gis
+        geocode_r = gis.geocode_r
+        hierarchy_level_keys = gis.hierarchy_level_keys
+        utcfromtimestamp = datetime.datetime.utcfromtimestamp
         gtable = db.gis_location
         ginsert = gtable.insert
         mtable = db.msg_rss
@@ -1654,39 +1686,26 @@ class S3Msg(object):
             ptable = db.msg_parsing_status
             pinsert = ptable.insert
 
-        # http://pythonhosted.org/feedparser
-        import feedparser
-        if channel.etag:
-            # http://pythonhosted.org/feedparser/http-etag.html
-            # NB This won't help for a server like Drupal 7 set to not allow caching & hence generating a new ETag/Last Modified each request!
-            # - consider logging cases where we get entries but none are new to be able to report on this & get remote sites to be configured more nicely
-            d = feedparser.parse(channel.url, etag=channel.etag)
-        elif channel.date:
-            d = feedparser.parse(channel.url, modified=channel.date.utctimetuple())
-        else:
-            # We've not polled this feed before
-            d = feedparser.parse(channel.url)
-        now = current.request.utcnow
-        data = dict(date=now)
-        etag = d.get("etag", None)
-        if etag:
-            data["etag"] = etag
-        db(query).update(**data)
-        utcfromtimestamp = datetime.datetime.utcfromtimestamp
-        from time import mktime, struct_time
-        for entry in d.entries:
+        entries = d.entries
+        if entries:
+            # Check how many we have already to see if any are new
+            count_old = db(mtable.id > 0).count()
+        for entry in entries:
             link = entry.get("link", None)
 
             # Check for duplicates
             # (ETag just saves bandwidth, doesn't filter the contents of the feed)
             exists = db(mtable.from_address == link).select(mtable.id,
                                                             mtable.location_id,
+                                                            mtable.message_id,
                                                             limitby=(0, 1)
                                                             ).first()
             if exists:
                 location_id = exists.location_id
             else:
                 location_id = None
+
+            title = entry.title
 
             content = entry.get("content", None)
             if content:
@@ -1704,38 +1723,52 @@ class S3Msg(object):
 
             tags = entry.get("tags", None)
             if tags:
-                tags = [s3_unicode(t.term) for t in tags]
+                tags = [t.term.encode("utf-8") for t in tags]
 
-            location_id = None
+            location = False
             lat = entry.get("geo_lat", None)
-            if lat is not None:
-                lon = entry.get("geo_long", None)
-                if lon is not None:
-                    try:
-                        if location_id:
-                            db(gtable.id == location_id).update(lat=lat, lon=lon)
-                        else:
-                            location_id = ginsert(lat=lat, lon=lon)
-                    except:
-                        # Don't die on badly-formed Geo
-                        pass
-            else:
+            lon = entry.get("geo_long", None)
+            if lat is None or lon is None:
                 # Try GeoRSS
                 georss = entry.get("georss_point", None)
                 if georss:
-                    try:
-                        lat, lon = georss.split(" ")
-                        if location_id:
-                            db(gtable.id == location_id).update(lat=lat, lon=lon)
-                        else:
-                            location_id = ginsert(lat=lat, lon=lon)
-                    except:
-                        # Don't die on badly-formed GeoRSS
-                        pass
+                    location = True
+                    lat, lon = georss.split(" ")
+            else:
+                location = True
+            if location:
+                try:
+                    query = (gtable.lat == lat) &\
+                            (gtable.lon == lon)
+                    exists = db(query).select(gtable.id,
+                                              limitby=(0, 1),
+                                              orderby=gtable.level,
+                                              ).first()
+                    if exists:
+                        location_id = exists.id
+                    else:
+                        data = dict(lat=lat,
+                                    lon=lon,
+                                    )
+                        results = geocode_r(lat, lon)
+                        if isinstance(results, dict):
+                            for key in hierarchy_level_keys:
+                                v = results.get(key, None)
+                                if v:
+                                    data[key] = v
+                        #if location_id:
+                        # Location has been changed
+                        #db(gtable.id == location_id).update(**data)
+                        location_id = ginsert(**data)
+                        data["id"] = location_id
+                        gis.update_location_tree(data)
+                except:
+                    # Don't die on badly-formed Geo
+                    pass
 
             if exists:
                 db(mtable.id == exists.id).update(channel_id = channel_id,
-                                                  title = entry.title,
+                                                  title = title,
                                                   from_address = link,
                                                   body = content,
                                                   author = entry.get("author", None),
@@ -1744,6 +1777,10 @@ class S3Msg(object):
                                                   tags = tags,
                                                   # @ToDo: Enclosures
                                                   )
+                if parser:
+                    pinsert(message_id = exists.message_id,
+                            channel_id = channel_id)
+                
             else:
                 id = minsert(channel_id = channel_id,
                              title = entry.title,
@@ -1760,6 +1797,16 @@ class S3Msg(object):
                 if parser:
                     pinsert(message_id = record["message_id"],
                             channel_id = channel_id)
+
+        if entries:
+            # Check again to see if there were any new ones
+            count_new = db(mtable.id > 0).count()
+            if count_new == count_old:
+                # No new posts?
+                # Back-off in-case the site isn't respecting ETags/Last-Modified
+                S3Msg.update_channel_status(channel_id,
+                                            status="+1",
+                                            period=(300, 3600))
 
         return "OK"
 
@@ -1819,6 +1866,58 @@ class S3Msg(object):
             update_super(table, dict(id=id))
 
         return True
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def update_channel_status(channel_id, status, period=None):
+        """
+            Update the Status for a Channel
+        """
+
+        db = current.db
+
+        # Read current status
+        stable = current.s3db.msg_channel_status
+        query = (stable.channel_id == channel_id)
+        old_status = db(query).select(stable.status,
+                                      limitby=(0, 1)
+                                      ).first()
+        if old_status:
+            # Update
+            if status[0] == "+":
+                # Increment status if-numeric
+                old_status = old_status.status
+                try:
+                    old_status = int(old_status)
+                except:
+                    new_status = status
+                else:
+                    new_status = old_status + int(status[1:])
+            else:
+                new_status = status
+            db(query).update(status = new_status)
+        else:
+            # Initialise
+            stable.insert(channel_id = channel_id,
+                          status = status)
+        if period:
+            # Amend the frequency of the scheduled task
+            ttable = db.scheduler_task
+            args = '["msg_rss_channel", %s]' % channel_id
+            query = ((ttable.function_name == "msg_poll") & \
+                     (ttable.args == args) & \
+                     (ttable.status.belongs(["RUNNING", "QUEUED", "ALLOCATED"])))
+            exists = db(query).select(ttable.id,
+                                      ttable.period,
+                                      limitby=(0, 1)).first()
+            if not exists:
+                return
+            old_period = exists.period
+            max_period = period[1]
+            if old_period < max_period:
+                new_period = old_period + period[0]
+                new_period = min(new_period, max_period)
+                db(ttable.id == exists.id).update(period=new_period)
 
     # -------------------------------------------------------------------------
     @staticmethod

@@ -76,7 +76,7 @@ from gluon.tools import callback
 
 from s3data import S3DataTable, S3DataList, S3PivotTable
 from s3fields import S3Represent, S3RepresentLazy, s3_all_meta_field_names
-from s3utils import s3_has_foreign_key, s3_flatlist, s3_get_foreign_key, s3_unicode, S3MarkupStripper, S3TypeConverter, s3_get_last_record_id, s3_remove_last_record_id
+from s3utils import s3_has_foreign_key, s3_get_foreign_key, s3_unicode, S3TypeConverter, s3_get_last_record_id, s3_remove_last_record_id
 from s3validators import IS_ONE_OF
 from s3xml import S3XMLFormat
 
@@ -1308,6 +1308,8 @@ class S3Resource(object):
                     fn, tn = rfield.name, rfield.tablename
                     rtable = db[tn]
                     query = (rfield.belongs(deletable))
+                    if tn == self.tablename:
+                        query &= (rfield != rtable._id)
                     if DELETED in rtable:
                         query &= (rtable[DELETED] != True)
                     rrows = db(query).select(rfield)
@@ -1338,9 +1340,12 @@ class S3Resource(object):
                         # Check deletability again
                         restricted = False
                         for rfield in rfields:
-                            rtable = db[rfield.tablename]
-                            rfield = rtable[rfield.name]
+                            fn, tn = rfield.name, rfield.tablename
+                            rtable = db[tn]
+                            #rfield = rtable[fn]
                             query = (rfield == record_id)
+                            if tn == self.tablename:
+                                query &= (rfield != rtable._id)
                             if DELETED in rtable:
                                 query &= (rtable[DELETED] != True)
                             rrow = db(query).select(rfield,
@@ -1361,6 +1366,8 @@ class S3Resource(object):
                     fn, tn = rfield.name, rfield.tablename
                     rtable = db[tn]
                     query = (rfield == record_id)
+                    if tn == self.tablename:
+                        query &= (rfield != rtable._id)
                     if rfield.ondelete == "CASCADE":
                         rresource = define_resource(tn,
                                                     filter=query,
@@ -2705,8 +2712,6 @@ class S3Resource(object):
         xml = current.xml
 
         pkey = self.table._id
-        action = "read"
-        representation = "xml"
 
         # Construct the record URL
         if base_url:
@@ -3164,7 +3169,6 @@ class S3Resource(object):
         db = current.db
         xml = current.xml
         auth = current.auth
-        has_permission = auth.s3_has_permission
         tablename = self.tablename
         table = self.table
 
@@ -3638,8 +3642,6 @@ class S3Resource(object):
 
             @return: tuple of (fields, joins, left, distinct)
         """
-
-        table = self.table
 
         prefix = lambda s: "~.%s" % s \
                            if "." not in s.split("$", 1)[0] else s
@@ -4145,6 +4147,12 @@ class S3Resource(object):
                             ktable = db[tn].with_alias(alias)
                             ktable._id = ktable[ktable._id.name]
                             tn = alias
+                        elif tn == field.tablename:
+                            prefix, name = field.tablename.split("_", 1)
+                            alias = "%s_%s_%s" % (prefix, field.name, name)
+                            ktable = db[tn].with_alias(alias)
+                            ktable._id = ktable[ktable._id.name]
+                            tn = alias
                         else:
                             ktable = db[tn]
 
@@ -4171,7 +4179,6 @@ class S3Resource(object):
 
                 wqueries = []
                 for field in flist:
-                    query = None
                     ftype = str(field.type)
                     options = None
                     fname = str(field)
@@ -4253,7 +4260,14 @@ class S3Resource(object):
                     continue
                 ftype = str(field.type)
 
-                if ftype[:9] == "reference" and \
+                if hasattr(field.represent, "dt_orderby"):
+                    # Custom orderby logic in field.represent
+                    field.represent.dt_orderby(field,
+                                               direction(i),
+                                               orderby,
+                                               left_joins)
+
+                elif ftype[:9] == "reference" and \
                    hasattr(field, "sortby") and field.sortby:
                     # Foreign keys with sortby will be sorted by sortby
                     
@@ -4262,6 +4276,12 @@ class S3Resource(object):
                     if parent is not None and \
                        parent.tablename == tn and field.name != fkey:
                         alias = "%s_%s_%s" % (parent.prefix, "linked", parent.name)
+                        ktable = db[tn].with_alias(alias)
+                        ktable._id = ktable[ktable._id.name]
+                        tn = alias
+                    elif tn == field.tablename:
+                        prefix, name = field.tablename.split("_", 1)
+                        alias = "%s_%s_%s" % (prefix, field.name, name)
                         ktable = db[tn].with_alias(alias)
                         ktable._id = ktable[ktable._id.name]
                         tn = alias
@@ -4507,13 +4527,10 @@ class S3LeftJoins(object):
     def extend(self, other):
 
         if type(other) is S3LeftJoins:
-            joins = self.joins
             append = self.tables.append
         else:
-            joins = self
             append = None
         joins = self.joins if type(other) is S3LeftJoins else self
-        tables = self.tables
         for tablename in other:
             if tablename not in self.joins:
                 joins[tablename] = other[tablename]
@@ -4529,7 +4546,6 @@ class S3LeftJoins(object):
     # -------------------------------------------------------------------------
     def as_list(self, tablenames=None, aqueries=None):
 
-        s3db = current.s3db
         accessible_query = current.auth.s3_accessible_query
 
         if tablenames is None:
@@ -4733,7 +4749,6 @@ class S3FieldSelector(object):
         t = type(field)
         
         if isinstance(field, Field):
-            f = field
             colname = str(field)
             tname, fname = colname.split(".", 1)
 
@@ -4744,7 +4759,6 @@ class S3FieldSelector(object):
                 # unresolvable selector
                 raise error(field.name)
             fname = rfield.fname
-            f = rfield.field
             tname = rfield.tname
 
         elif t is S3ResourceField:
@@ -4753,7 +4767,6 @@ class S3FieldSelector(object):
                 # unresolved selector
                 return None
             fname = field.fname
-            f = field.field
             tname = field.tname
 
         else:
@@ -4905,8 +4918,6 @@ class S3FieldPath(object):
         head = tokens.pop(0)
         tail = None
 
-        field_not_found = lambda f: AttributeError("Field not found: %s" % f)
-
         if head and head[0] == "(" and head[-1] == ")":
 
             # Context expression
@@ -4998,7 +5009,7 @@ class S3FieldPath(object):
         """
 
         if fieldname == "uid":
-            fieldname == current.xml.UID
+            fieldname = current.xml.UID
         if fieldname == "id":
             field = table._id
         elif fieldname in table.fields:
@@ -5272,7 +5283,6 @@ class S3ResourceField(object):
             @param lazy: return a lazy representation handle if available
         """
 
-        field = self.field
         tname = self.tname
         fname = self.fname
         colname = self.colname
@@ -5390,7 +5400,6 @@ class S3ResourceQuery(object):
         op = self.op
         l = self.left
         r = self.right
-        distinct = False
 
         if op in (self.AND, self.OR):
             ljoins, ld = l.joins(resource, left=left)
@@ -5788,9 +5797,9 @@ class S3ResourceQuery(object):
                 r = [r]
             for v in r:
                 if isinstance(l, (list, tuple, basestring)):
-                    if contains(l, r):
+                    if contains(l, v):
                         return True
-                elif l == r:
+                elif l == v:
                     return True
             return False
         elif op == self.BELONGS:
@@ -5982,12 +5991,12 @@ class S3ResourceQuery(object):
         l = self.left
         r = self.right
 
-        if self.op == self.AND:
+        if op == self.AND:
             return None
-        elif self.op == self.NOT:
+        elif op == self.NOT:
             lname, lop, lval, linv = l._or()
             return (lname, lop, lval, not linv)
-        elif self.op == self.OR:
+        elif op == self.OR:
             lvars = l._or()
             rvars = r._or()
             if lvars is None or rvars is None:
@@ -6003,7 +6012,7 @@ class S3ResourceQuery(object):
             else:
                 return None
         else:
-            return (self.left.name, self.op, self.right, False)
+            return (l.name, op, r, False)
 
 # =============================================================================
 class S3AxisFilter(object):
@@ -6824,7 +6833,6 @@ class S3ResourceFilter(object):
             return 0
 
         table = resource.table
-        tablename = resource.tablename
 
         vfltr = self.get_filter()
 
