@@ -51,6 +51,7 @@ class S3Config(Storage):
 
     # Used by modules/s3theme.py
     FORMSTYLE = {
+        "bootstrap": formstyle_bootstrap,
         "foundation": formstyle_foundation,
         "foundation_inline": formstyle_foundation_inline,
         "default": formstyle_default,
@@ -1042,12 +1043,21 @@ class S3Config(Storage):
     def get_L10n_mandatory_lastname(self):
         return self.L10n.get("mandatory_lastname", False)
 
+    def get_L10n_decimal_separator(self):
+        """
+            What should the decimal separator be in formatted numbers?
+            - falls back to ISO standard of a comma
+        """
+        return self.L10n.get("decimal_separator", ",")
+
     def get_L10n_thousands_separator(self):
+        """
+            What should the thousands separator be in formatted numbers?
+            - falls back to ISO standard of a space
+        """
         return self.L10n.get("thousands_separator", " ")
     def get_L10n_thousands_grouping(self):
         return self.L10n.get("thousands_grouping", 3)
-    def get_L10n_decimal_separator(self):
-        return self.L10n.get("decimal_separator", ",")
 
     def get_L10n_translate_cms_series(self):
         """
@@ -1107,11 +1117,14 @@ class S3Config(Storage):
         """ Get the current form style """
 
         setting = self.ui.get("formstyle", "default")
-        if callable(setting):
-            return setting
-        elif setting in self.FORMSTYLE:
+        if setting in self.FORMSTYLE:
+            # One of the standard supported formstyles
             return self.FORMSTYLE[setting]
+        elif callable(setting):
+            # A custom formstyle defined in the template
+            return setting
         else:
+            # A default web2py formstyle
             return setting
 
     def get_ui_filter_formstyle(self):

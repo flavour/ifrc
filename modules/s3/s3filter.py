@@ -48,7 +48,7 @@ except:
     from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
 from gluon import *
-from gluon.sqlhtml import MultipleOptionsWidget
+from gluon.sqlhtml import OptionsWidget, MultipleOptionsWidget
 from gluon.storage import Storage
 from gluon.tools import callback
 
@@ -56,7 +56,7 @@ from s3rest import S3Method
 from s3resource import S3FieldSelector, S3ResourceField, S3URLQuery
 from s3utils import s3_get_foreign_key, s3_unicode, S3TypeConverter
 from s3validators import *
-from s3widgets import S3DateWidget, S3DateTimeWidget, S3GroupedOptionsWidget, S3MultiSelectWidget, S3OrganisationHierarchyWidget, S3RadioOptionsWidget, S3SelectChosenWidget
+from s3widgets import S3DateWidget, S3DateTimeWidget, S3GroupedOptionsWidget, S3MultiSelectWidget, S3OrganisationHierarchyWidget, S3RadioOptionsWidget, S3HierarchySelectWidget
 
 # Compact JSON encoding
 SEPARATORS = (",", ":")
@@ -147,8 +147,8 @@ class S3FilterWidget(object):
             @keyword levels: list of location hierarchy levels
                              (L{S3LocationFilter})
             @keyword widget: widget to use (L{S3OptionsFilter}),
-                             "multiselect", "multiselect-bootstrap" or
-                             "groupedopts" (default)
+                             "select", "multiselect" (default), 
+                             "multiselect-bootstrap", or "groupedopts"
             @keyword cols: number of columns of checkboxes (L{S3OptionsFilter}
                            and L{S3LocationFilter} with "groupedopts" widget)
             @keyword filter: show filter for options (L{S3OptionsFilter},
@@ -752,7 +752,7 @@ class S3LocationFilter(S3FilterWidget):
                 attr["_name"] = name
                 # Find relevant values to pre-populate the widget
                 _values = values.get("%s$%s__%s" % (fname, level, operator))
-                w = S3MultiSelectWidget(filter = opts.get("filter", False),
+                w = S3MultiSelectWidget(filter = opts.get("filter", "auto"),
                                         header = opts.get("header", False),
                                         selectedList = opts.get("selectedList", 3),
                                         noneSelectedText = T("Select %(location)s") % \
@@ -1196,23 +1196,7 @@ class S3OptionsFilter(S3FilterWidget):
             if script not in scripts:
                 scripts.append(script)
             w = MultipleOptionsWidget.widget
-        elif widget_type == "multiselect":
-            widget_class = "multiselect-filter-widget"
-            w = S3MultiSelectWidget(
-                    filter = opts.get("filter", False),
-                    header = opts.get("header", False),
-                    selectedList = opts.get("selectedList", 3))
-        elif widget_type == "chosen":
-            widget_class = "chosen-filter-widget"
-            w = S3SelectChosenWidget()
-        # Radio is just GroupedOpts with multiple=False
-        #elif widget_type == "radio":
-        #    widget_class = "radio-filter-widget"
-        #    w = S3RadioOptionsWidget(options = options,
-        #                             cols = opts["cols"],
-        #                             help_field = opts["help_field"],
-        #                             )
-        else:
+        elif widget_type == "groupedopts":
             widget_class = "groupedopts-filter-widget"
             w = S3GroupedOptionsWidget(options = options,
                                        multiple = opts.get("multiple", True),
@@ -1220,6 +1204,15 @@ class S3OptionsFilter(S3FilterWidget):
                                        size = opts["size"] or 12,
                                        help_field = opts["help_field"],
                                        )
+        else:
+            # Default widget_type = "multiselect"
+            widget_class = "multiselect-filter-widget"
+            w = S3MultiSelectWidget(
+                    filter = opts.get("filter", "auto"),
+                    header = opts.get("header", False),
+                    selectedList = opts.get("selectedList", 3),
+                    multiple = opts.get("multiple", True),)
+
 
         # Add widget class and default class
         classes = set(attr.get("_class", "").split()) | \
@@ -1535,8 +1528,6 @@ class S3HierarchyFilter(S3FilterWidget):
 
             lookup              name of the lookup table
             represent           representation method for the key
-
-        @status: experimental
     """
 
     _class = "hierarchy-filter"
@@ -1551,49 +1542,7 @@ class S3HierarchyFilter(S3FilterWidget):
             @param resource: the resource
             @param values: the search values from the URL query
         """
-
-        attr = self._attr(resource)
-        opts = self.opts
-        name = attr["_name"]
-
-        widget_id = attr["_id"]
         
-        rfield = None
-        selector = self.field
-        
-        lookup = opts.get("lookup")
-        if not lookup:
-            if resource:
-                rfield = S3ResourceField(resource, selector)
-                if rfield.field:
-                    lookup = s3_get_foreign_key(rfield.field, m2m=False)[0]
-            if not lookup:
-                raise SyntaxError("No lookup table known for %s" % selector)
-
-        represent = opts.get("represent")
-        if not represent:
-            if not rfield:
-                rfield = S3ResourceField(resource, selector)
-                if rfield.field:
-                    represent = rfield.field.represent
-
-        from s3hierarchy import S3Hierarchy
-        h = S3Hierarchy(tablename=lookup, represent=represent)
-
-        if not h.config:
-            raise AttributeError("No hierarchy configured for %s" % lookup)
-
-        widget = DIV(INPUT(_type="hidden",
-                           _class="s3-hierarchy-input"),
-                     DIV(h.html("%s-tree" % widget_id),
-                         _class="s3-hierarchy-tree"),
-                     **attr)
-        widget.add_class(self._class)
-
-        s3 = current.response.s3
-        scripts = s3.scripts
-        script_dir = "/%s/static/scripts" % current.request.application
-
         # Currently selected values
         selected = []
         append = selected.append
@@ -1603,27 +1552,17 @@ class S3HierarchyFilter(S3FilterWidget):
             if isinstance(v, (int, long)) or str(v).isdigit():
                 append(v)
 
-        if s3.debug:
-            script = "%s/jquery.jstree.js" % script_dir
-            if script not in scripts:
-                scripts.append(script)
-            script = "%s/S3/s3.jquery.ui.hierarchicalopts.js" % script_dir
-            if script not in scripts:
-                scripts.append(script)
-        else:
-            script = "%s/S3/s3.jstree.min.js" % script_dir
-            if script not in scripts:
-                scripts.append(script)
+        # Resolve the field selector
+        rfield = S3ResourceField(resource, self.field)
 
-        script = '''
-$('#%(widget_id)s').hierarchicalopts({
-    appname: '%(appname)s',
-    selected: %(selected)s
-});''' % {"appname": current.request.application,
-          "widget_id": widget_id,
-          "selected": json.dumps(selected, separators=SEPARATORS) if selected else "null",
-          }
-        s3.jquery_ready.append(script)
+        # Instantiate the widget
+        opts = self.opts
+        w = S3HierarchySelectWidget(lookup = opts.get("lookup"),
+                                    represent = opts.get("represent"))
+
+        # Render the widget
+        widget = w(rfield.field, selected, **self._attr(resource))
+        widget.add_class(self._class)
 
         return widget
 
@@ -1766,6 +1705,9 @@ class S3FilterForm(object):
                 form = FORM(TABLE(TBODY(rows)), **attr)
             else:
                 form = FORM(DIV(rows), **attr)
+                if settings.ui.formstyle == "bootstrap":
+                    # We need to amend the HTML markup to support this CSS framework
+                    form.add_class("form-horizontal")
             form.add_class("filter-form")
             if ajax:
                 form.add_class("filter-ajax")

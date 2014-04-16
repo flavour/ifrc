@@ -132,11 +132,11 @@ div.dl {
 
 /* Match .btn.btn-primary */
 .delete-btn {
-    background-color: #006DCC;
+    background-color: #006dcc;
     border-color: rgba(0, 0, 0, 0.1) rgba(0, 0, 0, 0.1) rgba(0, 0, 0, 0.25);
     border-width: 1px;
     border-radius: 4px 4px 4px 4px;
-    color: #FFFFFF;
+    color: #fff;
     text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
     line-height: 20px;
     padding: 4px 12px;
@@ -245,8 +245,7 @@ a i.icon.icon-plus-sign.big-add:hover {
 div.form-container form.form-horizontal,
 form#datalist-filter-form,
 form#datatable-filter-form {
-    padding-top: 7px;
-    padding-left: 9px;
+    padding: 15px 5px 0 9px;
 }
 
 #list-filter {
@@ -263,7 +262,7 @@ form#datatable-filter-form {
 }
 
 #summary-tab-headers a {
-    border-color: #B2B2B2;
+    border-color: #b2b2b2;
 }
 
 #summary-tab-headers .ui-tabs-active a {
@@ -301,7 +300,7 @@ form.form-horizontal.project_project {
 
 /* Override Bootstrap */
 .form-horizontal .control-group {
-    margin-bottom: 5px;
+    margin-bottom: 10px;
 }
 .form-horizontal .control-label {
     font-weight: bold;
@@ -311,6 +310,12 @@ body.rtl .form-horizontal .control-label {
 }
 .form-container .tooltip {
     margin-top: 4px;
+}
+
+.form-horizontal div.controls .help-block {
+    display: inline-block;
+    margin-left: 10px;
+    margin-top: 0;
 }
 
 .form-container .help-block div {
@@ -426,7 +431,7 @@ a.action-btn:hover {
 /* Better solution will be to use inline 'Optional' hints:
 http://www.usabilitycounts.com/2009/11/18/form-design-and-the-fallacy-of-the-required-field/
 http://uxmovement.com/forms/always-mark-optional-form-fields-not-required-ones/ */
-b.red {
+.req_key {
     position: absolute;
     z-index: 1;
     margin-left: 7px;
@@ -438,7 +443,7 @@ b.red {
 }
 
 #last_update {
-    color: #D35400;
+    color: #d35400;
 }
 
 #markDuplicate {
@@ -457,7 +462,7 @@ form.form-horizontal #map_panel {
 
 /* Help Tooltips */
 .cluetip-default{
-    background-color: #ffffff;
+    background-color: #fff;
     border: 1px solid #ccc;
     border: 1px solid rgba(0, 0, 0, 0.2);
     -webkit-border-radius: 6px;
@@ -627,8 +632,8 @@ label.ui-corner-all span {
 }
 
 .ui-widget-header {
-    border-color: #BBBBBB;
-    margin-bottom: 0px;
+    border-color: #bbb;
+    margin-bottom: 0;
     background: none;
     font-weight: normal;
 }
@@ -636,8 +641,26 @@ label.ui-corner-all span {
 .ui-widget-header .ui-icon-check,
 .ui-widget-header .ui-icon-closethick { 
     background: none;
-    height: 0px;
-    width: 0px;
+    height: 0;
+    width: 0;
+}
+
+.ui-multiselect-filter input {
+    width: 160px;
+    margin: 0;
+}
+
+.ui-widget-header.ui-corner-all.ui-multiselect-header.ui-helper-clearfix.ui-multiselect-hasfilter {
+    border: none;
+}
+
+.ui-multiselect-menu .ui-multiselect-checkboxes label {
+    margin-left: 0;
+    padding: 0 5px 6px 5px !important;
+}
+
+.ui-multiselect-checkboxes label.ui-state-hover {
+    border: 1px solid #aaa;
 }
 
 /* Responsive styling */

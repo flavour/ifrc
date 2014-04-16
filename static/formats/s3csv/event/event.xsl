@@ -11,6 +11,7 @@
          Description.............event_event.comments
          Exercise................event_event.exercise
          Zero Hour...............event_event.zero_hour
+         End Date................event_event.end_date
          Closed..................event_event.closed
          Country.................optional.....event_event_location.Country
          L1......................optional.....event_event_location.L1
@@ -169,7 +170,10 @@
         <resource name="event_event">
             <data field="name"><xsl:value-of select="col[@field='Name']"/></data>
             <data field="zero_hour"><xsl:value-of select="col[@field='Zero Hour']"/></data>
-            <data field="comments"><xsl:value-of select="col[@field='Description']"/></data>
+            <data field="end_date"><xsl:value-of select="col[@field='End Date']"/></data>
+            <xsl:if test="col[@field='Description']!=''">
+                <data field="comments"><xsl:value-of select="col[@field='Description']"/></data>
+            </xsl:if>
             <xsl:choose>
                 <xsl:when test="$Exercise=''">
                     <!-- Use System Default -->
