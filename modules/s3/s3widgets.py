@@ -4892,14 +4892,20 @@ class S3HierarchySelectWidget(FormWidget):
             if script not in scripts:
                 scripts.append(script)
 
-        script = '''
-$('#%(widget_id)s').hierarchicalopts({
-    appname: '%(appname)s',
-    selected: %(selected)s
-});''' % {"appname": current.request.application,
-          "widget_id": widget_id,
-          "selected": json.dumps(selected, separators=SEPARATORS) if selected else "null",
-          }
+        T = current.T
+
+        script = \
+'''$('#%(widget_id)s').hierarchicalopts({
+ appname:'%(appname)s',
+ selected:%(selected)s,
+ selectedText:'%(selectedText)s',
+ noneSelectedText:'%(noneSelectedText)s'})''' % \
+    {"appname": current.request.application,
+     "widget_id": widget_id,
+     "selected": json.dumps(selected, separators=SEPARATORS) if selected else "null",
+     "selectedText": T("# selected"),
+     "noneSelectedText": T("Select"),
+     }
         s3.jquery_ready.append(script)
 
         return widget
