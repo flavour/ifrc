@@ -386,7 +386,7 @@ def render_events(list_id, item_id, resource, rfields, record):
 
     raw = record._row
     name = record["event_event.name"]
-    date = record["event_event.zero_hour"]
+    date = record["event_event.start_date"]
     closed = raw["event_event.closed"]
     event_type = record["event_event_type.name"]
     event_url = URL(c="event", f="event",
@@ -2361,7 +2361,7 @@ def customise_event_event_controller(**attr):
             table = s3db.event_event
 
             table.exercise.label = T("Is this an Exercise?")
-            table.zero_hour.label = T("Start Time")
+            table.start_date.label = T("Start Time")
 
             if r.method =="datalist":
                 # Disaster selection page
@@ -2528,7 +2528,7 @@ def customise_event_event_controller(**attr):
                     "name",
                     "event_type_id",
                     "exercise",
-                    "zero_hour",
+                    "start_date",
                     "closed",
                     S3SQLInlineComponent(
                         "event_location",
@@ -3241,7 +3241,7 @@ def customise_org_organisation_controller(**attr):
                                         org_office={"name": "nat_office",
                                                     "joinby": "organisation_id",
                                                     "filterby": "office_type_id",
-                                                    "filterfor": [national],
+                                                    "filterfor": (national,),
                                                    },
                                        )
                     list_fields.append("nat_office.location_id$addr_street")
@@ -3883,30 +3883,24 @@ def customise_project_project_controller(**attr):
                              ),
                 S3OptionsFilter("organisation_id",
                                 label = T("Lead Organization"),
-                                #cols = 3,
-                                widget="multiselect",
                                 ),
                 S3OptionsFilter("location.location_id$L1",
-                                #location_level="L1",
-                                widget="multiselect",
                                 ),
                 S3OptionsFilter("partner.organisation_id",
                                 label = T("Partners"),
-                                widget="multiselect",
                                 ),
                 S3OptionsFilter("donor.organisation_id",
                                 label = T("Donors"),
-                                widget="multiselect",
                                 )
                 ]
 
             s3db.configure("project_project",
                            create_next = url_next,
-                           delete_next = url_next,
-                           update_next = url_next,
                            crud_form = crud_form,
-                           list_fields = list_fields,
+                           delete_next = url_next,
                            filter_widgets = filter_widgets,
+                           list_fields = list_fields,
+                           update_next = url_next,
                            )
 
             # This is awful in Popups & inconsistent in dataTable view (People/Documents don't have this & it breaks the styling of the main Save button)

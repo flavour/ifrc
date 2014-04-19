@@ -103,25 +103,22 @@
   <div class='menu'>
    <a href='/{{=appname}}/stats/demographic_data/summary'>
      <h3>Demographic Data</h3>
-     <p><span class='badge demographic_data_L0 throbber'></span> Country</p>
-     <p><span class='badge demographic_data_L1 throbber'></span> Admin 1</p>
-     <p><span class='badge demographic_data_L2 throbber'></span> Admin 2</p>
+     <p><span class='badge stats_demographic_data_L0 throbber'></span> Country</p>
+     <p><span class='badge stats_demographic_data_L1 throbber'></span> Admin 1</p>
+     <p><span class='badge stats_demographic_data_L2 throbber'></span> Admin 2</p>
    </a>
   </div>
   <div class='menu'>
-   <a href='/{{=appname}}/stats/demographic_data/summary'>
-     <h3>Baseline Data</h3>
-       <!-- 
-     <span class='badge demographic_data_L0 throbber'></span>
-     <span class='badge demographic_data_L1 throbber'></span>
-     <span class='badge demographic_data_L2 throbber'></span>
-     -->
+   <a href='/{{=appname}}/vulnerability/data/summary'>
+     <h3>Vulnerability Data</h3>
+     <p><span class='badge vulnerability_data_L0 throbber'></span> Country</p>
+     <p><span class='badge vulnerability_data_L1 throbber'></span> Admin 1</p>
+     <p><span class='badge vulnerability_data_L2 throbber'></span> Admin 2</p>
    </a>
   </div>
-   
   <div class='menu'>
    <a href='/{{=appname}}/event/event/summary'>
-     <h3><span class='badge throbber'></span>Disasters</h3>
+     <h3><span class='badge event_event throbber'></span>Disasters</h3>
    </a>
   </div>
 
@@ -131,11 +128,10 @@
 <script type='text/javascript'>//<![CDATA[
 $(document).ready(function(){
 
-    var data = {{=XML(current.response.data)}}
+    var data = {{=XML(current.response.data)}};
     var stickyCountry = false;
-    _updateStats('total');
 
-    function _handlerClickCountry() {
+    var _handlerClickCountry = function() {
         var country = $(this).attr('class');
         var stickyCountryPrev = stickyCountry;
         //Country Is Selected
@@ -148,50 +144,56 @@ $(document).ready(function(){
         if (country != stickyCountryPrev) {
             //Select this country
             stickyCountry = country;
-            $( '.menus' ).css('background-color','#99CCFF');
-            $(this).css('background-color','#99CCFF');
-            $(this).css('height','70px');
+            $( '.menus' ).css('background-color', '#99CCFF');
+            $(this).css('background-color', '#99CCFF');
+            $(this).css('height', '70px');
             _updateStats(stickyCountry.substring(8));
         }
     }
 
-    function _handlerInCountry() {
+    var _handlerInCountry = function() {
         if (!stickyCountry) {
-          $( '.menus' ).css('background-color','#99CCFF');
-          $(this).css('background-color','#99CCFF');
-          $(this).css('height','70px');
-          // Get data for country 
-          _updateStats($(this).attr('class').substring(8));
+            $( '.menus' ).css('background-color', '#99CCFF');
+            $(this).css('background-color', '#99CCFF');
+            $(this).css('height', '70px');
+            // Get data for country 
+            _updateStats($(this).attr('class').substring(8));
         }
     }
 
-    function _handlerOutCountry() {
+    var _handlerOutCountry = function() {
         if (!stickyCountry) {
-            $( '.menus, .country' ).css('background-color','#66B2FF');
-            $( '.country' ).css('height','55px');
+            $( '.menus, .country' ).css('background-color', '#66B2FF');
+            $( '.country' ).css('height', '55px');
             // Get global data
             _updateStats('total');
         }
     }
 
-    function _updateStats(code) {
-        resources = ['location',
-                     'demographic_data_L0',
-                     'demographic_data_L1',
-                     'demographic_data_L2',
-                     'event'
-                     ]
-        for (var i=0; i< 5; i++) {
-            resource = resources[i]
-            var value = data[code][resource]
+    var _updateStats = function(code) {
+        var resources = ['location',
+                         'stats_demographic_data_L0',
+                         'stats_demographic_data_L1',
+                         'stats_demographic_data_L2',
+                         'vulnerability_data_L0',
+                         'vulnerability_data_L1',
+                         'vulnerability_data_L2',
+                         'event_event'
+                         ];
+        var resource,
+            value;
+        for (var i=0; i < 8; i++) {
+            resource = resources[i];
+            value = data[code][resource];
             if (value == undefined) {
                 value = 0;
             }
             $('.badge.' + resource).html(value);
-            $('.badge.' + resource ).removeClass('throbber');
+            $('.badge.' + resource).removeClass('throbber');
         }
     }
 
+    _updateStats('total');
     $( '.country' ).click(_handlerClickCountry);
     $( '.country' ).hover( _handlerInCountry, _handlerOutCountry);
 })

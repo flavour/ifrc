@@ -2461,9 +2461,6 @@ class S3Resource(object):
             queries = S3URLQuery.parse(self, filters[tablename])
             [self.add_filter(q) for a in queries for q in queries[a]]
 
-        # Total number of results
-        results = self.count()
-
         # Initialize export metadata
         self.muntil = None
         self.results = 0
@@ -2487,6 +2484,9 @@ class S3Resource(object):
                   virtual=False,
                   cacheable=True)
 
+        # Total number of results
+        results = self.count()
+
         format = current.auth.permission.format
         if format == "geojson":
             if results > current.deployment_settings.get_gis_max_features():
@@ -2502,28 +2502,28 @@ class S3Resource(object):
             # Lookups per layer not per record
             if tablename == "gis_layer_shapefile":
                 # GIS Shapefile Layer
-                locations = current.gis.get_shapefile_geojson(self)
+                location_data = current.gis.get_shapefile_geojson(self)
             elif tablename == "gis_theme_data":
                 # GIS Theme Layer
-                locations = current.gis.get_theme_geojson(self)
+                location_data = current.gis.get_theme_geojson(self)
             else:
                 # e.g. GIS Feature Layer
                 # e.g. Search results
-                locations = current.gis.get_location_data(self)
+                location_data = current.gis.get_location_data(self)
         elif format in ("georss", "kml", "gpx"):
-            locations = current.gis.get_location_data(self)
+            location_data = current.gis.get_location_data(self)
         else:
-            locations = None
+            location_data = None
 
         # Build the tree
         #if DEBUG:
         #    _start = datetime.datetime.now()
 
         root = etree.Element(xml.TAG.root)
-        
+
         export_map = Storage()
         reference_map = []
-        
+
         prefix = self.prefix
         name = self.name
         if base_url:
@@ -2550,7 +2550,7 @@ class S3Resource(object):
                                       components=mcomponents,
                                       filters=filters,
                                       msince=msince,
-                                      locations=locations,
+                                      location_data=location_data,
                                       xmlformat=xmlformat)
             if element is None:
                 results -= 1
@@ -2641,7 +2641,7 @@ class S3Resource(object):
                                               lazy=lazy,
                                               filters=filters,
                                               master=False,
-                                              locations=locations,
+                                              location_data=location_data,
                                               xmlformat=xmlformat)
 
                     # Mark as referenced element (for XSLT)
@@ -2688,7 +2688,7 @@ class S3Resource(object):
                           filters=None,
                           msince=None,
                           master=True,
-                          locations=None,
+                          location_data=None,
                           xmlformat=None):
         """
             Add a <resource> to the element tree
@@ -2706,7 +2706,7 @@ class S3Resource(object):
                             {tablename: {url_var: string}}
             @param msince: the minimum update datetime for exported records
             @param master: True of this is the master resource
-            @param locations: the locations for GIS encoding
+            @param location_data: the location_data for GIS encoding
         """
 
         xml = current.xml
@@ -2731,7 +2731,7 @@ class S3Resource(object):
                                url=record_url,
                                msince=msince,
                                master=master,
-                               locations=locations)
+                               location_data=location_data)
                                
         if element is not None:
             add = True
@@ -2823,7 +2823,7 @@ class S3Resource(object):
                                              url=crecord_url,
                                              msince=msince,
                                              master=False,
-                                             locations=locations)
+                                             location_data=location_data)
                     if celement is not None:
                         add = True # keep the parent record
 
@@ -2857,7 +2857,7 @@ class S3Resource(object):
                        url=None,
                        msince=None,
                        master=True,
-                       locations=None):
+                       location_data=None):
         """
             Exports a single record to the element tree.
 
@@ -2869,7 +2869,7 @@ class S3Resource(object):
             @param url: URL of the record
             @param msince: minimum last update time
             @param master: True if this is a record in the master resource
-            @param locations: the locations for GIS encoding
+            @param location_data: the location_data for GIS encoding
         """
 
         xml = current.xml
@@ -2937,9 +2937,9 @@ class S3Resource(object):
         xml.add_references(element, rmap,
                            show_ids=current.xml.show_ids, lazy=lazy)
 
-        # GIS-encode the element
-        xml.gis_encode(self, record, element, rmap,
-                       locations=locations, master=master)
+        if master:
+            # GIS-encode the element
+            xml.gis_encode(self, record, element, location_data=location_data)
 
         # Restore normal user_id representations
         for fn in auth_user_represent:
@@ -4104,7 +4104,7 @@ class S3Resource(object):
             skip = None
 
         # Resolve the list fields
-        rfields, j, l, d = self.resolve_selectors(fields)
+        rfields = self.resolve_selectors(fields)[0]
 
         # FILTER --------------------------------------------------------------
 
