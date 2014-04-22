@@ -1877,14 +1877,14 @@ def customise_org_facility_controller(**attr):
                 #                                             label = T("Drop-off Goods"),
                 #                                             options = yesno,
                 #                                             multiple = False,
-                #                                             widget = "groupedopts",
+                #                                             cols = 2,
                 #                                             hidden = True,
                 #                                             ))
                 #    filter_widgets.insert(1, S3OptionsFilter("needs.vol",
                 #                                             label = T("Volunteer Time"),
                 #                                             options = yesno,
                 #                                             multiple = False,
-                #                                             widget = "groupedopts",
+                #                                             cols = 2,
                 #                                             hidden = True,
                 #                                             ))
 
@@ -3162,12 +3162,11 @@ def customise_project_activity_controller(**attr):
         if r.method in (None, "create", "update"):
             # Custom Widgets/Validators
             from s3.s3validators import IS_LOCATION_SELECTOR2
-            from s3.s3widgets import S3LocationSelectorWidget2, S3SelectChosenWidget
+            from s3.s3widgets import S3LocationSelectorWidget2
             field = table.location_id
             field.label = "" # Gets replaced by widget
             field.requires = IS_LOCATION_SELECTOR2(levels=levels)
             field.widget = S3LocationSelectorWidget2(levels=levels)
-            #s3db.project_activity_organisation.organisation_id.widget = S3SelectChosenWidget()
 
             # Hide Labels when just 1 column in inline form
             #s3db.doc_document.file.label = ""
@@ -3242,7 +3241,6 @@ def customise_project_activity_controller(**attr):
                                           # Doesn't support translation
                                           #represent="%(name)s",
                                           # @ToDo: Introspect cols
-                                          widget = "groupedopts",
                                           cols = 3,
                                           ),
                           S3OptionsFilter("activity_activity_type.activity_type_id",
@@ -3308,7 +3306,6 @@ def customise_project_task_controller(**attr):
             S3OptionsFilter("priority",
                             label = T("Priority"),
                             #options = project_task_priority_opts,
-                            widget = "groupedopts",
                             cols = 4,
                             ),
             S3OptionsFilter("pe_id",
@@ -3316,9 +3313,7 @@ def customise_project_task_controller(**attr):
                             # @ToDo: Implement support for this in S3OptionsFilter
                             #null = T("Unassigned"),
                             #represent="%(name)s",
-                            #widget="multiselect",
-                            widget = "groupedopts",
-                            cols = 4,
+                            #cols = 4,
                             ),
             S3RangeFilter("created_on",
                           label = T("Date Created"),
@@ -3328,8 +3323,6 @@ def customise_project_task_controller(**attr):
             S3OptionsFilter("status",
                             label = T("Status"),
                             #options = project_task_status_opts,
-                            #widget = "multiselect",
-                            widget = "groupedopts",
                             cols = 4,
                             ),
             ]

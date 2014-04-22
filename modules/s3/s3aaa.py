@@ -348,6 +348,7 @@ Thank you"""
         # the user once they are approved
         define_table("auth_user_temp",
                      Field("user_id", utable),
+                     Field("home"),
                      Field("mobile"),
                      Field("image", "upload"),
                      *(s3_uid()+s3_timestamp()))
@@ -559,18 +560,20 @@ Thank you"""
         response.title = T("Login")
 
         # Do we use our own login form, or from a central source?
-        formstyle = settings.formstyle
         if settings.login_form == self:
-            form = SQLFORM(
-                utable,
-                fields=[username, passfield],
-                hidden=dict(_next=request.vars._next),
-                showid=settings.showid,
-                submit_button=T("Login"),
-                delete_label=messages.delete_label,
-                formstyle=formstyle,
-                separator=settings.label_separator
-                )
+            # Needs work
+            #formstyle = deployment_settings.get_ui_formstyle()
+            #formstyle = settings.formstyle
+            formstyle = "table3cols"
+            form = SQLFORM(utable,
+                           fields=[username, passfield],
+                           hidden=dict(_next=request.vars._next),
+                           showid=settings.showid,
+                           submit_button=T("Login"),
+                           delete_label=messages.delete_label,
+                           formstyle=formstyle,
+                           separator=settings.label_separator
+                           )
             if settings.remember_me_form:
                 # Add a new input checkbox "remember me for longer"
                 addrow(form, XML("&nbsp;"),
@@ -587,7 +590,7 @@ Thank you"""
                        formstyle,
                        "auth_user_remember__row")
 
-            if deployment_settings.set_presence_on_login:
+            if deployment_settings.get_auth_set_presence_on_login():
                 addrow(form, XML(""), INPUT(_id="auth_user_clientlocation",
                                             _name="auth_user_clientlocation",
                                             _style="display:none"),
@@ -595,10 +598,10 @@ Thank you"""
                 response.s3.jquery_ready.append('''S3.getClientLocation($('#auth_user_clientlocation'))''')
 
             captcha = settings.login_captcha or \
-                (settings.login_captcha!=False and settings.captcha)
+                (settings.login_captcha != False and settings.captcha)
             if captcha:
                 addrow(form, captcha.label, captcha, captcha.comment,
-                       formstyle,'captcha__row')
+                       formstyle, "captcha__row")
 
             accepted_form = False
             if form.accepts(request.post_vars, session,
@@ -758,7 +761,7 @@ Thank you"""
 
         # Set user's position
         # @ToDo: Per-User settings
-        if deployment_settings.set_presence_on_login and \
+        if deployment_settings.get_auth_set_presence_on_login() and \
            vars.has_key("auth_user_clientlocation") and \
            vars.get("auth_user_clientlocation"):
             position = vars.get("auth_user_clientlocation").split("|", 3)
@@ -771,7 +774,7 @@ Thank you"""
             # @ToDo: Filter to just Sites & Home Addresses?
             locations = gis.get_features_in_radius(userlat, userlon, accuracy)
 
-            ignore_levels_for_presence = deployment_settings.ignore_levels_for_presence
+            ignore_levels_for_presence = deployment_settings.get_auth_ignore_levels_for_presence()
             greatCircleDistance = gis.greatCircleDistance
             for location in locations:
                 if location.level not in ignore_levels_for_presence: 
@@ -787,7 +790,7 @@ Thank you"""
                         closestpoint = location
 
             s3tracker = S3Tracker()
-            if closestpoint == 0 and deployment_settings.create_unknown_locations: 
+            if closestpoint == 0 and deployment_settings.get_auth_create_unknown_locations(): 
                 # There wasn't any near-by location, so create one
                 newpoint = {"lat": userlat,
                             "lon": userlon,
@@ -904,6 +907,22 @@ Thank you"""
                               TD(comment,
                                  _class="w2p_fc"),
                            _id=field_id + SQLFORM.ID_ROW_SUFFIX))
+
+        # S3: Insert Home phone field into form
+        if deployment_settings.get_auth_registration_requests_home_phone():
+            for i, row in enumerate(form[0].components):
+                item = row.element("input", _name="email")
+                if item:
+                    field_id = "%s_home" % utable._tablename
+                    form[0].insert(i + 1,
+                                   TR(TD(LABEL("%s:" % T("Home Phone"),
+                                               _for="home",
+                                               _id=field_id + SQLFORM.ID_LABEL_SUFFIX),
+                                         _class="w2p_fl"),
+                                      TD(INPUT(_name="home", _id=field_id),
+                                         _class="w2p_fw"),
+                                      TD(_class="w2p_fc"),
+                                   _id=field_id + SQLFORM.ID_ROW_SUFFIX))
 
         # S3: Insert Mobile phone field into form
         if deployment_settings.get_auth_registration_requests_mobile_phone():
@@ -1210,19 +1229,19 @@ Thank you"""
                         team_id = team_rec.id
                     gm_table.insert(group_id = team_id,
                                     person_id = person_id)
-        form = SQLFORM(
-            utable,
-            self.user.id,
-            fields = self.settings.profile_fields,
-            labels = labels,
-            hidden = dict(_next=next),
-            showid = self.settings.showid,
-            submit_button = self.messages.profile_save_button,
-            delete_label = self.messages.delete_label,
-            upload = self.settings.download_url,
-            formstyle = self.settings.formstyle,
-            separator = ""
-            )
+        form = SQLFORM(utable,
+                       self.user.id,
+                       fields = self.settings.profile_fields,
+                       labels = labels,
+                       hidden = dict(_next=next),
+                       showid = self.settings.showid,
+                       submit_button = self.messages.profile_save_button,
+                       delete_label = self.messages.delete_label,
+                       upload = self.settings.download_url,
+                       formstyle = "table3cols",
+                       #formstyle = self.settings.formstyle,
+                       separator = ""
+                       )
         if settings.get_auth_openid():
             from gluon.contrib.login_methods.openid_auth import OpenIDAuth
             openid_login_form = OpenIDAuth(self)
@@ -1290,6 +1309,12 @@ Thank you"""
         settings = self.settings
         deployment_settings = current.deployment_settings
 
+        if deployment_settings.get_auth_registration_ui_select():
+            from s3widgets import S3MultiSelectWidget
+            multiselect = True
+        else:
+            multiselect = False
+
         utable = self.settings.table_user
 
         utable.password.label = T("Password") #messages.label_password
@@ -1328,6 +1353,8 @@ Thank you"""
             languages.get(opt, cmessages.UNKNOWN_OPT)
         # Default the profile language to the one currently active
         language.default = T.accepted_language
+        if multiselect:
+            language.widget = S3MultiSelectWidget(multiple=False)
 
         utc_offset = utable.utc_offset
         utc_offset.label = messages.label_utc_offset
@@ -1385,6 +1412,8 @@ Thank you"""
             #organisation_id.comment = DIV(_class="tooltip",
             #                              _title="%s|%s" % (T("Organization"),
             #                                                cmessages.AUTOCOMPLETE_HELP))
+            if multiselect:
+                organisation_id.widget = S3MultiSelectWidget(multiple=False)
 
         # Organisation Group
         if deployment_settings.get_auth_registration_requests_organisation_group():
@@ -1410,6 +1439,8 @@ Thank you"""
             #                                         f="group",
             #                                         label=s3db.crud_strings["org_group"].label_create,
             #                                         title=s3db.crud_strings["org_group"].title_list,)
+            if multiselect:
+                org_group_id.widget = S3MultiSelectWidget(multiple=False)
 
         # Site
         if deployment_settings.get_auth_registration_requests_site():
@@ -1713,24 +1744,9 @@ S3OptionsFilter({
                            _type="checkbox",
                            )
             #formstyle = current.deployment_settings.get_ui_formstyle()
-            #if formstyle == "bootstrap":
-            #    row = DIV(LABEL(label,
-            #                    _id="tos__label",
-            #                    _for="tos",
-            #                    _class="control-label",
-            #                    ),
-            #              DIV(widget,
-            #                  _class="controls",
-            #                  ),
-            #              # Somewhere to store Error Messages
-            #              SPAN(_class="help-block"),
-            #              _id=id,
-            #              _class="control-group hide",
-            #              )
-            #else:
-            #    # Assume callable
+            # Assume callable
+            #row = formstyle(id, label, widget, comment)
             comment = ""
-            #    #row = formstyle(id, label, widget, comment)
             # Auth uses default formstyle currently
             row = TR(TD(LABEL(label,
                               _id="tos__label",
@@ -1793,6 +1809,11 @@ S3OptionsFilter({
             db(utable.id == user_id).update(utc_offset = session.s3.utc_offset)
 
         record  = dict(user_id = user_id)
+
+        # Add the home_phone to pr_contact
+        home = form_vars.home
+        if home:
+            record["home"] = home
 
         # Add the mobile to pr_contact
         mobile = form_vars.mobile
@@ -1890,7 +1911,7 @@ S3OptionsFilter({
             aappend = approvers.append
             languages = []
             for each_approver in approver:
-                language = approver["language"]
+                language = each_approver["language"]
                 if language not in languages:
                     languages.append(language)
                 aappend(each_approver)
@@ -2078,7 +2099,7 @@ S3OptionsFilter({
 
         return
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     @staticmethod
     def s3_user_profile_onaccept(form):
         """ Update the UI locale from user profile """
@@ -2153,6 +2174,7 @@ S3OptionsFilter({
                                 ptable.id,
                                 ptable.first_name,
                                 ptable.last_name,
+                                ttable.home,
                                 ttable.mobile,
                                 ttable.image,
                                 left=left, distinct=True)
@@ -2198,7 +2220,7 @@ S3OptionsFilter({
                                   contact_method = "EMAIL",
                                   value = user.email)
 
-                #@ToDo: Also update mobile phone? profile image? Groups?
+                #@ToDo: Also update home/mobile phone? profile image? Groups?
 
                 person_ids.append(person.id)
 
@@ -2322,6 +2344,16 @@ S3OptionsFilter({
                                       contact_method = "SMS",
                                       priority = 2,
                                       value = mobile,
+                                      **owner)
+
+                    # Add the home phone number from the temporary
+                    # user data into pr_contact
+                    home = tuser.home
+                    if home:
+                        ctable.insert(pe_id = pe_id,
+                                      contact_method = "HOME_PHONE",
+                                      priority = 3,
+                                      value = home,
                                       **owner)
 
                     # Insert the profile picture from the temporary
@@ -3846,6 +3878,7 @@ S3OptionsFilter({
             user_id = 0
         if self.has_permission(method, table, 0, user_id):
             return table.id > 0
+
         # Filter Records to show only those to which the user has access
         current.session.warning = current.T("Only showing accessible records!")
         membership = self.settings.table_membership
@@ -6863,26 +6896,7 @@ class S3RoleManager(S3Method):
             widget2 = TEXTAREA(value=role_desc,
                                _name="role_desc",
                                _rows="4")
-            if formstyle == "bootstrap":
-                _class = "control-group"
-                label1 = LABEL("%s:" % label1, _class="control-label",
-                                               _for=id)
-                label2 = LABEL("%s:" % label2, _class="control-label",
-                                               _for=id)
-                widget1.add_class("input-xlarge")
-                widget2.add_class("input-xlarge")
-                _controls1 = DIV(widget1, _class="controls")
-                _controls2 = DIV(widget2, _class="controls")
-                row1 = DIV(label1,
-                           _controls1,
-                           _class=_class,
-                           _id="%s__row" % id1)
-                row2 = DIV(label2,
-                           _controls2,
-                           _class=_class,
-                           _id="%s__row" % id2)
-                form_rows = row1 + row2
-            elif callable(formstyle):
+            if callable(formstyle):
                 form_rows = formstyle(id1, label1, widget1, "") + \
                             formstyle(id2, label2, widget2, "")
             else:
