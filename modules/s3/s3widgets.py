@@ -688,7 +688,7 @@ class S3AddPersonWidget2(FormWidget):
             # Formstyle with separate row for label (e.g. default Eden formstyle)
             tuple_rows = True
         else:
-            # Formstyle with just a single row (e.g. Bootstrap or Foundation)
+            # Formstyle with just a single row (e.g. Bootstrap, Foundation or DRRPP)
             tuple_rows = False
             #if "form-row" in row["_class"]:
             #    # Foundation formstyle
@@ -3835,15 +3835,15 @@ class S3LocationSelectorWidget2(FormWidget):
     """
 
     def __init__(self,
-                 levels = None,         # Which levels of the hierarchy to expose?
-                 hide_lx = True,        # Whether to hide lower Lx fields until higher level selected
-                 reverse_lx = False,    # Whether to show Lx fields in the order usually used by Street Addresses
-                 show_address = False,  # Whether to show a field for Street Address
-                 show_postcode = False, # Whether to show a field for Postcode
-                 show_map = True,       # Whether to show a Map to select specific points
-                 lines = False,         # Whether the Map uses a Line draw tool instead of Point
-                 polygons = False,      # Whether the Map uses a Polygon draw tool instead of Point
-                 catalog_layers=False,  # Whether the Map should display Catalogue Layers or just the default base layer
+                 levels = None,          # Which levels of the hierarchy to expose?
+                 hide_lx = True,         # Whether to hide lower Lx fields until higher level selected
+                 reverse_lx = False,     # Whether to show Lx fields in the order usually used by Street Addresses
+                 show_address = False,   # Whether to show a field for Street Address
+                 show_postcode = False,  # Whether to show a field for Postcode
+                 show_map = True,        # Whether to show a Map to select specific points
+                 lines = False,          # Whether the Map uses a Line draw tool instead of Point
+                 polygons = False,       # Whether the Map uses a Polygon draw tool instead of Point
+                 catalog_layers = False, # Whether the Map should display Catalogue Layers or just the default base layer
                  ):
 
         self.levels = levels
@@ -3968,7 +3968,7 @@ class S3LocationSelectorWidget2(FormWidget):
             # Formstyle with separate row for label (e.g. default Eden formstyle)
             tuple_rows = True
         else:
-            # Formstyle with just a single row (e.g. Bootstrap or Foundation)
+            # Formstyle with just a single row (e.g. Bootstrap, Foundation or DRRPP)
             tuple_rows = False
             #if "form-row" in row["_class"]:
             #    # Foundation formstyle
@@ -4310,16 +4310,21 @@ class S3LocationSelectorWidget2(FormWidget):
                     labels[level] = v
 
         # Lx Dropdowns
+        ui_multiselect_widget = settings.get_ui_multiselect_widget()
         Lx_rows = DIV()
         # 1st level is always hidden until populated
         hidden = True
         comment = ""
         for level in levels:
             id = "%s_%s" % (fieldname, level)
+            lattr = {"_id" : id}
+            if ui_multiselect_widget:
+                lattr["_multiple"] = "multiple"
             label = labels.get(level, level)
-            widget = SELECT(OPTION(T("Select %(location)s") % dict(location = label),
+            noneSelectedText = T("Select %(location)s") % dict(location = label)
+            widget = SELECT(OPTION(noneSelectedText,
                                    _value=""),
-                            _id=id)
+                            **lattr)
             if required:
                 widget.add_class("required")
                 # @ToDo: DRY this setting with s3_mark_required
@@ -4537,6 +4542,11 @@ class S3LocationSelectorWidget2(FormWidget):
             global_append(script)
             script = '''i18n.select="%s"''' % T("Select")
             global_append(script)
+            if ui_multiselect_widget:
+                script = '''i18n.allSelectedText="%s"''' % T("All selected")
+                global_append(script)
+                script = '''i18n.selectedText="%s"''' % T("# selected")
+                global_append(script)
 
         # If we need to show the map since we have an existing lat/lon/wkt
         # then we need to launch the client-side JS as a callback to the MapJS loader
@@ -4801,7 +4811,10 @@ class S3HierarchyWidget(FormWidget):
 
     def __init__(self,
                  lookup=None,
-                 represent=None):
+                 represent=None,
+                 multiple=True,
+                 leafonly=True,
+                 ):
         """
             Constructor
 
@@ -4809,10 +4822,16 @@ class S3HierarchyWidget(FormWidget):
                            configured)
             @param represent: alternative representation method (falls back
                               to the field's represent-method)
+            @param multiple: allow selection of multiple options
+            @param leafonly: True = only leaf nodes can be selected
+                             False = any nodes to be selected independently
         """
 
         self.lookup = lookup
         self.represent = represent
+
+        self.multiple = multiple
+        self.leafonly = leafonly
 
     # -------------------------------------------------------------------------
     def __call__(self, field, value, **attr):
@@ -4893,18 +4912,32 @@ class S3HierarchyWidget(FormWidget):
 
         T = current.T
 
-        script = \
-'''$('#%(widget_id)s').hierarchicalopts({
- appname:'%(appname)s',
- selected:%(selected)s,
- selectedText:'%(selectedText)s',
- noneSelectedText:'%(noneSelectedText)s'})''' % \
-    {"appname": current.request.application,
-     "widget_id": widget_id,
-     "selected": json.dumps(selected, separators=SEPARATORS) if selected else "null",
-     "selectedText": T("# selected"),
-     "noneSelectedText": T("Select"),
-     }
+        widget_opts = {"selected": selected,
+                       "selectedText": str(T("# selected")),
+                       "noneSelectedText": str(T("Select")),
+                       "multiple": self.multiple,
+                       "leafonly": self.leafonly,
+                       }
+
+        script = '''$('#%(widget_id)s').hierarchicalopts(%(widget_opts)s)''' % \
+                 {"widget_id": widget_id,
+                  "widget_opts": json.dumps(widget_opts, separators=SEPARATORS),
+                  }
+
+        #script = \
+#'''$('#%(widget_id)s').hierarchicalopts({
+ #selected:%(selected)s,
+ #selectedText:'%(selectedText)s',
+ #noneSelectedText:'%(noneSelectedText)s',
+ #multiple:%(multiple)s,
+ #leafonly:%(leafonly)s})''' % \
+    #{"widget_id": widget_id,
+     #"selected": json.dumps(selected, separators=SEPARATORS) if selected else "null",
+     #"selectedText": T("# selected"),
+     #"noneSelectedText": T("Select"),
+     #"multiple": "true" if self.multiple else "false",
+     #"leafonly": "true" if self.leafonly else "false",
+     #}
         s3.jquery_ready.append(script)
 
         return widget

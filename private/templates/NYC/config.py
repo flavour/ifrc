@@ -101,9 +101,6 @@ settings.auth.registration_link_user_to_default = "staff"
 
 settings.security.policy = 5 # Controller, Function & Table ACLs
 
-# Resource which need approval
-#settings.auth.record_approval_required_for = ["org_facility"]
-
 settings.ui.update_label = "Edit"
 settings.ui.label_attachments = "Media"
 
@@ -421,13 +418,13 @@ def customise_org_organisation_controller(**attr):
                         "service",
                         label = T("Services"),
                         field = "service_id",
-                        cols = 4,
+                        #cols = 4,
                     ),
                     S3SQLInlineComponentMultiSelectWidget(
                         "group",
                         label = T("Network"),
                         field = "group_id",
-                        cols = 3,
+                        #cols = 3,
                     ),
                     S3SQLInlineComponent(
                         "address",
@@ -445,7 +442,7 @@ def customise_org_organisation_controller(**attr):
                                         options = "L4"
                                         ),
                         # @ToDo: GroupedCheckbox Widget or Hierarchical MultiSelectWidget
-                        cols = 5,
+                        #cols = 5,
                     ),
                     "phone",
                     S3SQLInlineComponent(

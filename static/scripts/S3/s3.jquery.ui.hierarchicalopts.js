@@ -1,7 +1,7 @@
 /**
  * jQuery UI HierarchicalOpts Widget for S3HierarchyFilter
  * 
- * @copyright: 2013 (c) Sahana Software Foundation
+ * @copyright: 2013-14 (c) Sahana Software Foundation
  * @license: MIT
  *
  * requires: jQuery 1.9.1+
@@ -22,7 +22,9 @@
         options: {
             selected: null,
             noneSelectedText: 'Select',
-            selectedText: 'selected'
+            selectedText: 'selected',
+            multiple: true,
+            leafonly: true
         },
 
         _create: function() {
@@ -69,7 +71,8 @@
 
             var opts = this.options;
             
-            var selected = [], s = opts.selected;
+            var selected = [],
+                s = opts.selected;
             if (s) {
                 var treeID = this.treeID;
                 for (var i=0, len=s.length; i<len; i++) {
@@ -89,23 +92,45 @@
             } else {
                 theme = 'default';
             }
+
+            var multiple = opts.multiple,
+                leafonly = opts.leafonly;
+
             this.tree.jstree({
                 'core': {
                     animation: 100,
                     rtl: rtl
                 },
                 'themes': {
-                    'theme' : theme,
+                    'theme': theme,
                     'icons': false
                 },
                 'ui': {
+                    'select_limit': multiple ? -1 : 1,
+                    'select_multiple_modifier': 'on',
                     'initially_select' : selected
                 },
                 'checkbox': {
-                    'override_ui': true
+                    'override_ui': true,
+                    'two_state': !leafonly
                 },
-                'plugins': ['themes', 'html_data', 'ui', 'checkbox', 'sort']
-            });
+                'plugins': ['themes', 'html_data', 'ui', 'sort', 'checkbox']
+            })
+
+            if (!multiple) {
+                var tree = this.tree;
+                var inst = jQuery.jstree._reference(tree);
+                tree.bind('check_node.jstree', function(e, data) {
+                    var currentNode = data.rslt.obj.attr("id");
+                    inst.get_checked(null, true).each(function () {
+                        if (currentNode != this.id){
+                            if (!leafonly || inst.is_leaf('#' + this.id)) {
+                                inst.uncheck_node('#' + this.id);
+                            }
+                        }
+                    });
+                });
+            }
 
             this._bindEvents();
         },
@@ -114,7 +139,8 @@
             // Get all selected nodes and store the result in the hidden input
 
             var old_selected = this.input.val(),
-                new_selected = [];
+                new_selected = [],
+                last_selected;
 
             if (old_selected) {
                 old_selected = JSON.parse(old_selected);
@@ -122,15 +148,18 @@
                 old_selected = [];
             }
 
-            var tree = this.tree;
+            var tree = this.tree,
+                opts = this.options;
             var nodes = tree.jstree('get_checked', null, true);
                 
             $(nodes).each(function() {
-                var id = $(this).attr('id');
-                if (id && tree.jstree('is_leaf', this)) {
+                var id = $(this).attr('id'),
+                    leafonly = opts.leafonly;
+                if (id && (!leafonly || tree.jstree('is_leaf', this))) {
                     var record_id = parseInt(id.split('-').pop());
                     if (record_id) {
                         new_selected.push(record_id);
+                        last_selected = id;
                     }
                 }
             });
@@ -146,26 +175,31 @@
             }
 
             this.input.val(JSON.stringify(new_selected));
-            this._updateButtonText(new_selected);
+            this._updateButtonText(new_selected, last_selected);
             if (changed) {
                 $(this.element).trigger('select.s3hierarchy');
             }
             return true;
         },
 
-        _updateButtonText: function(selected) {
+        _updateButtonText: function(selected, last_selected) {
             // Update the button text with the number of selected items
 
-            var buttonText = this.buttonText,
+            var text = null,
                 options = this.options;
-                
-            var numSelected = selected ? selected.length : 0;
-            if (numSelected) {
-                text = options.selectedText.replace('#', numSelected);
-            } else {
-                text = options.noneSelectedText;
+
+            if (!options.multiple && last_selected) {
+                text = $('#' + last_selected).text().replace(/^\s+|\s+$/g, '');
             }
-            buttonText.text(text);
+            if (!text) {
+                var numSelected = selected ? selected.length : 0;
+                if (numSelected) {
+                    text = options.selectedText.replace('#', numSelected);
+                } else {
+                    text = options.noneSelectedText;
+                }
+            }
+            this.buttonText.text(text);
         },
 
         set: function(values) {
@@ -242,7 +276,14 @@
                 widget._updateSelectedNodes();
             }).bind('uncheck_node.jstree', function (event, data) {
                 widget._updateSelectedNodes();
-            });
+            })
+            if (widget.options.leafonly && !widget.options.multiple) {
+                // Hide checkboxes on parent nodes if single-select and leaf-only
+                // @todo: indicate 3rd state?
+                tree.bind('loaded.jstree', function (event, data) {
+                    tree.find(' li[rel="parent"] > a > ins.jstree-checkbox').css({display: 'none'});
+                });
+            }
 
             button.bind('click' + namespace, function() {
                 if (!widget._isOpen) {
@@ -295,7 +336,8 @@
                 namespace = this._namespace;
 
             tree.unbind('check_node.jstree')
-                .unbind('uncheck_node.jstree');
+                .unbind('uncheck_node.jstree')
+                .unbind('loaded.jstree');
 
             $(this.button).unbind(namespace);
             $(document).unbind(namespace);

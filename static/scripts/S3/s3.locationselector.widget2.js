@@ -544,6 +544,17 @@
                     option = '<option value="' + _id + '"' + selected + '>' + location['n'] + '</option>';
                     select.append(option);
                 }
+                if (select.prop('multiple')) {
+                    select.multiselect({allSelectedText: i18n.allSelectedText,
+                                        selectedText: i18n.selectedText,
+                                        header: false,
+                                        height: 300,
+                                        minWidth: 0,
+                                        selectedList: 3,
+                                        noneSelectedText: $(selector + '_L' + level + ' option[value=""]').html(),
+                                        multiple:false
+                                        });
+                }
                 if (len_values == 1) {
                     // Only 1 option so select this one
                     lx_select(fieldname, level, _id);
@@ -1015,7 +1026,10 @@
         });
 
         // Show the Map
-        $(selector + '_map_wrapper').removeClass('hide').show();
+        var map_wrapper = $(selector + '_map_wrapper')
+        map_wrapper.removeClass('hide').show();
+        // Scroll to this section
+        $('html,body').animate({scrollTop: map_wrapper.offset().top}, 250);
 
         // Check if Maps JS is Loaded
         $.when(jsLoaded()).then(

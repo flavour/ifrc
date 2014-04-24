@@ -85,8 +85,6 @@ settings.base.guided_tour = True
 #settings.auth.registration_requests_site = True
 # Uncomment this to allow Admin to see Organisations in User Admin even if the Registration doesn't request this
 #settings.auth.admin_sees_organisation = True
-# Uncomment to use S3MultiSelectWidget on the Auth Registration page
-#settings.auth.registration_ui_select = True
 # Uncomment to set the default role UUIDs assigned to newly-registered users
 # This is a dictionary of lists, where the key is the realm that the list of roles applies to
 # The key 0 implies not realm restricted
@@ -95,7 +93,7 @@ settings.base.guided_tour = True
 # Uncomment this to enable record approval
 #settings.auth.record_approval = True
 # Uncomment this and specify a list of tablenames for which record approval is required
-#settings.auth.record_approval_required_for = ["project_project"]
+#settings.auth.record_approval_required_for = ("org_organisation",)
 # Uncomment this to request an image when users register
 #settings.auth.registration_requests_image = True
 # Uncomment this to direct newly-registered users to their volunteer page to be able to add extra details
@@ -112,7 +110,7 @@ settings.base.guided_tour = True
 # Uncomment this to enable presence records on login based on HTML5 geolocations
 #settings.auth.set_presence_on_login = True
 # Uncomment this and specify a list of location levels to be ignored by presence records
-#settings.auth.ignore_levels_for_presence = ["L0", "L1", "L2", "L3"]
+#settings.auth.ignore_levels_for_presence = ("L0", "L1", "L2", "L3")
 # Uncomment this to enable the creation of new locations if a user logs in from an unknown location. Warning: This may lead to many useless location entries
 #settings.auth.create_unknown_locations = True
 
@@ -245,12 +243,16 @@ settings.L10n.decimal_separator = "."
 #settings.gis.duplicate_features = True
 # Uncomment to use CMS to provide Metadata on Map Layers
 #settings.gis.layer_metadata = True
+# Uncomment to show Clear Layers tool
+#settings.gis.clear_layers = True
 # Uncomment to hide Layer Properties tool
 #settings.gis.layer_properties = False
 # Uncomment to hide the Base Layers folder in the LayerTree
 #settings.gis.layer_tree_base = False
 # Uncomment to hide the Overlays folder in the LayerTree
 #settings.gis.layer_tree_overlays = False
+# Uncomment to change the label of the Overlays folder in the LayerTree
+#settings.gis.label_overlays = "Overlays"
 # Uncomment to not expand the folders in the LayerTree by default
 #settings.gis.layer_tree_expanded = False
 # Uncomment to have custom folders in the LayerTree use Radio Buttons
@@ -345,6 +347,8 @@ settings.L10n.decimal_separator = "."
 #settings.ui.interim_save = True
 # Uncomment to enable glyphicon icons on action buttons (requires bootstrap CSS)
 #settings.ui.use_button_glyphicons = True
+# Uncomment to use S3MultiSelectWidget on all dropdowns (currently the Auth Registration page & LocationSelectorWidget2 listen to this)
+#settings.ui.multiselect_widget = True
 
 # -----------------------------------------------------------------------------
 # CMS

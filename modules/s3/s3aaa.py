@@ -282,40 +282,40 @@ Thank you"""
         uname = settings.table_user_name
         if not utable:
             utable_fields = [
-                    Field("first_name", length=128, notnull=True,
-                          default="",
-                          requires = \
-                          IS_NOT_EMPTY(error_message=messages.is_empty),
-                          ),
-                    Field("last_name", length=128,
-                          default=""),
-                    Field("email", length=255, unique=True,
-                          default=""),
-                    Field("language", length=16,
-                          default = deployment_settings.get_L10n_default_language()),
-                    Field("utc_offset", length=16,
-                          readable=False, writable=False),
-                    Field("organisation_id", "integer",
-                          readable=False, writable=False),
-                    Field("org_group_id", "integer",
-                          readable=False, writable=False),
-                    Field("site_id", "integer",
-                          readable=False, writable=False),
-                    Field("link_user_to", "list:string",
-                          readable=False, writable=False),
-                    Field("registration_key", length=512,
-                          default="",
-                          readable=False, writable=False),
-                    Field("reset_password_key", length=512,
-                          default="",
-                          readable=False, writable=False),
-                    Field("deleted", "boolean",
-                          default=False,
-                          readable=False, writable=False),
-                    Field("timestmp", "datetime",
-                          default="",
-                          readable=False, writable=False),
-                    s3_comments(readable=False, writable=False)
+                Field("first_name", length=128, notnull=True,
+                      default="",
+                      requires = \
+                      IS_NOT_EMPTY(error_message=messages.is_empty),
+                      ),
+                Field("last_name", length=128,
+                      default=""),
+                Field("email", length=255, unique=True,
+                      default=""),
+                Field("language", length=16,
+                      default = deployment_settings.get_L10n_default_language()),
+                Field("utc_offset", length=16,
+                      readable=False, writable=False),
+                Field("organisation_id", "integer",
+                      readable=False, writable=False),
+                Field("org_group_id", "integer",
+                      readable=False, writable=False),
+                Field("site_id", "integer",
+                      readable=False, writable=False),
+                Field("link_user_to", "list:string",
+                      readable=False, writable=False),
+                Field("registration_key", length=512,
+                      default="",
+                      readable=False, writable=False),
+                Field("reset_password_key", length=512,
+                      default="",
+                      readable=False, writable=False),
+                Field("deleted", "boolean",
+                      default=False,
+                      readable=False, writable=False),
+                Field("timestmp", "datetime",
+                      default="",
+                      readable=False, writable=False),
+                s3_comments(readable=False, writable=False)
                 ]
             utable_fields += list(s3_uid())
             utable_fields += list(s3_timestamp())
@@ -1309,11 +1309,11 @@ Thank you"""
         settings = self.settings
         deployment_settings = current.deployment_settings
 
-        if deployment_settings.get_auth_registration_ui_select():
+        if deployment_settings.get_ui_multiselect_widget():
             from s3widgets import S3MultiSelectWidget
-            multiselect = True
+            multiselect_widget = True
         else:
-            multiselect = False
+            multiselect_widget = False
 
         utable = self.settings.table_user
 
@@ -1353,7 +1353,7 @@ Thank you"""
             languages.get(opt, cmessages.UNKNOWN_OPT)
         # Default the profile language to the one currently active
         language.default = T.accepted_language
-        if multiselect:
+        if multiselect_widget:
             language.widget = S3MultiSelectWidget(multiple=False)
 
         utc_offset = utable.utc_offset
@@ -1412,7 +1412,7 @@ Thank you"""
             #organisation_id.comment = DIV(_class="tooltip",
             #                              _title="%s|%s" % (T("Organization"),
             #                                                cmessages.AUTOCOMPLETE_HELP))
-            if multiselect:
+            if multiselect_widget:
                 organisation_id.widget = S3MultiSelectWidget(multiple=False)
 
         # Organisation Group
@@ -1439,7 +1439,7 @@ Thank you"""
             #                                         f="group",
             #                                         label=s3db.crud_strings["org_group"].label_create,
             #                                         title=s3db.crud_strings["org_group"].title_list,)
-            if multiselect:
+            if multiselect_widget:
                 org_group_id.widget = S3MultiSelectWidget(multiple=False)
 
         # Site
@@ -1512,6 +1512,9 @@ S3OptionsFilter({
                                                   )
                 link_user_to.represent = lambda ids: \
                     ids and ", ".join([str(link_user_to_opts[id]) for id in ids]) or cmessages["NONE"]
+                #if multiselect_widget:
+                #    link_user_to.widget = S3MultiSelectWidget()
+                #else:
                 link_user_to.widget = SQLFORM.widgets.checkboxes.widget
                 link_user_to.comment = DIV(_class="tooltip",
                                            _title="%s|%s" % (link_user_to.label,
@@ -2044,7 +2047,8 @@ S3OptionsFilter({
         db(utable.id == user_id).update(registration_key = "")
 
         # Approve User's Organisation
-        if user.organisation_id and "org_organisation" in deployment_settings.get_auth_record_approval_required_for():
+        if user.organisation_id and \
+           "org_organisation" in deployment_settings.get_auth_record_approval_required_for():
             s3db.resource("org_organisation", user.organisation_id, unapproved=True).approve()
 
         # Send Welcome mail
@@ -2191,6 +2195,9 @@ S3OptionsFilter({
             # The user record
             user = row.auth_user
 
+            # The temporary user record
+            tuser = row.auth_user_temp
+
             # The person record
             person = row.pr_person
 
@@ -2214,13 +2221,26 @@ S3OptionsFilter({
                 query = (ctable.pe_id == pe_id) & \
                         (ctable.contact_method == "EMAIL") & \
                         (ctable.value == user.email)
-                item = db(query).select(limitby=(0, 1)).first()
+                item = db(query).select(ctable.id,
+                                        limitby=(0, 1)).first()
                 if item is None:
                     ctable.insert(pe_id = pe_id,
                                   contact_method = "EMAIL",
                                   value = user.email)
 
-                #@ToDo: Also update home/mobile phone? profile image? Groups?
+                # Add the user's mobile_phone to the person record if missing
+                if tuser.mobile:
+                    query = (ctable.pe_id == pe_id) & \
+                            (ctable.contact_method == "SMS") & \
+                            (ctable.value == tuser.mobile)
+                    item = db(query).select(ctable.id,
+                                            limitby=(0, 1)).first()
+                    if item is None:
+                        ctable.insert(pe_id = pe_id,
+                                      contact_method = "SMS",
+                                      value = tuser.mobile)
+
+                #@ToDo: Also update home phone? profile image? Groups?
 
                 person_ids.append(person.id)
 

@@ -64,13 +64,13 @@ settings.auth.registration_requests_mobile_phone = True
 settings.auth.registration_link_user_to = {"staff": T("Staff")}
 settings.auth.registration_link_user_to_default = "staff"
 
-# Uncomment to use S3MultiSelectWidget on the Auth Registration page
-settings.auth.registration_ui_select = True
-
-settings.auth.record_approval = False
-
 # Approval emails get sent to all admins
 settings.mail.approver = "ADMIN"
+
+# Record Approval
+settings.auth.record_approval = True
+# If an anonymous user creates a new org when registering then the org will be unapproved until the user is approved
+settings.auth.record_approval_required_for = ("org_organisation",)
 
 # -----------------------------------------------------------------------------
 # Security Policy
@@ -118,6 +118,8 @@ settings.ui.formstyle = "bootstrap"
 settings.ui.hide_report_options = False
 settings.ui.update_label = "Update" 
 settings.ui.export_formats = ["xls", "xml"]
+# Uncomment to use S3MultiSelectWidget on all dropdowns (currently the Auth Registration page & LocationSelectorWidget2 listen to this)
+settings.ui.multiselect_widget = True
 
 # Set Map to fill the container
 settings.gis.map_width = 1170
@@ -257,12 +259,16 @@ settings.gis.toolbar = False
 #settings.gis.nav_controls = False
 # Uncomment to use CMS to provide Metadata on Map Layers
 settings.gis.layer_metadata = True
+# Uncomment to show Clear Layers tool
+settings.gis.clear_layers = True
 # Uncomment to hide Layer Properties tool
 settings.gis.layer_properties = False
 # Uncomment to hide the Base Layers folder in the LayerTree
 settings.gis.layer_tree_base = False
 # Uncomment to hide the Overlays folder in the LayerTree
-settings.gis.layer_tree_overlays = False
+#settings.gis.layer_tree_overlays = False
+# Uncomment to change the label of the Overlays folder in the LayerTree
+settings.gis.label_overlays = "Places"
 # Uncomment to not expand the folders in the LayerTree by default
 settings.gis.layer_tree_expanded = False
 # Uncomment to have custom folders in the LayerTree use Radio Buttons
@@ -644,6 +650,7 @@ def customise_project_activity_controller(**attr):
                            "activity_activity_type.activity_type_id",
                            "activity_group.group_id",
                            "location_id",
+                           "location_id$addr_postcode",
                            "person_id",
                            (T("Number of People"), "beneficiary.value"),
                            "comments",
@@ -873,6 +880,7 @@ def customise_org_organisation_controller(**attr):
                            (T("Coalition Member"), "group_membership.group_id"),
                            (T("Sectors"), "sector_organisation.sector_id"),
                            (T("Services"), "service_organisation.service_id"),
+                           "website",
                            "comments",
                            ]
 
@@ -944,6 +952,17 @@ def customise_org_organisation_controller(**attr):
                                summary = [s for s in settings.ui.summary if s["name"] != "map"],
                                )
 
+            elif not current.auth.is_logged_in():
+                # Anonymous user creating Org: Keep Simple
+                from s3.s3forms import S3SQLCustomForm
+                crud_form = S3SQLCustomForm("name",
+                                            "website",
+                                            "comments",
+                                            )
+                s3db.configure(tablename,
+                               crud_form = crud_form,
+                               )
+
             else:
                 # Custom Form (Read/Create/Update)
                 from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
@@ -1001,6 +1020,7 @@ def customise_org_organisation_controller(**attr):
                 # Doesn't currently work Inline
                 #from s3.s3widgets import S3MultiSelectWidget
                 #s3db.org_resource.parameter_id.widget = S3MultiSelectWidget(multiple=False)
+                s3db.pr_contact.value.label = ""
                 form_fields = [
                     "name",
                     "logo",
@@ -1026,6 +1046,17 @@ def customise_org_organisation_controller(**attr):
                                   "value",
                                   "comments",
                                   ],
+                    ),
+                    "website",
+                    S3SQLInlineComponent(
+                        "contact",
+                        name = "twitter",
+                        label = T("Twitter"),
+                        multiple = False,
+                        fields = ["value"],
+                        filterby = dict(field = "contact_method",
+                                        options = "TWITTER"
+                                        )
                     ),
                     "comments",
                 ]
@@ -1230,6 +1261,7 @@ def customise_org_facility_controller(**attr):
                            "organisation_id",
                            "site_org_group.group_id",
                            "location_id",
+                           "location_id$addr_postcode",
                            "contact",
                            "phone1",
                            "email",
@@ -1395,9 +1427,11 @@ def customise_org_facility_controller(**attr):
             table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
             table.organisation_id.comment = ""
             s3.crud_strings[tablename].title_display = T("Place Details")
-            s3db.configure(tablename,
-                           popup_url="",
-                           )
+            # Disable Open on Places.
+            # - Not sure why this was done & have now been requested to undo it.
+            #s3db.configure(tablename,
+            #               popup_url = "",
+            #               )
 
         return True
     s3.prep = custom_prep
@@ -1449,6 +1483,7 @@ def customise_stats_people_controller(**attr):
                            "value",
                            "people_group.group_id",
                            "location_id",
+                           "location_id$addr_postcode",
                            "person_id",
                            "comments",
                            ]
@@ -1793,6 +1828,7 @@ def customise_vulnerability_risk_controller(**attr):
                            #(T("Hazard Type"), "hazard_id"),
                            "risk_group.group_id",
                            "location_id",
+                           "location_id$addr_postcode",
                            "comments",
                            ]
 
