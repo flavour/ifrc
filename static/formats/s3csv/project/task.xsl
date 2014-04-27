@@ -11,6 +11,7 @@
          Project..............string..........Project Name
          Activity.............string..........Activity
          Activity Type........string..........Activity Type
+         Incident.............string..........Incident
          Short Description ...string..........Task short description
          Detailed Description.string..........Task detailed description
          Date.................string..........Task created_on
@@ -44,6 +45,7 @@
     <xsl:key name="projects" match="row" use="col[@field='Project']"/>
     <xsl:key name="activity types" match="row" use="col[@field='Activity Type']"/>
     <xsl:key name="activities" match="row" use="col[@field='Activity']"/>
+    <xsl:key name="incidents" match="row" use="col[@field='Incident']"/>
     <xsl:key name="assignees" match="row" use="col[@field='Assigned']"/>
     <xsl:key name="milestones" match="row" use="col[@field='Milestone']"/>
 
@@ -74,6 +76,12 @@
                 <xsl:call-template name="Activity"/>
             </xsl:for-each>
 
+            <!-- Incidents -->
+            <xsl:for-each select="//row[generate-id(.)=generate-id(key('incidents',
+                                                                   col[@field='Incident'])[1])]">
+                <xsl:call-template name="Incident"/>
+            </xsl:for-each>
+
             <!-- Assignees -->
             <xsl:for-each select="//row[generate-id(.)=generate-id(key('assignees',
                                                                    col[@field='Assigned'])[1])]">
@@ -95,6 +103,7 @@
     <xsl:template match="row">
         <xsl:variable name="ProjectName" select="col[@field='Project']/text()"/>
         <xsl:variable name="ActivityName" select="col[@field='Activity']/text()"/>
+        <xsl:variable name="IncidentName" select="col[@field='Incident']/text()"/>
         <xsl:variable name="Task" select="col[@field='Short Description']/text()"/>
         <xsl:variable name="Date" select="col[@field='Date']/text()"/>
         <xsl:variable name="Author" select="col[@field='Author']/text()"/>
@@ -103,6 +112,7 @@
         <xsl:variable name="TimeEstimated" select="col[@field='Time Estimated']/text()"/>
         <xsl:variable name="Assignee" select="col[@field='Assigned']/text()"/>
         <xsl:variable name="Priority" select="col[@field='Priority']/text()"/>
+        <xsl:variable name="Status" select="col[@field='Status']/text()"/>
 
         <resource name="project_task">
             <xsl:attribute name="created_on">
@@ -150,43 +160,43 @@
                 </xsl:otherwise>
             </xsl:choose>
             <xsl:choose>
-                <xsl:when test="col[@field='Status']='Draft'">
+                <xsl:when test="$Status='Draft'">
                     <data field="status">1</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='New'">
+                <xsl:when test="$Status='New'">
                     <data field="status">2</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Assigned'">
+                <xsl:when test="$Status='Assigned'">
                     <data field="status">3</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Feedback'">
+                <xsl:when test="$Status='Feedback'">
                     <data field="status">4</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Blocked'">
+                <xsl:when test="$Status='Blocked'">
                     <data field="status">5</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='On Hold'">
+                <xsl:when test="$Status='On Hold'">
                     <data field="status">6</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Cancelled'">
+                <xsl:when test="$Status='Cancelled'">
                     <data field="status">7</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Duplicate'">
+                <xsl:when test="$Status='Duplicate'">
                     <data field="status">8</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Ready'">
+                <xsl:when test="$Status='Ready'">
                     <data field="status">9</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Verified'">
+                <xsl:when test="$Status='Verified'">
                     <data field="status">10</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Reopened'">
+                <xsl:when test="$Status='Reopened'">
                     <data field="status">11</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Completed'">
+                <xsl:when test="$Status='Completed'">
                     <data field="status">12</data>
                 </xsl:when>
-                <xsl:when test="col[@field='Status']='Closed'">
+                <xsl:when test="$Status='Closed'">
                     <!-- Completed -->
                     <data field="status">12</data>
                 </xsl:when>
@@ -229,13 +239,15 @@
             </xsl:if>
 
             <!-- Link to Project -->
-            <resource name="project_task_project">
-                <reference field="project_id" resource="project_project">
-                    <xsl:attribute name="tuid">
-                        <xsl:value-of select="$ProjectName"/>
-                    </xsl:attribute>
-                </reference>
-            </resource>
+            <xsl:if test="$ProjectName!=''">
+                <resource name="project_task_project">
+                    <reference field="project_id" resource="project_project">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="$ProjectName"/>
+                        </xsl:attribute>
+                    </reference>
+                </resource>
+            </xsl:if>
 
             <!-- Link to Activity -->
             <xsl:if test="$ActivityName!=''">
@@ -243,6 +255,17 @@
                     <reference field="activity_id" resource="project_activity">
                         <xsl:attribute name="tuid">
                             <xsl:value-of select="$ActivityName"/>
+                        </xsl:attribute>
+                    </reference>
+                </resource>
+            </xsl:if>
+
+            <!-- Link to Incident -->
+            <xsl:if test="$IncidentName!=''">
+                <resource name="event_task">
+                    <reference field="incident_id" resource="event_incident">
+                        <xsl:attribute name="tuid">
+                            <xsl:value-of select="$IncidentName"/>
                         </xsl:attribute>
                     </reference>
                 </resource>
@@ -372,6 +395,19 @@
 
             </resource>
         </xsl:if>
+
+        </xsl:template>
+
+    <!-- ****************************************************************** -->
+    <xsl:template name="Incident">
+        <xsl:variable name="IncidentName" select="col[@field='Incident']/text()"/>
+
+        <resource name="event_incident">
+            <xsl:attribute name="tuid">
+                <xsl:value-of select="$IncidentName"/>
+            </xsl:attribute>
+            <data field="name"><xsl:value-of select="$IncidentName"/></data>
+        </resource>
 
         </xsl:template>
 

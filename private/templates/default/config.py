@@ -392,8 +392,8 @@ settings.L10n.decimal_separator = "."
 #settings.pr.request_gender = False
 # Uncomment to show field in S3AddPersonWidget
 #settings.pr.request_home_phone = True
-# Uncomment to reverse the order of Names
-#settings.pr.reverse_names = True
+# Uncomment to modify the order of Names
+#settings.pr.name_format = "%(last_name)s, %(first_name)s %(middle_name)s"
 # Uncomment to prevent selecting existing users in the old S3AddPersonWidget
 #settings.pr.select_existing = False
 # Uncomment to prevent showing HR details in S3PersonAutocompleteWidget results
@@ -642,9 +642,9 @@ settings.L10n.decimal_separator = "."
 #settings.project.mode_drr = True
 # Uncomment this to use settings suitable for detailed Task management
 #settings.project.mode_task = True
-# Uncomment this to use Activities for projects
+# Uncomment this to use Activities for Projects & Tasks
 #settings.project.activities = True
-# Uncomment this to use Activity Types for Activities/Projects
+# Uncomment this to use Activity Types for Activities & Projects
 #settings.project.activity_types = True
 # Uncomment this to use Codes for projects
 #settings.project.codes = True
@@ -654,7 +654,7 @@ settings.L10n.decimal_separator = "."
 #settings.project.hazards = True
 # Uncomment this to enable Milestones in projects
 #settings.project.milestones = True
-# Uncomment this to link Activities to Projects
+# Uncomment this to use Projects for Activities & Tasks
 #settings.project.projects = True
 # Uncomment this to disable Sectors in projects
 #settings.project.sectors = False

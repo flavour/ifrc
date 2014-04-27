@@ -1534,14 +1534,22 @@ class S3OptionsFilter(S3FilterWidget):
         except:
             opt_list.sort(key=lambda item: s3_unicode(item[1]))
         options = []
-        empty = None
+        empty = False
         for k, v in opt_list:
             if k is None:
-                empty = ("None", v)
+                if none:
+                    empty = True
+                    if none is True:
+                        # Use the represent
+                        options.append((k, v))
+                    else:
+                        # Must be a string to use as the represent:
+                        options.append((k, none))
             else:
                 options.append((k, v))
-        if empty and none:
-            options.append(empty)
+        if none and not empty:
+            # Add the value anyway (e.g. not found via the reverse lookup)
+            options.append((None, none))
 
         # Sort the options
         return (ftype, options, None)
@@ -1611,7 +1619,10 @@ class S3HierarchyFilter(S3FilterWidget):
         # Instantiate the widget
         opts = self.opts
         w = S3HierarchyWidget(lookup = opts.get("lookup"),
-                              represent = opts.get("represent"))
+                              represent = opts.get("represent"),
+                              multiple = opts.get("multiple", True),
+                              leafonly = opts.get("leafonly", True),
+                              )
 
         # Render the widget
         widget = w(rfield.field, selected, **self._attr(resource))
@@ -2067,7 +2078,7 @@ class S3FilterForm(object):
         filter_widgets = resource.get_config("filter_widgets")
         for filter_widget in filter_widgets:
             # Do not apply defaults of hidden widgets because they are
-            # not visible for the user:
+            # not visible to the user:
             if filter_widget.opts.hidden:
                 continue
 

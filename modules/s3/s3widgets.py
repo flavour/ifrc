@@ -4753,12 +4753,12 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
         else:
             attr["_class"] = "multiselect-widget"
 
-        widget = TAG[""](MultipleOptionsWidget.widget(field, value, **attr),
-                         requires = field.requires)
+        multiple_opt = self.multiple
+        w = MultipleOptionsWidget if multiple_opt else OptionsWidget
+        widget = TAG[""](w.widget(field, value, **attr), requires = field.requires)
 
         # Filter and header for multiselect options list
         filter_opt = self.filter 
-        multiple_opt = self.multiple
         header_opt = self.header
         if not multiple_opt and header_opt is True:
             # Select All / Unselect All doesn't make sense if multiple == False
@@ -4814,6 +4814,7 @@ class S3HierarchyWidget(FormWidget):
                  represent=None,
                  multiple=True,
                  leafonly=True,
+                 filter=None,
                  ):
         """
             Constructor
@@ -4825,10 +4826,12 @@ class S3HierarchyWidget(FormWidget):
             @param multiple: allow selection of multiple options
             @param leafonly: True = only leaf nodes can be selected
                              False = any nodes to be selected independently
+            @param filter: filter query for the lookup table
         """
 
         self.lookup = lookup
         self.represent = represent
+        self.filter = filter
 
         self.multiple = multiple
         self.leafonly = leafonly
@@ -4866,8 +4869,13 @@ class S3HierarchyWidget(FormWidget):
             represent = field.represent
 
         # Instantiate the hierarchy
+        leafonly = self.leafonly
         from s3hierarchy import S3Hierarchy
-        h = S3Hierarchy(tablename=lookup, represent=represent)
+        h = S3Hierarchy(tablename = lookup,
+                        represent = represent,
+                        leafonly = leafonly,
+                        filter = self.filter,
+                        )
         if not h.config:
             raise AttributeError("No hierarchy configured for %s" % lookup)
 
@@ -4916,7 +4924,7 @@ class S3HierarchyWidget(FormWidget):
                        "selectedText": str(T("# selected")),
                        "noneSelectedText": str(T("Select")),
                        "multiple": self.multiple,
-                       "leafonly": self.leafonly,
+                       "leafonly": leafonly,
                        }
 
         script = '''$('#%(widget_id)s').hierarchicalopts(%(widget_opts)s)''' % \
@@ -4924,20 +4932,6 @@ class S3HierarchyWidget(FormWidget):
                   "widget_opts": json.dumps(widget_opts, separators=SEPARATORS),
                   }
 
-        #script = \
-#'''$('#%(widget_id)s').hierarchicalopts({
- #selected:%(selected)s,
- #selectedText:'%(selectedText)s',
- #noneSelectedText:'%(noneSelectedText)s',
- #multiple:%(multiple)s,
- #leafonly:%(leafonly)s})''' % \
-    #{"widget_id": widget_id,
-     #"selected": json.dumps(selected, separators=SEPARATORS) if selected else "null",
-     #"selectedText": T("# selected"),
-     #"noneSelectedText": T("Select"),
-     #"multiple": "true" if self.multiple else "false",
-     #"leafonly": "true" if self.leafonly else "false",
-     #}
         s3.jquery_ready.append(script)
 
         return widget
@@ -4949,16 +4943,19 @@ class S3HierarchyWidget(FormWidget):
 
             @param value: the value received from the client, JSON string
 
-            @return: a list
+            @return: a list (if multiple=True) or the value
         """
+
+        default = [] if self.multiple else None
 
         if value is None:
             return None, None
         try:
             value = json.loads(value)
         except ValueError:
-            return [], None
-
+            return default, None
+        if not self.multiple and value and isinstance(value, list):
+            value = value[0]
         return value, None
 
 # =============================================================================
