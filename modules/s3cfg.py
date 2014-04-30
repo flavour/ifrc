@@ -901,7 +901,9 @@ class S3Config(Storage):
                             ["cr_shelter", "hms_hospital", "org_office"])
 
     def get_gis_postcode_selector(self):
-        " Display Postcode form field when selecting Locations "
+        """
+            Display Postcode form field when selecting Locations
+        """
         return self.gis.get("postcode_selector", True)
 
     def get_gis_print_service(self):
@@ -910,6 +912,18 @@ class S3Config(Storage):
         """
         return self.gis.get("print_service", "")
 
+    def get_gis_scaleline(self):
+        """
+            Should the Map display a ScaleLine control?
+        """
+        return self.gis.get("scaleline", True)
+
+    def get_gis_search_geonames(self):
+        """
+            Whether the GeoNames search box should be visible on the map
+        """
+        return self.gis.get("search_geonames", True)
+
     def get_gis_simplify_tolerance(self):
         """
             Default Tolerance for the Simplification of Polygons
@@ -917,12 +931,6 @@ class S3Config(Storage):
             - a higher value is suitable for global views
         """
         return self.gis.get("simplify_tolerance", 0.01)
-
-    def get_gis_scaleline(self):
-        """
-            Should the Map display a ScaleLine control?
-        """
-        return self.gis.get("scaleline", True)
 
     def get_gis_spatialdb(self):
         """
@@ -934,6 +942,21 @@ class S3Config(Storage):
             return False
         else:
             return self.gis.get("spatialdb", False)
+
+    def get_gis_widget_catalogue_layers(self):
+        """
+            Should Map Widgets display Catalogue Layers?
+            - e.g. Profile & Summary pages
+        """
+        return self.gis.get("widget_catalogue_layers", False)
+
+    def get_gis_widget_wms_browser(self):
+        """
+            Should Map Widgets display a WMS Browser?
+            - e.g. Profile & Summary pages
+            NB This also requires the active gis_config to have one configured
+        """
+        return self.gis.get("widget_wms_browser", False)
 
     def get_gis_toolbar(self):
         """
@@ -2268,7 +2291,7 @@ class S3Config(Storage):
         T = current.T
         return self.project.get("organisation_roles", {
                 1: T("Lead Implementer"), # T("Host National Society")
-                2: T("Partner"), # T("Partner National Society")
+                2: T("Partner"),          # T("Partner National Society")
                 3: T("Donor"),
                 #4: T("Customer"), # T("Beneficiary")?
                 #5: T("Supplier")  # T("Beneficiary")?
@@ -2276,7 +2299,51 @@ class S3Config(Storage):
 
     def get_project_organisation_lead_role(self):
         return self.project.get("organisation_lead_role", 1)
-    
+
+    def get_project_task_status_opts(self):
+        """
+            The list of options for the Status of a Task.
+            NB Whilst the list can be customised, doing so makes it harder to
+            do synchronization.
+            There are also hard-coded elements within XSL & styling of
+            project_task_list_layout which will break if these are changed.
+            Best bet is simply to comment statuses that you don't wish to use
+            & tweak the label (whilst keeping the meaning) of those you retain
+            Those which are deemed as 'active' are currently not customisable
+            for this reason.
+        """
+        T = current.T
+        return self.project.get("task_status_opts", {1: T("Draft"),
+                                                     2: T("New"),
+                                                     3: T("Assigned"),
+                                                     4: T("Feedback"),
+                                                     5: T("Blocked"),
+                                                     6: T("On Hold"),
+                                                     7: T("Cancelled"),
+                                                     8: T("Duplicate"),
+                                                     9: T("Ready"),
+                                                    10: T("Verified"),
+                                                    11: T("Reopened"),
+                                                    12: T("Completed"),
+                                                    })
+
+    def get_project_task_priority_opts(self):
+        """
+            The list of options for the Priority of a Task.
+            NB Whilst the list can be customised, doing so makes it harder to
+            do synchronization.
+            There are also hard-coded elements within XSL & styling of
+            project_task_list_layout which will break if these are changed.
+            Best bet is simply to comment statuses that you don't wish to use
+            & tweak the label (whilst keeping the meaning) of those you retain
+        """
+        T = current.T
+        return self.project.get("task_priority_opts", {1: T("Urgent"),
+                                                       2: T("High"),
+                                                       3: T("Normal"),
+                                                       4: T("Low")
+                                                       })
+
     # -------------------------------------------------------------------------
     # Requests Management Settings
     #

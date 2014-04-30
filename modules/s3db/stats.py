@@ -2,7 +2,7 @@
 
 """ Sahana Eden Stats Model
 
-    @copyright: 2012-13 (c) Sahana Software Foundation
+    @copyright: 2012-14 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -35,6 +35,10 @@ __all__ = ["S3StatsModel",
            "S3StatsPeopleModel",
            "S3StatsTrainedPeopleModel",
            "stats_demographic_data_controller",
+           "stats_quantile",
+           "stats_year",
+           "stats_year_options",
+           #"stats_SourceRepresent",
            ]
 
 from datetime import date
@@ -57,7 +61,6 @@ class S3StatsModel(S3Model):
              "stats_source_superlink",
              "stats_source_id",
              #"stats_source_details",
-             "stats_quantile",
              ]
 
     def model(self):
@@ -120,8 +123,8 @@ class S3StatsModel(S3Model):
                      # - can't override field name, ondelete or requires
                      super_link("parameter_id", "stats_parameter"),
                      self.gis_location_id(
+                        requires = IS_LOCATION(),
                         widget = S3LocationAutocompleteWidget(),
-                        requires = IS_LOCATION()
                      ),
                      Field("value", "double",
                            label = T("Value"),
@@ -130,8 +133,9 @@ class S3StatsModel(S3Model):
                            ),
                      # @ToDo: This will need to be a datetime for some usecases
                      s3_date(),
-                     s3_date("date_end",
-                             label = T("End Date")),
+                     s3_date("end_date",
+                             label = T("End Date"),
+                             ),
                      )
 
         # ---------------------------------------------------------------------
@@ -147,21 +151,22 @@ class S3StatsModel(S3Model):
         tablename = "stats_source"
         super_entity(tablename, "source_id", source_types,
                      Field("name",
-                           label=T("Name")),
-                           )
+                           label = T("Name"),
+                           ),
+                     )
 
         # For use by Instances or Components
         source_superlink = super_link("source_id", "stats_source")
 
         # For use by other FKs
-        represent = S3Represent(lookup="stats_source")
+        represent = stats_SourceRepresent(show_link = True)
         source_id = S3ReusableField("source_id", "reference %s" % tablename,
-                                    label=T("Source"),
-                                    requires = IS_NULL_OR(
+                                    label = T("Source"),
+                                    represent = represent,
+                                    requires = IS_EMPTY_OR(
                                                 IS_ONE_OF(db, "stats_source.source_id",
                                                           represent,
                                                           sort=True)),
-                                    represent=represent,
                                     )
 
         #self.add_components(tablename,
@@ -184,7 +189,6 @@ class S3StatsModel(S3Model):
         # Pass names back to global scope (s3.*)
         return dict(stats_source_superlink = source_superlink,
                     stats_source_id = source_id,
-                    stats_quantile = self.quantile,
                     )
 
     # -------------------------------------------------------------------------
@@ -198,30 +202,6 @@ class S3StatsModel(S3Model):
                                                      writable=False,
                                                      )(),
             )
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def quantile(data, q):
-        """
-            Return the specified quantile(s) q of the supplied list.
-            The function can be called with either a single value for q or a
-            list of values. In the latter case, the returned value is a tuple.
-        """
-
-        sx = sorted(data)
-        def get_quantile(q1):
-            pos = (len(sx) - 1) * q1
-            if abs(pos - int(pos) - 0.5) < 0.1:
-                # quantile in the middle between two values, average them
-                return (sx[int(pos)] + sx[int(pos) + 1]) * 0.5
-            else:
-                # otherwise return the nearest value
-                return sx[int(pos + 0.5)]
-
-        if hasattr(q, "__iter__"):
-            return tuple([get_quantile(qi) for qi in q])
-        else:
-            return get_quantile(q)
 
 # =============================================================================
 class S3StatsDemographicModel(S3Model):
@@ -266,7 +246,7 @@ class S3StatsDemographicModel(S3Model):
                                  label = T("Description")),
                      # Link to the Demographic which is the Total, so that we can calculate percentages
                      Field("total_id", self.stats_parameter,
-                           requires = IS_NULL_OR(
+                           requires = IS_EMPTY_OR(
                                         IS_ONE_OF(db, "stats_parameter.parameter_id",
                                                   stats_parameter_represent,
                                                   instance_types = ("stats_demographic",),
@@ -330,11 +310,16 @@ class S3StatsDemographicModel(S3Model):
                            required = True,
                            ),
                      s3_date(required = True),
-                     # Unused but needed for the stats_data SE
-                     #Field("date_end", "date",
-                     #      readable=False,
-                     #      writable=False
-                     #      ),
+                     Field("end_date", "date",
+                           # Just used for the year() VF
+                           readable = False,
+                           writable = False
+                           ),
+                     Field("year", "list:integer",
+                           compute = lambda row: \
+                             stats_year(row, "stats_demographic_data"),
+                           label = T("Year"),
+                           ),
                      # Link to Source
                      self.stats_source_id(),
                      s3_comments(),
@@ -371,32 +356,38 @@ class S3StatsDemographicModel(S3Model):
 
         filter_widgets = [S3OptionsFilter("parameter_id",
                                           label = T("Type"),
+                                          multiple = False,
                                           # Not translateable
                                           #represent = "%(name)s",
-                                          multiple = False,
+                                          ),
+                          S3OptionsFilter("year",
+                                          #multiple = False,
+                                          operator = "anyof",
+                                          options = lambda: \
+                                            stats_year_options("stats_demographic_data"),
                                           ),
                           S3OptionsFilter("location_id$level",
                                           label = T("Level"),
+                                          multiple = False,
                                           # Not translateable
                                           #represent = "%(name)s",
-                                          multiple = False,
                                           ),
                           S3LocationFilter("location_id",
                                            levels = levels,
                                            ),
                           ]
 
-        report_options = Storage(rows=location_fields,
-                                 cols=["parameter_id"],
-                                 fact=[(T("Value"), "sum(value)"),
-                                       ],
-                                 defaults=Storage(rows="location_id",
-                                                  cols="parameter_id",
-                                                  fact="sum(value)",
-                                                  totals=True,
-                                                  chart = "breakdown:rows",
-                                                  table = "collapse",
-                                                  )
+        report_options = Storage(rows = location_fields + ["year"],
+                                 cols = ["parameter_id"],
+                                 fact = [(T("Value"), "sum(value)"),
+                                         ],
+                                 defaults = Storage(rows = "location_id",
+                                                    cols = "parameter_id",
+                                                    fact = "sum(value)",
+                                                    totals = True,
+                                                    chart = "breakdown:rows",
+                                                    table = "collapse",
+                                                    )
                                  )
 
         configure(tablename,
@@ -590,8 +581,8 @@ class S3StatsDemographicModel(S3Model):
 
         # Fire off a rebuild task
         current.s3task.async("stats_demographic_update_aggregates",
-                             vars=dict(records=records.json()),
-                             timeout=21600 # 6 hours
+                             vars = dict(records=records.json()),
+                             timeout = 21600 # 6 hours
                              )
 
     # -------------------------------------------------------------------------
@@ -1121,7 +1112,6 @@ class S3StatsDemographicModel(S3Model):
                           end_date = end_date,
                           **attr
                           )
-        return
 
 # =============================================================================
 def stats_demographic_data_controller():
@@ -1232,8 +1222,8 @@ class S3StatsImpactModel(S3Model):
 
         # Resource Configuration
         configure(tablename,
-                  super_entity = ("doc_entity", "stats_parameter"),
                   deduplicate = self.stats_impact_type_duplicate,
+                  super_entity = ("doc_entity", "stats_parameter"),
                   )
 
         represent = S3Represent(lookup=tablename)
@@ -1297,7 +1287,7 @@ class S3StatsImpactModel(S3Model):
         # Reusable Field
         impact_id = S3ReusableField("impact_id", "reference %s" % tablename,
                                      label = T("Impact"),
-                                     requires = IS_NULL_OR(
+                                     requires = IS_EMPTY_OR(
                                         IS_ONE_OF_EMPTY(db, "stats_impact.id")),
                                      represent = S3Represent(lookup=tablename),
                                      ondelete = "CASCADE")
@@ -1601,7 +1591,7 @@ class S3StatsTrainedPeopleModel(S3Model):
                      Field("value", "integer",
                            label = T("Number of Trained People"),
                            represent = IS_INT_AMOUNT.represent,
-                           requires=IS_NULL_OR(
+                           requires=IS_EMPTY_OR(
                                       IS_INT_IN_RANGE(0, 999999)
                                     ),
                            ),
@@ -1700,5 +1690,302 @@ class S3StatsTrainedPeopleModel(S3Model):
             item.id = _duplicate.id
             item.data.id = _duplicate.id
             item.method = item.METHOD.UPDATE
+
+# =============================================================================
+def stats_quantile(data, q):
+    """
+        Return the specified quantile(s) q of the supplied list.
+        The function can be called with either a single value for q or a
+        list of values. In the latter case, the returned value is a tuple.
+    """
+
+    sx = sorted(data)
+    def get_quantile(q1):
+        pos = (len(sx) - 1) * q1
+        if abs(pos - int(pos) - 0.5) < 0.1:
+            # quantile in the middle between two values, average them
+            return (sx[int(pos)] + sx[int(pos) + 1]) * 0.5
+        else:
+            # otherwise return the nearest value
+            return sx[int(pos + 0.5)]
+
+    if hasattr(q, "__iter__"):
+        return tuple([get_quantile(qi) for qi in q])
+    else:
+        return get_quantile(q)
+
+# =============================================================================
+def stats_year(row, tablename):
+    """
+        Function to calculate computed field for stats_data
+        - returns the year of this entry
+
+        @param row: a dict of the Row
+    """
+
+    NOT_PRESENT = lambda: None
+
+    try:
+        start_date = row["date"]
+    except AttributeError:
+        start_date = NOT_PRESENT
+    try:
+        end_date = row["end_date"]
+    except AttributeError:
+        end_date = NOT_PRESENT
+
+    if start_date is NOT_PRESENT or end_date is NOT_PRESENT:
+        if tablename == "project_beneficiary":
+            # Fallback to the Project's
+            try:
+                project_id = row["project_id"]
+            except KeyError:
+                pass
+            else:
+                table = current.s3db.project_project
+                project = current.db(table.id == project_id).select(table.start_date,
+                                                                    table.end_date,
+                                                                    limitby=(0, 1)
+                                                                    ).first()
+                if project:
+                    if start_date is NOT_PRESENT:
+                        start_date = project.start_date
+                    if end_date is NOT_PRESENT:
+                        end_date = project.end_date
+
+
+    if start_date is NOT_PRESENT and end_date is NOT_PRESENT:
+        # Partial record update without dates => let it fail so
+        # we do not override the existing value
+        raise AttributeError("no data available")
+
+    if not start_date and not end_date:
+        return []
+    elif end_date is NOT_PRESENT or not end_date:
+        return [start_date.year]
+    elif start_date is NOT_PRESENT or not start_date :
+        return [end_date.year]
+    else:
+        return list(xrange(start_date.year, end_date.year + 1))
+
+# =============================================================================
+def stats_year_options(tablename):
+    """
+        returns a dict of the options for the year computed field
+        used by the filter widget
+
+        orderby needed for postgres
+    """
+
+    db = current.db
+    s3db = current.s3db
+    table = s3db[tablename]
+    # @ToDo: use auth.s3_accessible_query
+    query = (table.deleted == False)
+    min_field = table.date.min()
+    start_date_min = db(query).select(min_field,
+                                      orderby=min_field,
+                                      limitby=(0, 1)).first()[min_field]
+    max_field = table.end_date.max()
+    end_date_max = db(query).select(max_field,
+                                    orderby=max_field,
+                                    limitby=(0, 1)).first()[max_field]
+
+    if tablename == "project_beneficiary":
+        # Use the Project's Years as well, as the dates may not be filled in the project_beneficiary table
+        ptable = s3db.project_project
+        pquery = (ptable.deleted == False)
+        pmin = ptable.start_date.min()
+        pmax = ptable.end_date.max()
+        p_start_date_min = db(pquery).select(pmin,
+                                             orderby=pmin,
+                                             limitby=(0, 1)).first()[pmin]
+        p_end_date_max = db(pquery).select(pmax,
+                                           orderby=pmax,
+                                           limitby=(0, 1)).first()[pmax]
+        if p_start_date_min and start_date_min:
+            start_year = min(p_start_date_min,
+                             start_date_min).year
+        else:
+            start_year = (p_start_date_min and p_start_date_min.year) or \
+                         (start_date_min and start_date_min.year)
+        if p_end_date_max and end_date_max:
+            end_year = max(p_end_date_max,
+                           end_date_max).year
+        else:
+            end_year = (p_end_date_max and p_end_date_max.year) or \
+                       (end_date_max and end_date_max.year)
+
+    else:
+        start_year = start_date_min and start_date_min.year
+        end_year = end_date_max and end_date_max.year
+
+    if not start_year or not end_year:
+        return {start_year:start_year} or {end_year:end_year}
+    years = {}
+    for year in xrange(start_year, end_year + 1):
+        years[year] = year
+    return years
+
+# =============================================================================
+class stats_SourceRepresent(S3Represent):
+    """ Representation of Stats Sources """
+
+    def __init__(self,
+                 translate = False,
+                 show_link = False,
+                 multiple = False,
+                 ):
+
+        if show_link:
+            # Need a custom lookup
+            self.lookup_rows = self.custom_lookup_rows
+        # Need a custom representation
+        fields = ["name"]
+
+        super(stats_SourceRepresent,
+              self).__init__(lookup="stats_source",
+                             fields=fields,
+                             show_link=show_link,
+                             translate=translate,
+                             multiple=multiple)
+
+    # -------------------------------------------------------------------------
+    def bulk(self, values, rows=None, list_type=False, show_link=True, include_blank=True):
+        """
+            Represent multiple values as dict {value: representation}
+
+            @param values: list of values
+            @param rows: the referenced rows (if values are foreign keys)
+            @param show_link: render each representation as link
+            @param include_blank: Also include a blank value
+
+            @return: a dict {value: representation}
+        """
+
+        show_link = show_link and self.show_link
+        if show_link and not rows:
+            # Retrieve the rows
+            rows = self.custom_lookup_rows(None, values)
+
+        self._setup()
+
+        # Get the values
+        if rows and self.table:
+            values = [row["stats_source.source_id"] for row in rows]
+        else:
+            values = [values] if type(values) is not list else values
+
+        # Lookup the representations
+        if values:
+            labels = self._lookup(values, rows=rows)
+            if show_link:
+                link = self.link
+                rows = self.rows
+                labels = dict((k, link(k, v, rows.get(k)))
+                               for k, v in labels.items())
+            for v in values:
+                if v not in labels:
+                    labels[v] = self.default
+        else:
+            labels = {}
+        if include_blank:
+            labels[None] = self.none
+        return labels
+
+    # -------------------------------------------------------------------------
+    def custom_lookup_rows(self, key, values, fields=[]):
+        """
+            Custom lookup method for site rows, does a
+            left join with any instance_types found. Parameters
+            key and fields are not used, but are kept for API
+            compatibility reasons.
+
+            @param values: the site IDs
+        """
+
+        db = current.db
+        s3db = current.s3db
+        stable = s3db.stats_source
+
+        qty = len(values)
+        if qty == 1:
+            query = (stable.id == values[0])
+            limitby = (0, 1)
+        else:
+            query = (stable.id.belongs(values))
+            limitby = (0, qty)
+
+        if self.show_link:
+            # We need the instance_type IDs
+            # Do a first query to see which instance_types we have
+            rows = db(query).select(stable.instance_type,
+                                    limitby=limitby)
+            instance_types = []
+            for row in rows:
+                if row.instance_type not in instance_types:
+                    instance_types.append(row.instance_type)
+
+            # Now do a second query which left-joins with all the instance tables we have
+            fields = [stable.source_id,
+                      stable.name,
+                      ]
+            left = []
+            for instance_type in instance_types:
+                table = s3db[instance_type]
+                fields.append(table.id)
+                left.append(table.on(table.source_id == stable.source_id))
+                if instance_type == "doc_document":
+                    # We need the URL
+                    fields.append(table.url)
+
+            rows = db(query).select(*fields,
+                                    left=left,
+                                    limitby=limitby)
+
+        else:
+            # Normal lookup
+            rows = db(query).select(stable.source_id,
+                                    stable.name,
+                                    limitby=limitby)
+
+        self.queries += 1
+        return rows
+
+    # -------------------------------------------------------------------------
+    def link(self, k, v, row=None):
+        """
+            Represent a (key, value) as hypertext link.
+
+            @param k: the key (site_id)
+            @param v: the representation of the key
+            @param row: the row with this key
+        """
+
+        if row:
+            try:
+                url = row["doc_document.url"]
+            except AttributeError:
+                return v
+            else:
+                if url:
+                    return A(v, _href=url, _target="blank")
+
+        # We have no way to determine the linkto
+        return v
+
+    # -------------------------------------------------------------------------
+    def represent_row(self, row):
+        """
+            Represent a single Row
+
+            @param row: the org_site Row
+        """
+
+        name = row["stats_source.name"]
+        if not name:
+            return self.default
+
+        return s3_unicode(name)
 
 # END =========================================================================

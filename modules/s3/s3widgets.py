@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2013 (c) Sahana Software Foundation
+    @copyright: 2009-2014 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -523,7 +523,7 @@ class S3AddPersonWidget(FormWidget):
         if emailRequired:
             email_requires = IS_EMAIL()
         else:
-            email_requires = IS_NULL_OR(IS_EMAIL())
+            email_requires = IS_EMPTY_OR(IS_EMAIL())
 
         # Determine validation rule for mobile phone number
         mobile_phone_requires = IS_EMPTY_OR(IS_PHONE_NUMBER(
@@ -627,6 +627,8 @@ class S3AddPersonWidget2(FormWidget):
 
         @ToDo: get working AC/validator for human_resource_id
                - perhaps re-implement as S3SQLFormElement
+        @ToDo: provide option for entering data in 2-3 separate name fields
+               instead of all in 1 field
     """
 
     def __init__(self,
@@ -2581,9 +2583,9 @@ class S3InvBinWidget(FormWidget):
 
         match_lbl = LABEL(T("Select an existing bin"))
         match_div = SELECT(bins,
-                          _id = "%s_%s" % (self.tablename, field.name),
-                          _name = field.name,
-                         )
+                           _id = "%s_%s" % (self.tablename, field.name),
+                           _name = field.name,
+                           )
         new_lbl = LABEL(T("...or add a new bin"))
         return TAG[""](match_lbl,
                        match_div,
@@ -2873,7 +2875,7 @@ class S3LocationDropdownWidget(FormWidget):
         attr_dropdown = OptionsWidget._attributes(field, attr)
         requires = IS_IN_SET(locations)
         if empty:
-            requires = IS_NULL_OR(requires)
+            requires = IS_EMPTY_OR(requires)
         attr_dropdown["requires"] = requires
 
         attr_dropdown["represent"] = \
@@ -3063,7 +3065,7 @@ class S3LocationSelectorWidget(FormWidget):
         if request.controller == "appadmin":
             # Don't use this widget in appadmin
             return TAG[""](INPUT(**attr),
-                           requires=IS_NULL_OR(IS_LOCATION()),
+                           requires=IS_EMPTY_OR(IS_LOCATION()),
                            )
 
         # Hide the real field
@@ -3406,8 +3408,8 @@ S3.gis.tab="%s"''' % s3.gis.tab
                                                                value = ""),
                                                           **attributes)
             attr_dropdown["requires"] = \
-                IS_NULL_OR(IS_IN_SET(countries,
-                                     zero = SELECT_COUNTRY))
+                IS_EMPTY_OR(IS_IN_SET(countries,
+                                      zero = SELECT_COUNTRY))
             attr_dropdown["represent"] = \
                 lambda id: gis.get_country(id) or UNKNOWN_OPT
             opts = [OPTION(SELECT_COUNTRY, _value="")]
@@ -3925,7 +3927,7 @@ class S3LocationSelectorWidget2(FormWidget):
             if required:
                 requires = IS_LOCATION()
             else:
-                requires = IS_NULL_OR(IS_LOCATION())
+                requires = IS_EMPTY_OR(IS_LOCATION())
             return TAG[""](INPUT(**attr),
                            requires=requires,
                            )

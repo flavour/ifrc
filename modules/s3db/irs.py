@@ -2,7 +2,7 @@
 
 """ Sahana Eden Incident Reporting Model
 
-    @copyright: 2009-2013 (c) Sahana Software Foundation
+    @copyright: 2009-2014 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -256,10 +256,10 @@ class S3IRSModel(S3Model):
                            label = T("Category"),
                            # The full set available to Admins & Imports/Exports
                            # (users use the subset by over-riding this in the Controller)
-                           requires = IS_NULL_OR(IS_IN_SET_LAZY(lambda: \
+                           requires = IS_EMPTY_OR(IS_IN_SET_LAZY(lambda: \
                                       sort_dict_by_values(irs_incident_type_opts))),
                            # Use this instead if a simpler set of Options required
-                           #requires = IS_NULL_OR(IS_IN_SET(irs_incident_type_opts)),
+                           #requires = IS_EMPTY_OR(IS_IN_SET(irs_incident_type_opts)),
                            represent = lambda opt: \
                                        irs_incident_type_opts.get(opt, opt)),
                      self.hrm_human_resource_id(
@@ -472,7 +472,7 @@ class S3IRSModel(S3Model):
                       )
                       
         ireport_id = S3ReusableField("ireport_id", "reference %s" % tablename,
-                                     requires = IS_NULL_OR(
+                                     requires = IS_EMPTY_OR(
                                                     IS_ONE_OF(db,
                                                               "irs_ireport.id",
                                                               self.irs_ireport_represent)),
@@ -480,19 +480,18 @@ class S3IRSModel(S3Model):
                                      label = T("Incident"),
                                      ondelete = "CASCADE")
 
-        # ---------------------------------------------------------------------
         # Custom Methods
         set_method("irs", "ireport",
-                   method="dispatch",
+                   method = "dispatch",
                    action=self.irs_dispatch)
 
         set_method("irs", "ireport",
-                   method="timeline",
-                   action=self.irs_timeline)
+                   method = "timeline",
+                   action = self.irs_timeline)
 
         set_method("irs", "ireport",
-                   method="ushahidi",
-                   action=self.irs_ushahidi_import)
+                   method = "ushahidi",
+                   action = self.irs_ushahidi_import)
 
         if settings.has_module("fire"):
             create_next = URL(args=["[id]", "human_resource"])
@@ -1130,7 +1129,7 @@ class S3IRSResponseModel(S3Model):
                                        ),
                      asset_id(label=T("Vehicle"),
                               # @ToDo: Limit to Vehicles which are assigned to this Incident
-                              requires = IS_NULL_OR(
+                              requires = IS_EMPTY_OR(
                                             IS_ONE_OF(db, "asset_asset.id",
                                                       self.asset_represent,
                                                       filterby="type",
@@ -1177,11 +1176,11 @@ class S3IRSResponseModel(S3Model):
                  (ltable.closed == True) | \
                  (ltable.deleted == True))
         left = ltable.on(table.id == ltable.asset_id)
-        requires = IS_NULL_OR(IS_ONE_OF(current.db(query),
-                                        "asset_asset.id",
-                                        asset_represent,
-                                        left=left,
-                                        sort=True))
+        requires = IS_EMPTY_OR(IS_ONE_OF(current.db(query),
+                                         "asset_asset.id",
+                                         asset_represent,
+                                         left=left,
+                                         sort=True))
         return requires
 
     # -------------------------------------------------------------------------

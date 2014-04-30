@@ -121,6 +121,9 @@ settings.gis.nav_controls = False
 settings.gis.legend = "float"
 # Uncomment to Hide the Toolbar from the main Map
 settings.gis.toolbar = False
+# Uncomment to show WMS Browser in Map Widgets (e.g. Profile & Summary pages)
+# - NB This also requires the active gis_config to have one configured
+settings.gis.widget_wms_browser = True
 
 # Use PCodes for Locations import
 settings.gis.lookup_code = "PCode"
@@ -544,6 +547,14 @@ def customise_org_facility_resource(r, tablename):
 
     s3db = current.s3db
 
+    from s3.s3validators import IS_LOCATION_SELECTOR2
+    from s3.s3widgets import S3LocationSelectorWidget2
+    levels = ("L0", "L1", "L2")
+    loc_field = r.table.location_id
+    loc_field.requires = IS_LOCATION_SELECTOR2(levels=levels)
+    loc_field.widget = S3LocationSelectorWidget2(levels=levels,
+                                                 show_address = True)
+
     list_fields = ["name",
                    (T("Type"),"facility_type.name"),
                    #"organisation_id",
@@ -584,34 +595,33 @@ def customise_org_facility_resource(r, tablename):
                      ]
 
     report_options = Storage(
-        rows=report_fields,
-        cols=[],
-        fact=[(T("Number of Facilities"), "count(name)")],
-        defaults=Storage(rows="site_facility_type.facility_type_id",
-                         #cols="site_org_group.group_id",
-                         fact="count(name)",
-                         totals=True,
-                         chart = "barchart:rows",
-                         table = "collapse",
-                         )
+        rows = report_fields,
+        cols = [],
+        fact = [(T("Number of Facilities"), "count(name)")],
+        defaults = Storage(rows = "site_facility_type.facility_type_id",
+                           #cols = "site_org_group.group_id",
+                           fact = "count(name)",
+                           totals = True,
+                           chart = "barchart:rows",
+                           table = "collapse",
+                           )
         )
 
     from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponentMultiSelectWidget
     # Custom Crud Form
-    crud_form = S3SQLCustomForm(
-        "name",
-        S3SQLInlineComponentMultiSelectWidget(
-            "facility_type",
-            #label = T("Type of Place"),
-            field = "facility_type_id",
-        ),
-        #"organisation_id",
-        "location_id",
-        "contact",
-        "phone1",
-        "email",
-        "comments",
-    )
+    crud_form = S3SQLCustomForm("name",
+                                S3SQLInlineComponentMultiSelectWidget(
+                                    "facility_type",
+                                    #label = T("Type of Place"),
+                                    field = "facility_type_id",
+                                ),
+                                #"organisation_id",
+                                "location_id",
+                                "contact",
+                                "phone1",
+                                "email",
+                                "comments",
+                                )
 
     s3db.configure(tablename,
                    crud_form = crud_form,

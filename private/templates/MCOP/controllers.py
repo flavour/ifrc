@@ -76,42 +76,45 @@ for(var i=0,len=layers.length;i<len;i++){
         output["cms_post_datalist"] = datalist.html()
 
         # Incidents Data List
-        resource = s3db.resource("project_project") # Temp: Uses relabelled project_project
+        resource = s3db.resource("event_incident")
         list_fields = ["name",
-                       "description",
-                       "location.location_id",
-                       "start_date",
-                       "organisation_id",
-                       "organisation_id$logo",
+                       "location_id",
+                       "zero_hour",
                        "modified_by",
+                       "organisation_id",
+                       "comments",
                        ]
-        datalist, numrows, ids = resource.datalist(list_id = "project_project_datalist",
+        datalist, numrows, ids = resource.datalist(list_id = "event_incident_datalist",
                                                    fields = list_fields,
                                                    #start=None,
                                                    limit=5,
                                                    #list_id=list_id,
                                                    #orderby=orderby,
-                                                   layout = s3db.project_project_list_layout
+                                                   layout = s3db.event_incident_list_layout
                                                    )
-        output["project_project_datalist"] = datalist.html()
+        output["event_incident_datalist"] = datalist.html()
 
         # Tasks Data List
         resource = s3db.resource("project_task")
         list_fields = ["name",
                        "description",
+                       "comments",
                        "location_id",
+                       "priority",
+                       "status",
                        "date_due",
                        "pe_id",
                        "task_project.project_id",
                        #"organisation_id$logo",
                        "modified_by",
+                       "source_url"
                         ]
         datalist, numrows, ids = resource.datalist(list_id = "project_task_datalist",
                                                    fields = list_fields,
                                                    #start=None,
                                                    limit=5,
                                                    #list_id=list_id,
-                                                   #orderby=orderby,
+                                                   orderby = "project_task.date_due asc",
                                                    layout = s3db.project_task_list_layout
                                                    )
         output["project_task_datalist"] = datalist.html()
@@ -146,6 +149,15 @@ google.setOnLoadCallback(LoadDynamicFeedControl);
             item["cms"] = resource_content(module = item["c"], 
                                            resource = item["f"])
 
+        return output
+
+# =============================================================================
+class about(S3CustomController):
+    """ Custom Home Page """
+
+    def __call__(self):
+        output = {}
+        self._view(THEME, "about.html")
         return output
 
 # END =========================================================================

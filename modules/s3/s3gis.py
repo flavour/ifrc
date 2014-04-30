@@ -1159,7 +1159,7 @@ class GIS(object):
             if tablename == "gis_location":
                 labels["L0"] = current.messages.COUNTRY
                 table.level.requires = \
-                    IS_NULL_OR(IS_IN_SET(labels))
+                    IS_EMPTY_OR(IS_IN_SET(labels))
             else:
                 for level in levels:
                     table[level].label = labels[level]
@@ -1170,7 +1170,7 @@ class GIS(object):
             if "gis_location" in db:
                 table = db.gis_location
                 table.level.requires = \
-                    IS_NULL_OR(IS_IN_SET(labels))
+                    IS_EMPTY_OR(IS_IN_SET(labels))
 
             # These tables store location hierarchy info for XSLT export.
             # Labels are used for PDF & XLS Reports
@@ -2285,7 +2285,8 @@ class GIS(object):
                                 _attr = attr_cols[fieldname]
                                 ftype = _attr[0]
                                 if ftype == "integer":
-                                    # Attributes should be numbers not Strings
+                                    # Attributes should be numbers not strings
+                                    # NB This also relies on decoding within geojson/export.xsl and S3XML.__element2json()
                                     try:
                                         represent = int(represent.replace(",", ""))
                                     except:
@@ -2293,7 +2294,7 @@ class GIS(object):
                                         #        (although we *do* want the represent in the tooltips!)
                                         pass
                                 elif ftype == "double":
-                                    # Attributes should be numbers not Strings
+                                    # Attributes should be numbers not strings
                                     try:
                                         float_represent = float(represent.replace(",", ""))
                                         int_represent = int(float_represent)
@@ -6056,9 +6057,9 @@ class MAP(DIV):
                 "gis_zoomin": T("Zoom In"),
                 }
 
-        ############
+        ##########
         # Viewport
-        ############
+        ##########
 
         height = opts.get("height", None)
         if height:
@@ -8392,17 +8393,29 @@ class S3Map(S3Method):
                               "marker"    : marker
                               }]
         settings = current.deployment_settings
+        catalogue_layers = settings.get_gis_widget_catalogue_layers()
         legend = settings.get_gis_legend()
+        search = settings.get_gis_search_geonames()
         toolbar = settings.get_gis_toolbar()
+        wms_browser = settings.get_gis_widget_wms_browser()
+        if wms_browser:
+            config = gis.get_config()
+            if config.wmsbrowser_url:
+                wms_browser = wms_browser = {"name" : config.wmsbrowser_name,
+                                             "url" : config.wmsbrowser_url,
+                                             }
+            else:
+                wms_browser = None
 
         map = gis.show_map(id = widget_id,
                            feature_resources = feature_resources,
-                           #catalogue_layers = True,
+                           catalogue_layers = catalogue_layers,
                            collapsed = True,
                            legend = legend,
                            toolbar = toolbar,
-                           #search = True,
                            save = False,
+                           search = search,
+                           wms_browser = wms_browser,
                            callback = callback,
                            )
         return map
@@ -8643,6 +8656,7 @@ class S3ImportPOI(S3Method):
 
             title = T("Import from OpenStreetMap")
 
+            # @ToDo: use settings.get_ui_formstyle()
             res_select = [TR(TD(B("%s: " % T("Select resources to import")),
                                 _colspan=3))]
             for resource in current.deployment_settings.get_gis_poi_resources():
@@ -8662,7 +8676,7 @@ class S3ImportPOI(S3Method):
                         TR(TD(B("%s: " % T("File"))),
                            TD(INPUT(_type="file", _name="file", _size="50")),
                            TD(SPAN("*", _class="req",
-                                   _style="padding-right: 5px;"))
+                                   _style="padding-right:5px"))
                            ),
                         TR(TD(),
                            TD(T("or")),
@@ -8706,12 +8720,12 @@ class S3ImportPOI(S3Method):
                 from s3widgets import S3LocationAutocompleteWidget
                 # dummy field
                 field = s3db.org_office.location_id
-                field.requires = IS_NULL_OR(IS_LOCATION())
+                field.requires = IS_EMPTY_OR(IS_LOCATION())
                 widget = S3LocationAutocompleteWidget()(field, None)
                 row = TR(TD(B("%s: " % T("Location"))),
                          TD(widget),
                          TD(SPAN("*", _class="req",
-                                 _style="padding-right: 5px;"))
+                                 _style="padding-right:5px"))
                          )
                 form[0].insert(3, row)
 
@@ -8734,9 +8748,9 @@ class S3ImportPOI(S3Method):
                     else:
                         gtable = s3db.gis_location
                         record = current.db(gtable.id == form_vars.location_id).select(gtable.name,
-                                                                                  gtable.wkt,
-                                                                                  limitby=(0, 1)
-                                                                                  ).first()
+                                                                                       gtable.wkt,
+                                                                                       limitby=(0, 1)
+                                                                                       ).first()
                         if record.wkt is None:
                             form.errors["location_id"] = T("Location needs to have WKT!")
                             return output

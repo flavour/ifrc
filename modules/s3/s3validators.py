@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: (c) 2010-2013 Sahana Software Foundation
+    @copyright: (c) 2010-2014 Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -2984,7 +2984,7 @@ class IS_IN_SET_LAZY(Validator):
         "lambda:" in front of the call.  E.g.:
 
         Field("nationality",
-            requires = IS_NULL_OR(IS_IN_SET_LAZY(
+            requires = IS_EMPTY_OR(IS_IN_SET_LAZY(
                 lambda: gis.get_countries(key_type="code"))),
             label = T("Nationality"),
             represent = lambda code: gis.get_country(code, key_type="code") or UNKNOWN_OPT)

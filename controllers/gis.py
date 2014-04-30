@@ -108,11 +108,7 @@ def define_map(height = None,
         config = gis.get_config()
 
     legend = settings.get_gis_legend()
-
-    # @ToDo: Make these configurable
-    search = True
-    #googleEarth = True
-    #googleStreetview = True
+    search = settings.get_gis_search_geonames()
 
     if config.wmsbrowser_url:
         wms_browser = {"name" : config.wmsbrowser_name,
@@ -183,14 +179,14 @@ def define_map(height = None,
                        lat = lat,
                        lon = lon,
                        add_feature = pois,
+                       catalogue_layers = True,
                        feature_resources = feature_resources,
-                       toolbar = toolbar,
-                       wms_browser = wms_browser,
                        legend = legend,
+                       print_tool = print_tool,
                        save = True,
                        search = search,
-                       catalogue_layers = True,
-                       print_tool = print_tool,
+                       toolbar = toolbar,
+                       wms_browser = wms_browser,
                        window = window,
                        closable = closable,
                        maximizable = maximizable,
@@ -210,15 +206,15 @@ def location():
     set_method = s3db.set_method
     from s3.s3gis import S3ExportPOI
     set_method("gis", "location",
-               method="export_poi",
-               action=S3ExportPOI())
+               method = "export_poi",
+               action = S3ExportPOI())
     from s3.s3gis import S3ImportPOI
     set_method("gis", "location",
-               method="import_poi",
-               action=S3ImportPOI())
+               method = "import_poi",
+               action = S3ImportPOI())
     set_method("gis", "location",
-               method="parents",
-               action=s3_gis_location_parents)
+               method = "parents",
+               action = s3_gis_location_parents)
 
     location_hierarchy = gis.get_location_hierarchy()
     from s3.s3filter import S3TextFilter, S3OptionsFilter#, S3LocationFilter
@@ -446,7 +442,7 @@ def location():
 
     country = S3ReusableField("country", "string", length=2,
                               label = COUNTRY,
-                              requires = IS_NULL_OR(IS_IN_SET_LAZY(
+                              requires = IS_EMPTY_OR(IS_IN_SET_LAZY(
                                     lambda: gis.get_countries(key_type="code"),
                                     zero = SELECT_LOCATION)),
                               represent = lambda code: \
@@ -2344,7 +2340,7 @@ def theme_data():
     """ RESTful CRUD controller """
 
     field = s3db.gis_layer_theme_id()
-    field.requires = IS_NULL_OR(field.requires)
+    field.requires = IS_EMPTY_OR(field.requires)
     output = s3_rest_controller(csv_extra_fields = [
                                     # CSV column headers, so no T()
                                     dict(label="Layer",
