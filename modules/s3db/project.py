@@ -1758,7 +1758,7 @@ class S3ProjectBeneficiaryModel(S3Model):
             S3OptionsFilter("year",
                             operator = "anyof",
                             options = lambda: \
-                                self.stats_year_options("project_beneficiary"),
+                                      self.stats_year_options("project_beneficiary"),
                             hidden = True,
                             ),
             S3LocationFilter("location_id",
