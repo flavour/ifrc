@@ -37,8 +37,8 @@ settings = current.deployment_settings
 settings.auth.registration_requires_verification = True
 # Users need to be approved
 settings.auth.registration_requires_approval = True
-#settings.auth.registration_requests_organisation = True
-#settings.auth.registration_organisation_required = True
+settings.auth.registration_requests_organisation = True
+settings.auth.registration_organisation_required = True
 
 # Approval emails get sent to all admins
 settings.mail.approver = "ADMIN"
@@ -70,6 +70,10 @@ settings.ui.formstyle_row = "bootstrap"
 settings.ui.formstyle = "bootstrap"
 settings.ui.filter_formstyle = "bootstrap"
 settings.ui.hide_report_options = False
+
+# @ToDo: Investigate 
+settings.ui.use_button_glyphicons = True
+
 #settings.gis.map_height = 600
 #settings.gis.map_width = 854
 
@@ -154,6 +158,16 @@ settings.project.task_status_opts = {2: T("Active"),
 
 settings.ui.update_label = "Edit"
 # -----------------------------------------------------------------------------
+# Mariner CommandBridge resource identifiers
+settings.sync.mcb_resource_identifiers = {"event_incident": "802017D4-08D1-40EA-A03D-4FCFC26883A4",
+                                          "project_task": "06831BE6-7B49-47F0-80CD-5FB27DEEC330",
+                                          "cms_post": "A6E68F53-72B8-415A-A50F-BB26D363CD30",
+                                          }
+# Mariner CommandBridge domain identifiers
+settings.sync.mcb_domain_identifiers = {"sahana": "9197B3DC-07DD-4922-96CA-9B6D8A1FC2D2",
+                                        "wrike": "69A069D9-23E8-422D-BB18-2A3A92FE291C",
+                                        }
+# -----------------------------------------------------------------------------
 # Disable rheaders
 def customise_no_rheader_controller(**attr):
     # Remove rheader
@@ -236,7 +250,10 @@ def customise_cms_post_resource(r, tablename):
     table = s3db.cms_post
 
     s3.dl_pagelength = 12
-    s3.dl_rowsize = 2
+    list_id = r.get_vars.get("list_id", None)
+    if list_id != "cms_post_datalist":
+        # Default page, not homepage
+        s3.dl_rowsize = 2
 
     #from s3.s3resource import S3FieldSelector
     #s3.filter = S3FieldSelector("series_id$name").belongs(["Alert"])
@@ -263,8 +280,17 @@ def customise_cms_post_resource(r, tablename):
     # Don't add new Locations here
     table.location_id.comment = None
 
-    table.series_id.readable = table.series_id.writable = True
-    table.series_id.label = T("Type")
+    #table.series_id.readable = table.series_id.writable = True
+    #table.series_id.label = T("Type")
+    stable = s3db.cms_series
+    try:
+        series_id = current.db(stable.name == "Alert").select(stable.id,
+                                                              limitby=(0, 1)
+                                                              ).first().id
+        table.series_id.default = series_id
+    except:
+        # No suitable prepop
+        pass
 
     table.body.label = T("Description")
     table.body.widget = None
@@ -274,14 +300,14 @@ def customise_cms_post_resource(r, tablename):
                    #"series_id",
                    "body",
                    "location_id",
-                   S3SQLInlineComponent(
-                       "document",
-                       name = "file",
-                       label = T("Files"),
-                       fields = [("", "file"),
-                                 #"comments",
-                                 ],
-                       ),
+                   #S3SQLInlineComponent(
+                   #    "document",
+                   #    name = "file",
+                   #    label = T("Files"),
+                   #    fields = [("", "file"),
+                   #              #"comments",
+                   #              ],
+                   #    ),
                    ]
 
     incident_id = r.get_vars.get("~.(incident)", None)
@@ -313,7 +339,7 @@ def customise_cms_post_resource(r, tablename):
     filter_widgets.insert(1, S3OptionsFilter("incident_post.incident_id"))
 
     # Return to List view after create/update/delete
-    # We now do all this in Popups
+    # We do all this in Popups
     url_next = URL(c="cms", f="post", args="datalist")
 
     s3db.configure("cms_post",
@@ -409,17 +435,17 @@ def customise_event_incident_resource(r, tablename):
                    "comments",
                    "organisation_id",
                    ]
-    
+
     # Custom Form
-    #location_id_field = table.location_id
-    #from s3.s3validators import IS_LOCATION_SELECTOR2
-    #from s3.s3widgets import S3LocationSelectorWidget2
-    #location_id_field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-    #location_id_field.widget = S3LocationSelectorWidget2(levels=levels,
-    #                                                     show_address=True,
-    #                                                     show_map=True)
-    ## Don't add new Locations here
-    #location_id_field.comment = None
+    location_id_field = table.location_id
+    from s3.s3validators import IS_LOCATION_SELECTOR2
+    from s3.s3widgets import S3LocationSelectorWidget2
+    location_id_field.requires = IS_LOCATION_SELECTOR2(levels=levels)
+    location_id_field.widget = S3LocationSelectorWidget2(levels=levels,
+                                                         show_address=True,
+                                                         show_map=True)
+    # Don't add new Locations here
+    location_id_field.comment = None
 
     #from gluon.validators import IS_EMPTY_OR
     #table.organisation_id.requires = IS_EMPTY_OR(table.organisation_id.requires)
@@ -461,12 +487,12 @@ def customise_event_incident_resource(r, tablename):
                       #                ),
                       ]
 
-    url_next = URL(c="event", f="incident", args="summary")
+    url_next = URL(c="event", f="incident", args=["[id]", "profile"])
 
     s3db.configure("event_incident",
                    create_next = url_next,
                    crud_form = crud_form,
-                   delete_next = url_next,
+                   delete_next = URL(c="event", f="incident", args="summary"),
                    filter_widgets = filter_widgets,
                    list_fields = list_fields,
                    update_next = url_next,
@@ -503,7 +529,7 @@ def customise_event_incident_resource(r, tablename):
                                 tablename = "event_resource",
                                 context = "incident",
                                 #filter = S3FieldSelector("status").belongs(event_resource_active_statuses),
-                                icon = "icon-resource",
+                                icon = "icon-wrench",
                                 colspan = 1,
                                 #list_layout = s3db.event_resource_list_layout,
                                 )
@@ -737,7 +763,7 @@ def customise_org_organisation_resource(r, tablename):
                                     context = "organisation",
                                     icon = "icon-resource",
                                     show_on_map = False, # No Marker yet & only show at L1-level anyway
-                                    list_layout = s3db.org_resource_list_layout,
+                                    #list_layout = s3db.org_resource_list_layout,
                                     )
             projects_widget = dict(label = "Incidents",
                                    label_create = "Create Incident",
@@ -746,7 +772,7 @@ def customise_org_organisation_resource(r, tablename):
                                    context = "organisation",
                                    icon = "icon-incident",
                                    show_on_map = False, # No Marker yet & only show at L1-level anyway
-                                   list_layout = s3db.event_incident_list_layout,
+                                   #list_layout = s3db.event_incident_list_layout,
                                    )
             #activities_widget = dict(label = "Activities",
             #                         label_create = "Create Activity",

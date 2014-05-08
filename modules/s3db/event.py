@@ -570,8 +570,6 @@ class S3IncidentModel(S3Model):
         T = current.T
         db = current.db
         settings = current.deployment_settings
-        
-        add_components = self.add_components
 
         # ---------------------------------------------------------------------
         # Incidents
@@ -671,50 +669,52 @@ class S3IncidentModel(S3Model):
                                       "closed",
                                       "comments",
                                       ],
+                       list_layout = event_incident_list_layout,
                        # Most recent Incident first
                        orderby = "event_incident.zero_hour desc",
                        )
 
         # Components
-        add_components(tablename,
-                       asset_asset = {"link": "event_asset",
-                                      "joinby": "incident_id",
-                                      "key": "asset_id",
-                                      "actuate": "embed",
-                                      "autocomplete": "name",
-                                      "autodelete": False,
-                                      },
-                       event_human_resource = "incident_id",
-                       hrm_human_resource = {"link": "event_human_resource",
-                                             "joinby": "incident_id",
-                                             "key": "human_resource_id",
-                                             # @ToDo: Widget to handle embedded AddPersonWidget
-                                             #"actuate": "embed",
-                                             "actuate": "link",
-                                             "autocomplete": "name",
-                                             "autodelete": False,
-                                             },
-                       event_post = "event_id",
-                       event_site = "incident_id",
-                       event_task = "incident_id",
-                       project_task = {"link": "event_task",
-                                       "joinby": "incident_id",
-                                       "key": "task_id",
-                                       # @ToDo: Widget to handle embedded LocationSelector
-                                       #"actuate": "embed",
-                                       "actuate": "link",
-                                       "autocomplete": "name",
-                                       "autodelete": False,
-                                       },
-                       gis_config = {"link": "event_config",
-                                     "joinby": "incident_id",
-                                     "multiple": False,
-                                     "key": "config_id",
-                                     "actuate": "replace",
-                                     "autocomplete": "name",
-                                     "autodelete": True,
-                                     },
-                       )
+        self.add_components(tablename,
+                            asset_asset = {"link": "event_asset",
+                                           "joinby": "incident_id",
+                                           "key": "asset_id",
+                                           "actuate": "embed",
+                                           "autocomplete": "name",
+                                           "autodelete": False,
+                                           },
+                            event_human_resource = "incident_id",
+                            hrm_human_resource = {"link": "event_human_resource",
+                                                  "joinby": "incident_id",
+                                                  "key": "human_resource_id",
+                                                  # @ToDo: Widget to handle embedded AddPersonWidget
+                                                  #"actuate": "embed",
+                                                  "actuate": "link",
+                                                  "autocomplete": "name",
+                                                  "autodelete": False,
+                                                  },
+                            event_post = "event_id",
+                            event_site = "incident_id",
+                            event_task = "incident_id",
+                            project_task = {"name": "event_task",
+                                            "link": "event_task",
+                                            "joinby": "incident_id",
+                                            "key": "task_id",
+                                            # @ToDo: Widget to handle embedded LocationSelector
+                                            #"actuate": "embed",
+                                            "actuate": "link",
+                                            "autocomplete": "name",
+                                            "autodelete": False,
+                                            },
+                            gis_config = {"link": "event_config",
+                                          "joinby": "incident_id",
+                                          "multiple": False,
+                                          "key": "config_id",
+                                          "actuate": "replace",
+                                          "autocomplete": "name",
+                                          "autodelete": True,
+                                          },
+                            )
 
         # Pass names back to global scope (s3.*)
         return dict(event_incident_id = incident_id,
@@ -874,8 +874,6 @@ class S3IncidentReportModel(S3Model):
 
         T = current.T
 
-        add_components = self.add_components
-
         # ---------------------------------------------------------------------
         # Incident Reports
         #
@@ -919,16 +917,16 @@ class S3IncidentReportModel(S3Model):
                        )
 
         # Components
-        add_components(tablename,
-                       # Coalitions
-                       org_group = {"link": "event_incident_report_group",
-                                    "joinby": "incident_report_id",
-                                    "key": "group_id",
-                                    "actuate": "hide",
-                                    },
-                       # Format for InlineComponent/filter_widget
-                       event_incident_report_group = "incident_report_id",
-                       )
+        self.add_components(tablename,
+                            # Coalitions
+                            org_group = {"link": "event_incident_report_group",
+                                         "joinby": "incident_report_id",
+                                         "key": "group_id",
+                                         "actuate": "hide",
+                                         },
+                            # Format for InlineComponent/filter_widget
+                            event_incident_report_group = "incident_report_id",
+                            )
 
         # Pass names back to global scope (s3.*)
         return dict()
@@ -1009,7 +1007,7 @@ class S3EventResourceModel(S3Model):
                                                ),
                           #Field.Method("location", lambda row: self.sit_location(row, tablename)),
                           # @ToDo: Deprecate once we start using S3Track
-                          s3_datetime(),
+                          s3_datetime(default = "now"),
                           s3_comments(),
                           *s3_meta_fields())
 
@@ -1681,12 +1679,11 @@ def event_incident_list_layout(list_id, item_id, resource, rfields, record,
     permit = current.auth.s3_has_permission
     table = current.db.event_incident
     if permit("update", table, record_id=record_id):
-        vars = {"refresh": list_id,
-                "record": record_id,
-                }
         edit_btn = A(I(" ", _class="icon icon-edit"),
                      _href=URL(c="event", f="incident",
-                               args=[record_id, "update.popup"]
+                               args=[record_id, "update.popup"],
+                               vars={"refresh": list_id,
+                                     "record": record_id},
                                ),
                      _class="s3_modal",
                      _title=current.response.s3.crud_strings.event_incident.title_update,

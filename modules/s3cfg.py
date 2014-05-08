@@ -102,6 +102,7 @@ class S3Config(Storage):
         self.inv = Storage()
         self.irs = Storage()
         self.L10n = Storage()
+        self.log = Storage()
         self.mail = Storage()
         self.msg = Storage()
         self.org = Storage()
@@ -112,8 +113,9 @@ class S3Config(Storage):
         self.supply = Storage()
         self.search = Storage()
         self.security = Storage()
+        self.sync = Storage()
         self.ui = Storage()
-        self.log = Storage()
+        self.vulnerability = Storage()
 
     # -------------------------------------------------------------------------
     # Template
@@ -1469,6 +1471,28 @@ class S3Config(Storage):
         return self.search.get("filter_manager_load", None)
 
     # =========================================================================
+    # Sync
+    #
+    def get_sync_mcb_resource_identifiers(self):
+        """
+            Resource (=data type) identifiers for synchronization with
+            Mariner CommandBridge, a dict {tablename:id}
+        """
+
+        return self.sync.get("mcb_resource_identifiers", {})
+
+    def get_sync_mcb_domain_identifiers(self):
+        """
+            Domain (of origin) identifiers for synchronization with
+            Mariner CommandBridge, a dict {domain: id} where
+            "domain" means the domain prefix of the record UUID
+            (e.g. uuid "wrike/IKY0192834" => domain "wrike"),
+            default domain is "sahana"
+        """
+
+        return self.sync.get("mcb_domain_identifiers", {})
+
+    # =========================================================================
     # Modules
 
     # -------------------------------------------------------------------------
@@ -2502,5 +2526,11 @@ class S3Config(Storage):
 
     def get_supply_use_alt_name(self):
         return self.supply.get("use_alt_name", True)
+
+    # -------------------------------------------------------------------------
+    # Vulnerability
+    #
+    def get_vulnerability_indicator_hierarchical(self):
+        return self.vulnerability.get("indicator_hierarchical", False)
 
 # END =========================================================================
