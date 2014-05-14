@@ -5,7 +5,7 @@
     @requires: U{B{I{gluon}} <http://web2py.com>}
     @requires: U{B{I{shapely}} <http://trac.gispython.org/lab/wiki/Shapely>}
 
-    @copyright: (c) 2010-2013 Sahana Software Foundation
+    @copyright: (c) 2010-2014 Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -5892,7 +5892,7 @@ class GIS(object):
             @param area: Show the Area tool on the Toolbar
             @param nav: Show the Navigation controls on the Toolbar
             @param save: Show the Save tool on the Toolbar
-            @param search: Show the Geonames search box
+            @param search: Show the Geonames search box (requires a username to be configured)
             @param mouse_position: Show the current coordinates in the bottom-right of the map. 3 Options: 'normal', 'mgrs', False (defaults to checking deployment_settings, which defaults to 'normal')
             @param overview: Show the Overview Map (defaults to checking deployment_settings, which defaults to True)
             @param permalink: Show the Permalink control (defaults to checking deployment_settings, which defaults to True)
@@ -5982,7 +5982,7 @@ class MAP(DIV):
 
         # Options for server-side processing
         self.opts = opts
-        self.id = opts.get("id", "default_map")
+        self.id = map_id = opts.get("id", "default_map")
 
         # Options for client-side processing
         self.options = {}
@@ -5994,7 +5994,7 @@ class MAP(DIV):
         # Needs to be an ID which means we can't have multiple per page :/
         # - Alternatives are also fragile. See s3.gis.js
         components.append(DIV(DIV(_class="map_loader"),
-                              _id="map_panel"))
+                              _id="%s_panel" % map_id))
 
         self.components = components
         for c in components:
@@ -6002,7 +6002,7 @@ class MAP(DIV):
 
         # Other DIV settings
         self.attributes = {"_class": "map_wrapper",
-                           "_id": self.id,
+                           "_id": map_id,
                            }
         self.parent = None
 
@@ -6249,10 +6249,13 @@ class MAP(DIV):
 
             # Search
             if opts.get("search", False):
-                # Presence of label adds support JS in Loader and turns feature on in s3.gis.js
-                # @ToDo: Provide explicit option to support multiple maps in a page with different options
-                i18n["gis_search"] = T("Search location in Geonames")
-                #i18n["gis_search_no_internet"] = T("Geonames.org search requires Internet connectivity!")
+                geonames_username = settings.get_gis_geonames_username()
+                if geonames_username:
+                    # Presence of username turns feature on in s3.gis.js
+                    options["geonames"] = geonames_username
+                    # Presence of label adds support JS in Loader
+                    i18n["gis_search"] = T("Search location in Geonames")
+                    #i18n["gis_search_no_internet"] = T("Geonames.org search requires Internet connectivity!")
 
             # Show NAV controls?
             # e.g. removed within S3LocationSelectorWidget[2]
@@ -8234,7 +8237,7 @@ class S3Map(S3Method):
             Entry point to apply map method to S3Requests
             - produces a full page with S3FilterWidgets above a Map
 
-            @param r: the S3Request isntance
+            @param r: the S3Request instance
             @param attr: controller attributes for the request
 
             @return: output object to send to the view
@@ -8626,7 +8629,7 @@ class S3ExportPOI(S3Method):
             @param resource: the resource
         """
 
-        from s3resource import S3FieldSelector as FS
+        from s3query import FS
         query = (FS("location_id$path").contains("/%s/" % lx)) | \
                 (FS("location_id$path").like("%s/%%" % lx))
         resource.add_filter(query)

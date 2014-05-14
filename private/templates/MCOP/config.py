@@ -128,6 +128,8 @@ levels = ("L1", "L2", "L3")
 settings.gis.nav_controls = False
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
+# GeoNames username
+settings.gis.geonames_username = "mcop"
 
 # -----------------------------------------------------------------------------
 # Module settings
@@ -185,11 +187,10 @@ settings.ui.summary = [#{"common": True,
                        # "name": "cms",
                        # "widgets": [{"method": "cms"}]
                        # },
-                       # Embedded Location Selector Widgets are conflicting with Summary Map
-                       #{"common": True,
-                       # "name": "add",
-                       # "widgets": [{"method": "create"}],
-                       # },
+                       {"common": True,
+                        "name": "add",
+                        "widgets": [{"method": "create"}],
+                        },
                        {"name": "table",
                         "label": "Table",
                         "widgets": [{"method": "datatable"}]
@@ -209,6 +210,8 @@ settings.search.filter_manager = False
 # =============================================================================
 # Customise Resources
 
+# -----------------------------------------------------------------------------
+# Alerts (cms_post)
 # -----------------------------------------------------------------------------
 def cms_post_age(row):
     """
@@ -255,8 +258,8 @@ def customise_cms_post_resource(r, tablename):
         # Default page, not homepage
         s3.dl_rowsize = 2
 
-    #from s3.s3resource import S3FieldSelector
-    #s3.filter = S3FieldSelector("series_id$name").belongs(["Alert"])
+    #from s3.s3query import FS
+    #s3.filter = FS("series_id$name").belongs(["Alert"])
 
     s3.crud_strings["cms_post"] = Storage(
         label_create = T("Create Alert"),
@@ -356,6 +359,8 @@ def customise_cms_post_resource(r, tablename):
 
 settings.customise_cms_post_resource = customise_cms_post_resource
 
+# -----------------------------------------------------------------------------
+# Incidents (event_incident)
 # -----------------------------------------------------------------------------
 def open_incident_filter(selector, tablename=None):
     """
@@ -502,7 +507,7 @@ def customise_event_incident_resource(r, tablename):
         # Customise tables used by widgets
         customise_project_task_resource(r, "project_task")
 
-        from s3.s3resource import S3FieldSelector
+        from s3.s3query import FS
         map_widget = dict(label = "Map",
                           type = "map",
                           context = "incident",
@@ -518,7 +523,7 @@ def customise_event_incident_resource(r, tablename):
                              tablename = "cms_post",
                              context = "incident",
                              # Only show Active Alerts
-                             filter = S3FieldSelector("expired") == False,
+                             filter = FS("expired") == False,
                              icon = "icon-alert",
                              colspan = 1,
                              #list_layout = s3db.cms_post_list_layout,
@@ -528,7 +533,7 @@ def customise_event_incident_resource(r, tablename):
                                 type = "datalist",
                                 tablename = "event_resource",
                                 context = "incident",
-                                #filter = S3FieldSelector("status").belongs(event_resource_active_statuses),
+                                #filter = FS("status").belongs(event_resource_active_statuses),
                                 icon = "icon-wrench",
                                 colspan = 1,
                                 #list_layout = s3db.event_resource_list_layout,
@@ -539,7 +544,7 @@ def customise_event_incident_resource(r, tablename):
                             tablename = "project_task",
                             context = "incident",
                             # Only show Active Tasks
-                            filter = S3FieldSelector("status").belongs(s3db.project_task_active_statuses),
+                            filter = FS("status").belongs(s3db.project_task_active_statuses),
                             icon = "icon-tasks",
                             colspan = 1,
                             #list_layout = s3db.project_task_list_layout,
@@ -575,6 +580,8 @@ def customise_event_incident_resource(r, tablename):
 
 settings.customise_event_incident_resource = customise_event_incident_resource
 
+# -----------------------------------------------------------------------------
+# Facilities (org_facility)
 # -----------------------------------------------------------------------------
 def customise_org_facility_resource(r, tablename):
     """
@@ -655,6 +662,8 @@ def customise_org_facility_resource(r, tablename):
 
 settings.customise_org_facility_resource = customise_org_facility_resource
 
+# -----------------------------------------------------------------------------
+# Stakeholders (org_organisation)
 # -----------------------------------------------------------------------------
 def customise_org_organisation_resource(r, tablename):
     """
@@ -740,7 +749,7 @@ def customise_org_organisation_resource(r, tablename):
             #customise_org_office_fields()
             s3db.org_customise_org_resource_fields("profile")
 
-            from s3.s3resource import S3FieldSelector
+            from s3.s3query import FS
             contacts_widget = dict(label = "Directory",
                                    label_create = "Create Contact",
                                    type = "datalist",
@@ -793,7 +802,7 @@ def customise_org_organisation_resource(r, tablename):
             #                         type = "datalist",
             #                         tablename = "cms_post",
             #                         context = "organisation",
-            #                         filter = S3FieldSelector("series_id$name") == "Activity",
+            #                         filter = FS("series_id$name") == "Activity",
             #                         icon = "icon-activity",
             #                         layer = "Activities",
             #                         # provided by Catalogue Layer
@@ -805,7 +814,7 @@ def customise_org_organisation_resource(r, tablename):
             #                      type = "datalist",
             #                      tablename = "cms_post",
             #                      context = "organisation",
-            #                      filter = S3FieldSelector("series_id$name") == "Report",
+            #                      filter = FS("series_id$name") == "Report",
             #                      icon = "icon-report",
             #                      layer = "Reports",
             #                      # provided by Catalogue Layer
@@ -817,7 +826,7 @@ def customise_org_organisation_resource(r, tablename):
             #                          type = "datalist",
             #                          tablename = "cms_post",
             #                          context = "organisation",
-            #                          filter = S3FieldSelector("series_id$name") == "Assessment",
+            #                          filter = FS("series_id$name") == "Assessment",
             #                          icon = "icon-assessment",
             #                          layer = "Assessments",
             #                          # provided by Catalogue Layer
@@ -867,6 +876,8 @@ def customise_org_organisation_resource(r, tablename):
 
 settings.customise_org_organisation_resource = customise_org_organisation_resource
 
+# -----------------------------------------------------------------------------
+# Resource Inventory (org_resource)
 # -----------------------------------------------------------------------------
 def customise_org_resource_resource(r, tablename):
     """
@@ -930,6 +941,8 @@ def customise_org_resource_resource(r, tablename):
 
 settings.customise_org_resource_resource = customise_org_resource_resource
 
+# -----------------------------------------------------------------------------
+# Tasks (project_task)
 # -----------------------------------------------------------------------------
 def active_status_filter(selector, tablename=None):
     """
@@ -1070,6 +1083,8 @@ def customise_project_task_resource(r, tablename):
 
 settings.customise_project_task_resource = customise_project_task_resource
 
+# -----------------------------------------------------------------------------
+# Contacts (pr_person)
 # -----------------------------------------------------------------------------
 def customise_pr_person_controller(**attr):
 
@@ -1577,6 +1592,7 @@ def render_facilities(list_id, item_id, resource, rfields, record):
                )
 
     return item
+
 # =============================================================================
 # Modules
 # Comment/uncomment modules here to disable/enable them

@@ -1283,7 +1283,7 @@ def deploy_apply(r, **attr):
                         filters = S3URLQuery.parse_url(post_vars.ajaxURL)
                     else:
                         filters = None
-                    query = ~(S3FieldSelector("id").belongs(selected))
+                    query = ~(FS("id").belongs(selected))
                     hresource = s3db.resource("hrm_human_resource",
                                               filter=query, vars=filters)
                     rows = hresource.select(["id"], as_rows=True)
@@ -1455,7 +1455,7 @@ def deploy_alert_select_recipients(r, **attr):
     s3db = current.s3db
 
     response = current.response
-    member_query = S3FieldSelector("application.active") == True
+    member_query = FS("application.active") == True
 
     if r.http == "POST":
 
@@ -1476,7 +1476,7 @@ def deploy_alert_select_recipients(r, **attr):
                 else:
                     filters = None
                 query = member_query & \
-                        (~(S3FieldSelector("id").belongs(selected)))
+                        (~(FS("id").belongs(selected)))
 
                 hresource = s3db.resource("hrm_human_resource",
                                           filter=query, vars=filters)
@@ -1653,7 +1653,7 @@ def deploy_response_select_mission(r, **attr):
                             )
         
     response = current.response
-    mission_query = S3FieldSelector("mission.status") == 2
+    mission_query = FS("mission.status") == 2
 
     get_vars = r.get_vars or {}
     mission_id = get_vars.get("mission_id", None)
@@ -1898,6 +1898,90 @@ def deploy_response_select_mission(r, **attr):
 # =============================================================================
 class deploy_MissionProfileLayout(S3DataListLayout):
     """ DataList layout for Mission Profile """
+
+    # -------------------------------------------------------------------------
+    def __init__(self):
+        """ Constructor """
+
+        self.dcount = {}
+        self.avgrat = {}
+        self.deployed = set()
+
+    # -------------------------------------------------------------------------
+    def prep(self, resource, records):
+        """
+            Bulk lookups for cards
+
+            @param resource: the resource
+            @param records: the records as returned from S3Resource.select
+        """
+
+        tablename = resource.tablename
+        if tablename == "deploy_response":
+
+            dcount = self.dcount
+            avgrat = self.avgrat
+            deployed = self.deployed
+            
+            mission_id = None
+
+            for record in records:
+                raw = record["_row"]
+                human_resource_id = raw["hrm_human_resource.id"]
+                if human_resource_id:
+                    dcount[human_resource_id] = 0
+                    avgrat[human_resource_id] = None
+                if not mission_id:
+                    # Should be the same for all rows
+                    mission_id = raw["deploy_response.mission_id"]
+
+            hr_ids = dcount.keys()
+            if hr_ids:
+                db = current.db
+                s3db = current.s3db
+
+                # Number of previous deployments
+                table = s3db.deploy_assignment
+                human_resource_id = table.human_resource_id
+                deployment_count = table.id.count()
+                
+                query = (human_resource_id.belongs(hr_ids)) & \
+                        (table.deleted != True)
+                rows = db(query).select(human_resource_id,
+                                        deployment_count,
+                                        groupby = human_resource_id,
+                                        )
+                for row in rows:
+                    dcount[row[human_resource_id]] = row[deployment_count]
+
+                # Members deployed for this mission
+                query = (human_resource_id.belongs(hr_ids)) & \
+                        (table.mission_id == mission_id) & \
+                        (table.deleted != True)
+                rows = db(query).select(human_resource_id)
+                for row in rows:
+                    deployed.add(row[human_resource_id])
+
+                # Average appraisal rating
+                atable = s3db.hrm_appraisal
+                htable = s3db.hrm_human_resource
+                human_resource_id = htable.id
+                average_rating = atable.rating.avg()
+                
+                query = (human_resource_id.belongs(hr_ids)) & \
+                        (htable.person_id == atable.person_id) & \
+                        (atable.deleted != True) & \
+                        (atable.rating != None) & \
+                        (atable.rating > 0)
+
+                rows = db(query).select(human_resource_id,
+                                        average_rating,
+                                        groupby = human_resource_id,
+                                        )
+                for row in rows:
+                    avgrat[row[human_resource_id]] = row[average_rating]
+                    
+        return
 
     # -------------------------------------------------------------------------
     def render_header(self, list_id, item_id, resource, rfields, record):
@@ -2146,29 +2230,11 @@ class deploy_MissionProfileLayout(S3DataListLayout):
                 docs = ""
 
             # Number of previous deployments and average rating
-            # @todo: bulk lookups instead of per-card
-            if human_resource_id:
-                s3db = current.s3db
-                table = s3db.deploy_assignment
-                query = (table.human_resource_id == human_resource_id) & \
-                        (table.deleted != True)
-                dcount = db(query).count()
-
-                table = s3db.hrm_appraisal
-                htable = s3db.hrm_human_resource
-                query = (htable.id == human_resource_id) & \
-                        (htable.person_id == table.person_id) & \
-                        (table.deleted != True) & \
-                        (table.rating != None) & \
-                        (table.rating > 0)
-                avgrat = table.rating.avg()
-                row = db(query).select(avgrat).first()
-                if row:
-                    avgrat = row[avgrat]
-                else:
-                    avgrat = None
-            else:
-                dcount = avgrat = "?"
+            # (looked up in-bulk in self.prep)
+            if hasattr(self, "dcount"):
+                dcount = self.dcount.get(human_resource_id, 0)
+            if hasattr(self, "avgrat"):
+                avgrat = self.avgrat.get(human_resource_id)
             dcount_id = "profile-data-dcount-%s" % record_id
             avgrat_id = "profile-data-avgrat-%s" % record_id
             dinfo = DIV(LABEL("%s:" % T("Previous Deployments"),
@@ -2215,21 +2281,15 @@ class deploy_MissionProfileLayout(S3DataListLayout):
                         )
 
             # Workflow
-            # @todo: bulk lookup instead of per-card
             if human_resource_id:
-                mission_id = raw["deploy_response.mission_id"]
-                table = current.s3db.deploy_assignment
-                query = (table.mission_id == mission_id) & \
-                        (table.human_resource_id == human_resource_id) & \
-                        (table.deleted != True)
-                row = db(query).select(table.id, limitby=(0, 1)).first()
-                if row:
+                if hasattr(self, "deployed") and human_resource_id in self.deployed:
                     deploy = A(I(" ", _class="icon icon-deployed"),
                                SPAN(T("Member Deployed"),
                                     _class="card-action"),
                                _class="action-lnk"
                              )
                 else:
+                    mission_id = raw["deploy_response.mission_id"]
                     url = URL(f="mission",
                               args=[mission_id, "assignment", "create"],
                               vars={"member_id": human_resource_id})

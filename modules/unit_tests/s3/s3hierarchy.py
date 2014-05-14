@@ -8,7 +8,7 @@
 import unittest
 from gluon.dal import Query
 from s3.s3utils import *
-from s3 import S3FieldSelector, S3Hierarchy, s3_uid
+from s3 import FS, S3Hierarchy, s3_uid
 from lxml import etree
 
 # =============================================================================
@@ -27,6 +27,12 @@ class S3HierarchyTests(unittest.TestCase):
                           Field("parent", "reference test_hierarchy"),
                           *s3_uid()
                           )
+
+        s3db.define_table("test_hierarchy_reference",
+                          Field("test_hierarchy_id", "reference test_hierarchy"),
+                          *s3_uid()
+                          )
+                          
         xmlstr = """
 <s3xml>
     <resource name="test_hierarchy" uuid="HIERARCHY1">
@@ -311,7 +317,7 @@ class S3HierarchyTests(unittest.TestCase):
         uids = self.uids
 
         h = S3Hierarchy("test_hierarchy",
-                        filter = S3FieldSelector("type") == "D",
+                        filter = FS("type") == "D",
                         leafonly = True)
 
         # Check nodes
@@ -338,7 +344,7 @@ class S3HierarchyTests(unittest.TestCase):
         uids = self.uids
 
         h = S3Hierarchy("test_hierarchy",
-                        filter = S3FieldSelector("type") == "C",
+                        filter = FS("type") == "C",
                         leafonly = False)
 
         # Check nodes
@@ -360,6 +366,73 @@ class S3HierarchyTests(unittest.TestCase):
             parent_id = node["p"]
             if parent_id:
                 self.assertTrue(parent_id in nodes)
+
+    # -------------------------------------------------------------------------
+    def testTypeOf(self):
+        """ Test resolution of __typeof queries """
+
+        db = current.db
+        
+        uids = self.uids
+        resource = current.s3db.resource("test_hierarchy_reference")
+
+        # Test with field in referencing table
+        table = resource.table
+        expr = FS("test_hierarchy_id").typeof(uids["HIERARCHY1"])
+        
+        expected = ("HIERARCHY1",
+                    "HIERARCHY1-1",
+                    "HIERARCHY1-1-1",
+                    "HIERARCHY1-1-2",
+                    "HIERARCHY1-2",
+                    "HIERARCHY1-2-1",
+                    "HIERARCHY1-2-2",
+                    )
+        expected_query = table.test_hierarchy_id.belongs(
+                            uids[uid] for uid in expected
+                         )
+        query = expr.query(resource)
+        self.assertEqual(query, expected_query)
+
+        # Test with field in hierarchy table
+        table = db.test_hierarchy
+        expr = FS("test_hierarchy_id$name").typeof("Type 1")
+        expected = ("HIERARCHY1",
+                    "HIERARCHY1-1",
+                    "HIERARCHY1-1-1",
+                    "HIERARCHY1-1-2",
+                    "HIERARCHY1-2",
+                    "HIERARCHY1-2-1",
+                    "HIERARCHY1-2-2",
+                    )
+        expected_query = table.id.belongs(
+                            uids[uid] for uid in expected
+                         )
+        query = expr.query(resource)
+        self.assertEqual(query, expected_query)
+
+        # Test with field in hierarchy table, with wildcard
+        table = db.test_hierarchy
+        expr = FS("test_hierarchy_id$name").typeof("Type 1-*")
+        expected = ("HIERARCHY1-1",
+                    "HIERARCHY1-1-1",
+                    "HIERARCHY1-1-2",
+                    "HIERARCHY1-2",
+                    "HIERARCHY1-2-1",
+                    "HIERARCHY1-2-2",
+                    )
+        expected_query = table.id.belongs(
+                            uids[uid] for uid in expected
+                         )
+        query = expr.query(resource)
+        self.assertEqual(query, expected_query)
+        
+        # Test with field in hierarchy table, with wildcard, no match
+        table = db.test_hierarchy
+        expr = FS("test_hierarchy_id$name").typeof("Type 1-3*")
+        expected_query = table.id.belongs(set())
+        query = expr.query(resource)
+        self.assertEqual(query, expected_query)
 
 # =============================================================================
 def run_suite(*test_classes):
