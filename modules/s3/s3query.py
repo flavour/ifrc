@@ -32,7 +32,7 @@ import re
 import sys
 
 from gluon import current
-from gluon.dal import Row, Field
+from gluon.dal import Row, Field, Query
 from gluon.storage import Storage
 
 from s3fields import S3RepresentLazy
@@ -1287,8 +1287,9 @@ class S3ResourceQuery(object):
         # Connect to the hierarchy
         from s3hierarchy import S3Hierarchy
         hierarchy = S3Hierarchy(ktablename)
-        if hierarchy.config is None:
-            # No hierarchy configured => fall back to belongs
+        if hierarchy.config is None and str(l.type)[:5] != "list:":
+            # No hierarchy configured and no list:reference
+            # => no need to resolve expression, can simply use belongs
             return self._query_belongs(l, r)
 
         field = l
@@ -1302,32 +1303,7 @@ class S3ResourceQuery(object):
 
                 # Build a filter expression for the lookup table
                 fs = S3FieldSelector(l.name)
-                if str(l.type) in ("string", "text"):
-                    if not isinstance(r, (list, tuple, set)):
-                        items = [r]
-                    else:
-                        items = r
-                    expr = None
-                    for item in items:
-                        if isinstance(item, basestring):
-                            if "*" in item and "%" not in item:
-                                s = item.replace("*", "%")
-                            else:
-                                s = item
-                        else:
-                            try:
-                                s = str(item)
-                            except:
-                                continue
-                        _expr = (fs.like(s)) if "%" in s else (fs == s)
-                        if expr is not None:
-                            expr |= _expr
-                        else:
-                            expr = _expr
-                elif isinstance(r, (list, tuple, set)):
-                    expr = fs.belongs(r)
-                else:
-                    expr = (fs == r)
+                expr = self._query_belongs(l, r, field = fs)
 
                 # Resolve filter expression into subquery
                 kresource = current.s3db.resource(ktablename)
@@ -1342,10 +1318,16 @@ class S3ResourceQuery(object):
                 if current.xml.DELETED in ktable.fields:
                     subquery &= ktable[current.xml.DELETED] != True
                 rows = current.db(subquery).select(ktable._id)
+
+                # Override field/keys
+                field = ktable._id
                 keys = set([row[ktable._id.name] for row in rows])
 
-                field = ktable._id
-
+        list_type = str(field.type)[:5] == "list:"
+        
+        q = None
+        none = False
+        
         if keys:
             # Lookup all descendant types from the hierarchy
             none = False
@@ -1361,34 +1343,99 @@ class S3ResourceQuery(object):
                     except ValueError:
                         continue
                     nodes.add(node_id)
-            nodeset = hierarchy.findall(nodes, inclusive=True)
-            q = field.belongs(nodeset)
-            if none:
-                # None needs special handling with older DAL versions
-                q |= (field == None)
-        else:
-            # Filter doesn't match
+            if hierarchy.config is not None:
+                nodeset = hierarchy.findall(nodes, inclusive=True)
+            else:
+                nodeset = nodes
+            if nodeset:
+                if list_type:
+                    q = (field.contains(list(nodeset)))
+                elif len(nodeset) > 1:
+                    q = (field.belongs(nodeset))
+                else:
+                    q = (field == tuple(nodeset)[0])
+                
+        elif keys is None:
+            none = True
+
+        if none:
+            if not list_type:
+                if q is None:
+                    q = (field == None)
+                else:
+                    q |= (field == None)
+        if q is None:
             q = field.belongs(set())
-            
+
         return q
 
     # -------------------------------------------------------------------------
-    def _query_belongs(self, l, r):
+    def _query_belongs(self, l, r, field=None):
         """
-            Translate BELONGS into DAL expression
+            Resolve BELONGS into a DAL expression (or S3ResourceQuery if
+            field is an S3FieldSelector)
 
             @param l: the left operator
             @param r: the right operator
+            @param field: alternative left operator
         """
 
+        if field is None:
+            field = l
+
+        expr = None
+        none = False
+        
         if not isinstance(r, (list, tuple, set)):
-            r = [r]
-        if None in r:
-            _r = [item for item in r if item is not None]
-            q = ((l.belongs(_r)) | (l == None))
+            items = [r]
         else:
-            q = l.belongs(r)
-        return q
+            items = r
+        if None in items:
+            none = True
+            items = [item for item in items if item is not None]
+            
+        wildcard = False
+        
+        if str(l.type) in ("string", "text"):
+            for item in items:
+                if isinstance(item, basestring):
+                    if "*" in item and "%" not in item:
+                        s = item.replace("*", "%")
+                    else:
+                        s = item
+                else:
+                    try:
+                        s = str(item)
+                    except:
+                        continue
+                if "%" in s:
+                    wildcard = True
+                    _expr = (field.like(s))
+                else:
+                    _expr = (field == s)
+                    
+                if expr is None:
+                    expr = _expr
+                else:
+                    expr |= _expr
+                    
+        if not wildcard:
+            if len(items) == 1:
+                # Don't use belongs() for single value
+                expr = (field == items[0])
+            elif items:
+                expr = (field.belongs(items))
+
+        if none:
+            # None needs special handling with older DAL versions
+            if expr is None:
+                expr = (field == None)
+            else:
+                expr |= (field == None)
+        elif expr is None:
+            expr = field.belongs(set())
+
+        return expr
 
     # -------------------------------------------------------------------------
     def __call__(self, resource, row, virtual=True):
