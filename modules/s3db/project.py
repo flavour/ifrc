@@ -1001,7 +1001,11 @@ class S3ProjectActivityModel(S3Model):
             levels = hierarchy.keys()
             if len(settings.get_gis_countries()) == 1 or \
                s3.gis.config.region_location_id:
-                levels.remove("L0")
+                try:
+                    levels.remove("L0")
+                except ValueError:
+                    # Already removed
+                    pass
 
             filter_widgets.insert(0,
                 S3LocationFilter("location_id",
@@ -1735,7 +1739,11 @@ class S3ProjectBeneficiaryModel(S3Model):
         levels = hierarchy.keys()
         if len(settings.get_gis_countries()) == 1 or \
            s3.gis.config.region_location_id:
-            levels.remove("L0")
+            try:
+                levels.remove("L0")
+            except ValueError:
+                # Already removed
+                pass
 
         # Normally only used in Report
         filter_widgets = [
@@ -2536,7 +2544,11 @@ class S3ProjectLocationModel(S3Model):
         levels = hierarchy.keys()
         if len(settings.get_gis_countries()) == 1 or \
            s3.gis.config.region_location_id:
-            levels.remove("L0")
+            try:
+                levels.remove("L0")
+            except ValueError:
+                # Already removed
+                pass
 
         # ---------------------------------------------------------------------
         # Project Location ('Community')
@@ -2548,6 +2560,10 @@ class S3ProjectLocationModel(S3Model):
                      Field("name",
                            writable=False),
                      self.project_project_id(),
+                     # Enable in templates which desire this:
+                     self.project_status_id(readable = False,
+                                            writable = False,
+                                            ),
                      self.gis_location_id(
                      widget = S3LocationAutocompleteWidget(),
                      requires = IS_LOCATION(),
@@ -3668,7 +3684,11 @@ class S3ProjectDRRPPModel(S3Model):
         NONE = current.messages["NONE"]
 
         local_currencies = current.deployment_settings.get_fin_currencies().keys()
-        local_currencies.remove("USD")
+        try:
+            local_currencies.remove("USD")
+        except ValueError:
+            # Already removed
+            pass
 
         project_rfa_opts = self.project_rfa_opts()
         project_pifacc_opts = self.project_pifacc_opts()
@@ -6036,13 +6056,13 @@ def project_task_controller():
                 # Hide the Assignee column (always us)
                 try:
                     list_fields.remove("pe_id")
-                except:
+                except ValueError:
                     # Already removed
                     pass
                 # Hide the Status column (always 'assigned' or 'reopened')
                 try:
                     list_fields.remove("status")
-                except:
+                except ValueError:
                     # Already removed
                     pass
                 s3db.configure(tablename,
@@ -6072,7 +6092,7 @@ def project_task_controller():
             try:
                 # Hide the project column since we know that already
                 list_fields.remove((T("Project"), "task_project.project_id"))
-            except:
+            except ValueError:
                 # Already removed
                 pass
             s3db.configure(tablename,
