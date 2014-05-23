@@ -60,10 +60,12 @@ class S3Config(Storage):
 
     # Formats from static/scripts/i18n/jquery-ui-i18n.js converted to Python style
     date_formats = {"ar": "%d/%m/%Y",
+                    "bs": "%d.%m.%Y",
                     "de": "%d.%m.%Y",
                     "el": "%d/%m/%Y",
                     "es": "%d/%m/%Y",
                     "fr": "%d/%m/%Y",
+                    "hr": "%d.%m.%Y",
                     "it": "%d/%m/%Y",
                     "ja": "%Y/%m/%d",
                     "km": "%d-%m-%Y",
@@ -74,6 +76,7 @@ class S3Config(Storage):
                     "pt": "%d/%m/%Y",
                     "pt-br": "%d/%m/%Y",
                     "ru": "%d.%m.%Y",
+                    "sr": "%d.%m.%Y",
                     "sv": "%Y-%m-%d",
                     #"tet": "",
                     #"tl": "",
@@ -735,7 +738,8 @@ class S3Config(Storage):
 
     def get_gis_clear_layers(self):
         """
-            Display Clear Layers Tool above Map's Layer Tree
+            Display Clear Layers Tool
+            - defaults to being above Map's Layer Tree, but can also be set to "toolbar"
         """
         return self.gis.get("clear_layers", False)
 
@@ -757,18 +761,23 @@ class S3Config(Storage):
         return self.gis.get("duplicate_features", False)
 
     def get_gis_edit_group(self):
-        " Edit Location Groups "
+        """
+            Edit Location Groups
+        """
         return self.gis.get("edit_GR", False)
 
     def get_gis_geocode_imported_addresses(self):
-        " Should Addresses imported from CSV be passed to a Geocoder to try and automate Lat/Lon? "
+        """
+            Should Addresses imported from CSV be passed to a Geocoder to try and automate Lat/Lon?
+        """
         return self.gis.get("geocode_imported_addresses", False)
 
-    def get_gis_geonames_username(self):
+    def get_gis_geolocate_control(self):
         """
-            Username for the GeoNames search box
+            Whether the map should have a Geolocate control
+            - also requires the presence of a Toolbar
         """
-        return self.gis.get("geonames_username", None)
+        return self.gis.get("geolocate_control", True)
 
     def get_gis_geoserver_url(self):
         return self.gis.get("geoserver_url", "")
@@ -777,16 +786,29 @@ class S3Config(Storage):
     def get_gis_geoserver_password(self):
         return self.gis.get("geoserver_password", "")
         
+    def get_gis_getfeature_control(self):
+        """
+            Whether the map should have a WMS GetFeatureInfo control
+            - also requires the presence of a Toolbar and queryable WMS layers
+        """
+        return self.gis.get("getfeature_control", True)
+
     def get_gis_latlon_selector(self):
-        " Display Lat/Lon form fields when selecting Locations "
+        """
+            Display Lat/Lon form fields when selecting Locations
+        """
         return self.gis.get("latlon_selector", True)
 
     def get_gis_layer_metadata(self):
-        " Use CMS to provide Metadata on Map Layers "
+        """
+            Use CMS to provide Metadata on Map Layers
+        """
         return self.has_module("cms") and self.gis.get("layer_metadata", False)
 
     def get_gis_layer_properties(self):
-        " Display Layer Properties Tool above Map's Layer Tree "
+        """
+            Display Layer Properties Tool above Map's Layer Tree
+        """
         return self.gis.get("layer_properties", True)
 
     def get_gis_layer_tree_base(self):
@@ -874,7 +896,7 @@ class S3Config(Storage):
         """
             Should the Map Toolbar display Navigation Controls?
         """
-        return self.gis.get("nav_controls", True)
+        return self.gis.get("nav_controls", False)
 
     def get_gis_label_overlays(self):
         """
@@ -919,6 +941,14 @@ class S3Config(Storage):
             URL for a Print Service
         """
         return self.gis.get("print_service", "")
+
+    def get_gis_save(self):
+        """
+            Should the main Map display a Save control?
+            If there is a Toolbar, then this defaults to being inside the Toolbar, otherwise floating.
+            If you wish it to float even when there is a toolbar, then specify "float"
+        """
+        return self.gis.get("save", True)
 
     def get_gis_scaleline(self):
         """
@@ -997,6 +1027,7 @@ class S3Config(Storage):
         return self.L10n.get("languages", OrderedDict([("ar", "العربية"),
                                                        ("zh-cn", "中文 (简体)"),
                                                        ("zh-tw", "中文 (繁體)"),
+                                                       ("bs", "Bosanski"),
                                                        ("en", "English"),
                                                        ("fr", "Français"),
                                                        ("de", "Deutsch"),
@@ -1016,6 +1047,7 @@ class S3Config(Storage):
                                                        ("ur", "اردو"),
                                                        ("vi", "Tiếng Việt"),
                                                        ]))
+
     def get_L10n_languages_readonly(self):
         return self.L10n.get("languages_readonly", True)
 
