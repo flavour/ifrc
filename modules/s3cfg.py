@@ -780,9 +780,9 @@ class S3Config(Storage):
         return self.gis.get("geolocate_control", True)
 
     def get_gis_geonames_username(self):
-          """
-              Username for the GeoNames search box
-          """
+        """
+            Username for the GeoNames search box
+        """
         return self.gis.get("geonames_username", None)
 
     def get_gis_geoserver_url(self):
