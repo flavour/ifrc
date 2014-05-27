@@ -222,6 +222,17 @@
     </xsl:template>
 
     <!-- ****************************************************************** -->
+    <!-- project_task -->
+    <xsl:template match="resource[@name='project_task']" mode="contents">
+        <title>
+            <xsl:value-of select="./data[@field='name']/text()"/>
+        </title>
+        <description>
+            <xsl:value-of select="./data[@field='description']/text()"/>
+        </description>
+    </xsl:template>
+
+    <!-- ****************************************************************** -->
     <!-- req_req -->
     <xsl:template match="resource[@name='req_req']" mode="contents">
         <title>
@@ -271,5 +282,4 @@
     </xsl:template>
 
     <!-- ****************************************************************** -->
-
 </xsl:stylesheet>

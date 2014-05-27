@@ -20,22 +20,34 @@ class S3HierarchyTests(unittest.TestCase):
 
         s3db = current.s3db
 
+        s3db.define_table("test_nonhierarchy",
+                          Field("name"),
+                          *s3_uid())
+
         s3db.define_table("test_hierarchy",
                           Field("name"),
                           Field("category"),
                           Field("type"),
                           Field("parent", "reference test_hierarchy"),
-                          *s3_uid()
-                          )
+                          Field("test_nonhierarchy_id", "reference test_nonhierarchy"),
+                          Field("test_nonhierarchy_multi_id", "list:reference test_nonhierarchy"),
+                          Field.Method("vsfield", lambda row: "test"),
+                          Field.Method("vmfield", lambda row: ["test1", "test2", "test3"]),
+                          *s3_uid())
 
         s3db.define_table("test_hierarchy_reference",
                           Field("test_hierarchy_id", "reference test_hierarchy"),
                           Field("test_hierarchy_multi_id", "list:reference test_hierarchy"),
-                          *s3_uid()
-                          )
-                          
+                          *s3_uid())
+
         xmlstr = """
 <s3xml>
+    <resource name="test_nonhierarchy" uuid="NONHIERARCHY1">
+        <data field="name">NonHierarchy1</data>
+    </resource>
+    <resource name="test_nonhierarchy" uuid="NONHIERARCHY2">
+        <data field="name">NonHierarchy2</data>
+    </resource>
     <resource name="test_hierarchy" uuid="HIERARCHY1">
         <data field="name">Type 1</data>
         <data field="category">Cat 0</data>
@@ -46,6 +58,7 @@ class S3HierarchyTests(unittest.TestCase):
         <data field="category">Cat 1</data>
         <data field="type">C</data>
         <reference field="parent" resource="test_hierarchy" uuid="HIERARCHY1"/>
+        <reference field="test_nonhierarchy_id" resource="test_nonhierarchy" uuid="NONHIERARCHY1"/>
     </resource>
     <resource name="test_hierarchy" uuid="HIERARCHY1-1-1">
         <data field="name">Type 1-1-1</data>
@@ -86,6 +99,8 @@ class S3HierarchyTests(unittest.TestCase):
         <data field="name">Type 2-1</data>
         <data field="category">Cat 1</data>
         <data field="type">A</data>
+        <reference field="test_nonhierarchy_multi_id" resource="test_nonhierarchy"
+                   uuid="[&quot;NONHIERARCHY1&quot;,&quot;NONHIERARCHY2&quot;]"/>
         <reference field="parent" resource="test_hierarchy" uuid="HIERARCHY2"/>
     </resource>
     <resource name="test_hierarchy" uuid="HIERARCHY2-1-1">
@@ -105,7 +120,7 @@ class S3HierarchyTests(unittest.TestCase):
         xmltree = etree.ElementTree(etree.fromstring(xmlstr))
 
         current.auth.override = True
-        resource = current.s3db.resource("test_hierarchy")
+        resource = s3db.resource("test_hierarchy")
         resource.import_xml(xmltree)
 
     # -------------------------------------------------------------------------
@@ -114,6 +129,8 @@ class S3HierarchyTests(unittest.TestCase):
 
         db = current.db
         db.test_hierarchy.drop()
+        db.test_hierarchy_reference.drop()
+        db.test_nonhierarchy.drop()
 
     # -------------------------------------------------------------------------
     def setUp(self):
@@ -121,15 +138,24 @@ class S3HierarchyTests(unittest.TestCase):
         current.auth.override = True
         
         db = current.db
-        rows = db(db.test_hierarchy.id>0).select()
-        self.rows = {}
-        self.uids = {}
-        self.ids = {}
-        for row in rows:
-            uid = row.uuid
-            self.rows[uid] = row
-            self.uids[uid] = row.id
-            self.ids[row.id] = uid
+
+        if not hasattr(self, "rows"):
+            rows = db(db.test_hierarchy.id>0).select()
+            self.rows = {}
+            self.uids = {}
+            self.ids = {}
+            for row in rows:
+                uid = row.uuid
+                self.rows[uid] = row
+                self.uids[uid] = row.id
+                self.ids[row.id] = uid
+
+        if not hasattr(self, "lookup_uids"):
+            rows = db(db.test_nonhierarchy.id>0).select()
+            self.lookup_uids = {}
+            for row in rows:
+                uid = row.uuid
+                self.lookup_uids[uid] = row.id
 
         current.s3db.configure("test_hierarchy",
                                hierarchy=("parent", "category"))
@@ -138,7 +164,6 @@ class S3HierarchyTests(unittest.TestCase):
     def tearDown(self):
 
         current.auth.override = False
-        self.rows = None
 
     # -------------------------------------------------------------------------
     def testHierarchyConstruction(self):
@@ -681,6 +706,86 @@ class S3HierarchyTests(unittest.TestCase):
         self.assertEquivalent(query, expected_query)
 
     # -------------------------------------------------------------------------
+    def testTypeOfLookupTableReference(self):
+        """
+            Test resolution of __typeof queries, for reference field
+            in lookup table
+        """
+
+        db = current.db
+
+        uids = self.uids
+        lookup_uids = self.lookup_uids
+        resource = current.s3db.resource("test_hierarchy_reference")
+
+        # Test with single value
+        lookup = lookup_uids["NONHIERARCHY1"]
+        expr = FS("test_hierarchy_id$test_nonhierarchy_id").typeof(lookup)
+        query = expr.query(resource)
+
+        table = db.test_hierarchy
+        expected = set(uids[uid] for uid in ("HIERARCHY1-1",
+                                             "HIERARCHY1-1-1",
+                                             "HIERARCHY1-1-2",
+                                             ))
+        expected_query = table.id.belongs(expected)
+
+        # Test with multiple values
+        lookup = (lookup_uids["NONHIERARCHY1"],
+                  lookup_uids["NONHIERARCHY2"])
+        expr = FS("test_hierarchy_id$test_nonhierarchy_id").typeof(lookup)
+        query = expr.query(resource)
+
+        table = db.test_hierarchy
+        expected = set(uids[uid] for uid in ("HIERARCHY1-1",
+                                             "HIERARCHY1-1-1",
+                                             "HIERARCHY1-1-2",
+                                             ))
+        expected_query = table.id.belongs(expected)
+
+        self.assertEquivalent(query, expected_query)
+
+    # -------------------------------------------------------------------------
+    def testTypeOfLookupTableListReference(self):
+        """
+            Test resolution of __typeof queries, for list:reference field
+            in lookup table
+        """
+
+        db = current.db
+
+        uids = self.uids
+        lookup_uids = self.lookup_uids
+        resource = current.s3db.resource("test_hierarchy_reference")
+
+        # Test with single value
+        lookup = lookup_uids["NONHIERARCHY1"]
+        expr = FS("test_hierarchy_id$test_nonhierarchy_multi_id").typeof(lookup)
+        query = expr.query(resource)
+
+        table = db.test_hierarchy
+        expected = set(uids[uid] for uid in ("HIERARCHY2-1",
+                                             "HIERARCHY2-1-1",
+                                             "HIERARCHY2-1-2",
+                                             ))
+        expected_query = table.id.belongs(expected)
+
+        # Test with multiple values
+        lookup = (lookup_uids["NONHIERARCHY1"],
+                  lookup_uids["NONHIERARCHY2"])
+        expr = FS("test_hierarchy_id$test_nonhierarchy_multi_id").typeof(lookup)
+        query = expr.query(resource)
+
+        table = db.test_hierarchy
+        expected = set(uids[uid] for uid in ("HIERARCHY2-1",
+                                             "HIERARCHY2-1-1",
+                                             "HIERARCHY2-1-2",
+                                             ))
+        expected_query = table.id.belongs(expected)
+
+        self.assertEquivalent(query, expected_query)
+
+    # -------------------------------------------------------------------------
     def testTypeOfLookupTableNoHierarchy(self):
         """
             Test resolution of __typeof queries, for field in lookup
@@ -875,6 +980,56 @@ class S3HierarchyTests(unittest.TestCase):
         self.assertEqual(found, expected)
 
     # -------------------------------------------------------------------------
+    def testVirtualFieldSingle(self):
+        """ Test fallbacks for __typeof with single value virtual field """
+
+        resource = current.s3db.resource("test_hierarchy")
+        row = self.rows["HIERARCHY1"]
+
+        # vsfield returns "test"
+
+        expr = FS("vsfield").typeof("test")
+        result = expr(resource, row, virtual=True)
+        self.assertTrue(result)
+
+        expr = FS("vsfield").typeof("other")
+        result = expr(resource, row, virtual=True)
+        self.assertFalse(result)
+
+        expr = FS("vsfield").typeof(["test", "test1", "test2"])
+        result = expr(resource, row, virtual=True)
+        self.assertTrue(result)
+
+        expr = FS("vsfield").typeof(["other", "other1", "other2"])
+        result = expr(resource, row, virtual=True)
+        self.assertFalse(result)
+
+    # -------------------------------------------------------------------------
+    def testVirtualFieldMultiple(self):
+        """ Test fallbacks for __typeof with multi-value virtual field """
+
+        resource = current.s3db.resource("test_hierarchy")
+        row = self.rows["HIERARCHY2"]
+
+        # vmfield returns ["test1", "test2", "test3"]
+
+        expr = FS("vmfield").typeof("test1")
+        result = expr(resource, row, virtual=True)
+        self.assertTrue(result)
+
+        expr = FS("vmfield").typeof("other")
+        result = expr(resource, row, virtual=True)
+        self.assertFalse(result)
+
+        expr = FS("vmfield").typeof(["test1", "other"])
+        result = expr(resource, row, virtual=True)
+        self.assertTrue(result)
+
+        expr = FS("vmfield").typeof(["other1", "other2"])
+        result = expr(resource, row, virtual=True)
+        self.assertFalse(result)
+
+    # -------------------------------------------------------------------------
     def inspect_multi_query(self, query, field=None, conjunction=None, op=None):
         """
             Inspect a list:reference multi-value containment query
@@ -942,7 +1097,7 @@ class S3HierarchyTests(unittest.TestCase):
         
         self.assertTrue(self.equivalent(query, expected_query),
                         msg = "%s != %s" % (query, expected_query))
-                        
+
 # =============================================================================
 def run_suite(*test_classes):
     """ Run the test suite """

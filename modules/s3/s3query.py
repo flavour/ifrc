@@ -1280,48 +1280,61 @@ class S3ResourceQuery(object):
             @param r: the right operator
         """
 
-        ktablename, key, multiple = s3_get_foreign_key(l)
-        if not ktablename:
-            ktablename = l.tablename
-
-        # Connect to the hierarchy
         from s3hierarchy import S3Hierarchy
-        hierarchy = S3Hierarchy(ktablename)
-        if hierarchy.config is None and str(l.type)[:5] != "list:":
+        
+        tablename = l.tablename
+        
+        # Connect to the hierarchy
+        hierarchy = S3Hierarchy(tablename)
+        if hierarchy.config is None:
+            # Reference to a hierarchical table?
+            ktablename, key = s3_get_foreign_key(l)[:2]
+            if ktablename:
+                hierarchy = S3Hierarchy(ktablename)
+        else:
+            key = None
+
+        list_type = str(l.type)[:5] == "list:"
+        if hierarchy.config is None and not list_type:
             # No hierarchy configured and no list:reference
             # => no need to resolve expression, can simply use belongs
             return self._query_belongs(l, r)
 
-        field = l
-        keys = r
-            
+        field, keys = l, r
+        
         if not key:
 
-            ktable = current.s3db[ktablename]
-            if l.name != ktable._id.name:
+            s3db = current.s3db
+
+            table = s3db[tablename]
+            if l.name != table._id.name:
                 # Lookup-field rather than primary key => resolve it
 
                 # Build a filter expression for the lookup table
                 fs = S3FieldSelector(l.name)
-                expr = self._query_belongs(l, r, field = fs)
+                if list_type:
+                    expr = fs.contains(r)
+                else:
+                    expr = self._query_belongs(l, r, field = fs)
 
                 # Resolve filter expression into subquery
-                kresource = current.s3db.resource(ktablename)
+                resource = s3db.resource(tablename)
                 if expr is not None:
-                    subquery = expr.query(kresource)
+                    subquery = expr.query(resource)
                 else:
                     subquery = None
                 if not subquery:
                     return None
 
                 # Execute query and retrieve the lookup table IDs
-                if current.xml.DELETED in ktable.fields:
-                    subquery &= ktable[current.xml.DELETED] != True
-                rows = current.db(subquery).select(ktable._id)
+                DELETED = current.xml.DELETED
+                if DELETED in table.fields:
+                    subquery &= table[DELETED] != True
+                rows = current.db(subquery).select(table._id)
 
                 # Override field/keys
-                field = ktable._id
-                keys = set([row[ktable._id.name] for row in rows])
+                field = table._id
+                keys = set([row[table._id.name] for row in rows])
 
         list_type = str(field.type)[:5] == "list:"
         
@@ -1553,30 +1566,42 @@ class S3ResourceQuery(object):
         """
 
         result = False
-
-        contains = self._contains
         convert = S3TypeConverter.convert
+
+        # Fallbacks for TYPEOF
+        if op == self.TYPEOF:
+            if isinstance(l, (list, tuple, set)):
+                op = self.ANYOF
+            elif isinstance(r, (list, tuple, set)):
+                op = self.BELONGS
+            else:
+                op = self.EQ
+
         if op == self.CONTAINS:
             r = convert(l, r)
-            result = contains(l, r)
+            result = self._probe_contains(l, r)
+            
         elif op == self.ANYOF:
-            if not isinstance(r, (list, tuple)):
+            if not isinstance(r, (list, tuple, set)):
                 r = [r]
             for v in r:
-                if isinstance(l, (list, tuple, basestring)):
-                    if contains(l, v):
+                if isinstance(l, (list, tuple, set, basestring)):
+                    if self._probe_contains(l, v):
                         return True
                 elif l == v:
                     return True
             return False
+            
         elif op == self.BELONGS:
-            if not isinstance(r, (list, tuple)):
+            if not isinstance(r, (list, tuple, set)):
                 r = [r]
             r = convert(l, r)
-            result = contains(r, l)
+            result = self._probe_contains(r, l)
+            
         elif op == self.LIKE:
             pattern = re.escape(str(r)).replace("\\%", ".*").replace(".*.*", "\\%")
             return re.match(pattern, str(l)) is not None
+            
         else:
             r = convert(l, r)
             if op == self.LT:
@@ -1591,11 +1616,12 @@ class S3ResourceQuery(object):
                 result = l >= r
             elif op == self.GT:
                 result = l > r
+                
         return result
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def _contains(a, b):
+    def _probe_contains(a, b):
         """
             Probe whether a contains b
         """
@@ -1605,8 +1631,8 @@ class S3ResourceQuery(object):
         try:
             if isinstance(a, basestring):
                 return str(b) in a
-            elif isinstance(a, (list, tuple)):
-                if isinstance(b, (list, tuple)):
+            elif isinstance(a, (list, tuple, set)):
+                if isinstance(b, (list, tuple, set)):
                     convert = S3TypeConverter.convert
                     found = True
                     for _b in b:

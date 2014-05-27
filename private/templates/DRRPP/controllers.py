@@ -96,8 +96,7 @@ class index():
             lappend(card)
             odd = False if odd else True
 
-        request.args = ["login"]
-        login = current.auth()
+        login = current.auth.login(inline=True)
 
         appname = request.application
         s3 = response.s3
@@ -165,10 +164,10 @@ class register():
         _settings.register_onaccept = register_onaccept
 
         # Build the registration form
-        form = auth()
-        form.attributes["_id"] = "regform"
+        form = auth.register(js_validation=False)
 
         # Set the formstyle
+        # @ToDo: Update to the fact that Auth now uses formstyle & use s3_addrow to add new rows
         _form = form[0]
         _form[-1] = TR(TD(_class="w2p_fl"),
                        TD(_class="w2p_fc"),
@@ -315,7 +314,7 @@ class register():
             s3.scripts.append("/%s/static/scripts/jquery.pstrength.2.1.0.min.js" % appname)
             s3.scripts.append("/%s/static/scripts/jquery.validate.min.js" % appname)
         s3.jquery_ready.append("".join(('''
-$('#regform').validate({
+$('.auth_register').validate({
  errorClass:'req',
  rules:{
   first_name:{
@@ -665,11 +664,8 @@ class login():
 
         response.title = T("Login")
 
-        request.args = ["login"]
-        login = current.auth()
-
         return dict(
-            form = login
+            form = current.auth.login()
         )
 
 # =============================================================================
