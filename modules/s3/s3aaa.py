@@ -570,23 +570,9 @@ Thank you"""
             else:
                 formstyle = deployment_settings.get_ui_formstyle()
 
-            form = SQLFORM(utable,
-                           fields = [username, passfield],
-                           hidden = dict(_next=request.vars._next),
-                           showid = settings.showid,
-                           submit_button = T("Login"),
-                           delete_label = messages.delete_label,
-                           formstyle = formstyle,
-                           separator = settings.label_separator
-                           )
+            buttons = []
 
-            # Identify form for CSS
-            form.add_class("auth_login")
-
-            # @ToDo: Probe formstyle rather than hardcode options here
-            formstyle_name = deployment_settings.ui.get("formstyle")
-            bootstrap = formstyle_name == "bootstrap"
-            foundation = formstyle_name == "foundation"
+            # Self-registration action link
             self_registration = deployment_settings.get_security_self_registration()
             if self_registration and register_link:
                 if self_registration == "index":
@@ -600,24 +586,36 @@ Thank you"""
                                   _id="register-btn",
                                   _class="action-lnk",
                                   )
-                if bootstrap:
-                    form[0][-1].append(register_link)
-                elif foundation:
-                    form[0][-1][0][1].append(register_link)
-                else:
-                    form[0][-1][0].append(register_link)
+                buttons.append(register_link)
 
+            # Lost-password action link
             if lost_pw_link:
                 lost_pw_link = A(T("Lost Password"),
                                  _href=URL(f="user", args="retrieve_password"),
                                  _class="action-lnk",
                                  )
-                if bootstrap:
-                    form[0][-1].append(lost_pw_link)
-                elif foundation:
-                    form[0][-1][0][1].append(lost_pw_link)
-                else:
-                    form[0][-1][0].append(lost_pw_link)
+                buttons.append(lost_pw_link)
+
+            # If we have custom buttons, add submit button
+            if buttons:
+                submit_button = INPUT(_type="submit", _value=T("Login"))
+                buttons.insert(0, submit_button)
+            else:
+                buttons = None
+            
+            form = SQLFORM(utable,
+                           fields = [username, passfield],
+                           hidden = dict(_next=request.vars._next),
+                           showid = settings.showid,
+                           submit_button = T("Login"),
+                           delete_label = messages.delete_label,
+                           formstyle = formstyle,
+                           separator = settings.label_separator,
+                           buttons = buttons,
+                           )
+
+            # Identify form for CSS
+            form.add_class("auth_login")
 
             if settings.remember_me_form:
                 # Add a new input checkbox "remember me for longer"
@@ -4011,8 +4009,7 @@ S3OptionsFilter({
         sr = self.get_system_roles()
 
         if not hasattr(table, "_tablename"):
-            s3db = current.s3db
-            table = s3db[table]
+            table = current.s3db[table]
 
         policy = current.deployment_settings.get_security_policy()
 
@@ -4092,8 +4089,7 @@ S3OptionsFilter({
         sr = self.get_system_roles()
 
         if not hasattr(table, "_tablename"):
-            s3db = current.s3db
-            table = s3db[table]
+            table = current.s3db[table]
 
         policy = current.deployment_settings.get_security_policy()
 
@@ -4700,8 +4696,8 @@ S3OptionsFilter({
                     query = (supertable[skey] == record[skey])
                 else:
                     continue
-                updates = dict([(f, data[f])
-                                for f in data if f in supertable.fields])
+                updates = dict((f, data[f])
+                               for f in data if f in supertable.fields)
                 if not updates:
                     continue
                 db(query).update(**updates)
@@ -6600,12 +6596,26 @@ class S3Audit(object):
 
         table = self.table
         if not table:
-            # Auditing Disabled
+            # Don't Audit
             return True
 
         #if DEBUG:
         #    _debug("Audit %s: %s_%s record=%s representation=%s" % \
         #           (method, prefix, name, record, representation))
+
+        if method in ("list", "read"):
+            audit = current.deployment_settings.get_security_audit_read()
+        elif method in ("create", "update", "delete"):
+            audit = current.deployment_settings.get_security_audit_write()
+        else:
+            # Don't Audit
+            return True
+
+        if not audit:
+            # Don't Audit
+            return True
+
+        tablename = "%s_%s" % (prefix, name)
 
         if record:
             if isinstance(record, Row):
@@ -6632,92 +6642,81 @@ class S3Audit(object):
         else:
             record = None
 
-        now = datetime.datetime.utcnow()
-        tablename = "%s_%s" % (prefix, name)
-
-        settings = current.deployment_settings
-        audit_read = settings.get_security_audit_read()
-        if callable(audit_read):
-            audit_read = audit_read(method, tablename, form, record,
-                                    representation)
-        audit_write = settings.get_security_audit_write()
-        if callable(audit_write):
-            audit_write = audit_write(method, tablename, form, record,
-                                      representation)
+        if callable(audit):
+            audit = audit(method, tablename, form, record, representation)
+            if not audit:
+                # Don't Audit
+                return True
 
         if method in ("list", "read"):
-            if audit_read:
-                table.insert(timestmp = now,
-                             user_id = self.user_id,
-                             method = method,
-                             tablename = tablename,
-                             record_id = record,
-                             representation = representation,
-                             )
+            table.insert(timestmp = datetime.datetime.utcnow(),
+                         user_id = self.user_id,
+                         method = method,
+                         tablename = tablename,
+                         record_id = record,
+                         representation = representation,
+                         )
 
         elif method == "create":
-            if audit_write:
-                if form:
-                    form_vars = form.vars
-                    if not record:
-                        record = form_vars["id"]
-                    new_value = ["%s:%s" % (var, str(form_vars[var]))
-                                 for var in form_vars if form_vars[var]]
-                else:
-                    new_value = []
-                table.insert(timestmp = now,
-                             user_id = self.user_id,
-                             method = method,
-                             tablename = tablename,
-                             record_id = record,
-                             representation = representation,
-                             new_value = new_value,
-                             )
+            if form:
+                form_vars = form.vars
+                if not record:
+                    record = form_vars["id"]
+                new_value = ["%s:%s" % (var, str(form_vars[var]))
+                             for var in form_vars if form_vars[var]]
+            else:
+                new_value = []
+            table.insert(timestmp = datetime.datetime.utcnow(),
+                         user_id = self.user_id,
+                         method = method,
+                         tablename = tablename,
+                         record_id = record,
+                         representation = representation,
+                         new_value = new_value,
+                         )
 
         elif method == "update":
-            if audit_write:
-                if form:
-                    rvars = form.record
-                    if rvars:
-                        old_value = ["%s:%s" % (var, str(rvars[var]))
-                                     for var in rvars]
-                    else:
-                        old_value = []
-                    fvars = form.vars
-                    if not record:
-                        record = fvars["id"]
-                    new_value = ["%s:%s" % (var, str(fvars[var]))
-                                 for var in fvars]
+            if form:
+                rvars = form.record
+                if rvars:
+                    old_value = ["%s:%s" % (var, str(rvars[var]))
+                                 for var in rvars]
                 else:
-                    new_value = []
                     old_value = []
-                table.insert(timestmp = now,
-                             user_id = self.user_id,
-                             method = method,
-                             tablename = tablename,
-                             record_id = record,
-                             representation = representation,
-                             old_value = old_value,
-                             new_value = new_value,
-                             )
+                fvars = form.vars
+                if not record:
+                    record = fvars["id"]
+                new_value = ["%s:%s" % (var, str(fvars[var]))
+                             for var in fvars]
+            else:
+                new_value = []
+                old_value = []
+            table.insert(timestmp = datetime.datetime.utcnow(),
+                         user_id = self.user_id,
+                         method = method,
+                         tablename = tablename,
+                         record_id = record,
+                         representation = representation,
+                         old_value = old_value,
+                         new_value = new_value,
+                         )
 
         elif method == "delete":
-            if audit_write:
-                db = current.db
-                query = (db[tablename].id == record)
-                row = db(query).select(limitby=(0, 1)).first()
-                old_value = []
-                if row:
-                    old_value = ["%s:%s" % (field, row[field])
-                                 for field in row]
-                table.insert(timestmp = now,
-                             user_id = self.user_id,
-                             method = method,
-                             tablename = tablename,
-                             record_id = record,
-                             representation = representation,
-                             old_value = old_value,
-                             )
+            db = current.db
+            query = (db[tablename].id == record)
+            row = db(query).select(limitby=(0, 1)).first()
+            old_value = []
+            if row:
+                old_value = ["%s:%s" % (field, row[field])
+                             for field in row]
+            table.insert(timestmp = datetime.datetime.utcnow(),
+                         user_id = self.user_id,
+                         method = method,
+                         tablename = tablename,
+                         record_id = record,
+                         representation = representation,
+                         old_value = old_value,
+                         )
 
         return True
 
@@ -7313,8 +7312,8 @@ class S3RoleManager(S3Method):
                 if tacls:
                     ptables = [acl.tablename for acl in tacls]
                 # Relevant ACLs
-                acls = dict([(acl.tablename, acl) for acl in records
-                                                if acl.tablename in ptables])
+                acls = dict((acl.tablename, acl) for acl in records
+                                                 if acl.tablename in ptables)
 
                 # Table header
                 thead = THEAD(TR(TH(T("Tablename")),

@@ -92,9 +92,11 @@ class S3Config(Storage):
         self.base = Storage()
         self.cap = Storage()
         self.cms = Storage()
+        self.cr = Storage()
         self.database = Storage()
         self.deploy = Storage()
         self.event = Storage()
+        self.evr = Storage()
         self.fin = Storage()
         # @ToDo: Move to self.ui
         self.frontpage = Storage()
@@ -129,6 +131,12 @@ class S3Config(Storage):
             http://eden.sahanafoundation.org/wiki/BluePrint/Templates
         """
         return self.base.get("template", "default")
+
+    def get_chat_server(self):
+        """
+            Get the ip of the chat server if enabled or return False
+        """
+        return self.base.get("chat_server", False)
 
     def exec_template(self, path):
         """
@@ -943,11 +951,18 @@ class S3Config(Storage):
         """
         return self.gis.get("postcode_selector", True)
 
-    def get_gis_print_service(self):
+    def get_gis_print(self):
         """
-            URL for a Print Service
+            Should the Map display a Print control?
         """
-        return self.gis.get("print_service", "")
+        return self.gis.get("print_button", False) # Change to True once ready for prime-time
+
+    #def get_gis_print_service(self):
+    #    """
+    #        URL for an external Print Service (based on the MapFish plugin for GeoServer)
+    #         http://eden.sahanafoundation.org/wiki/BluePrint/GIS/Printing
+    #    """
+    #    return self.gis.get("print_service", "")
 
     def get_gis_save(self):
         """
@@ -1396,6 +1411,17 @@ class S3Config(Storage):
         """
         return self.ui.get("use_button_glyphicons", False)
 
+    def get_ui_hierarchy_theme(self):
+        """
+            Theme for the S3HierarchyWidget: folder, either relative to
+            static/styles/jstree (e.g. "default"), or relative to the
+            application (e.g. "static/styles/jstree/default")
+
+            @note: for right-to-left scripts, the theme folder is expected
+                   to be <themename>-rtl (e.g. "default-rtl")
+        """
+        return self.ui.get("hierarchy_theme", None)
+
     # =========================================================================
     # Messaging
     #
@@ -1435,6 +1461,18 @@ class S3Config(Storage):
             - unless overridden by per-domain entries in auth_organsiation
         """
         return self.mail.get("approver", "useradmin@example.org")
+    
+    def get_mail_default_subject(self):
+        """
+            Use system_name_short as default email subject (Appended).
+        """
+        return self.mail.get("default_email_subject", False)
+
+    def get_mail_auth_user_in_subject(self):
+        """
+            Append name and surname of logged in user to email subject
+        """
+        return self.mail.get("mail.auth_user_in_email_subject", False)
 
     def get_mail_limit(self):
         """
@@ -1734,13 +1772,20 @@ class S3Config(Storage):
         return self.cms.get("show_titles", False)
 
     # -------------------------------------------------------------------------
-    # Events
+    # Shelters
     #
-    def get_event_types_hierarchical(self):
+    def get_cr_shelter_population_dynamic(self):
         """
-            Whether Event Types are Hierarchical or not
+            Whether Shelter Population should be done manually (False)
+            or automatically based on the registrations (True)
+            and displaying all fields used by the automatic evaluation of current
+            shelter population:
+            "available_capacity_day",
+            "available_capacity_night",
+            "population_day",
+            "population_night".
         """
-        return self.event.get("types_hierarchical", False)
+        return self.cr.get("shelter_population_dynamic", False)
 
     # -------------------------------------------------------------------------
     # Deployments
@@ -1751,6 +1796,34 @@ class S3Config(Storage):
             e.g. 'Staff', 'Volunteer' (CERT), 'Member' (RDRT)
         """
         return self.deploy.get("hr_label", "Staff")
+
+    # -------------------------------------------------------------------------
+    # Events
+    #
+    def get_event_types_hierarchical(self):
+        """
+            Whether Event Types are Hierarchical or not
+        """
+        return self.event.get("types_hierarchical", False)
+
+    # -------------------------------------------------------------------------
+    # Evacuees
+    #
+    def get_evr_group_types(self):
+        """
+            Evacuees Group Types
+        """
+        T = current.T
+        return self.evr.get("group_types", {1: T("other"),
+                                            2: T("Family"),
+                                            3: T("Tourist group"),
+                                            4: T("Society"),
+                                            5: T("Company"),
+                                            6: T("Convent"),
+                                            7: T("Hotel"),
+                                            8 :T("Hospital"),
+                                            9 :T("Orphanage")
+                                            })
 
     # -------------------------------------------------------------------------
     # Hospital Registry
@@ -2277,6 +2350,12 @@ class S3Config(Storage):
         """
         return self.pr.get("search_shows_hr_details", True)
 
+    def get_pr_show_emergency_contacts(self):
+        """
+            Show emergency contacts as well as standard contacts in Person Contacts page
+        """ 
+        return self.pr.get("show_emergency_contacts", True)
+        
     # -------------------------------------------------------------------------
     # Proc
     #

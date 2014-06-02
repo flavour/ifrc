@@ -997,15 +997,7 @@ class S3ProjectActivityModel(S3Model):
         else:
             #create_next = URL(c="project", f="activity", args=["[id]"])
             # Which levels of Hierarchy are we using?
-            hierarchy = current.gis.get_location_hierarchy()
-            levels = hierarchy.keys()
-            if len(settings.get_gis_countries()) == 1 or \
-               s3.gis.config.region_location_id:
-                try:
-                    levels.remove("L0")
-                except ValueError:
-                    # Already removed
-                    pass
+            levels = current.gis.get_relevant_hierarchy_levels()
 
             filter_widgets.insert(0,
                 S3LocationFilter("location_id",
@@ -1735,15 +1727,7 @@ class S3ProjectBeneficiaryModel(S3Model):
         )
 
         # Which levels of Hierarchy are we using?
-        hierarchy = current.gis.get_location_hierarchy()
-        levels = hierarchy.keys()
-        if len(settings.get_gis_countries()) == 1 or \
-           s3.gis.config.region_location_id:
-            try:
-                levels.remove("L0")
-            except ValueError:
-                # Already removed
-                pass
+        levels = current.gis.get_relevant_hierarchy_levels()
 
         # Normally only used in Report
         filter_widgets = [
@@ -2540,15 +2524,7 @@ class S3ProjectLocationModel(S3Model):
         define_table = self.define_table
 
          # Which levels of Hierarchy are we using?
-        hierarchy = current.gis.get_location_hierarchy()
-        levels = hierarchy.keys()
-        if len(settings.get_gis_countries()) == 1 or \
-           s3.gis.config.region_location_id:
-            try:
-                levels.remove("L0")
-            except ValueError:
-                # Already removed
-                pass
+        levels = current.gis.get_relevant_hierarchy_levels()
 
         # ---------------------------------------------------------------------
         # Project Location ('Community')
@@ -3395,12 +3371,12 @@ class S3ProjectThemeModel(S3Model):
                     )
 
         configure(tablename,
-                  crud_form=crud_form,
-                  list_fields=["id",
-                               "name",
-                               (T("Sectors"), "theme_sector.sector_id"),
-                               "comments",
-                               ])
+                  crud_form = crud_form,
+                  list_fields = ["id",
+                                 "name",
+                                 (T("Sectors"), "theme_sector.sector_id"),
+                                 "comments",
+                                 ])
 
         # ---------------------------------------------------------------------
         # Theme <> Sector Link Table
@@ -3456,7 +3432,7 @@ class S3ProjectThemeModel(S3Model):
         )
 
         configure(tablename,
-                  deduplicate=self.project_theme_project_deduplicate,
+                  deduplicate = self.project_theme_project_deduplicate,
                   onaccept = self.project_theme_project_onaccept,
                   )
 
@@ -3491,7 +3467,7 @@ class S3ProjectThemeModel(S3Model):
         )
 
         configure(tablename,
-                  deduplicate=self.project_theme_activity_deduplicate,
+                  deduplicate = self.project_theme_activity_deduplicate,
                   #onaccept = self.project_theme_activity_onaccept,
                   )
 
@@ -3627,7 +3603,7 @@ class S3ProjectDRRModel(S3Model):
         T = current.T
 
         hfa_opts = project_hfa_opts()
-        hfa_opts = dict([(opt, "HFA %s" % opt) for opt in hfa_opts])
+        hfa_opts = dict((opt, "HFA %s" % opt) for opt in hfa_opts)
 
         tablename = "project_drr"
         self.define_table(tablename,
@@ -3971,6 +3947,7 @@ class S3ProjectTaskModel(S3Model):
                                        )
 
         configure(tablename,
+                  deduplicate = self.project_milestone_duplicate,
                   orderby = "project_milestone.date",
                   )
 
@@ -4613,7 +4590,7 @@ class S3ProjectTaskModel(S3Model):
                 (ltable.task_id == ttable.id) & \
                 (ltable.project_id == ptable.id)
         rows = db(query).select(ptable.id, ptable.name)
-        return dict([(row.id, row.name) for row in rows])
+        return dict((row.id, row.name) for row in rows)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4630,11 +4607,8 @@ class S3ProjectTaskModel(S3Model):
         query = (ttable.deleted == False) & \
                 (ltable.task_id == ttable.id) & \
                 (ltable.activity_id == atable.id)
-        opts = db(query).select(atable.name)
-        _dict = {}
-        for opt in opts:
-            _dict[opt.name] = opt.name
-        return _dict
+        rows = db(query).select(atable.id, atable.name)
+        return dict((row.id, row.name) for row in rows)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4651,11 +4625,8 @@ class S3ProjectTaskModel(S3Model):
         query = (ttable.deleted == False) & \
                 (ltable.task_id == ttable.id) & \
                 (ltable.milestone_id == mtable.id)
-        opts = db(query).select(mtable.name)
-        _dict = {}
-        for opt in opts:
-            _dict[opt.name] = opt.name
-        return _dict
+        rows = db(query).select(mtable.id, mtable.name)
+        return dict((row.id, row.name) for row in rows)
 
     # -------------------------------------------------------------------------
     @staticmethod

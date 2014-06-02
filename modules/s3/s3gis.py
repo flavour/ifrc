@@ -259,6 +259,8 @@ class GIS(object):
         self.hierarchy_levels = {}
         self.max_allowed_level_num = 4
 
+        self.relevant_hierarchy_levels = None
+
     # -------------------------------------------------------------------------
     @staticmethod
     def gps_symbols():
@@ -1567,6 +1569,26 @@ class GIS(object):
             return all_levels
 
     # -------------------------------------------------------------------------
+    def get_relevant_hierarchy_levels(self, as_dict=False):
+        """
+            Get current location hierarchy levels relevant for the user
+        """
+
+        levels = self.relevant_hierarchy_levels
+
+        if not levels:
+            levels = OrderedDict(self.get_location_hierarchy())
+            if len(current.deployment_settings.get_gis_countries()) == 1 or \
+               current.response.s3.gis.config.region_location_id:
+                levels.pop("L0", None)
+            self.relevant_hierarchy_levels = levels
+
+        if not as_dict:
+            return levels.keys()
+        else:
+            return levels
+
+    # -------------------------------------------------------------------------
     @staticmethod
     def get_countries(key_type="id"):
         """
@@ -2564,13 +2586,15 @@ class GIS(object):
 
         driver = webdriver.PhantomJS()
 
-        # Set the size of the browser
-        # @ToDo: Make Configurable
-        driver.set_window_size(1980, 1080)
+        # Set the size of the browser to match the map
+        settings = current.deployment_settings
+        height = settings.get_gis_map_height()
+        width = settings.get_gis_map_width()
+        driver.set_window_size(width, height)
 
         # Load the homepage
         # (Cookie needs to be set on same domain as it takes effect)
-        public_url = current.deployment_settings.get_base_public_url()
+        public_url = settings.get_base_public_url()
         appname = request.application
         url = "%s/%s" % (public_url, appname)
         driver.get(url)
@@ -2585,7 +2609,7 @@ class GIS(object):
         current.session._unlock(response)
 
         # Load the map
-        url = "%s/%s/gis/index?config=%s" % (public_url, appname, config_id)
+        url = "%s/%s/gis/map_viewing_client?print=1&config=%s" % (public_url, appname, config_id)
         driver.get(url)
 
         # Wait for map to load
@@ -2616,6 +2640,20 @@ class GIS(object):
                 redirect(URL(c="gis", f="index", vars={"config_id": config_id}))
 
         driver.save_screenshot(os.path.join(cachepath, "%s.png" % session_id))
+        driver.quit()
+
+        # If this was a temporary config for creating the screenshot, then delete it now
+        ctable = current.s3db.gis_config
+        set = current.db(ctable.id == config_id)
+        config = set.select(ctable.temp,
+                            limitby=(0, 1)
+                            ).first()
+        try:
+            if config.temp:
+                set.delete()
+        except:
+            # Record not found?
+            pass
 
         # Pass the result back to the User
         redirect(URL(c="static", f="cache", args=["png", "%s.png" % session_id]))
@@ -5896,7 +5934,6 @@ class GIS(object):
                  scaleline = None,
                  zoomcontrol = None,
                  zoomWheelEnabled = True,
-                 print_tool = {},
                  mgrs = {},
                  window = False,
                  window_hide = False,
@@ -5979,11 +6016,6 @@ class GIS(object):
             @param permalink: Show the Permalink control (defaults to checking deployment_settings, which defaults to True)
             @param scaleline: Show the ScaleLine control (defaults to checking deployment_settings, which defaults to True)
             @param zoomcontrol: Show the Zoom control (defaults to checking deployment_settings, which defaults to True)
-            @param print_tool: Show a print utility (NB This requires server-side support: http://eden.sahanafoundation.org/wiki/BluePrintGISPrinting)
-                {"url": string,            # URL of print service (e.g. http://localhost:8080/geoserver/pdf/)
-                 "mapTitle": string,       # Title for the Printed Map (optional)
-                 "subTitle": string        # subTitle for the Printed Map (optional)
-                }
             @param mgrs: Use the MGRS Control to select PDFs
                 {"name": string,           # Name for the Control
                  "url": string             # URL of PDF server
@@ -6033,7 +6065,6 @@ class GIS(object):
                    scaleline = scaleline,
                    zoomcontrol = zoomcontrol,
                    zoomWheelEnabled = zoomWheelEnabled,
-                   print_tool = print_tool,
                    mgrs = mgrs,
                    window = window,
                    window_hide = window_hide,
@@ -6360,6 +6391,20 @@ class MAP(DIV):
                 options["area"] = True
                 i18n["gis_area_message"] = T("The area is")
                 i18n["gis_area_tooltip"] = T("Measure Area: Click the points around the polygon & end with a double-click")
+
+            # Show Print control?
+            print_control = settings.get_gis_print()
+            if print_control:
+                # @ToDo: Use internal Printing or External Service
+                # http://eden.sahanafoundation.org/wiki/BluePrint/GIS/Printing
+                #print_service = settings.get_gis_print_service()
+                #if print_service:
+                #    print_tool = {"url": string,            # URL of print service (e.g. http://localhost:8080/geoserver/pdf/)
+                #                  "mapTitle": string,       # Title for the Printed Map (optional)
+                #                  "subTitle": string        # subTitle for the Printed Map (optional)
+                #                  }
+                options["print"] = True
+                i18n["gis_print"] = T("Take a screenshot of the map which can be printed")
 
             # Show Save control?
             # e.g. removed within S3LocationSelectorWidget[2]

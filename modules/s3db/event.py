@@ -45,6 +45,8 @@ __all__ = ["S3EventModel",
            "S3EventResourceModel",
            "S3EventSiteModel",
            "S3EventTaskModel",
+           "S3EventShelterModel",
+           "event_notification_dispatcher",
            "event_incident_list_layout",
            ]
 
@@ -185,7 +187,16 @@ class S3EventModel(S3Model):
                            label = T("Name"),
                            ),
                      event_type_id(),
+                     self.org_organisation_id(
+                        comment = DIV(_class="tooltip",
+                                       _title="%s|%s" % (T("Organization"),
+                                                         T("The organization managing this event"))),
+                        # Enable in the template if-required
+                        readable = False,
+                        writable = False,
+                        ),
                      Field("exercise", "boolean",
+                           default = False,
                            label = T("Exercise?"),
                            represent = lambda opt: "√" if opt else NONE,
                            #comment = DIV(_class="tooltip",
@@ -248,15 +259,7 @@ class S3EventModel(S3Model):
                                    )
 
         # Which levels of Hierarchy are we using?
-        hierarchy = current.gis.get_location_hierarchy()
-        levels = hierarchy.keys()
-        if len(settings.get_gis_countries()) == 1 or \
-           s3.gis.config.region_location_id:
-            try:
-                levels.remove("L0")
-            except ValueError:
-                # Already removed
-                pass
+        levels = current.gis.get_relevant_hierarchy_levels()
 
         if hierarchical_event_types:
             filter_widgets = [S3HierarchyFilter("event_type_id",
@@ -348,6 +351,10 @@ class S3EventModel(S3Model):
                                             },
                             event_event_impact = "event_id",
                             )
+
+        self.set_method("event", "event",
+                        method = "dispatch",
+                        action = event_notification_dispatcher)
 
         # ---------------------------------------------------------------------
         # Event Locations (link table)
@@ -653,6 +660,7 @@ class S3IncidentModel(S3Model):
                                       )
 
         # @ToDo: Move this workflow into Templates?
+        # - or useful to have good defaults
         if settings.has_module("project"):
             create_next_url = URL(args=["[id]", "task"])
         elif settings.has_module("hrm"):
@@ -719,6 +727,10 @@ class S3IncidentModel(S3Model):
                                           "autodelete": True,
                                           },
                             )
+
+        self.set_method("event", "incident",
+                        method = "dispatch",
+                        action = event_notification_dispatcher)
 
         # Pass names back to global scope (s3.*)
         return dict(event_incident_id = incident_id,
@@ -1632,6 +1644,181 @@ class S3EventTaskModel(S3Model):
         return dict()
 
 # =============================================================================
+class S3EventShelterModel(S3Model):
+    """
+        Link Shelters to Events
+    """
+
+    names = ["event_event_shelter"]
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Shelters
+        #   Link table for cr_shelter <> event_event
+        tablename = "event_event_shelter"
+        self.define_table(tablename,
+                          self.event_event_id(empty = False,
+                                              ondelete = "CASCADE",
+                                              ),
+                          self.cr_shelter_id(empty = False,
+                                             ondelete = "CASCADE",
+                                             ),
+                          *s3_meta_fields()
+                          )
+
+        function = current.request.function
+        if function == "event":
+            current.response.s3.crud_strings[tablename] = Storage(
+                label_create = T("Add Shelter"),
+                title_display = T("Shelter Details"),
+                title_list = T("Shelters"),
+                title_update = T("Edit Shelter"),
+                label_list_button = T("List Shelters"),
+                label_delete_button = T("Remove Shelter for this Event"),
+                msg_record_created = T("Shelter added"),
+                msg_record_modified = T("Shelter updated"),
+                msg_record_deleted = T("Shelter removed"),
+                msg_list_empty = T("No Shelters currently tagged to this event")
+                )
+
+        elif function == "shelter":
+            current.response.s3.crud_strings[tablename] = Storage(
+                label_create = T("Associate Event"),
+                title_display = T("Event Details"),
+                title_list = T("Events"),
+                title_update = T("Edit Event"),
+                label_list_button = T("List Events"),
+                label_delete_button = T("Remove Event for this Shelter"),
+                msg_record_created = T("Event added"),
+                msg_record_modified = T("Event updated"),
+                msg_record_deleted = T("Event removed"),
+                msg_list_empty = T("No Events currently tagged to this Shelter")
+                )
+
+        # Pass names back to global scope (s3.*)
+        return dict()
+
+#===============================================================================    
+def event_notification_dispatcher(r, **attr):
+    """
+        Send a Dispatch notice from an Incident Report
+      - this will be formatted as an OpenGeoSMS
+    """
+
+    if r.representation == "html" and \
+        r.id and not r.component:
+
+        T = current.T
+        msg = current.msg
+        s3db = current.s3db
+
+        ctable = s3db.pr_contact
+        itable = s3db.event_incident
+        etable = s3db.event_event
+
+        message = ""
+        text = ""
+
+        if r.name == "event":
+
+            record = r.record
+            id = record.id
+            eventName = record.name
+            startDate = record.start_date
+            exercise = record.exercise
+            status = record.closed
+
+            text += "************************************************"
+            text += "\n%s " % T("Automatic Message")
+            text += "\n%s " % T("Event ID: %s, ") % id
+            text += T(" Event name: %s") % eventName
+            text += "\n%s " % T("Event started: %s") % startDate
+            text += "\n%s " % T("Exercise= %s,") % exercise
+            text += "%s " % T("Status open= %s") % exercise
+            text += "\n************************************************\n"
+
+            # URL to redirect to after message sent
+            url = URL(c="event", f="event", args=r.id)
+
+        if r.name == "incident":
+
+            record = r.record
+            id = record.id
+            incName = record.name
+            zeroHour = record.zero_hour
+            exercise = record.exercise
+            event_id = record.event_id
+            closed = record.closed
+            
+            if event_id != None:
+                event = current.db(itable.id == event_id).select(etable.name,
+                                                                 limitby=(0, 1)
+                                                                 ).first()
+                eventName = event.name
+            else:
+                eventName = T("Not Defined")
+
+            text += "************************************************"
+            text += "\n%s " % T("Automatic Message")
+            text += "\n%s " % T("Incident ID: %s, ") % id
+            text += T(" Incident name: %s") % incName
+            text += "\n%s " % T("Related event: %s") % eventName
+            text += "\n%s " % T("Incident started: %s") % zeroHour
+            text += "\n%s " % T("Exercise? %s,") % exercise
+            text += "%s " % T("Closed? %s") % closed
+            text += "\n************************************************\n"
+
+            url = URL(c="event", f="incident", args=r.id)
+
+        # Create the form
+        opts = dict(type="SMS",
+                    # @ToDo: deployment_setting
+                    subject = T("Deployment Request"),
+                    message = message + text,
+                    url = url,
+                    )
+
+#        query = (ctable.pe_id == id)
+#        recipients = current.db(query).select(ctable.pe_id)
+
+#        if not recipients:
+            # Provide an Autocomplete the select the person to send the notice to
+#            opts["recipient_type"] = "pr_person"
+
+#       elif len(recipients) == 1:
+#               # Send to this person
+#             opts["recipient"] = recipients.first()["pr_person"].pe_id
+#       else:
+#                # Send to the Incident Commander
+#             ic = False
+#             for row in recipients:
+#                    if row["irs_ireport_human_resource"].incident_commander == True:
+#                        opts["recipient"] = row["pr_person"].pe_id
+#                        ic = True
+#                        break
+#                if not ic:
+#                    # Provide an Autocomplete the select the person to send the notice to
+#                    opts["recipient_type"] = "pr_person"
+
+        output = msg.compose(**opts)
+
+        # Maintain RHeader for consistency
+        if attr.get("rheader"):
+            rheader = attr["rheader"](r)
+            if rheader:
+                output["rheader"] = rheader
+
+        output["title"] = T("Send Event Update")
+        current.response.view = "msg/compose.html"
+        return output
+
+    else:
+        raise HTTP(501, current.messages.BADMETHOD)
+
+#===============================================================================    
 def event_incident_list_layout(list_id, item_id, resource, rfields, record,
                                icon="incident"):
     """

@@ -17,15 +17,6 @@ def index():
     response.title = module_name
 
     # Read user request
-    config = get_vars.get("config", None)
-    if config:
-        try:
-            config = int(config)
-        except:
-            config = None
-        else:
-            config = gis.set_config(config)
-
     height = get_vars.get("height", None)
     width = get_vars.get("width", None)
     toolbar = get_vars.get("toolbar", None)
@@ -54,13 +45,16 @@ def index():
             script = "/%s/static/scripts/S3/s3.gis.fullscreen.min.js" % appname
         s3.scripts.append(script)
 
-    help = T("To Print or Share the Map you will have to take a screenshot. If you need help taking a screen shot, have a look at these instructions for %(windows)s or %(mac)s") \
-        % dict(windows="<a href='http://www.wikihow.com/Take-a-Screenshot-in-Microsoft-Windows' target='_blank'>Windows</a>",
-               mac="<a href='http://www.wikihow.com/Take-a-Screenshot-in-Mac-OS-X' target='_blank'>Mac</a>")
-    script = '''i18n.gis_print_help="%s"''' % help
-    s3.js_global.append(script)
-    script = "/%s/static/scripts/S3/s3.gis.print_help.js" % appname
-    s3.scripts.append(script)
+    save = settings.get_gis_save()
+
+    if not save:
+        help = T("To Print or Share the Map you will have to take a screenshot. If you need help taking a screen shot, have a look at these instructions for %(windows)s or %(mac)s") \
+            % dict(windows="<a href='http://www.wikihow.com/Take-a-Screenshot-in-Microsoft-Windows' target='_blank'>Windows</a>",
+                   mac="<a href='http://www.wikihow.com/Take-a-Screenshot-in-Mac-OS-X' target='_blank'>Mac</a>")
+        script = '''i18n.gis_print_help="%s"''' % help
+        s3.js_global.append(script)
+        script = "/%s/static/scripts/S3/s3.gis.print_help.js" % appname
+        s3.scripts.append(script)
 
     # Include an embedded Map on the index page
     map = define_map(height = height,
@@ -70,7 +64,8 @@ def index():
                      collapsed = collapsed,
                      closable = False,
                      maximizable = False,
-                     config = config)
+                     save = save,
+                     )
 
     return dict(map=map,
                 title = T("Map"))
@@ -82,10 +77,27 @@ def map_viewing_client():
         UI for a user to view the overall Maps with associated Features
     """
 
+    # Read user request
+    print_mode = get_vars.get("print", None)
+    if print_mode:
+        collapsed = True
+        toolbar = False
+        save = False
+        zoomcontrol = False
+    else:
+        collapsed = False
+        toolbar = True
+        save = settings.get_gis_save()
+        zoomcontrol = None
+
     map = define_map(window = True,
-                     toolbar = True,
+                     toolbar = toolbar,
+                     collapsed = collapsed,
                      closable = False,
-                     maximizable = False)
+                     maximizable = False,
+                     save = save,
+                     zoomcontrol = zoomcontrol,
+                     )
 
     response.title = T("Map Viewing Client")
     return dict(map=map)
@@ -98,13 +110,23 @@ def define_map(height = None,
                closable = True,
                collapsed = False,
                maximizable = True,
-               config = None):
+               save = False,
+               zoomcontrol = None,
+               ):
     """
         Define the main Situation Map
         This is called from both the Index page (embedded)
         & the Map_Viewing_Client (fullscreen)
     """
 
+    config = get_vars.get("config", None)
+    if config:
+        try:
+            config = int(config)
+        except:
+            config = None
+        else:
+            config = gis.set_config(config)
     if not config:
         config = gis.get_config()
 
@@ -117,13 +139,6 @@ def define_map(height = None,
                        }
     else:
         wms_browser = None
-
-    # http://eden.sahanafoundation.org/wiki/BluePrintGISPrinting
-    print_service = settings.get_gis_print_service()
-    if print_service:
-        print_tool = {"url": print_service}
-    else:
-        print_tool = {}
 
     # Do we allow creation of PoIs from the main Map?
     pois = settings.get_gis_pois() and \
@@ -175,8 +190,6 @@ def define_map(height = None,
         lon = None
         feature_resources = None
 
-    save = settings.get_gis_save()
-
     map = gis.show_map(height = height,
                        width = width,
                        lat = lat,
@@ -185,15 +198,15 @@ def define_map(height = None,
                        catalogue_layers = True,
                        feature_resources = feature_resources,
                        legend = legend,
-                       print_tool = print_tool,
                        save = save,
                        search = search,
                        toolbar = toolbar,
                        wms_browser = wms_browser,
-                       window = window,
+                       collapsed = collapsed,
                        closable = closable,
                        maximizable = maximizable,
-                       collapsed = collapsed,
+                       window = window,
+                       zoomcontrol = zoomcontrol,
                        )
 
     return map
@@ -813,6 +826,10 @@ def config_default(r, **attr):
 def config():
     """ RESTful CRUD controller """
 
+    # Filter out Temp configs
+    FS = s3base.S3FieldSelector
+    s3.filter = (FS("config.temp") == False)
+
     # Custom Methods to set as default
     set_method = s3db.set_method
     set_method(module, resourcename,
@@ -834,10 +851,11 @@ def config():
         if r.representation == "url":
             # Save from Map
             if r.method == "create" and \
-                 auth.is_logged_in():
-                pe_id = auth.user.pe_id
-                r.table.pe_id.default = pe_id
-                r.table.pe_type.default = 1
+               auth.is_logged_in():
+                table = r.table
+                table.pe_id.default = auth.user.pe_id
+                table.pe_type.default = 1
+                table.temp.writable = True
 
         elif r.interactive or r.representation == "aadata":
             if not r.component:
@@ -860,15 +878,15 @@ def config():
                     # Hide Exports
                     settings.ui.export_formats = []
                     # Filter Region & Default Configs
-                    table = r.table
-                    s3.filter = (table.region_location_id == None) & \
-                                (table.uuid != "SITE_DEFAULT")
+                    s3.filter = (FS("config.temp") == False) & \
+                                (FS("config.region_location_id") == None) & \
+                                (FS("config.uuid") != "SITE_DEFAULT")
                     list_fields = ["name",
                                    "pe_id",
                                    "pe_default",
                                    ]
                     CREATED_BY = T("Created By")
-                    field = table.pe_id
+                    field = r.table.pe_id
                     field.label = CREATED_BY
                     field.represent = s3db.pr_PersonEntityRepresent(show_label = False,
                                                                     show_type = False,
@@ -1031,15 +1049,36 @@ def config():
             # Save from Map
             result = json.loads(output["item"])
             if result["status"] == "success":
+                config_id = r.id
+                post_vars = request.post_vars
+                if post_vars.get("temp", False):
+                    # This is coming from a Print Screenshot
+                    # Hide the message
+                    try:
+                        del result["message"]
+                    except:
+                        pass
+                    # Add the ID
+                    result["id"] = config_id
+                    SEPARATORS = (",", ":")
+                    output["item"] = json.dumps(result, separators=SEPARATORS)
+                elif post_vars.get("hide", False):
+                    # This is coming from Save Panel
+                    # Hide the message
+                    try:
+                        del result["message"]
+                    except:
+                        pass
+                    SEPARATORS = (",", ":")
+                    output["item"] = json.dumps(result, separators=SEPARATORS)
                 # Process Layers
                 ltable = s3db.gis_layer_config
-                id = r.id
                 layers = json.loads(request.post_vars.layers)
                 form = Storage()
                 for layer in layers:
                     if "id" in layer and layer["id"] != "search_results":
                         layer_id = layer["id"]
-                        form_vars = Storage(config_id = id,
+                        form_vars = Storage(config_id = config_id,
                                             layer_id = layer_id,
                                             )
                         if "base" in layer:
@@ -1048,7 +1087,7 @@ def config():
                         if "style" in layer:
                             form_vars.style = json.dumps(layer["style"])
                         # Update or Insert?
-                        query = (ltable.config_id == id) & \
+                        query = (ltable.config_id == config_id) & \
                                 (ltable.layer_id == layer_id)
                         record = db(query).select(ltable.id,
                                                   limitby=(0, 1)).first()
@@ -1057,7 +1096,7 @@ def config():
                             form_vars.id = record_id
                             db(ltable.id == record_id).update(**form_vars)
                         else:
-                            # How could this happen?
+                            # New Saved Map
                             form_vars.id = ltable.insert(**form_vars)
                         # Ensure that Default Base processing happens properly
                         form.vars = form_vars
@@ -1066,7 +1105,8 @@ def config():
         return output
     s3.postp = postp
 
-    output = s3_rest_controller(rheader=s3db.gis_rheader)
+    output = s3_rest_controller(rheader = s3db.gis_rheader,
+                                )
     return output
 
 # -----------------------------------------------------------------------------

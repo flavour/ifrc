@@ -3940,14 +3940,7 @@ class S3LocationSelectorWidget2(FormWidget):
         levels = self.levels
         if not levels:
             # Which levels of Hierarchy are we using?
-            hierarchy = gis.get_location_hierarchy()
-            levels = hierarchy.keys()
-            if len(settings.get_gis_countries()) == 1 or \
-               s3.gis.config.region_location_id:
-                try:
-                    levels.remove("L0")
-                except ValueError:
-                    pass
+            levels = current.gis.get_relevant_hierarchy_levels()
 
         hide_lx = self.hide_lx
         show_address = self.show_address
@@ -4929,6 +4922,14 @@ class S3HierarchyWidget(FormWidget):
                        "multiple": self.multiple,
                        "leafonly": leafonly,
                        }
+
+        # Custom theme
+        theme = current.deployment_settings.get_ui_hierarchy_theme()
+        if theme and hasattr(theme, "rsplit"):
+            folder, theme = ([None] + theme.rsplit("/", 1))[-2:]
+            if folder:
+                widget_opts["themesFolder"] = folder
+            widget_opts["theme"] = theme
 
         script = '''$('#%(widget_id)s').hierarchicalopts(%(widget_opts)s)''' % \
                  {"widget_id": widget_id,

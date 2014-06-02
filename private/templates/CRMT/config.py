@@ -86,8 +86,7 @@ def audit_write(method, tablename, form, record, representation):
     if not current.auth.user:
         # Don't include prepop
         return False
-    if tablename in ("gis_config",
-                     "org_facility",
+    if tablename in ("org_facility",
                      "org_organisation",
                      "pr_filter",
                      "project_activity",
@@ -97,9 +96,12 @@ def audit_write(method, tablename, form, record, representation):
                      ):
         # Perform normal Audit
         return True
-    else:
-        # Don't Audit non user-visible resources
-        return False
+    elif tablename == "gis_config":
+        if form.vars.get("temp") != "1":
+            # Perform normal Audit
+            return True
+    # Don't Audit non user-visible resources
+    return False
 
 settings.security.audit_write = audit_write
 
@@ -122,7 +124,9 @@ settings.ui.export_formats = ["xls", "xml"]
 settings.ui.multiselect_widget = True
 
 # Set Map to fill the container
-settings.gis.map_width = 1170
+settings.gis.map_width = 1178
+# Set map to be able to open Census Data & still view root labels
+settings.gis.map_height = 816
 
 settings.base.youtube_id = [dict(id = "introduction",
                                  title = T("Introduction"),
@@ -287,6 +291,9 @@ settings.gis.permalink = False
 settings.gis.pois = False
 # Uncomment to rename Overlays in Layer Tree
 #settings.gis.label_overlays = "Community Data"
+# Uncomment to show the Print control:
+# http://eden.sahanafoundation.org/wiki/UserGuidelines/Admin/MapPrinting
+settings.gis.print_button = True
 # Uncomment to hide the Save control, or set to "float"
 settings.gis.save = "float"
 # Uncomment to hide the GeoNames search box

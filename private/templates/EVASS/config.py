@@ -39,9 +39,8 @@ settings.base.prepopulate = ["EVASS"]
 settings.base.system_name = T("EVASS - Sahana Eden for Italy")
 settings.base.system_name_short = T("Sahana Eden for Italy")
 
-# Use system_name_short as default email subject (Appended).   
+# Use system_name_short as default email subject (Appended).
 settings.mail.default_email_subject = True
-
 # Append name and surname of logged in user to email subject
 settings.mail.auth_user_in_email_subject = True
 
@@ -49,9 +48,6 @@ settings.mail.auth_user_in_email_subject = True
 settings.base.theme = "EVASS"
 settings.ui.formstyle = "foundation"
 settings.ui.filter_formstyle = "foundation_inline"
-
-# Enable Guided Tours
-#settings.base.guided_tour = True
 
 # Authentication settings
 # These settings should be changed _after_ the 1st (admin) user is
@@ -112,7 +108,7 @@ settings.auth.always_notify_approver = False
 #settings.auth.registration_volunteer = True
 # Terms of Service to be able to Register on the system
 # uses <template>/views/tos.html
-#settings.auth.terms_of_service = True
+settings.auth.terms_of_service = True
 # Uncomment this to allow users to Login using Gmail's SMTP
 #settings.auth.gmail_domains = ["gmail.com"]
 # Uncomment this to allow users to Login using OpenID
@@ -134,7 +130,11 @@ settings.L10n.languages = OrderedDict([
 # Default language for Language Toolbar (& GIS Locations in future)
 settings.L10n.default_language = "en"
 # Default timezone for users
-#settings.L10n.utc_offset = "UTC +0000"
+settings.L10n.utc_offset = "UTC +0100"
+settings.L10n.languages = OrderedDict([
+    ("en", "English"),
+    ("it", "Italiano"),
+])
 # Uncomment these to use US-style dates in English (localisations can still convert to local format)
 #settings.L10n.time_format = T("%H:%M:%S")
 settings.L10n.date_format = T("%d/%m/%Y")
@@ -159,53 +159,6 @@ settings.L10n.religions = OrderedDict([("unknown", T("Unknown")),
                                        ("muslim", T("Muslim")),
                                        ("other", T("other"))
                                        ])
-
-# Configure the list of measurement units
-# Edit the options order to change the measurement unit.
-# option "1" will be used within EDEN.
-settings.L10n.measurement_lenght_m = {1: "m", 
-                                      2: "yd",
-                                      }
-settings.L10n.measurement_lenght_cm = {1: "cm",
-                                       2: "in",
-                                       3: "ft",
-                                       }
-settings.L10n.measurement_lenght_km = {1: "Km",
-                                       2: "mi",
-                                       3: "naut mi",
-                                       }
-settings.L10n.measurement_area_m = {1: "m²",
-                                    2: "yd²",
-                                    3: "ac",
-                                    }
-settings.L10n.measurement_area_km = {1: "Km²",
-                                     2: "mi²",
-                                     3: "ac",
-                                     }
-settings.L10n.measurement_vol_l = {1: "l",
-                                   2: "US_gal",
-                                   3: "Uk_gal",
-                                   }
-settings.L10n.measurement_weight_g = {1: "g",
-                                      2: "oz",
-                                      3: "ozt",
-                                      }
-settings.L10n.measurement_weight_kg = {1: "kg",
-                                       2: "lb",
-                                       }
-
-# Configure marital status options
-settings.L10n.maritalStatus_default = 1
-settings.L10n.maritalStatus = {1: T("Unknown"),
-                               2: T("Single"),
-                               3: T("Cohabit"),
-                               4: T("Married"),
-                               5: T("Divorced"),
-                               6: T("Separated"),
-                               7: T("Widowed"),
-                               8: T("Other"),
-                               }
-
 # Uncomment this to Translate CMS Series Names
 #settings.L10n.translate_cms_series = True
 # Uncomment this to Translate Layer Names
@@ -235,8 +188,8 @@ settings.gis.geonames_username = "evass"
 # Size of the Embedded Map
 # Change this if-required for your theme
 # NB API can override this in specific modules
-#settings.gis.map_height = 500
-#settings.gis.map_width = 800
+#settings.gis.map_height = 400
+#settings.gis.map_width = 700
 # Restrict the Location Selector to just certain countries
 # NB This can also be over-ridden for specific contexts later
 # e.g. Activities filtered to those of parent Project
@@ -248,7 +201,7 @@ settings.gis.countries = ["IT"]
 # Hide LatLon boxes in the Location Selector
 #settings.gis.latlon_selector = False
 # Use Building Names as a separate field in Street Addresses?
-settings.gis.building_name = False
+#settings.gis.building_name = False
 # Use a non-default fillColor for Clustered points
 #settings.gis.cluster_fill = "8087ff"
 # Use a non-default strokeColor for Clustered points
@@ -290,7 +243,9 @@ settings.gis.building_name = False
 # Uncomment to have custom folders in the LayerTree use Radio Buttons
 #settings.gis.layer_tree_radio = True
 # Uncomment to display the Map Legend as a floating DIV
-#settings.gis.legend = "float"
+settings.gis.legend = "float"
+# Hide unnecessary Toolbar items
+settings.gis.nav_controls = False
 # Mouse Position: 'normal', 'mgrs' or None
 #settings.gis.mouse_position = "mgrs"
 # Uncomment to hide the Overview map
@@ -328,7 +283,7 @@ settings.gis.building_name = False
 # 7: Apply Controller, Function, Table ACLs and Entity Realm + Hierarchy
 # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
 #
-settings.security.policy = 5
+settings.security.policy = 7
 
 # Ownership-rule for records without owner:
 # True = not owned by any user (strict ownership, default)
@@ -374,6 +329,25 @@ settings.security.policy = 5
 #settings.cms.richtext = True
 # Uncomment to show tags in Newsfeed
 #settings.cms.show_tags = True
+
+# -----------------------------------------------------------------------------
+# Shelters
+# Uncomment to use a dynamic population estimation by calculations based on registrations  
+settings.cr.shelter_population_dynamic = True
+
+# -----------------------------------------------------------------------------
+# Evacuees
+# Group Types
+#settings.evr.group_types = {1: T("other"),
+#                            2: T("Family"),
+#                            3: T("Tourist group"),
+#                            4: T("Society"),
+#                            5: T("Company"),
+#                            6: T("Convent"),
+#                            7: T("Hotel"),
+#                            8: T("Hospital"),
+#                            9: T("Orphanage")
+#                            }
 
 # -----------------------------------------------------------------------------
 # Organisations
@@ -422,9 +396,9 @@ settings.org.groups = "Network"
 # Uncomment to change the label for 'Staff'
 #settings.hrm.staff_label = "Contacts"
 # Uncomment to allow Staff & Volunteers to be registered without an email address
-#settings.hrm.email_required = False
+settings.hrm.email_required = False
 # Uncomment to allow Staff & Volunteers to be registered without an Organisation
-#settings.hrm.org_required = False
+settings.hrm.org_required = False
 # Uncomment to allow HR records to be deletable rather than just marking them as obsolete
 #settings.hrm.deletable = True
 # Uncomment to filter certificates by (root) Organisation & hence not allow Certificates from other orgs to be added to a profile (except by Admin)
@@ -612,9 +586,11 @@ settings.org.groups = "Network"
 # Uncomment this to use settings suitable for detailed Task management
 #settings.project.mode_task = True
 # Uncomment this to use Activities for projects
-#settings.project.activities = True
+settings.project.activities = True
 # Uncomment this to use Activity Types for Activities/Projects
 #settings.project.activity_types = True
+# Uncomment this to use multiple Organization per project
+#settings.project.multiple_organizations = True
 # Uncomment this to use Codes for projects
 #settings.project.codes = True
 # Uncomment this to call project locations 'Communities'
@@ -659,24 +635,16 @@ settings.org.groups = "Network"
 # RSS feeds
 settings.frontpage.rss = [
     {"title": "RSS News - Dipartimento della Protezione Civile ",
-     # Trac timeline
      "url": "http://www.protezionecivile.gov.it/jcms/do/jprss/Rss/Feed/show.action?id=12170&lang=it#"
-     #"url": "http://eden.sahanafoundation.org/timeline?ticket=on&changeset=on&milestone=on&wiki=on&max=50&daysback=90&format=rss"
     },
     {"title": "RSS Vigilanza Meteo - Dipartimento della Protezione Civile ",
-     # Trac timeline
      "url": "http://www.protezionecivile.gov.it/jcms/do/jprss/Rss/Feed/show.action?id=23573&lang=it#"
-     #"url": "http://eden.sahanafoundation.org/timeline?ticket=on&changeset=on&milestone=on&wiki=on&max=50&daysback=90&format=rss"
     },
     {"title": "RSS Previsioni Meteo - Dipartimento della Protezione Civile ",
-     # Trac timeline
      "url": "http://www.protezionecivile.gov.it/jcms/do/jprss/Rss/Feed/show.action?id=23575&lang=it#"
-     #"url": "http://eden.sahanafoundation.org/timeline?ticket=on&changeset=on&milestone=on&wiki=on&max=50&daysback=90&format=rss"
     },
     {"title": "RSS Comunicati Stampa - Dipartimento della Protezione Civile ",
-     # Trac timeline
      "url": "http://www.protezionecivile.gov.it/jcms/do/jprss/Rss/Feed/show.action?id=23577&lang=it#"
-     #"url": "http://eden.sahanafoundation.org/timeline?ticket=on&changeset=on&milestone=on&wiki=on&max=50&daysback=90&format=rss"
     },
     {"title": "Twitter - Croce Rossa Italia",
      # @crocerossa
@@ -694,15 +662,20 @@ settings.frontpage.rss = [
 #     "url": "http://api2.socialmention.com/search?q=protezionecivile&t=all&f=rss"
 #    }
 ]
-#***********************************************************************
 
+# =============================================================================
+def customise_org_organisation_controller(**attr):
 
+    table = current.s3db.org_organisation
+    table.year.label = T("Year Founded")
+    return attr
+
+settings.customise_org_organisation_controller = customise_org_organisation_controller
 
 # -----------------------------------------------------------------------------
 def customise_pr_person_resource(r, tablename):
 
     s3db = current.s3db
-    
     table = r.resource.table
 
     # Disallow "unknown" gender and defaults to "male"
@@ -713,6 +686,9 @@ def customise_pr_person_resource(r, tablename):
     gender.default = 3
 
     if r.controller == "evr":
+        # Hide evacuees emergency contacts
+        settings.pr.show_emergency_contacts = False
+
         # Last name and date of birth mandatory in EVR module
         table.last_name.requires = IS_NOT_EMPTY(
                         error_message = T("Please enter a last name"))
@@ -723,16 +699,21 @@ def customise_pr_person_resource(r, tablename):
                                empty = False).requires
         dob_requires.error_message = T("Please enter a date of birth")
         table.date_of_birth.requires = dob_requires
-    
+
+        s3db.pr_person_details.place_of_birth.requires = IS_NOT_EMPTY(
+                        error_message = T("Please enter a place of birth"))
+
     # Disable unneeded physical details
     pdtable = s3db.pr_physical_description
     hide_fields = [
         "race",
         "complexion",
         "height",
+        "weight",
         "hair_length",
         "hair_style",
         "hair_baldness",
+        "hair_comment",
         "facial_hair_type",
         "facial_hair_length",
         "facial_hair_color",
@@ -759,7 +740,6 @@ def customise_pr_person_resource(r, tablename):
     ethnicity_opts = dict((v, T(v)) for v in ethnicity_opts)
 
     ethnicity = pdtable.ethnicity
-    ethnicity.readable = ethnicity.writable = True
     ethnicity.requires = IS_EMPTY_OR(IS_IN_SET(ethnicity_opts,
                                                sort=True))
     ethnicity.represent = S3Represent(options=ethnicity_opts,
@@ -770,6 +750,51 @@ def customise_pr_person_resource(r, tablename):
     place_of_birth.readable = place_of_birth.writable = True
 
 settings.customise_pr_person_resource = customise_pr_person_resource
+
+# =============================================================================
+# def customise_cr_shelter_resource(r, tablename):
+#     
+#     field_static_population = current.s3db.cr_shelter.population
+#     field_static_population.readable = False
+#     field_static_population.writable = False
+#         
+#     field_available_capacity_day = current.s3db.cr_shelter.available_capacity_day
+#     field_available_capacity_day.readable = True
+#     
+#     field_available_capacity_night = current.s3db.cr_shelter.available_capacity_night
+#     field_available_capacity_night.readable = True
+#     
+#     field_population_day = current.s3db.cr_shelter.population_day
+#     field_population_day.readable = True
+#     
+#     field_population_night = current.s3db.cr_shelter.population_night
+#     field_population_night.readable = True
+#     
+# settings.customise_cr_shelter_resource = customise_cr_shelter_resource
+# =============================================================================
+def customise_pr_group_resource(r, tablename):
+
+    field = r.table.group_type
+    pr_group_types = {1 : T("Family"),
+                      2 : T("Tourist Group"),
+                      3 : T("Relief Team"),
+                      4 : T("other"),
+                      5 : T("Mailing Lists"),
+                      6 : T("Society"),
+                      }
+    field.represent = lambda opt: pr_group_types.get(opt, messages.UNKNOWN_OPT)
+    field.requires = IS_IN_SET(pr_group_types, zero=None)
+
+settings.customise_pr_group_resource = customise_pr_group_resource
+
+# -----------------------------------------------------------------------------
+def customise_event_event_resource(r, tablename):
+
+    table = r.table
+    table.exercise.default = True
+    table.organisation_id.readable = table.organisation_id.writable = True
+        
+settings.customise_event_event_resource = customise_event_event_resource
 
 # -----------------------------------------------------------------------------
 def customise_project_location_resource(r, tablename):
@@ -945,13 +970,12 @@ settings.modules = OrderedDict([
        #restricted = True,
        #module_type = 10,
     #)),
-    # @todo: implement evr module
-#     ("evr", Storage(
-#          name_nice = T("Evacuees"),
-#          #description = "Evacuees Registry",
-#          restricted = True, # use Access Control Lists to see this module
-#          module_type = 7
-#     )),
+    ("evr", Storage(
+         name_nice = T("Evacuees"),
+         #description = "Evacuees Registry",
+         restricted = True, # use Access Control Lists to see this module
+         module_type = 7
+    )),
     ("event", Storage(
         name_nice = T("Events"),
         #description = "Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities).",
