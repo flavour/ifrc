@@ -76,11 +76,8 @@ class S3MainMenu(object):
         module = all_modules["default"]
         menu_modules.append(MM(module.name_nice, c="default", f="index"))
 
-        auth = current.auth
         # Modules to hide due to insufficient permissions
-        hidden_modules = auth.permission.hidden_modules()
-
-        has_role = auth.s3_has_role
+        hidden_modules = current.auth.permission.hidden_modules()
 
         # The Modules to display at the top level (in order)
         for module_type in [1, 2, 3, 4, 5, 6, 7, 8, 9]:
@@ -422,25 +419,23 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def assess(self):
+    @staticmethod
+    def assess():
         """ ASSESS Menu """
 
-        ADMIN = current.session.s3.system_roles.ADMIN
+        #ADMIN = current.session.s3.system_roles.ADMIN
 
         return M(c="assess")(
                     M("Building Assessments", f="building")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                     ),
                     M("Canvassing", f="canvass")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                     ),
                     #M("Rapid Assessments", f="rat")(
                     #    M("Create", m="create"),
-                    #    #M("Search"),
                     #),
                     #M("Impact Assessments", f="assess")(
                     #    #M("Create", m="create"),
@@ -459,7 +454,8 @@ class S3OptionsMenu(object):
 
 
     # -------------------------------------------------------------------------
-    def asset(self):
+    @staticmethod
+    def asset():
         """ ASSET Controller """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -467,39 +463,34 @@ class S3OptionsMenu(object):
         return M(c="asset")(
                     M("Assets", f="asset", m="summary")(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Map", m="map"),
                         M("Import", m="import", p="create"),
                     ),
                     #M("Brands", f="brand",
                     #  restrict=[ADMIN])(
                     #    M("Create", m="create"),
-                    #    M("Search"),
                     #),
                     M("Items", f="item", m="summary")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", f="catalog_item", m="import", p="create"),
                     ),
                     M("Item Categories", f="item_category",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Catalogs", f="catalog",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Suppliers", f="supplier")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", m="import", p="create"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def budget(self):
+    @staticmethod
+    def budget():
         """ BUDGET Controller """
 
         return M(c="budget")(
@@ -528,7 +519,8 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def building(self):
+    @staticmethod
+    def building():
         """ BUILDING Controller """
 
         return M(c="building")(
@@ -536,7 +528,6 @@ class S3OptionsMenu(object):
                         M("Submit New (triage)", m="create",
                           vars={"triage":1}),
                         M("Submit New (full form)", m="create"),
-                        #M("Search"),
                     ),
                     M("NZSEE Level 2", f="nzseel2")(
                         M("Submit New", m="create"),
@@ -549,20 +540,18 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def cap(self):
+    @staticmethod
+    def cap():
         """ CAP menu """
 
-        T = current.T
-
-        session = current.session
-        ADMIN = session.s3.system_roles.ADMIN
-
         return M(c="cap")(
-                    M("Alerts", f="alert", vars={'alert.is_template': 'false'})(
-                        M("Create Alert", f="alert", m="create"),
+                    M("Alerts", f="alert")(
+                        M("Create", m="create"),
+                        M("Import from CSV", m="import", p="create"),
+                        M("Import from Feed URL", m="import_feed", p="create"),
                     ),
-                    M("Templates", f="template", vars={'alert.is_template': 'true'})(
-                        M("Create Template", f="template", m="create"),
+                    M("Templates", f="template")(
+                        M("Create", m="create"),
                     ),
                     #M("CAP Profile", f="profile")(
                     #    M("Edit profile", f="profile")
@@ -570,7 +559,8 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def cr(self):
+    @staticmethod
+    def cr():
         """ CR / Shelter Registry """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -585,7 +575,6 @@ class S3OptionsMenu(object):
         return M(c="cr")(
                     M(shelter, f="shelter")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Report", m="report"),
                         M("Import", m="import", p="create"),
@@ -597,24 +586,24 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def cms(self):
+    @staticmethod
+    def cms():
         """ CMS / Content Management System """
 
         return M(c="cms")(
                     M("Series", f="series")(
                         M("Create", m="create"),
-                        M("Search"),
                         M("View as Pages", f="blog"),
                     ),
                     M("Posts", f="post")(
                         M("Create", m="create"),
-                        M("Search"),
                         M("View as Pages", f="page"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def delphi(self):
+    @staticmethod
+    def delphi():
         """ DELPHI / Delphi Decision Maker """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -622,11 +611,9 @@ class S3OptionsMenu(object):
         return M(c="delphi")(
                     M("Active Problems", f="problem")(
                         M("Create", m="create"),
-                        M("Search"),
                     ),
                     M("Groups", f="group")(
                         M("Create", m="create"),
-                        M("Search"),
                     ),
                     #M("Solutions", f="solution"),
                     #M("Administration", restrict=[ADMIN])(
@@ -637,7 +624,8 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def deploy(self):
+    @staticmethod
+    def deploy():
         """ Deployments """
 
         return M()(M("Missions",
@@ -670,23 +658,23 @@ class S3OptionsMenu(object):
                   )
 
     # -------------------------------------------------------------------------
-    def doc(self):
+    @staticmethod
+    def doc():
         """ DOC Menu """
 
         return M(c="doc")(
                     M("Documents", f="document")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Photos", f="image")(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Bulk Uploader", f="bulk_upload"),
                     )
                 )
 
     # -------------------------------------------------------------------------
-    def dvi(self):
+    @staticmethod
+    def dvi():
         """ DVI / Disaster Victim Identification """
 
         return M(c="dvi")(
@@ -711,24 +699,24 @@ class S3OptionsMenu(object):
                     ),
                     M("Morgues", f="morgue")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Dashboard", f="index"),
                 )
 
     # -------------------------------------------------------------------------
-    def dvr(self):
+    @staticmethod
+    def dvr():
         """ DVR Menu """
 
         return M(c="dvr")(
                     M("Cases", f="case")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def event(self):
+    @staticmethod
+    def event():
         """ EVENT / Event Module """
 
         return M()(
@@ -753,44 +741,41 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def fire(self):
+    @staticmethod
+    def fire():
         """ FIRE """
 
         return M(c="fire")(
                     M("Fire Stations", f="station")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Import Stations", m="import"),
                         M("Import Vehicles", f="station_vehicle", m="import"),
                     ),
                     M("Fire Zones", f="zone")(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Map", m="map"),
                         #M("Import", m="import"),
                     ),
                     M("Zone Types", f="zone_type")(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Map", m="map"),
                         #M("Import", m="import"),
                     ),
                     M("Water Sources", f="water_source")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Import", m="import"),
                     ),
                     M("Hazard Points", f="hazard_point")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", m="import"),
                     )
                 )
 
     # -------------------------------------------------------------------------
-    def gis(self):
+    @staticmethod
+    def gis():
         """ GIS / GIS Controllers """
 
         MAP_ADMIN = current.session.s3.system_roles.MAP_ADMIN
@@ -848,7 +833,6 @@ class S3OptionsMenu(object):
                     M("Locations", c="gis", f="location")(
                         M("Create Location", m="create"),
                         #M("Create Location Group", m="create", vars={"group": 1}),
-                        #M("Search"),
                         M("Import from CSV", m="import", restrict=[MAP_ADMIN]),
                         M("Import from OpenStreetMap", m="import_poi",
                           restrict=[MAP_ADMIN]),
@@ -876,7 +860,8 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def hms(self):
+    @staticmethod
+    def hms():
         """ HMS / Hospital Status Assessment and Request Management """
 
         #s3 = current.response.s3
@@ -884,7 +869,6 @@ class S3OptionsMenu(object):
         return M(c="hms")(
                     M("Hospitals", f="hospital")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Report", m="report"),
                         M("Import", m="import", p="create"),
@@ -896,7 +880,8 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def hrm(self):
+    @staticmethod
+    def hrm():
         """ HRM / Human Resources Management """
 
         s3 = current.session.s3
@@ -917,7 +902,6 @@ class S3OptionsMenu(object):
                     M(settings.get_hrm_staff_label(), f="staff", m="summary",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Search by Skills", f="competency"),
                         M("Import", f="person", m="import",
                           vars={"group":"staff"}, p="create"),
@@ -928,43 +912,36 @@ class S3OptionsMenu(object):
                     M(teams, f="group",
                       check=[manager_mode, use_teams])(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Search Members", f="group_membership"),
                         M("Import", f="group_membership", m="import"),
                     ),
                     M("Department Catalog", f="department",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Job Title Catalog", f="job_title",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Skill Catalog", f="skill",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Skill Provisions", f="skill_provision"),
                     ),
                     M("Training Events", f="training_event",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Search Training Participants", f="training"),
                         M("Import Participant List", f="training", m="import"),
                     ),
                     M("Training Course Catalog", f="course",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Course Certificates", f="course_certificate"),
                     ),
                     M("Certificate Catalog", f="certificate",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Skill Equivalence", f="certificate_skill"),
                     ),
                     M("Reports", f="staff", m="report",
@@ -985,7 +962,8 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def vol(self):
+    @staticmethod
+    def vol():
         """ Volunteer Management """
 
         s3 = current.session.s3
@@ -1010,7 +988,6 @@ class S3OptionsMenu(object):
                     M("Volunteers", f="volunteer", m="summary",
                       check=[manager_mode])(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Search by skills", f="competency"),
                         M("Import", f="person", m="import",
                           vars={"group":"volunteer"}, p="create"),
@@ -1021,49 +998,41 @@ class S3OptionsMenu(object):
                     M(teams, f="group",
                       check=[manager_mode, use_teams])(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Search Members", f="group_membership"),
                         M("Import", f="group_membership", m="import"),
                     ),
                     M("Department Catalog", f="department",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Volunteer Role Catalog", f="job_title",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Skill Catalog", f="skill",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Skill Provisions", f="skill_provision"),
                     ),
                     M("Training Events", f="training_event",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Search Training Participants", f="training"),
                         M("Import Participant List", f="training", m="import"),
                     ),
                     M("Training Course Catalog", f="course",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Course Certificates", f="course_certificate"),
                     ),
                     M("Certificate Catalog", f="certificate",
                       check=manager_mode)(
                         M("Create", m="create"),
-                        #M("Search"),
                         #M("Skill Equivalence", f="certificate_skill"),
                     ),
                     M("Programs", f="programme",
                       check=[manager_mode, show_programmes])(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import Hours", f="programme_hours", m="import"),
                     ),
                     M("Reports", f="volunteer", m="report",
@@ -1096,7 +1065,8 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def inv(self):
+    @staticmethod
+    def inv():
         """ INV / Inventory """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1112,13 +1082,9 @@ class S3OptionsMenu(object):
                     #M("Home", f="index"),
                     M("Warehouses", c="inv", f="warehouse")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", m="import", p="create"),
                     ),
                     M("Warehouse Stock", c="inv", f="inv_item")(
-                        #M("Search", f="inv_item"),
-                        # Duplicate:
-                        #M("Search Shipped Items", f="track_item"),
                         M("Adjust Stock Levels", f="adj", check=use_adjust),
                         M("Kitting", f="kit"),
                         M("Import", f="inv_item", m="import", p="create"),
@@ -1138,65 +1104,54 @@ class S3OptionsMenu(object):
                     ),
                     M(inv_recv_list, c="inv", f="recv")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Timeline", args="timeline"),
                     ),
                     M("Sent Shipments", c="inv", f="send")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Search Shipped Items", f="track_item"),
                         M("Timeline", args="timeline"),
                     ),
                     M("Items", c="supply", f="item", m="summary")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", f="catalog_item", m="import", p="create"),
                     ),
                     # Catalog Items moved to be next to the Item Categories
                     #M("Catalog Items", c="supply", f="catalog_item")(
                        #M("Create", m="create"),
-                       #M("Search"),
                     #),
                     #M("Brands", c="supply", f="brand",
                     #  restrict=[ADMIN])(
                     #    M("Create", m="create"),
-                    #    M("Search"),
                     #),
                     M("Catalogs", c="supply", f="catalog")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Item Categories", c="supply", f="item_category",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Suppliers", c="inv", f="supplier")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", m="import", p="create"),
                     ),
                     M("Facilities", c="inv", f="facility")(
                         M("Create", m="create", t="org_facility"),
-                        #M("Search"),
                     ),
                     M("Facility Types", c="inv", f="facility_type",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Requests", c="req", f="req")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Requested Items", f="req_item"),
                     ),
                     M("Commitments", c="req", f="commit", check=use_commit)(
-                        #M("Search")
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def irs(self):
+    @staticmethod
+    def irs():
         """ IRS / Incident Report System """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1204,7 +1159,6 @@ class S3OptionsMenu(object):
         return M(c="irs")(
                     M("Incident Reports", f="ireport")(
                         M("Create Incident Report", m="create"),
-                        #M("Search"),
                         M("Open Incidents", vars={"open":1}),
                         M("Map", m="map"),
                         M("Timeline", args="timeline"),
@@ -1213,14 +1167,14 @@ class S3OptionsMenu(object):
                     ),
                     M("Incident Categories", f="icategory", restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Ushahidi Import", f="ireport", restrict=[ADMIN],
                       args="ushahidi")
                 )
 
     # -------------------------------------------------------------------------
-    def security(self):
+    @staticmethod
+    def security():
         """ Security Management System """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1228,7 +1182,6 @@ class S3OptionsMenu(object):
         return M(c="security")(
                     M("Incident Reports", c="irs", f="ireport")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Open Incidents", vars={"open":1}),
                         M("Map", m="map"),
                         M("Timeline", args="timeline"),
@@ -1242,24 +1195,19 @@ class S3OptionsMenu(object):
                     M("Incident Categories", c="irs", f="icategory",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Facilities", c="org", f="facility", m="summary")(
                         M("Create", m="create"),
-                        #M("Search", m="summary"),
                     ),
                     M("Facility Types", c="org", f="facility_type",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Zones", f="zone")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Zone Types", f="zone_type", restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Personnel", f="staff")(
                         M("Create", m="create"),
@@ -1268,7 +1216,6 @@ class S3OptionsMenu(object):
                     ),
                     M("Security Staff Types", f="staff_type", restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     #M("Ushahidi Import", c="irs", f="ireport", restrict=[ADMIN],
                     #  args="ushahidi")
@@ -1289,7 +1236,8 @@ class S3OptionsMenu(object):
         return self.inv()
 
     # -------------------------------------------------------------------------
-    def survey(self):
+    @staticmethod
+    def survey():
         """ SURVEY / Survey """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1329,31 +1277,30 @@ class S3OptionsMenu(object):
                 )
 
     # -------------------------------------------------------------------------
-    def member(self):
+    @staticmethod
+    def member():
         """ Membership Management """
 
         return M(c="member")(
                     M("Members", f="membership", m="summary")(
                         M("Create Member", m="create"),
-                        #M("Search"),
                         #M("Report", m="report"),
                         M("Import", f="person", m="import"),
                     ),
                     M("Membership Types", f="membership_type")(
                         M("Create Membership Type", m="create"),
-                        #M("Search"),
                         #M("Import", m="import"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def mpr(self):
+    @staticmethod
+    def mpr():
         """ MPR / Missing Person Registry """
 
         return M(c="mpr")(
                     M("Missing Persons", f="person")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                 )
 
@@ -1401,7 +1348,8 @@ class S3OptionsMenu(object):
 
 
     # -------------------------------------------------------------------------
-    def org(self):
+    @staticmethod
+    def org():
         """ ORG / Organization Registry """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1411,54 +1359,48 @@ class S3OptionsMenu(object):
         return M(c="org")(
                     M("Organizations", f="organisation")(
                         M("Create Organization", m="create"),
-                        #M("Search"),
                         M("Import", m="import")
                     ),
                     M("Offices", f="office")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Import", m="import")
                     ),
                     M("Facilities", f="facility", m="summary")(
                         M("Create", m="create"),
-                        #M("Search", m="summary"),
                         M("Import", m="import")
                     ),
                     M("Organization Types", f="organisation_type",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Office Types", f="office_type",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Facility Types", f="facility_type",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M(SECTORS, f="sector", restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def patient(self):
+    @staticmethod
+    def patient():
         """ PATIENT / Patient Tracking """
 
         return M(c="patient")(
                     M("Patients", f="patient")(
                         M("Create", m="create"),
-                        #M("Search"),
                     )
                 )
 
     # -------------------------------------------------------------------------
-    def pr(self):
+    @staticmethod
+    def pr():
         """ PR / Person Registry """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1466,31 +1408,29 @@ class S3OptionsMenu(object):
         return M(c="pr", restrict=ADMIN)(
                     M("Persons", f="person")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Groups", f="group")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def proc(self):
+    @staticmethod
+    def proc():
         """ PROC / Procurement """
 
         return M(c="proc")(
                     M("Procurement Plans", f="plan")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Suppliers", f="supplier")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def project(self):
+    @staticmethod
+    def project():
         """ PROJECT / Project Tracking & Management """
 
         settings = current.deployment_settings
@@ -1513,12 +1453,10 @@ class S3OptionsMenu(object):
                 menu(
                      M("Projects", f="project")(
                         M("Create", m="create"),
-                        #M("Search"),
                      ),
                      M("Communities", f="location")(
                         # Better created from tab (otherwise Activity Type filter won't work)
                         #M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("List Community Contacts", f="location_contact"),
                      ),
@@ -1527,7 +1465,6 @@ class S3OptionsMenu(object):
                 menu(
                      M("Projects", f="project")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", f="location", m="map"),
                      )
                     )
@@ -1554,32 +1491,26 @@ class S3OptionsMenu(object):
                  M("Activity Types", f="activity_type",
                    check=activity_types)(
                     M("Create", m="create"),
-                    #M("Search"),
                  ),
                  M("Beneficiary Types", f="beneficiary_type",
                    check=stats)(
                     M("Create", m="create"),
-                    #M("Search"),
                  ),
                  M("Demographics", f="demographic",
                    check=stats)(
                     M("Create", m="create"),
-                    #M("Search"),
                  ),
                  M("Hazards", f="hazard",
                    check=hazards)(
                     M("Create", m="create"),
-                    #M("Search"),
                  ),
                  M("Sectors", f="sector",
                    check=sectors)(
                     M("Create", m="create"),
-                    #M("Search"),
                  ),
                  M("Themes", f="theme",
                    check=themes)(
                     M("Create", m="create"),
-                    #M("Search"),
                  ),
                 )
 
@@ -1587,12 +1518,10 @@ class S3OptionsMenu(object):
             menu(
                  M("Projects", f="project")(
                     M("Create", m="create"),
-                    #M("Search"),
                     M("Open Tasks for Project", vars={"tasks":1}),
                  ),
                  M("Tasks", f="task")(
                     M("Create", m="create"),
-                    #M("Search"),
                  ),
                 )
             if current.auth.s3_has_role("STAFF"):
@@ -1625,7 +1554,6 @@ class S3OptionsMenu(object):
             menu(
                  M("Projects", f="project")(
                     M("Create", m="create"),
-                    #M("Search"),
                     M("Import", m="import", p="create"),
                  ),
                 )
@@ -1633,7 +1561,8 @@ class S3OptionsMenu(object):
         return menu
 
     # -------------------------------------------------------------------------
-    def req(self):
+    @staticmethod
+    def req():
         """ REQ / Request Management """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1646,52 +1575,45 @@ class S3OptionsMenu(object):
         return M(c="req")(
                     M("Requests", f="req")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("List Recurring Requests", f="req_template"),
                         M("Map", m="map"),
                         M("Report", m="report"),
                         M("Search All Requested Items", f="req_item",
-                          check=req_skills),
+                          check=req_items),
                         M("Search All Requested Skills", f="req_skill",
                           check=req_skills),
                     ),
                     M("Commitments", f="commit", check=use_commit)(
-                        #M("Search")
                     ),
                     M("Items", c="supply", f="item")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Report", m="report"),
                         M("Import", m="import", p="create"),
                     ),
                     # Catalog Items moved to be next to the Item Categories
                     #M("Catalog Items", c="supply", f="catalog_item")(
                        #M("Create", m="create"),
-                       #M("Search"),
                     #),
                     M("Catalogs", c="supply", f="catalog")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Item Categories", c="supply", f="item_category",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def stats(self):
+    @staticmethod
+    def stats():
         """ Statistics """
 
         return M(c="stats")(
                     M("Demographics", f="demographic")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Demographic Data", f="demographic_data")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", m="import"),
                     ),
                 )
@@ -1704,14 +1626,14 @@ class S3OptionsMenu(object):
         return self.admin()
 
     # -------------------------------------------------------------------------
-    def tour(self):
+    @staticmethod
+    def tour():
         """ Guided Tour """
 
         ADMIN = current.session.s3.system_roles.ADMIN
 
         return M(c="tour")(
                     M("Configuration", f="config", restrict=[ADMIN])(
-                        #M("Search"),
                         M("Import", m="import", restrict=[ADMIN]),
                         ),
                     M("Detail", f="details", restrict=[ADMIN]),
@@ -1720,7 +1642,8 @@ class S3OptionsMenu(object):
 
 
     # -------------------------------------------------------------------------
-    def transport(self):
+    @staticmethod
+    def transport():
         """ TRANSPORT """
 
         ADMIN = current.session.s3.system_roles.ADMIN
@@ -1728,76 +1651,69 @@ class S3OptionsMenu(object):
         return M(c="transport")(
                     M("Airports", f="airport")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Import", m="import", restrict=[ADMIN]),
                     ),
                     M("Seaports", f="seaport")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Import", m="import", restrict=[ADMIN]),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def vehicle(self):
+    @staticmethod
+    def vehicle():
         """ VEHICLE / Vehicle Tracking """
 
         return M(c="vehicle")(
                     M("Vehicles", f="vehicle")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                     ),
                     M("Vehicle Types", f="item")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def vulnerability(self):
+    @staticmethod
+    def vulnerability():
         """ Vulnerability """
 
         return M(c="vulnerability")(
                     M("Indicators", f="indicator")(
                         M("Create", m="create"),
-                        #M("Search"),
                     ),
                     M("Data", f="data")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Import", m="import"),
                     ),
                 )
 
     # -------------------------------------------------------------------------
-    def water(self):
+    @staticmethod
+    def water():
         """ Water: Floods, etc """
 
         return M(c="water")(
                     M("Gauges", f="gauge")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         M("Import", m="import"),
                     ),
                     M("Rivers", f="river")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         #M("Import", m="import"),
                     ),
                     M("Zones", f="zone")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         #M("Import", m="import"),
                     ),
                     M("Zone Types", f="zone_type")(
                         M("Create", m="create"),
-                        #M("Search"),
                         M("Map", m="map"),
                         #M("Import", m="import"),
                     ),
@@ -1880,6 +1796,5 @@ class S3OptionsMenu(object):
                                    # anywhere...
                                    vars=item.vars))
         return breadcrumbs
-#-----------------------------------------------------------------------
 
 # END =========================================================================

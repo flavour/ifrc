@@ -1291,6 +1291,19 @@ class S3Msg(object):
 
         return True
 
+    #------------------------------------------------------------------------------
+    def post_to_facebook(self, post):
+        """
+            Posts a message on Facebook
+        """
+
+        import facebook
+        settings = current.deployment_settings.get_auth_facebook()
+        access_token = facebook.get_app_access_token(settings["id"],
+                                                     settings["secret"])
+        graph = facebook.GraphAPI(access_token)
+        graph.put_wall_post(post)
+
     # -------------------------------------------------------------------------
     def poll(self, tablename, channel_id):
         """

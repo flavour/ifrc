@@ -99,7 +99,7 @@ settings.auth.realm_entity = drmp_realm_entity
 # Pre-Populate
 settings.base.prepopulate = ["DRMP"]
 
-settings.base.system_name = T("Timor-Leste Disaster Risk Management Information System ")
+settings.base.system_name = T("Timor-Leste Disaster Risk Management Information System")
 settings.base.system_name_short = T("DRMIS")
 
 # -----------------------------------------------------------------------------
@@ -2336,9 +2336,8 @@ def customise_event_event_controller(**attr):
     standard_prep = s3.prep
     def custom_prep(r):
         if r.interactive:
-            ADD_EVENT = T("New Disaster")
             s3.crud_strings["event_event"] = Storage(
-                label_create = ADD_EVENT,
+                label_create = T("New Disaster"),
                 title_display = T("Disaster Details"),
                 title_list = T("Disasters"),
                 title_update = T("Edit Disaster"),
@@ -2487,7 +2486,7 @@ def customise_event_event_controller(**attr):
                                                       ),
                                                     H2(record.name),
                                                     #P(record.comments),
-                                                    _class="profile_header",
+                                                    _class="profile-header",
                                                     ),
                                profile_widgets = [alerts_widget,
                                                   map_widget,
@@ -2739,7 +2738,7 @@ def customise_gis_location_controller(**attr):
                                                       #_href=location_url,
                                                       ),
                                                     H2(name),
-                                                    _class="profile_header",
+                                                    _class="profile-header",
                                                     ),
                                profile_widgets = [#locations_widget,
                                                   resources_widget,
@@ -3206,7 +3205,7 @@ def customise_org_organisation_controller(**attr):
                                                       #_href=org_url,
                                                       ),
                                                     H2(record.name),
-                                                    _class="profile_header",
+                                                    _class="profile-header",
                                                     ),
                                profile_widgets = [contacts_widget,
                                                   map_widget,

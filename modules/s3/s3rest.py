@@ -563,6 +563,7 @@ class S3Request(object):
                 if self.vars is not None and count == 1:
                     self.resource.load()
                     self.record = self.resource._rows[0]
+                    self.id = self.record.id
                 else:
                     #current.session.error = current.ERROR.BAD_RECORD
                     redirect(URL(r=self, c=self.prefix, f=self.name))
@@ -1594,7 +1595,7 @@ class S3Method(object):
 
             @param r: the S3Request
             @param method: the method established by the REST interface
-            @param as_widget: render as widget (to embed in another method)
+            @param widget_id: widget ID
             @param attr: dict of parameters for the method handler
 
             @return: output object to send to the view

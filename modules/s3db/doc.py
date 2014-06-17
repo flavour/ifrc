@@ -109,9 +109,9 @@ class S3DocumentLibrary(S3Model):
         # Components
         doc_id = "doc_id"
         add_components(tablename,
-                       doc_document=doc_id,
-                       doc_image=doc_id,
-                      )
+                       doc_document = doc_id,
+                       doc_image = doc_id,
+                       )
 
         # ---------------------------------------------------------------------
         # Documents
@@ -177,9 +177,8 @@ class S3DocumentLibrary(S3Model):
                      *s3_meta_fields())
 
         # CRUD Strings
-        ADD_DOCUMENT = T("Create Reference Document")
         crud_strings[tablename] = Storage(
-            label_create = ADD_DOCUMENT,
+            label_create = T("Add Reference Document"),
             title_display = T("Document Details"),
             title_list = T("Documents"),
             title_update = T("Edit Document"),

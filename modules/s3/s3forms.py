@@ -152,7 +152,7 @@ class S3SQLForm(object):
             if isinstance(label, basestring):
                 label = current.T(label)
             button = INPUT(_type="submit",
-                           _class="crud-submit-button",
+                           _class="btn crud-submit-button",
                            _name=name,
                            _value=label)
             if _class:
@@ -554,7 +554,14 @@ class S3SQLDefaultForm(S3SQLForm):
         """
             Process the form
 
-            @todo: describe arguments
+            @param form: FORM instance
+            @param vars: request POST variables
+            @param onvalidation: callback(function) upon successful form validation
+            @param onaccept: callback(function) upon successful form acceptance
+            @param link: component link
+            @param http: HTTP method
+            @param format: request extension
+
         """
 
         table = self.table
@@ -1081,10 +1088,10 @@ class S3SQLCustomForm(S3SQLForm):
                 subid = None
 
             # Accept the subrecord
-            accept_subid = self._accept(subid,
-                                        subdata,
-                                        alias=alias,
-                                        format=format)
+            self._accept(subid,
+                         subdata,
+                         alias=alias,
+                         format=format)
 
         # Accept components (e.g. Inline-Forms)
         for item in self.components:
@@ -1886,6 +1893,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
         if not multiple:
             # Mark to client-side JS that we should open Edit Row
             _class = "%s single" % _class
+        item = None
         for i in xrange(len(items)):
             has_rows = True
             item = items[i]
@@ -1934,7 +1942,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
         _class = "edit-row inline-form hide"
         if required and has_rows:
             _class = "%s required" % _class
-        edit_row = self._render_item(table, None, fields,
+        edit_row = self._render_item(table, item, fields,
                                      editable=_editable,
                                      deletable=_deletable,
                                      readonly=False,

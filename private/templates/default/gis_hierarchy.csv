@@ -17,6 +17,7 @@ SITE_DEFAULT,,"State / Province","County / District","City / Town / Village","Vi
 ,KG,"Oblast / State City","District (Rayon) / Oblast City","Town / Village Group",Village,,
 ,KH,Province,District,Commune,Village,
 ,KZ,Province,District,,,,
+,LK,Province,District,Divisional Secretariat,Grama Niladhari,,
 ,LY,District,"City / Town / Village",,,,
 ,MM,State,District,Township,Village Tract,Village,
 ,MN,"Province / Aimag","District / Soum","Subdistrict / Bagh",,,

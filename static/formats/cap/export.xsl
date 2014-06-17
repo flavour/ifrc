@@ -5,7 +5,7 @@
 
          CAP Export Templates for S3XRC
 
-         Copyright (c) 2011 Sahana Software Foundation
+         Copyright (c) 2011-14 Sahana Software Foundation
 
          Permission is hereby granted, free of charge, to any person
          obtaining a copy of this software and associated documentation
@@ -109,7 +109,6 @@
         <xsl:param name="string"/>
         <xsl:param name="node-name"/>
 
-
         <xsl:call-template name="splitList">
             <xsl:with-param name="list"><xsl:value-of select="$string"/></xsl:with-param>
             <xsl:with-param name="arg"><xsl:value-of select="$node-name"/></xsl:with-param>
@@ -129,6 +128,7 @@
         <xsl:call-template name="splitList">
             <xsl:with-param name="list"><xsl:value-of select="$string"/></xsl:with-param>
             <xsl:with-param name="listsep">,</xsl:with-param>
+            <xsl:with-param name="arg"> </xsl:with-param>  <!-- Not used -->
         </xsl:call-template>
     </xsl:template>
 
@@ -328,43 +328,75 @@
 
             <xsl:if test="data[@field='parameter']">
                 <xsl:call-template name="key-value-pairs">
-                    <xsl:with-param name="string"><xsl:value-of select="data[@field='parameter']"/>
+                    <xsl:with-param name="string">
+                        <xsl:value-of select="data[@field='parameter']"/>
                     </xsl:with-param>
                     <xsl:with-param name="arg">parameter</xsl:with-param>
                 </xsl:call-template>
             </xsl:if>
-            <!--
-            <xsl:if test="../resource[@name='cap_info_resource']/info_id = @uuid">
-                <xsl:apply-templates select="resource[@name='cap_info_resource']"/>
-                <xsl:apply-templates select="resource[@name='cap_info_area']"/>
-            </xsl:if> -->
+            <xsl:apply-templates select="../resource[@name='cap_area']">
+                <xsl:with-param name="info">
+                    <xsl:value-of select="@uuid"/>
+                </xsl:with-param>
+            </xsl:apply-templates>
+            <xsl:apply-templates select="../resource[@name='cap_resource']"/>
         </info>
     </xsl:template>
 
-    <!-- *********************** cap_info_area **************************** -->
-    <xsl:template match="resource[@name='cap_info_area']">
-        <area>
-            <areaDesc><xsl:value-of select="data[@field='area_desc']"/></areaDesc>
-            <xsl:if test="data[@name='polygon']!=''">
-                <polygon><xsl:value-of select="data[@name='polygon']"/></polygon>
-            </xsl:if>
-            <xsl:if test="data[@field='circle']!=''">
-                <circle><xsl:value-of select="data[@field='circle']"/></circle>
-            </xsl:if>
-            <xsl:if test="data[@field='geocode']!=''">
-                <geocode><xsl:value-of select="data[@field='geocode']"/></geocode>
-            </xsl:if>
-            <xsl:if test="data[@name='altitude']!=''">
-                <altitude><xsl:value-of select="data[@name='altitude']"/></altitude>
-            </xsl:if>
-            <xsl:if test="data[@name='ceiling']!=''">
-                <ceiling><xsl:value-of select="data[@name='ceiling']"/></ceiling>
-            </xsl:if>
-        </area>
+    <!-- *********************** cap_area **************************** -->
+    <xsl:template match="resource[@name='cap_area']">
+        <xsl:param name="info"/>
+        
+        <!-- Include all Areas within this Info & all that are global to the Alert -->
+        <xsl:choose>
+            <xsl:when test="reference[@field='info_id']/@uuid != $info">
+            </xsl:when>
+            <xsl:otherwise>
+                <area>
+                    <areaDesc><xsl:value-of select="data[@field='name']"/></areaDesc>
+                    <xsl:if test="data[@field='altitude']!=''">
+                        <altitude><xsl:value-of select="data[@name='altitude']"/></altitude>
+                    </xsl:if>
+                    <xsl:if test="data[@field='ceiling']!=''">
+                        <ceiling><xsl:value-of select="data[@name='ceiling']"/></ceiling>
+                    </xsl:if>
+                    <xsl:apply-templates select="resource[@name='cap_area_tag']" />
+                    <xsl:apply-templates select="resource[@name='cap_area_location']//resource[@name='gis_location_tag']" />
+                </area>
+            </xsl:otherwise>
+        </xsl:choose>
     </xsl:template>
 
-    <!-- *********************** cap_info_resource ************************ -->
-    <xsl:template match="resource[@name='cap_info_resource']">
+    <!-- *********************** cap_area_tag ******************* -->
+    <!-- These are key value pairs used for geocodes. -->
+    <xsl:template match="resource[@name='cap_area_tag']">
+        <geocode>
+            <valueName>
+                <xsl:value-of select="data[@field='tag']" />
+            </valueName>
+            <value>
+                <xsl:value-of select="data[@field='value']" />
+            </value>
+        </geocode>
+    </xsl:template>
+
+    <!-- *********************** cap_area_location ******************* -->
+    <!-- The actual data, formatted for CAP, is stored in location tags. -->
+    <xsl:template match="resource[@name='cap_area_location']//resource[@name='gis_location_tag']">
+        <xsl:if test="./data[@field='tag']/text()='cap_polygon'">
+            <polygon>
+                <xsl:value-of select="./data[@field='value']/text()"/>
+            </polygon>
+        </xsl:if>
+        <xsl:if test="./data[@field='tag']/text()='cap_circle'">
+            <circle>
+                <xsl:value-of select="./data[@field='value']/text()"/>
+            </circle>
+        </xsl:if>
+    </xsl:template>
+    
+    <!-- *********************** cap_resource ************************ -->
+    <xsl:template match="resource[@name='cap_resource']">
         <resource>
             <resourceDesc><xsl:value-of select="data[@field='resource_desc']"/></resourceDesc>
             <mimeType><xsl:value-of select="data[@field='mime_type']"/></mimeType>
