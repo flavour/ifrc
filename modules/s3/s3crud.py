@@ -514,7 +514,7 @@ class S3CRUD(S3Method):
         view = self._view(r, "listadd.html")
         output = XML(response.render(view, output))
         return output
-            
+
     # -------------------------------------------------------------------------
     def read(self, r, **attr):
         """
@@ -1377,6 +1377,7 @@ class S3CRUD(S3Method):
             dtargs["dt_pagination"] = dt_pagination
             dtargs["dt_displayLength"] = display_length
             dtargs["dt_base_url"] = r.url(method="", vars={})
+            dtargs["dt_permalink"] = r.url()
             datatable = dt.html(totalrows,
                                 displayrows,
                                 id=list_id,
@@ -2279,7 +2280,7 @@ class S3CRUD(S3Method):
                 else:
                     label = crud_string(tablename, "label_list_button")
                     _href = url(method="",
-                                id=0,
+                                id=r.id if r.component else 0,
                                 vars=remove_filters(r.get_vars),
                                 representation=representation)
                     btn = crud_button(label=label,
@@ -2348,7 +2349,7 @@ class S3CRUD(S3Method):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def action_button(label, url, **attr):
+    def action_button(label, url, icon=None, **attr):
         """
             Add a link to response.s3.actions
 
@@ -2359,6 +2360,8 @@ class S3CRUD(S3Method):
 
         link = dict(attr)
         link.update(label=str(label), url=url)
+        if icon and current.deployment_settings.get_ui_use_button_glyphicons():
+            link.update(icon=icon)
         if "_class" not in link:
             link.update(_class="action-btn")
 
@@ -2430,7 +2433,8 @@ class S3CRUD(S3Method):
             s3crud.action_button(labels.UPDATE, update_url,
                                  # To use modals
                                  #_class="action-btn s3_modal"
-                                 _class="action-btn edit"
+                                 _class="action-btn edit",
+                                 icon = "edit",
                                  )
         else:
             if not read_url:
@@ -2439,11 +2443,12 @@ class S3CRUD(S3Method):
             s3crud.action_button(labels.READ, read_url,
                                  # To use modals
                                  #_class="action-btn s3_modal"
-                                 _class="action-btn read"
+                                 _class="action-btn read",
                                  )
 
         # Delete-action
         if deletable and has_permission("delete", table):
+            icon = "trash"
             if not delete_url:
                 delete_url = URL(args = args + ["delete"],
                                  vars = get_vars)
@@ -2458,16 +2463,24 @@ class S3CRUD(S3Method):
                     if row_id:
                         rappend(str(row_id))
                 s3crud.action_button(labels.DELETE, delete_url,
-                                     _class="delete-btn", restrict=restrict)
+                                     _class="delete-btn",
+                                     icon=icon, 
+                                     restrict=restrict,
+                                     )
             else:
                 s3crud.action_button(labels.DELETE, delete_url,
-                                     _class="delete-btn")
+                                     _class="delete-btn",
+                                     icon=icon,
+                                     )
 
         # Copy-action
         if copyable and has_permission("create", table):
             if not copy_url:
                 copy_url = URL(args = args + ["copy"])
-            s3crud.action_button(labels.COPY, copy_url)
+            s3crud.action_button(labels.COPY, 
+                                 copy_url,
+                                 icon="copy",
+                                 )
 
         # Append custom actions
         if custom_actions:

@@ -20,11 +20,18 @@ T = current.T
 s3 = current.response.s3
 settings = current.deployment_settings
 
+datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+
 """
     Template settings for IFRC MENA 4W Portal
 """
 
-datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+# -----------------------------------------------------------------------------
+# Pre-Populate
+settings.base.prepopulate = ["Syria", "demo/users"]
+
+settings.base.system_name = T("IFRC MENA 4W Portal")
+settings.base.system_name_short = T("IFRC MENA 4W")
 
 # =============================================================================
 # System Settings
@@ -61,13 +68,6 @@ settings.security.map = True
 
 # Owner Entity
 settings.auth.person_realm_human_resource_site_then_org = False
-
-# -----------------------------------------------------------------------------
-# Pre-Populate
-settings.base.prepopulate = ["Syria"]
-
-settings.base.system_name = T("IFRC MENA 4W Portal")
-settings.base.system_name_short = T("IFRC MENA 4W")
 
 # -----------------------------------------------------------------------------
 # Theme (folder to use for views/layout.html)
@@ -951,7 +951,8 @@ def customise_org_organisation_controller(**attr):
             table = s3db.org_organisation
 
             # Hide fields
-            table.organisation_type_id.readable = table.organisation_type_id.writable = False
+            field = s3db.org_organisation_organisation_type.organisation_type_id
+            field.readable = field.writable = False
             table.region_id.readable = table.region_id.writable = False
             table.country.readable = table.country.writable = False
             table.year.readable = table.year.writable = False

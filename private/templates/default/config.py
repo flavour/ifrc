@@ -29,8 +29,8 @@ settings = current.deployment_settings
 # eg:
 # ["default"] (1 is a shortcut for this)
 # ["Standard"]
-# ["IFRC_Train"]
-# ["roles", "user"]
+# ["IFRC, IFRC/Train"]
+# ["roles", "demo/users"]
 # Unless doing a manual DB migration, where prepopulate = 0
 # In Production, prepopulate = 0 (to save 1x DAL hit every page)
 #settings.base.prepopulate = 1
@@ -445,6 +445,10 @@ settings.gis.geonames_username = "eden_test"
 # Enable the use of Organisation Groups & what their name is
 #settings.org.groups = "Coalition"
 #settings.org.groups = "Network"
+# Make Organisation Types Hierarchical
+#settings.org.organisation_types_hierarchical = True
+# Make Organisation Types Multiple
+#settings.org.organisation_types_multiple = True
 # Enable the use of Organisation Regions
 #settings.org.regions = True
 # Make Organisation Regions Hierarchical

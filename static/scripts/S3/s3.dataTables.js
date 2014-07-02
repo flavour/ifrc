@@ -51,6 +51,37 @@
         }
     }
 
+    var updateURLQuery = function(target, source) {
+
+        var tquery = target.split('?'),
+            squery = source.split('?');
+
+        var turlvars = tquery.length > 1 ? tquery[1].split('&') : [],
+            surlvars = squery.length > 1 ? squery[1].split('&') : [],
+            rurlvars = [],
+            i, len, q;
+
+        for (i=0, len=turlvars.length; i<len; i++) {
+            q = turlvars[i].split('=');
+            if (q.length > 1) {
+                k = decodeURIComponent(q[0]);
+                if (k.indexOf('.') == -1 && k[0] != '(' && k[0] != 'w') {
+                    rurlvars.push(turlvars[i]);
+                }
+            }
+        }
+        for (i=0, len=surlvars.length; i<len; i++) {
+            q = surlvars[i].split('=');
+            if (q.length > 1) {
+                k = decodeURIComponent(q[0]);
+                if (k.indexOf('.') != -1 || k[0] == '(') {
+                    rurlvars.push(surlvars[i]);
+                }
+            }
+        }
+        return rurlvars.length ? tquery[0] + '?' + rurlvars.join('&') : tquery[0];
+    };
+
     /* Function used by Export buttons */
     var formatRequest = function(representation, tableid, url) {
         var t = tableIdReverse('#' + tableid);
@@ -1007,7 +1038,13 @@
                             }
                             var c = action._class;
                             var label = S3.Utf8.decode(action.label);
+                            var title = label;
                             re = /%5Bid%5D/g;
+                            if (action.icon) {
+                                label = '<i class="icon icon-' + action.icon + '" alt="' + label + '"></i>';
+                            } else if (action.img) {
+                                label = '<img src="' + action.icon + '" alt="' + label + '">';
+                            }
                             if (action._onclick) {
                                 var oc = Actions[i]._onclick.replace(re, action_id);
                                 Buttons = Buttons + '<a class="' + c + '" onclick="' + oc + '">' + label + '</a>' + '&nbsp;';
@@ -1017,16 +1054,10 @@
                                     fnActionCallBacks.push([action_id, S3ActionCallBack]);
                                 }
                             } else if (action.url) {
-                                if (action.icon) {
-                                    label = '<img src="' + action.icon + '" alt="' + label + '" title="' + label + '">';
-                                }
                                 var url = action.url.replace(re, action_id);
-                                Buttons = Buttons + '<a db_id="'+ action_id + '" class="' + c + '" href="' + url + '" title="' + label + '">' + label + '</a>' + '&nbsp;';
+                                Buttons = Buttons + '<a db_id="'+ action_id + '" class="' + c + '" href="' + url + '" title="' + title + '">' + label + '</a>' + '&nbsp;';
                             } else {
-                                if (action.icon) {
-                                    label = '<img src="' + action.icon + '" alt="' + label + '" title="' + label + '">';
-                                }
-                                Buttons = Buttons + '<a db_id="'+ action_id + '" class="' + c + '" title="' + label + '">' + label + '</a>' + '&nbsp;';
+                                Buttons = Buttons + '<a db_id="'+ action_id + '" class="' + c + '" title="' + title + '">' + label + '</a>' + '&nbsp;';
                             }
                         } // end of loop through for each row Action for this table
                     } // end of if there are to be Row Actions for this table
@@ -1084,6 +1115,17 @@
             'fnDrawCallback': function(oSettings) {
                 //var table = '#' + oSettings.nTable.id;
                 //var t = tableIdReverse(table);
+
+                // Update permalink
+                var ajaxSource = oSettings.sAjaxSource;
+                if (ajaxSource) {
+                    $(id).closest('.dt-wrapper').find('a.permalink').each(function() {
+                        var $this = $(this);
+                        var url = updateURLQuery($this.attr('href'), ajaxSource);
+                        $this.attr('href', url);
+                    });
+                }
+
                 $('.dt-truncate .ui-icon-zoomin, .dt-truncate .ui-icon-zoomout').bind('click.dtToggleCell', toggleCell);
                 bindButtons(t, tableConfig, fnActionCallBacks);
                 if (oSettings.aiDisplay.length === 0) {

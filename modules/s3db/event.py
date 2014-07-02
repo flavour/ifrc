@@ -271,9 +271,9 @@ class S3EventModel(S3Model):
             filter_widgets = [S3OptionsFilter("event_type_id",
                                               label = T("Type"),
                                               multiple = False,
-                                              options = lambda: \
-                                                get_s3_filter_opts("event_event_type",
-                                                                   translate = True)
+                                              #options = lambda: \
+                                              #  get_s3_filter_opts("event_event_type",
+                                              #                     translate = True)
                                               ),
                               ]
 
@@ -971,8 +971,8 @@ class S3EventResourceModel(S3Model):
         super_link = self.super_link
 
         status_opts = {1: T("Available"),
-                       2: T("On Scene"),
-                       3: T("Responding"),
+                       2: T("Assigned"),
+                       3: T("En Route"),
                        }
 
         # ---------------------------------------------------------------------

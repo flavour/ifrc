@@ -456,15 +456,8 @@ class S3DataTable(object):
             query = "&".join("%s=%s" % (k, v) for k, v in get_vars.items())
             default_url = "%s?%s" % (default_url, query)
 
-        div = DIV(_id = "%s_list_formats" % id, # Used by s3.filter.js to update URLs
-                  _class = "list_formats")
-        if permalink is not None:
-            link = A(T("Link to this result"),
-                     _href=permalink,
-                     _class="permalink")
-            div.append(link)
-            div.append(" | ")
-
+        div = SPAN(_id = "%s_list_formats" % id, # Used by s3.filter.js to update URLs
+                   _class = "list_formats")
         export_formats = current.deployment_settings.get_ui_export_formats()
         if export_formats:
             div.append("%s:" % current.T("Export as"))
@@ -533,7 +526,15 @@ class S3DataTable(object):
             for icon in iconList:
                 div.append(icon)
 
-        return div
+        output = DIV(_class="dt-export-options")
+        if permalink is not None:
+            link = A(T("Link to this result"),
+                     _href=permalink,
+                     _class="permalink")
+            output.append(link)
+            output.append(" | ")
+        output.append(div)
+        return output
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -742,6 +743,13 @@ class S3DataTable(object):
         # Wrap the table in a form and add some data in hidden fields
         form = FORM(_class="dt-wrapper")
         if not s3.no_formats and len(html) > 0:
+            # @todo: always *render* both export options and permalink,
+            #        even if the initial table is empty, so that
+            #        Ajax-update can unhide them once there are results
+            # @todo: move export-format update into fnDrawCallback
+            # @todo: poor UX with onclick-JS, better to render real
+            #        links which can be bookmarked, and then update them
+            #        in fnDrawCallback
             permalink = attr.get("dt_permalink", None)
             base_url = attr.get("dt_base_url", None)
             form.append(S3DataTable.listFormats(id, rfields,
@@ -1803,6 +1811,7 @@ class S3PivotTable(object):
                     cols:
                     total:
                 },
+                method: <aggregation method>,
                 cells: [rows[cols]],
                 rows: [rows[index, value, label, total]],
                 cols: [cols[index, value, label, total]],
@@ -1875,8 +1884,8 @@ class S3PivotTable(object):
                 rtail = self._tail(rows, maxrows, least=least, method=hmethod)
             self._sortdim(rows, rfields[rows_dim])
             if rtail[1] is not None:
-                rows.append((OTHER, rtail[1], Storage(value=None, text=others)))
-            #row_indices = [i[0] for i in rows]
+                rows.append((OTHER, rtail[1], Storage(value=rtail[0],
+                                                      text=others)))
 
             # Group and sort the cols
             is_numeric = None
@@ -1895,8 +1904,8 @@ class S3PivotTable(object):
                 ctail = self._tail(cols, maxcols, least=least, method=hmethod)
             self._sortdim(cols, rfields[cols_dim])
             if ctail[1] is not None:
-                cols.append((OTHER, ctail[1], Storage(value=None, text=others)))
-            #col_indices = [i[0] for i in cols]
+                cols.append((OTHER, ctail[1], Storage(value=ctail[0],
+                                                      text=others)))
 
             rothers = rtail[0] or []
             cothers = ctail[0] or []
@@ -1954,8 +1963,11 @@ class S3PivotTable(object):
 
             for rindex, rtotal, rtitle in rows:
                 orow = []
-                rval = s3_unicode(rtitle.value) \
-                       if rtitle.value is not None and rindex != OTHER else None
+                rval = rtitle.value
+                if rindex == OTHER and isinstance(rval, list):
+                    rval = ",".join(s3_unicode(v) for v in rval)
+                elif rval is not None:
+                    rval = s3_unicode(rval)
                 if represent:
                     rappend((rindex,
                              rindex in rothers,
@@ -2020,8 +2032,11 @@ class S3PivotTable(object):
                                  "items": items,
                                  "value": value})
                     if ctotals:
-                        cval = s3_unicode(ctitle.value) \
-                               if ctitle.value is not None and cindex != OTHER else None
+                        cval = ctitle.value
+                        if cindex == OTHER and isinstance(cval, list):
+                            cval = ",".join(s3_unicode(v) for v in cval)
+                        elif cval is not None:
+                            cval = s3_unicode(cval)
                         if represent:
                             cappend((cindex,
                                      cindex in cothers,
@@ -2039,6 +2054,7 @@ class S3PivotTable(object):
         output = {"rows": orows,
                   "cols": ocols,
                   "cells": ocells,
+                  "method": method,
                   "lookup": lookup if lookup else None,
                   "total": self._totals(self.totals, [layer]),
                   "nodata": None if not self.empty else str(T("No data available"))}

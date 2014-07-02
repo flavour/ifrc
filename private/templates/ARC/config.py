@@ -14,10 +14,28 @@ settings = current.deployment_settings
 T = current.T
 
 """
-    Template settings for ARC
+    Template settings for American Red Cross
 """
+
 # =============================================================================
 # System Settings
+# -----------------------------------------------------------------------------
+# Pre-Populate
+settings.base.prepopulate = ["ARC", "demo/users"]
+
+settings.base.system_name = T("Resource Management System")
+settings.base.system_name_short = T("RMS")
+
+# -----------------------------------------------------------------------------
+# Theme (folder to use for views/layout.html)
+settings.base.theme = "ARC"
+settings.base.xtheme = "IFRC/xtheme-ifrc.css"
+settings.gis.map_height = 600
+settings.gis.map_width = 854
+# Display Resources recorded to Admin-Level Locations on the map
+# @ToDo: Move into gis_config?
+settings.gis.display_L0 = True
+
 # -----------------------------------------------------------------------------
 # Authorization Settings
 settings.auth.registration_requires_approval = True
@@ -139,12 +157,13 @@ def ifrc_realm_entity(table, row):
     use_user_organisation = False
     # Suppliers & Partners are owned by the user's organisation
     if realm_entity == 0 and tablename == "org_organisation":
-        ott = s3db.org_organisation_type
-        row = table[row.id]
-        row = db(table.organisation_type_id == ott.id).select(ott.name,
-                                                              limitby=(0, 1)
-                                                              ).first()
-        
+        ottable = s3db.org_organisation_type
+        ltable = db.org_organisation_organisation_type
+        query = (ltable.organisation_id == row.id) & \
+                (ltable.organisation_type_id == ottable.id)
+        row = db(query).select(ottable.name,
+                               limitby=(0, 1)
+                               ).first()
         if row and row.name != "Red Cross / Red Crescent":
             use_user_organisation = True
 
@@ -160,23 +179,6 @@ def ifrc_realm_entity(table, row):
 
     return realm_entity
 settings.auth.realm_entity = ifrc_realm_entity
-
-# -----------------------------------------------------------------------------
-# Pre-Populate
-settings.base.prepopulate = ["ARC"]
-
-settings.base.system_name = T("Resource Management System")
-settings.base.system_name_short = T("RMS")
-
-# -----------------------------------------------------------------------------
-# Theme (folder to use for views/layout.html)
-settings.base.theme = "ARC"
-settings.base.xtheme = "IFRC/xtheme-ifrc.css"
-settings.gis.map_height = 600
-settings.gis.map_width = 854
-# Display Resources recorded to Admin-Level Locations on the map
-# @ToDo: Move into gis_config?
-settings.gis.display_L0 = True
 
 # -----------------------------------------------------------------------------
 # L10n (Localization) settings

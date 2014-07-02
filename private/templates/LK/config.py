@@ -23,11 +23,20 @@ T = current.T
 s3 = current.response.s3
 settings = current.deployment_settings
 
+datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+
 """
     Template settings for Sri Lanka SahanaCamp
+    - based on DRMP with stats_demographic_data added
+    - Auth settings are for Camp not Prod
 """
 
-datetime_represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+# -----------------------------------------------------------------------------
+# Pre-Populate
+settings.base.prepopulate = ["LK", "demo/users"]
+
+settings.base.system_name = T("Sri Lanka Disaster Risk Management Information System")
+settings.base.system_name_short = T("Sahana")
 
 # =============================================================================
 # System Settings
@@ -49,14 +58,14 @@ settings.auth.registration_roles = {"organisation_id": ["USER"],
 
 # Terms of Service to be able to Register on the system
 # uses <template>/views/tos.html
-settings.auth.terms_of_service = True
+#settings.auth.terms_of_service = True
 
 settings.auth.show_utc_offset = False
 
 settings.auth.show_link = False
 
-settings.auth.record_approval = True
-settings.auth.record_approval_required_for = ("org_organisation",)
+#settings.auth.record_approval = True
+#settings.auth.record_approval_required_for = ("org_organisation",)
 
 # -----------------------------------------------------------------------------
 # Security Policy
@@ -90,17 +99,23 @@ def drmp_realm_entity(table, row):
         if org:
             return org.pe_id
 
+    elif tablename == "org_office":
+        # Give the Office the Realm of the Organisation
+        otable = current.s3db.org_organisation
+        if "organisation_id" in row:
+            query = (otable.id == row.organisation_id)
+        else:
+            query = (table.id == row.id) & \
+                    (otable.id == table.organisation_id)
+        org = current.db(query).select(otable.pe_id,
+                                       limitby=(0, 1)).first()
+        if org:
+            return org.pe_id
+
     # Follow normal rules
     return 0
 
 settings.auth.realm_entity = drmp_realm_entity
-
-# -----------------------------------------------------------------------------
-# Pre-Populate
-settings.base.prepopulate = ["LK"]
-
-settings.base.system_name = T("Sri Lanka Disaster Risk Management Information System")
-settings.base.system_name_short = T("Sahana")
 
 # -----------------------------------------------------------------------------
 # Theme (folder to use for views/layout.html)
@@ -3273,7 +3288,8 @@ def customise_org_organisation_controller(**attr):
             table = s3db.org_organisation
 
             # Hide fields
-            table.organisation_type_id.readable = table.organisation_type_id.writable = False
+            field = s3db.org_organisation_organisation_type.organisation_type_id
+            field.readable = field.writable = False
             table.region_id.readable = table.region_id.writable = False
             table.country.readable = table.country.writable = False
             table.year.readable = table.year.writable = False

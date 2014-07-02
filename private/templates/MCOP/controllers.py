@@ -58,6 +58,7 @@ for(var i=0,len=layers.length;i<len;i++){
                        "created_by$organisation_id",
                        "document.file",
                        "event_post.event_id",
+                       "event_post.incident_id",
                        ]
         # Order with most recent Alert first
         orderby = "cms_post.date desc"

@@ -56,8 +56,8 @@ except ImportError:
         import gluon.contrib.simplejson as json # fallback to pure-Python module
 
 from gluon import current
+from gluon.html import A, TAG
 from gluon.http import HTTP
-from gluon.html import TAG
 from gluon.validators import IS_EMPTY_OR
 from gluon.dal import Row, Rows, Table, Field, Expression
 from gluon.storage import Storage
@@ -385,6 +385,9 @@ class S3Resource(object):
             link.actuate = component.actuate
             link.autodelete = component.autodelete
             link.multiple = component.multiple
+            # @todo: possible ambiguity if the same link is used
+            #        in multiple components (e.g. filtered or 3-way),
+            #        need a better aliasing mechanism here
             self.links[link.name] = link
 
         self.components[alias] = component
@@ -1329,10 +1332,11 @@ class S3Resource(object):
         append = qfields.append
         for f in table.fields:
             
-            if f in ("wkt", "the_geom") and \
-               (tablename == "gis_location" or \
-                tablename.startswith("gis_layer_shapefile_")):
-                    
+            if tablename == "gis_location" and \
+               ((f == "the_geom") or (f == "wkt" and current.auth.permission.format != "cap")):
+                # Filter out bulky Polygons
+                continue
+            elif f in ("wkt", "the_geom")  and tablename.startswith("gis_layer_shapefile_"):
                 # Filter out bulky Polygons
                 continue
 
@@ -2740,61 +2744,109 @@ class S3Resource(object):
                        fields=None,
                        only_last=False,
                        show_uids=False,
+                       hierarchy=False,
                        as_json=False):
         """
             Export field options of this resource as element tree
 
             @param component: name of the component which the options are
-                requested of, None for the primary table
+                              requested of, None for the primary table
             @param fields: list of names of fields for which the options
-                are requested, None for all fields (which have options)
+                           are requested, None for all fields (which have
+                           options)
             @param as_json: convert the output into JSON
-            @param only_last: Obtain the latest record (performance bug fix,
-                timeout at s3_tb_refresh for non-dropdown form fields)
+            @param only_last: obtain only the latest record
         """
 
         if component is not None:
-            c = self.components.get(component, None)
+            c = self.components.get(component)
             if c:
                 tree = c.export_options(fields=fields,
                                         only_last=only_last,
                                         show_uids=show_uids,
+                                        hierarchy=hierarchy,
                                         as_json=as_json)
                 return tree
             else:
+                # If we get here, we've been called from the back-end,
+                # otherwise the request would have failed during parse.
+                # So it's safe to raise an exception:
                 raise AttributeError
         else:
             if as_json and only_last and len(fields) == 1:
-                db = current.db
-                component_tablename = "%s_%s" % (self.prefix, self.name)
-                field = db[component_tablename][fields[0]]
-                req = field.requires
-                if isinstance(req, IS_EMPTY_OR):
-                    req = req.other
+                # Identify the field
+                default = {"option":[]}
+                try:
+                    field = self.table[fields[0]]
+                except AttributeError:
+                    # Can't raise an exception here as this goes
+                    # directly to the client
+                    return json.dumps(default)
+
+                # Check that the validator has a lookup table
+                requires = field.requires
+                if not isinstance(requires, (list, tuple)):
+                    requires = [requires]
+                requires = requires[0]
+                if isinstance(requires, IS_EMPTY_OR):
+                    requires = requires.other
                 from s3validators import IS_LOCATION
-                if not isinstance(req, (IS_ONE_OF, IS_LOCATION)):
-                    raise RuntimeError, "not isinstance(req, IS_ONE_OF)"
-                kfield = db[req.ktable][req.kfield]
-                rows = db().select(kfield,
-                                   orderby=~kfield,
-                                   limitby=(0, 1))
-                res = []
-                for row in rows:
-                    val = row[req.kfield]
-                    if field.represent:
-                        represent = field.represent(val)
+                if not isinstance(requires, (IS_ONE_OF, IS_LOCATION)):
+                    # Can't raise an exception here as this goes
+                    # directly to the client
+                    return json.dumps(default)
+
+                # Identify the lookup table
+                db = current.db
+                lookuptable = requires.ktable
+                lookupfield = db[lookuptable][requires.kfield]
+
+                # Fields to extract
+                fields = [lookupfield]
+                h = None
+                if hierarchy:
+                    from s3hierarchy import S3Hierarchy
+                    h = S3Hierarchy(lookuptable)
+                    if not h.config:
+                        h = None
+                    elif h.pkey.name != lookupfield.name:
+                        # Also extract the node key for the hierarchy
+                        fields.append(k.pkey)
+
+                # Get the latest record
+                # NB: this assumes that the lookupfield is auto-incremented
+                row = db().select(orderby=~lookupfield,
+                                  limitby=(0, 1),
+                                  *fields).first()
+
+                # Represent the value and generate the output JSON
+                if row:
+                    value = row[lookupfield]
+                    widget = field.widget
+                    if hasattr(widget, "represent") and widget.represent:
+                        # Prefer the widget's represent as options.json
+                        # is usually called to Ajax-update the widget
+                        represent = widget.represent(value)
+                    elif field.represent:
+                        represent = field.represent(value)
                     else:
-                        represent = s3_unicode(val)
+                        represent = s3_unicode(value)
                     if isinstance(represent, A):
                         represent = represent.components[0]
-                    res.append({"@value": val, "$": represent})
-                return json.dumps({'option': res})
+                        
+                    item = {"@value": value, "$": represent}
+                    if h:
+                        item["@parent"] = str(h.parent(row[h.pkey]))
+                    result = [item]
+                else:
+                    result = []
+                return json.dumps({'option': result})
 
             xml = current.xml
-            tree = xml.get_options(self.prefix,
-                                   self.name,
+            tree = xml.get_options(self.table,
+                                   fields=fields,
                                    show_uids=show_uids,
-                                   fields=fields)
+                                   hierarchy=hierarchy)
 
             if as_json:
                 return xml.tree2json(tree, pretty_print=False,
@@ -3149,8 +3201,8 @@ class S3Resource(object):
 
         if rfields is None or dfields is None:
             if self.tablename == "gis_location":
-                if "wkt" not in skip:
-                    # Skip Bulky WKT fields
+                if "wkt" not in skip and current.auth.permission.format != "cap":
+                    # Skip bulky WKT fields
                     skip.append("wkt")
                 if current.deployment_settings.get_gis_spatialdb() and \
                    "the_geom" not in skip:
@@ -4164,7 +4216,7 @@ class S3ResourceFilter(object):
             return self.query
             
         resource = self.resource
-        
+
         query = reduce(lambda x, y: x & y, self.queries, self.mquery)
         if self.filters:
             if self.transformed is None:
@@ -4729,15 +4781,15 @@ class S3ResourceData(object):
         self.rfields = dfields
         self.numrows = 0 if totalrows is None else totalrows
         self.ids = ids
-        
+
         if groupby or as_rows:
             # Just store the rows, no further queries or extraction
             self.rows = rows
-            
+
         elif not rows:
             # No rows found => empty list
             self.rows = []
-            
+
         else:
             # Extract the data from the master rows
             records = self.extract(rows,
@@ -4768,7 +4820,6 @@ class S3ResourceData(object):
             results = {}
 
             field_data = self.field_data
-            effort = self.effort
             NONE = current.messages["NONE"]
 
             render = self.render

@@ -21,11 +21,14 @@ settings = current.deployment_settings
 
 """
     Puget Sound Common Maritime Operating Picture (MCOP) 
-
-    All settings which are to configure a specific template are located here
-
-    Deployers should ideally not need to edit any other files outside of their template folder
 """
+
+# -----------------------------------------------------------------------------
+# Pre-Populate
+settings.base.prepopulate = ["MCOP", "demo/users"]
+
+settings.base.system_name = T("Sahana: Puget Sound Common Maritime Operating Picture (MCOP)")
+settings.base.system_name_short = T("Sahana")
 
 # =============================================================================
 # System Settings
@@ -55,13 +58,6 @@ settings.auth.show_link = False
 # Security Policy
 settings.security.policy = 5 # Apply Controller, Function and Table ACLs
 settings.security.map = True
-
-# -----------------------------------------------------------------------------
-# Pre-Populate
-settings.base.prepopulate = ["MCOP"]
-
-settings.base.system_name = T("Sahana: Puget Sound Common Maritime Operating Picture (MCOP)")
-settings.base.system_name_short = T("Sahana")
 
 # -----------------------------------------------------------------------------
 # Theme (folder to use for views/layout.html)
@@ -247,6 +243,7 @@ def customise_cms_post_resource(r, tablename):
     """
 
     s3 = current.response.s3
+    db = current.db
     s3db = current.s3db
     table = s3db.cms_post
 
@@ -260,7 +257,7 @@ def customise_cms_post_resource(r, tablename):
     #s3.filter = FS("series_id$name").belongs(["Alert"])
 
     s3.crud_strings["cms_post"] = Storage(
-        label_create = T("Create Alert"),
+        label_create = T("Add"),
         title_display = T("Alert Details"),
         title_list = T("Alerts"),
         title_update = T("Edit Alert"),
@@ -285,9 +282,9 @@ def customise_cms_post_resource(r, tablename):
     #table.series_id.label = T("Type")
     stable = s3db.cms_series
     try:
-        series_id = current.db(stable.name == "Alert").select(stable.id,
-                                                              limitby=(0, 1)
-                                                              ).first().id
+        series_id = db(stable.name == "Alert").select(stable.id,
+                                                      limitby=(0, 1)
+                                                      ).first().id
         table.series_id.default = series_id
     except:
         # No suitable prepop
@@ -314,6 +311,14 @@ def customise_cms_post_resource(r, tablename):
     incident_id = r.get_vars.get("~.(incident)", None)
     if incident_id:
         # Coming from Profile page
+        # Default location to Incident Location
+        itable = s3db.event_incident
+        incident = db(itable == incident_id).select(itable.location_id,
+                                                    limitby=(0, 1)
+                                                    ).first()
+        if incident:
+            table.location_id.default = incident.location_id
+        
         # Add link onaccept
         def create_onaccept(form):
             current.s3db.event_post.insert(incident_id=incident_id,
@@ -419,8 +424,8 @@ def customise_event_incident_resource(r, tablename):
         But runs before prep
     """
 
-    table = r.table
     s3db = current.s3db
+    table = s3db[tablename]
     crud_strings = current.response.s3.crud_strings
 
     # Enable 'Lead Organisation' field
@@ -441,12 +446,6 @@ def customise_event_incident_resource(r, tablename):
 
     # Custom Form
     location_id_field = table.location_id
-    from s3.s3validators import IS_LOCATION_SELECTOR2
-    from s3.s3widgets import S3LocationSelectorWidget2
-    location_id_field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-    location_id_field.widget = S3LocationSelectorWidget2(levels=levels,
-                                                         show_address=True,
-                                                         show_map=True)
     # Don't add new Locations here
     location_id_field.comment = None
 
@@ -486,8 +485,6 @@ def customise_event_incident_resource(r, tablename):
                       S3OptionsFilter("organisation_id",
                                       represent = "%(name)s",
                                       ),
-                      #S3OptionsFilter("project_organisation.organisation_id$organisation_type_id",
-                      #                ),
                       ]
 
     url_next = URL(c="event", f="incident", args=["[id]", "profile"])
@@ -597,7 +594,7 @@ def customise_org_facility_resource(r, tablename):
     table = s3db.org_facility
 
     s3.crud_strings[tablename] = Storage(
-        label_create = T("Create Facility"),
+        label_create = T("Add"),
         title_display = T("Facility Details"),
         title_list = T("Facilities"),
         title_update = T("Edit Facility Details"),
@@ -653,8 +650,9 @@ def customise_org_facility_resource(r, tablename):
                    crud_form = crud_form,
                    delete_next = url_next,
                    list_fields = list_fields,
-                   report_options = report_options,
                    list_layout = render_facilities,
+                   report_options = report_options,
+                   summary = settings.ui.summary,
                    update_next = url_next,
                    )
 
@@ -689,7 +687,7 @@ def customise_org_organisation_resource(r, tablename):
         table.comments.label = T("Description")
 
         s3.crud_strings["org_organisation"] = Storage(
-            label_create = T("Create Stakeholder"),
+            label_create = T("Add"),
             title_display = T("Stakeholder Details"),
             title_list = T("Stakeholders"),
             title_update = T("Edit Stakeholder"),
@@ -700,10 +698,16 @@ def customise_org_organisation_resource(r, tablename):
             msg_record_deleted = T("Stakeholder deleted"),
             msg_list_empty = T("No Stakeholders currently registered"))
 
-        from s3.s3forms import S3SQLCustomForm
+        from s3.s3forms import S3SQLCustomForm, S3SQLInlineLink
         crud_form = S3SQLCustomForm("id",
                                     "name",
-                                    "organisation_type_id",
+                                    S3SQLInlineLink(
+                                        "organisation_type",
+                                        field = "organisation_type_id",
+                                        label = T("Type"),
+                                        multiple = False,
+                                        #widget = "hierarchy",
+                                    ),
                                     "logo",
                                     "phone",
                                     "website",
@@ -727,7 +731,7 @@ def customise_org_organisation_resource(r, tablename):
                                             "comments",
                                             ],
                                           label = T("Search")),
-                              S3OptionsFilter("organisation_type_id",
+                              S3OptionsFilter("organisation_organisation_type.organisation_type_id",
                                               label = T("Type"),
                                               ),
                               ]
@@ -886,11 +890,23 @@ def customise_org_resource_resource(r, tablename):
         But runs before prep
     """
 
-    s3 = current.response.s3
-    s3db = current.s3db
-    table = s3db.org_resource
-
     if r.interactive:
+        s3 = current.response.s3
+        s3db = current.s3db
+        table = s3db.org_resource
+
+        s3.crud_strings[tablename] = Storage(
+            label_create = T("Add"),
+            title_display = T("Inventory Resource"),
+            title_list = T("Resource Inventory"),
+            title_update = T("Edit Inventory Resource"),
+            label_list_button = T("Resource Inventory"),
+            label_delete_button = T("Delete Inventory Resource"),
+            msg_record_created = T("Inventory Resource added"),
+            msg_record_modified = T("Inventory Resource updated"),
+            msg_record_deleted = T("Inventory Resource deleted"),
+            msg_list_empty = T("No Resources in Inventory"))
+        
         location_field = table.location_id
         # Filter from a Profile page?
         # If so, then default the fields we know
@@ -933,11 +949,34 @@ def customise_org_resource_resource(r, tablename):
                        )
 
         # This is awful in Popups & inconsistent in dataTable view (People/Documents don't have this & it breaks the styling of the main Save button)
-        #s3.cancel = URL(c="org", f="resource")
-
-    return True
+        s3.cancel = URL(c="org", f="resource")
 
 settings.customise_org_resource_resource = customise_org_resource_resource
+
+# -----------------------------------------------------------------------------
+def customise_event_resource_resource(r, tablename):
+    """
+        Customise org_resource resource
+        - Fields
+        - Filter
+        Runs after controller customisation
+        But runs before prep
+    """
+
+    if r.interactive:
+        current.response.s3.crud_strings[tablename] = Storage(
+            label_create = T("Add"),
+            title_display = T("Resource Responding"),
+            title_list = T("Resources Responding"),
+            title_update = T("Edit Resource Responding"),
+            label_list_button = T("Resources Responding"),
+            label_delete_button = T("Delete Resource Responding"),
+            msg_record_created = T("Resource Responding added"),
+            msg_record_modified = T("Resource Responding updated"),
+            msg_record_deleted = T("Resource Responding deleted"),
+            msg_list_empty = T("No Resources Responding"))
+
+settings.customise_event_resource_resource = customise_event_resource_resource
 
 # -----------------------------------------------------------------------------
 # Tasks (project_task)
@@ -980,6 +1019,8 @@ def customise_project_task_resource(r, tablename):
 
     s3db = current.s3db
     table = s3db.project_task
+    
+    s3 = current.response.s3
 
     if r.tablename == "event_incident" and r.method == "profile":
         # Set list_fields for renderer (project_task_list_layout)
@@ -1010,9 +1051,11 @@ def customise_project_task_resource(r, tablename):
     # Custom Form
     table.name.label = T("Name")
     table.description.label = T("Description")
+    table.description.comment = None
     table.location_id.readable = table.location_id.writable = True
     from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent
-    crud_fields = ["status",
+    crud_fields = ["source_url",
+                   "status",
                    "priority",
                    "name",
                    "description",
@@ -1039,6 +1082,20 @@ def customise_project_task_resource(r, tablename):
                                                    fields = [("", "incident_id")],
                                                    multiple = False,
                                                    ))
+
+    if (r.method == None or r.method == "update") and r.record.source_url:
+        # Task imported from Wrike
+        # - lock all fields which should only be edited within Wrike
+        #crud_fields.insert(0, "source_url")
+        current.s3db.event_task.incident_id.writable = False
+        for fieldname in ["source_url",
+                          "status",
+                          "priority",
+                          "name",
+                          "description",
+                          "pe_id",
+                          "date_due"]:
+            table[fieldname].writable = False
 
     crud_form = S3SQLCustomForm(*crud_fields)
 
@@ -1138,9 +1195,8 @@ def customise_pr_person_resource(r, tablename):
     table = s3db.pr_person
 
     # CRUD Strings
-    ADD_CONTACT = T("Create Contact")
     s3.crud_strings[tablename] = Storage(
-        label_create = T("Create Contact"),
+        label_create = T("Add"),
         title_display = T("Contact Details"),
         title_list = T("Contact Directory"),
         title_update = T("Edit Contact Details"),
@@ -1305,6 +1361,7 @@ def customise_pr_person_resource(r, tablename):
                    crud_form = crud_form,
                    delete_next = url_next,
                    filter_widgets = filter_widgets,
+                   listadd = True,
                    list_fields = list_fields,
                    report_options = report_options,
                    # Don't include a Create form in 'More' popups

@@ -48,7 +48,6 @@ except:
     from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
 from gluon import *
-from gluon.sqlhtml import MultipleOptionsWidget
 from gluon.storage import Storage
 from gluon.tools import callback
 
@@ -1550,7 +1549,17 @@ class S3OptionsFilter(S3FilterWidget):
         # Make sure the selected options are in the available options
         # (not possible if we have a fixed options dict)
         if options is None and values:
-            for val in values:
+            numeric = rfield.ftype in ("integer", "id") or \
+                      rfield.ftype[:9] == "reference"
+            for _val in values:
+                if numeric:
+                    try:
+                        val = int(_val)
+                    except ValueError:
+                        # not valid for this field type => skip
+                        continue
+                else:
+                    val = _val
                 if val not in opt_keys and \
                    (not isinstance(val, (int, long)) or not str(val) in opt_keys):
                     opt_keys.append(val)
@@ -1772,7 +1781,7 @@ class S3HierarchyFilter(S3FilterWidget):
             return variable
 
         # Detect and resolve __typeof queries
-        BELONGS = current.db._adapter.BELONGS
+        #BELONGS = current.db._adapter.BELONGS
         resolve = S3ResourceQuery._resolve_hierarchy
         selector = resource.prefix_selector(selector)
         for key, value in get_vars.items():

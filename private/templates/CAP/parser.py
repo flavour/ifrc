@@ -32,7 +32,15 @@
 
 __all__ = ["S3Parser"]
 
+import os
+import urllib2          # Needed for quoting & error handling on fetch
+try:
+    from cStringIO import StringIO    # Faster, where available
+except:
+    from StringIO import StringIO
+
 from gluon import current
+from gluon.tools import fetch
 
 from s3.s3parser import S3Parsing
 
@@ -44,9 +52,18 @@ class S3Parser(object):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def parse_email(message):
+        """
+            Parse Email Messages into the CAP Module
+        """
+
+        pass
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def parse_rss(message):
         """
-            Parse Feeds into the CAP Module
+            Parse RSS Feeds into the CAP Module
         """
 
         db = current.db
@@ -58,7 +75,7 @@ class S3Parser(object):
                                                                    table.body,
                                                                    table.date,
                                                                    table.location_id,
-                                                                   table.tags,
+                                                                   #table.tags,
                                                                    table.author,
                                                                    limitby=(0, 1)
                                                                    ).first()
@@ -66,28 +83,19 @@ class S3Parser(object):
             return
 
         alert_table = s3db.cap_alert
+        info_table = s3db.cap_info
 
         # Is this an Update or a Create?
+        # @ToDo: Use guid?
+        # Use Body
         body = record.body or record.title
-        url = record.from_address
-        if url:
-            doc_table = s3db.doc_document
-            exists = db(doc_table.url == url).select(doc_table.doc_id,
-                                                     limitby=(0, 1)
-                                                     ).first()
-            if exists:
-                exists = db(alert_table.doc_id == exists.doc_id).select(alert_table.id,
-                                                                        limitby=(0, 1)
-                                                                        ).first()
-        else:
-            # Use Body
-            exists = db(alert_table.body == body).select(alert_table.id,
-                                                         limitby=(0, 1)
-                                                         ).first()
-                
-        
+        query = (info_table.description == body)
+        exists = db(query).select(info_table.id,
+                                  limitby=(0, 1)
+                                  ).first()
+
         channel_id = record.channel_id
-        tags = record.tags
+        #tags = record.tags
 
         author = record.author
         if author:
@@ -114,13 +122,14 @@ class S3Parser(object):
             person_id = None
 
         if exists:
-            alert_id = exists.id
-            db(alert_table.id == alert_id).update(title = record.title,
-                                                  body = body,
-                                                  created_on = record.date,
-                                                  location_id = record.location_id,
-                                                  person_id = person_id,
-                                                  )
+            # @ToDo: Use XSLT
+            info_id = exists.id
+            db(info_table.id == info_id).update(headline = record.title,
+                                                description = body,
+                                                created_on = record.date,
+                                                #location_id = record.location_id,
+                                                #person_id = person_id,
+                                                )
             # Read existing Tags (which came from remote)
             #ttable = db.cap_tag
             #ltable = db.cap_alert_tag
@@ -165,24 +174,22 @@ class S3Parser(object):
             #        db(query).delete()
 
         else:
-            # @ToDo: Import via XSLT
+            # Embedded link
+            url = record.from_address
+            try:
+                file = fetch(url)
+            except urllib2.URLError:
+                response.error = str(sys.exc_info()[1])
+                return output
+            except urllib2.HTTPError:
+                response.error = str(sys.exc_info()[1])
+                return output
+            File = StringIO(file)
 
-            alert_id = alert_table.insert(title = record.title,
-                                          body = body,
-                                          created_on = record.date,
-                                          location_id = record.location_id,
-                                          person_id = person_id,
-                                          series_id = series_id,
-                                          mci = 1, # This is an imported record, not added natively
-                                          )
-            record = dict(id=alert_id)
-            s3db.update_super(post_table, record)
-
-            # Source link
-            if url:
-                doc_table.insert(doc_id = record["doc_id"],
-                                 url = url,
-                                 )
+            # Import via XSLT
+            resource = s3db.resource("cap_alert")
+            stylesheet = os.path.join(current.request.folder, "static", "formats", "cap", "import.xsl")
+            success = resource.import_xml(File, stylesheet=stylesheet)
 
             # Is this feed associated with an Org/Network?
             #def lookup_pe(channel_id):

@@ -498,8 +498,19 @@ class S3FieldPath(object):
             return resource.table, None, False, False
 
         multiple = True
-        s3db = current.s3db
+        
+        linked = resource.linked
+        if linked and linked.alias == alias:
+            
+            # It's the linked table
+            linktable = resource.table
 
+            ktable = linked.table
+            join = [ktable.on(ktable[linked.fkey] == linktable[linked.rkey])]
+
+            return ktable, join, multiple, True
+
+        s3db = current.s3db
         tablename = resource.tablename
 
         # Try to attach the component
@@ -1153,7 +1164,7 @@ class S3ResourceQuery(object):
                 if distinct and left or not distinct and not left:
                     joins = rfield._joins
 
-        return(joins, distinct)
+        return (joins, distinct)
         
     # -------------------------------------------------------------------------
     def fields(self):

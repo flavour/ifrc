@@ -394,7 +394,7 @@ def customise_org_organisation_controller(**attr):
             list_fields = ["id",
                            "name",
                            "acronym",
-                           "organisation_type_id",
+                           "organisation_organisation_type.organisation_type_id",
                            (T("Services"), "service.name"),
                            (T("Neighborhoods Served"), "location.name"),
                            ]
@@ -405,13 +405,17 @@ def customise_org_organisation_controller(**attr):
         if r.interactive:
             if not r.component:
                 from gluon.html import DIV, INPUT
-                from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
-                # activate hierarchical org_service:
-                #from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget, S3SQLInlineLink
+                from s3.s3forms import S3SQLCustomForm, S3SQLInlineLink, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
                 crud_form = S3SQLCustomForm(
                     "name",
                     "acronym",
-                    "organisation_type_id",
+                    S3SQLInlineLink(
+                        "organisation_type",
+                        field = "organisation_type_id",
+                        label = T("Type"),
+                        multiple = False,
+                        #widget = "hierarchy",
+                    ),
                     S3SQLInlineComponentMultiSelectWidget(
                     # activate hierarchical org_service:
                     #S3SQLInlineLink(
@@ -419,6 +423,7 @@ def customise_org_organisation_controller(**attr):
                         label = T("Services"),
                         field = "service_id",
                         # activate hierarchical org_service:
+                        #leafonly = False,
                         #widget = "hierarchy",
                     ),
                     S3SQLInlineComponentMultiSelectWidget(
@@ -550,7 +555,7 @@ def customise_org_organisation_controller(**attr):
                     #                  #label = T("Service"),
                     #                  #hidden = True,
                     #                  ),
-                    S3OptionsFilter("organisation_type_id",
+                    S3OptionsFilter("organisation_organisation_type.organisation_type_id",
                                     label = T("Type"),
                                     #hidden = True,
                                     ),
@@ -753,8 +758,9 @@ def customise_org_group_controller(**attr):
         return result
     s3.prep = custom_prep
 
-    # Allow components with components (such as org/group) to breakout from tabs
-    attr["native"] = True
+    if current.auth.s3_logged_in():
+        # Allow components with components (such as org/group) to breakout from tabs
+        attr["native"] = True
 
     return attr
 
