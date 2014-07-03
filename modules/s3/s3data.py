@@ -32,6 +32,7 @@
 """
 
 import datetime
+import re
 import sys
 
 from itertools import product, islice
@@ -445,10 +446,11 @@ class S3DataTable(object):
         #          hence applying the datatable sorting/filters is
         #          not transparent
         if s3.datatable_ajax_source:
-            end = s3.datatable_ajax_source.find(".aadata")
-            default_url = s3.datatable_ajax_source[:end] # strip '.aadata' extension
+            default_url = s3.datatable_ajax_source
         else:
             default_url = base_url
+        # Strip format extensions (e.g. .aadata or .iframe)
+        default_url = re.sub("(\/[a-zA-Z0-9_]*)(\.[a-zA-Z]*)", "\g<1>", default_url)
 
         # Keep any URL filters
         get_vars = request.get_vars
