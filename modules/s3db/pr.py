@@ -27,7 +27,7 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3PersonEntity",
+__all__ = ("S3PersonEntity",
            "S3OrgAuthModel",
            "S3PersonModel",
            "S3GroupModel",
@@ -85,7 +85,7 @@ __all__ = ["S3PersonEntity",
            #"pr_address_list_layout",
            #"pr_contact_list_layout",
            #"pr_filter_list_layout",
-           ]
+           )
 
 import os
 #import re
@@ -117,7 +117,7 @@ SEPARATORS = (",", ":")
 class S3PersonEntity(S3Model):
     """ Person Super-Entity """
 
-    names = ["pr_pentity",
+    names = ("pr_pentity",
              "pr_affiliation",
              "pr_person_user",
              "pr_role",
@@ -126,7 +126,7 @@ class S3PersonEntity(S3Model):
              "pr_pe_label",
              "pr_pe_types",
              "pr_pentity_represent",
-             ]
+             )
 
     def model(self):
 
@@ -202,20 +202,32 @@ class S3PersonEntity(S3Model):
                                      {"name": "email",
                                       "joinby": pe_id,
                                       "filterby": "contact_method",
-                                      "filterfor": ["EMAIL"],
+                                      "filterfor": ("EMAIL",),
                                       },
                                      # Mobile phone numbers:
                                      {"name": "phone",
                                       "joinby": pe_id,
                                       "filterby": "contact_method",
-                                      "filterfor": ["SMS"],
+                                      "filterfor": ("SMS",),
                                       },
                                      # Work phone numbers:
                                      #{"name": "work_phone",
                                      # "joinby": pe_id,
                                      # "filterby": "contact_method",
-                                     # "filterfor": ["WORK_PHONE"],
+                                     # "filterfor": ("WORK_PHONE",),
                                      # },
+                                     # Facebook:
+                                     {"name": "facebook",
+                                      "joinby": pe_id,
+                                      "filterby": "contact_method",
+                                      "filterfor": ("FACEBOOK",),
+                                      },
+                                     # Twitter:
+                                     {"name": "twitter",
+                                      "joinby": pe_id,
+                                      "filterby": "contact_method",
+                                      "filterfor": ("TWITTER",),
+                                      },
                                      ),
                        pr_contact_emergency = pe_id,
                        pr_image = pe_id,
@@ -663,7 +675,7 @@ class S3PersonEntity(S3Model):
 class S3OrgAuthModel(S3Model):
     """ Organisation-based Authorization Model """
 
-    names = ["pr_delegation"]
+    names = ("pr_delegation",)
 
     def model(self):
 
@@ -687,13 +699,13 @@ class S3OrgAuthModel(S3Model):
 class S3PersonModel(S3Model):
     """ Persons and Groups """
 
-    names = ["pr_person",
+    names = ("pr_person",
              "pr_gender",
              "pr_gender_opts",
              "pr_person_id",
              "pr_person_lookup",
              "pr_person_represent",
-             ]
+             )
 
     def model(self):
 
@@ -1747,10 +1759,10 @@ class S3PersonModel(S3Model):
 class S3GroupModel(S3Model):
     """ Groups """
 
-    names = ["pr_group",
+    names = ("pr_group",
              "pr_group_id",
              "pr_group_membership"
-             ]
+             )
 
     def model(self):
 
@@ -2035,9 +2047,10 @@ class S3GroupModel(S3Model):
 class S3ContactModel(S3Model):
     """ Person Entity Contacts - for Persons & Organisations """
 
-    names = ["pr_contact",
-             "pr_contact_emergency"
-             ]
+    names = ("pr_contact",
+             "pr_contact_represent",
+             "pr_contact_emergency",
+             )
 
     def model(self):
 
@@ -2116,6 +2129,8 @@ class S3ContactModel(S3Model):
                   onvalidation = self.pr_contact_onvalidation,
                   )
 
+        contact_represent = pr_ContactRepresent()
+
         # ---------------------------------------------------------------------
         # Emergency Contact Information
         # - currently only ever 1 of these expected
@@ -2143,7 +2158,8 @@ class S3ContactModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return dict()
+        return dict(pr_contact_represent = contact_represent,
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2236,9 +2252,9 @@ class S3ContactModel(S3Model):
 class S3AddressModel(S3Model):
     """ Addresses for Person Entities: Persons and Organisations """
 
-    names = ["pr_address",
+    names = ("pr_address",
              "pr_address_type_opts"
-             ]
+             )
 
     def model(self):
 
@@ -2406,7 +2422,7 @@ class S3AddressModel(S3Model):
 class S3PersonImageModel(S3Model):
     """ Images for Persons """
 
-    names = ["pr_image"]
+    names = ("pr_image",)
 
     def model(self):
 
@@ -2625,10 +2641,10 @@ class S3ImageLibraryModel(S3Model):
         new compulsory module just for this.
     """
 
-    names = ["pr_image_library",
+    names = ("pr_image_library",
              "pr_image_size",
              "pr_image_delete_all",
-             ]
+             )
 
     def model(self):
 
@@ -2697,7 +2713,7 @@ class S3ImageLibraryModel(S3Model):
 class S3PersonIdentityModel(S3Model):
     """ Identities for Persons """
 
-    names = ["pr_identity"]
+    names = ("pr_identity",)
 
     def model(self):
 
@@ -2819,9 +2835,9 @@ class S3PersonIdentityModel(S3Model):
 class S3PersonEducationModel(S3Model):
     """ Education details for Persons """
 
-    names = ["pr_education_level",
+    names = ("pr_education_level",
              "pr_education",
-             ]
+             )
 
     def model(self):
 
@@ -2978,8 +2994,8 @@ class S3PersonEducationModel(S3Model):
 class S3PersonDetailsModel(S3Model):
     """ Extra optional details for People """
 
-    names = ["pr_person_details",
-             ]
+    names = ("pr_person_details",
+             )
 
     def model(self):
 
@@ -3111,9 +3127,9 @@ class S3PersonDetailsModel(S3Model):
 class S3SavedFilterModel(S3Model):
     """ Saved Filters """
 
-    names = ["pr_filter",
+    names = ("pr_filter",
              "pr_filter_id",
-             ]
+             )
 
     def model(self):
 
@@ -3152,6 +3168,7 @@ class S3SavedFilterModel(S3Model):
                                       ],
                        listadd = False,
                        list_layout = pr_filter_list_layout,
+                       onvalidation = self.pr_filter_onvalidation,
                        orderby = "pr_filter.resource",
                        )
 
@@ -3160,14 +3177,30 @@ class S3SavedFilterModel(S3Model):
         #
         return dict(pr_filter_id = filter_id)
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def pr_filter_onvalidation(form):
+        """
+            Ensure that JSON can be loaded by json.loads()
+        """
+
+        query = form.vars.get("query", None)
+        if query:
+            query = query.replace("'", "\"")
+            try:
+                json.loads(query)
+            except ValueError, e: 
+                form.errors.query = "%s: %s" % (current.T("Query invalid"), e)
+            form.vars.query = query
+
 # =============================================================================
 class S3SubscriptionModel(S3Model):
     """ Model for subscriptions """
 
-    names = ["pr_subscription",
+    names = ("pr_subscription",
              "pr_subscription_resource",
              "pr_subscription_check_intervals",
-            ]
+             )
 
     def model(self):
 
@@ -3209,68 +3242,75 @@ class S3SubscriptionModel(S3Model):
                           self.super_link("pe_id", "pr_pentity"),
                           self.pr_filter_id(),
                           Field("notify_on", "list:string",
-                                requires=IS_IN_SET(trigger_opts,
-                                                   multiple=True,
-                                                   zero=None),
-                                default=["new"],
-                                represent=S3Represent(options=trigger_opts,
-                                                      multiple=True)),
+                                default = ["new"],
+                                represent = S3Represent(options=trigger_opts,
+                                                        multiple=True),
+                                requires = IS_IN_SET(trigger_opts,
+                                                     multiple=True,
+                                                     zero=None),
+                                ),
                           Field("frequency",
-                                requires=IS_IN_SET(frequency_opts,
-                                                   zero=None),
-                                default="daily",
-                                represent=lambda opt: \
-                                          FREQUENCY_OPTS.get(opt,
-                                                             UNKNOWN_OPT)),
+                                default = "daily",
+                                represent = lambda opt: \
+                                            FREQUENCY_OPTS.get(opt,
+                                                               UNKNOWN_OPT),
+                                requires = IS_IN_SET(frequency_opts,
+                                                     zero=None),
+                                ),
                           Field("method", "list:string",
-                                requires=IS_IN_SET(MSG_CONTACT_OPTS,
-                                                   multiple=True,
-                                                   zero=None),
-                                default=["EMAIL"],
-                                represent=S3Represent(
-                                            options=MSG_CONTACT_OPTS,
-                                            multiple=True)),
+                                default = ["EMAIL"],
+                                represent = S3Represent(options=MSG_CONTACT_OPTS,
+                                                        multiple=True),
+                                requires = IS_IN_SET(MSG_CONTACT_OPTS,
+                                                     multiple=True,
+                                                     zero=None),
+                                ),
                           Field("email_format",
-                                requires=IS_EMPTY_OR(
-                                          IS_IN_SET(email_format_opts,
-                                                    zero=None)),
-                                represent=S3Represent(
-                                            options=email_format_opts)),
+                                represent = S3Represent(options=email_format_opts),
+                                requires = IS_EMPTY_OR(
+                                            IS_IN_SET(email_format_opts,
+                                                      zero=None)),
+                                ),
                           *s3_meta_fields())
 
         self.add_components(tablename,
-                            pr_subscription_resource="subscription_id",
-                           )
+                            pr_subscription_resource = "subscription_id",
+                            )
 
         # ---------------------------------------------------------------------
         tablename = "pr_subscription_resource"
         self.define_table(tablename,
-                          Field("subscription_id",
-                                "reference pr_subscription",
-                                ondelete="CASCADE"),
+                          Field("subscription_id", "reference pr_subscription",
+                                ondelete = "CASCADE",
+                                ),
                           Field("resource"),
                           Field("url"),
-                          Field("auth_token",
-                                length=40,
-                                readable=False,
-                                writable=False),
+                          Field("auth_token", length=40,
+                                readable = False,
+                                writable = False,
+                                ),
                           Field("locked", "boolean",
-                                default=False,
-                                readable=False,
-                                writable=False),
+                                default = False,
+                                readable = False,
+                                writable = False,
+                                ),
                           Field("batch_mode", "boolean",
-                                default=True),
+                                default = True,
+                                ),
                           Field("last_check_time", "datetime",
-                                default=current.request.utcnow,
-                                writable=False),
+                                default = current.request.utcnow,
+                                writable = False,
+                                ),
                           Field("next_check_time", "datetime",
-                                writable=False),
+                                writable = False,
+                                ),
                           *s3_meta_fields())
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return dict(pr_subscription_check_intervals = check_intervals)
+        return dict(pr_subscription_check_intervals = check_intervals,
+                    )
 
 # =============================================================================
 class S3PersonPresence(S3Model):
@@ -3278,16 +3318,16 @@ class S3PersonPresence(S3Model):
         Presence Log for Persons
 
         @todo: deprecate
-        currently still used by CR
+        currently still used by CR?
     """
 
-    names = ["pr_presence",
+    names = ("pr_presence",
              "pr_trackable_types",
              "pr_default_trackable",
              "pr_presence_opts",
              "pr_presence_conditions",
              "pr_default_presence"
-             ]
+             )
 
     def model(self):
 
@@ -3621,11 +3661,11 @@ class S3PersonPresence(S3Model):
 class S3PersonDescription(S3Model):
     """ Additional tables for DVI/MPR """
 
-    names = ["pr_age_group",
+    names = ("pr_age_group",
              "pr_age_group_opts",
              "pr_note",
              "pr_physical_description",
-             ]
+             )
 
     def model(self):
 
@@ -4517,6 +4557,72 @@ def pr_person_phone_represent(id, show_link=True):
         repr = A(repr,
                  _href = URL(c=controller, f="person", args=[id, "contact"]))
     return repr
+
+# =============================================================================
+class pr_ContactRepresent(S3Represent):
+
+    def __init__(self,
+                 show_link = True,
+                 ):
+        """
+            Show a Contact with appropriate hyperlinks if Facebook or Twitter
+
+            @param: see super
+        """
+
+        super(pr_ContactRepresent, self).__init__(lookup="pr_contact",
+                                                  fields=["contact_method",
+                                                          "value"],
+                                                  show_link=show_link,
+                                                  )
+
+    # -------------------------------------------------------------------------
+    def link(self, k, v, row=None):
+        """
+            Represent a (key, value) as hypertext link.
+
+                - Typically, k is a foreign key value, and v the
+                  representation of the referenced record, and the link
+                  shall open a read view of the referenced record.
+
+                - The linkto-parameter expects a URL (as string) with "[id]"
+                  as placeholder for the key.
+
+            @param k: the key
+            @param v: the representation of the key
+            @param row: the row with this key
+        """
+
+        if not k:
+            return v
+
+        if v.startswith("http"):
+            return A(v, _href=v)
+
+        contact_method = row.contact_method
+        if contact_method == "TWITTER":
+            url = "http://twitter.com/%s" % v
+            return A(v, _href=url)
+        elif contact_method == "FACEBOOK":
+            url = "http://%s" % v
+            return A(v, _href=url)
+        else:
+            # No link
+            return v
+
+    # -------------------------------------------------------------------------
+    def represent_row(self, row):
+        """
+            Represent a row
+
+            @param row: the Row
+        """
+
+        value = row["pr_contact.value"]
+        if not value:
+            return self.default
+
+        return s3_unicode(value)
 
 # =============================================================================
 def pr_person_comment(title=None, comment=None, caller=None, child=None):
@@ -5999,14 +6105,14 @@ def pr_image_modify(image_file,
                                        table.new_name.uploadfolder)
         # rewind the original file so it can be read, if required
         image_file.seek(0)
-        image_id = table.insert(original_name = image_name,
-                                new_name = newfile,
-                                format = to_format,
-                                width = size[0],
-                                height = size[1],
-                                actual_width = im.size[0],
-                                actual_height = im.size[1],
-                               )
+        table.insert(original_name = image_name,
+                     new_name = newfile,
+                     format = to_format,
+                     width = size[0],
+                     height = size[1],
+                     actual_width = im.size[0],
+                     actual_height = im.size[1],
+                     )
         return True
     else:
         return False

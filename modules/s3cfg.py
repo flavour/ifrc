@@ -229,22 +229,10 @@ class S3Config(Storage):
         return self.auth.get("hmac_key", "akeytochange")
 
     def get_auth_password_min_length(self):
-     	""" 
+        """ 
             To set the Minimum Password Length
- 	    """
+        """
         return self.auth.get("password_min_length", int(4))
-
-    def get_auth_facebook(self):
-        """
-            Read the FaceBook OAuth settings
-            - if configured, then it is assumed that FaceBook Authentication is enabled
-        """
-        id = self.auth.get("facebook_id", False)
-        secret = self.auth.get("facebook_secret", False)
-        if id and secret:
-            return dict(id=id, secret=secret)
-        else:
-            return False
 
     def get_auth_gmail_domains(self):
         """ List of domains which can use GMail SMTP for Authentication """
@@ -535,13 +523,21 @@ class S3Config(Storage):
     def get_base_migrate(self):
         """ Whether to allow Web2Py to migrate the SQL database to the new structure """
         return self.base.get("migrate", True)
+
     def get_base_fake_migrate(self):
         """ Whether to have Web2Py create the .table files to match the expected SQL database structure """
         return self.base.get("fake_migrate", False)
         
     def get_base_prepopulate(self):
         """ Whether to prepopulate the database &, if so, which set of data to use for this """
-        return self.base.get("prepopulate", 1)
+        base = self.base
+        setting = base.get("prepopulate", 1)
+        if setting:
+            options = base.get("prepopulate_options")
+            return self.resolve_profile(options, setting)
+        else:
+            # Pre-populate off (production mode), don't bother resolving
+            return 0
 
     def get_base_guided_tour(self):
         """ Whether the guided tours are enabled """
@@ -932,18 +928,38 @@ class S3Config(Storage):
         """
         return self.gis.get("permalink", True)
 
-    def get_gis_pois(self):
+    def get_gis_poi_create_resources(self):
         """
-            Should the Map allow the addition of PoIs?
-        """
-        return self.gis.get("pois", True)
+            List of resources which can be directly added to the main map.
+            Includes the type (point, line or polygon) and where they are to be
+            accessed from (button, menu or popup)
 
-    def get_gis_poi_resources(self):
+            Defaults to the generic 'gis_poi' resource as a point from a button
+
+            @ToDo: Complete the button vs menu vs popup
+            @ToDo: S3PoIWidget() to allow other resources to pickup the passed Lat/Lon/WKT
+        """
+        T = current.T
+        return self.gis.get("poi_create_resources",
+                            [{"c": "gis",               # Controller
+                              "f": "poi",               # Function
+                              "table": "gis_poi",       # For permissions check
+                              # Default:
+                              #"type": "point",          # Feature Type: point, line or polygon
+                              "label": T("Add PoI"),    # Label
+                              #"tooltip": T("Add PoI"),  # Tooltip
+                              "layer": "PoIs",          # Layer Name to refresh
+                              "location": "button",     # Location to access from
+                              },
+                              ]
+                            ) 
+
+    def get_gis_poi_export_resources(self):
         """
             List of resources (tablenames) to import/export as PoIs from Admin Locations
             - KML & OpenStreetMap formats
         """
-        return self.gis.get("poi_resources",
+        return self.gis.get("poi_export_resources", 
                             ["cr_shelter", "hms_hospital", "org_office"])
 
     def get_gis_postcode_selector(self):
@@ -1287,8 +1303,16 @@ class S3Config(Storage):
         """
         return self.ui.get("hide_report_options", True)
 
+    def get_ui_iframe_opens_full(self):
+        """
+            Open links in IFrames should open a full page in a new tab 
+        """
+        return self.ui.get("iframe_opens_full", False)
+
     def get_ui_interim_save(self):
-        """ Render interim-save button in CRUD forms by default """
+        """
+            Render interim-save button in CRUD forms by default
+        """
         return self.ui.get("interim_save", False)
 
     def get_ui_label_attachments(self):
@@ -1809,6 +1833,12 @@ class S3Config(Storage):
         """
         return self.event.get("types_hierarchical", False)
 
+    def get_incident_types_hierarchical(self):
+        """
+            Whether Incident Types are Hierarchical or not
+        """
+        return self.event.get("incident_types_hierarchical", False)
+
     # -------------------------------------------------------------------------
     # Evacuees
     #
@@ -2179,6 +2209,14 @@ class S3Config(Storage):
         """
         return self.org.get("facility_types_hierarchical", False)
 
+    def get_org_organisation_location_context(self):
+        """
+            The Context to use for displaying Organisation Locations
+            - defaults to the Organisation's Sites
+            - can also set to "organisation_location.location_id"
+        """
+        return self.org.get("organisation_location_context", "site.location_id")
+
     def get_org_organisation_types_hierarchical(self):
         """
             Whether Organisation Types are Hierarchical or not
@@ -2211,6 +2249,12 @@ class S3Config(Storage):
             Whether Organisation Regions are Hierarchical or not
         """
         return self.org.get("regions_hierarchical", False)
+
+    def get_org_resources_tab(self):
+        """
+            Whether to show a Tab for Organisation Resources
+        """
+        return self.org.get("resources_tab", False)
 
     def get_org_services_hierarchical(self):
         """
@@ -2701,5 +2745,90 @@ class S3Config(Storage):
     #
     def get_vulnerability_indicator_hierarchical(self):
         return self.vulnerability.get("indicator_hierarchical", False)
+
+    # -------------------------------------------------------------------------
+    # Utilities
+    #
+    def resolve_profile(self, options, setting, resolved=None):
+        """
+            Resolve option profile (e.g. prepopulate)
+
+            @param options: the template options as dict like:
+                            {"name": ("item1", "item2",...),...},
+                            The "mandatory" list will always be
+                            added, while the "default" list will
+                            be added only if setting is None.
+            @param setting: the active setting, as single item
+                            or tuple/list, items with a "template:"
+                            prefix (like "template:name") refer to
+                            the respective list in options
+            @param resolved: internal (for recursion)
+
+            @example:
+
+                # Template provides:
+                settings.base.prepopulate_options = {
+                    "mandatory": "locations/intl",
+                    "brazil": "locations/brazil",
+                    "germany": "locations/germany",
+                    "default": "default",
+                    "demo": ("template:default", "demo/users"),
+                }
+
+                # Set up a demo for Brazil:
+                settings.base.prepopulate = ("template:brazil", "template:demo")
+                # result:
+                ["locations/intl", "locations/brazil", "default", "demo/users"]
+
+                # Set up a production instance for Germany:
+                settings.base.prepopulate = ("template:germany", "template:default")
+                # result:
+                ["locations/intl", "locations/germany", "default"]
+
+                # Default setup:
+                settings.base.prepopulate = None
+                # result:
+                ["locations/intl", "default"]
+
+                # Custom options:
+                settings.base.prepopulate = ["template:demo", "IFRC/Train"]
+                # result:
+                ["locations/intl", "default", "demo/users", "IFRC/Train"]
+
+            @note: the result list is deduplicated, maintaining the original
+                   order by first occurrence
+        """
+
+        default = resolved is None
+        if default:
+            resolved = set()
+        seen = resolved.add
+
+        result = []
+
+        def append(item):
+            if item not in resolved:
+                seen(item)
+                if isinstance(item, basestring) and item[:9] == "template:":
+                    if options:
+                        option = options.get(item[9:])
+                        if option:
+                            result.extend(self.resolve_profile(options,
+                                                               option,
+                                                               resolved=resolved))
+                else:
+                    result.append(item)
+            return
+
+        if default:
+            append("template:mandatory")
+        if setting is not None:
+            if not isinstance(setting, (tuple, list)):
+                setting = (setting,)
+            for item in setting:
+                append(item)
+        elif default:
+            append("template:default")
+        return result
 
 # END =========================================================================

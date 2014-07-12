@@ -29,11 +29,11 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["GIS",
+__all__ = ("GIS",
            "S3Map",
            "S3ExportPOI",
            "S3ImportPOI",
-           ]
+           )
 
 import datetime         # Needed for Feed Refresh checks
 import os
@@ -721,6 +721,7 @@ class GIS(object):
                         results[row.level] = row.id
                 else:
                     # Oh dear, this is going to be slow :/
+                    # Filter to the BBOX initially
                     query &= (table.lat_min < lat) & \
                              (table.lat_max > lat) & \
                              (table.lon_min < lon) & \
@@ -4360,7 +4361,10 @@ class GIS(object):
                         _vars.update(inherited = False)
                     if spatial:
                         _vars.update(the_geom = wkt)
-                db(table.id == feature.id).update(**_vars)
+                try:
+                    db(table.id == feature.id).update(**_vars)
+                except MemoryError:
+                    current.log.error("S3GIS: Unable to set bounds & centroid for feature %s: MemoryError" % feature.id)
 
         if not feature:
             # Do the whole database
@@ -4374,16 +4378,20 @@ class GIS(object):
             update_location_tree = GIS.update_location_tree
             for level in ["L0", "L1", "L2", "L3", "L4", "L5", None]:
                 query = (table.level == level) & (table.deleted == False)
-                features = db(query).select(*fields)
-                for feature in features:
-                    feature["level"] = level
-                    wkt = feature["wkt"]
-                    if wkt and not wkt.startswith("POI"):
-                        # Polygons aren't inherited
-                        feature["inherited"] = False
-                    update_location_tree(feature)
-                    # Also do the Bounds/Centroid/WKT
-                    bounds_centroid_wkt(feature)
+                try:
+                    features = db(query).select(*fields)
+                except MemoryError:
+                    current.log.error("S3GIS: Unable to update Location Tree for level %s: MemoryError" % level)
+                else:
+                    for feature in features:
+                        feature["level"] = level
+                        wkt = feature["wkt"]
+                        if wkt and not wkt.startswith("POI"):
+                            # Polygons aren't inherited
+                            feature["inherited"] = False
+                        update_location_tree(feature)
+                        # Also do the Bounds/Centroid/WKT
+                        bounds_centroid_wkt(feature)
             return
 
         # Single Feature
@@ -8698,7 +8706,7 @@ class S3ExportPOI(S3Method):
             resources = r.get_vars["resources"]
         else:
             # Fallback to deployment_setting
-            resources = current.deployment_settings.get_gis_poi_resources()
+            resources = current.deployment_settings.get_gis_poi_export_resources()
         if not isinstance(resources, list):
             resources = [resources]
         [tables.extend(t.split(",")) for t in resources]
@@ -8843,7 +8851,7 @@ class S3ExportPOI(S3Method):
                 (FS("location_id$path").like("%s/%%" % lx))
         resource.add_filter(query)
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 class S3ImportPOI(S3Method):
     """
         Import point-of-interest resources for a location
@@ -8871,7 +8879,7 @@ class S3ImportPOI(S3Method):
             # @ToDo: use settings.get_ui_formstyle()
             res_select = [TR(TD(B("%s: " % T("Select resources to import")),
                                 _colspan=3))]
-            for resource in current.deployment_settings.get_gis_poi_resources():
+            for resource in current.deployment_settings.get_gis_poi_export_resources():
                 _id = "res_" + resource
                 res_select.append(TR(TD(LABEL(resource, _for=_id)),
                                      TD(INPUT(_type="checkbox",

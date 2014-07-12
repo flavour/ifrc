@@ -292,15 +292,15 @@ class S3MainMenu(object):
                     cfg = current.gis.get_config()
                     s3.location_filter = cfg.region_location_id
                     if settings.has_module("event"):
-                        # See if this config is associated with an Event
+                        # See if this config is associated with an Incident
                         table = s3db.event_config
                         query = (table.config_id == config)
                         incident = db(query).select(table.incident_id,
                                                     limitby=(0, 1)).first()
                         if incident:
-                            s3.event = incident.incident_id
+                            s3.incident = incident.incident_id
                         else:
-                            s3.event = None
+                            s3.incident = None
             # Don't use the outdated cache for this call
             cache = None
         else:
@@ -645,7 +645,8 @@ class S3OptionsMenu(object):
                         ),
                         M("Settings",
                           c="deploy", f="email_channel",
-                        ),
+                          p="update", t="msg_email_channel",
+                          ),
                    ),
                    M("Assignments",
                      c="deploy", f="assignment", m="summary"
@@ -655,8 +656,12 @@ class S3OptionsMenu(object):
                    ),
                    M("Human Resources",
                      c="deploy", f="human_resource", m="summary")(
-                        M("Add Deployables", c="deploy", f="application", m="select"),
-                        M("Import Human Resources", c="deploy", f="person", m="import"),
+                        M("Add Deployables",
+                          c="deploy", f="application", m="select",
+                          p="create", t="deploy_application",
+                          ),
+                        M("Import Human Resources",
+                          c="deploy", f="person", m="import"),
                    ),
                   )
 
@@ -788,7 +793,14 @@ class S3OptionsMenu(object):
 
         settings = current.deployment_settings
         gis_menu = settings.get_gis_menu()
-        pois = settings.get_gis_pois()
+        def pois(i):
+            poi_resources = settings.get_gis_poi_create_resources()
+            if not poi_resources:
+                return False
+            for res in poi_resources:
+                if res["table"] == "gis_poi":
+                    return True
+            return False
 
         def config_menu(i):
             auth = current.auth
@@ -844,7 +856,7 @@ class S3OptionsMenu(object):
                           restrict=[MAP_ADMIN]),
                         #M("Geocode", f="geocode_manual"),
                     ),
-                    M("PoIs", c="gis", f="poi", check=[pois])(),
+                    M("PoIs", c="gis", f="poi", check=pois)(),
                     #M("Population Report", f="location", m="report",
                     #  vars=dict(rows="name",
                     #            fact="population",
@@ -1318,6 +1330,7 @@ class S3OptionsMenu(object):
 
         if current.request.function in ("sms_outbound_gateway",
                                         "email_channel",
+                                        "facebook_channel",
                                         "sms_modem_channel",
                                         "sms_smtp_channel",
                                         "sms_webapi_channel",
@@ -1331,14 +1344,16 @@ class S3OptionsMenu(object):
                     M("Compose", f="compose"),
                     M("InBox", f="inbox")(
                         M("Email", f="email_inbox"),
+                        #M("Facebook", f="facebook_inbox"),
                         M("RSS", f="rss"),
                         M("SMS", f="sms_inbox"),
                         M("Twitter", f="twitter_inbox"),
                     ),
                     M("Outbox", f="outbox")(
-                       M("Email", f="email_outbox"),
-                       M("SMS", f="sms_outbox"),
-                       M("Twitter", f="twitter_outbox"),
+                        M("Email", f="email_outbox"),
+                        M("Facebook", f="facebook_outbox"),
+                        M("SMS", f="sms_outbox"),
+                        M("Twitter", f="twitter_outbox"),
                     ),
                     M("Message Log", f="message"),
                     M("Distribution groups", f="group")(
@@ -1674,9 +1689,10 @@ class S3OptionsMenu(object):
         return M(c="vehicle")(
                     M("Vehicles", f="vehicle")(
                         M("Create", m="create"),
+                        M("Import", m="import", p="create"),
                         M("Map", m="map"),
                     ),
-                    M("Vehicle Types", f="item")(
+                    M("Vehicle Types", f="vehicle_type")(
                         M("Create", m="create"),
                     ),
                 )
@@ -1737,6 +1753,7 @@ class S3OptionsMenu(object):
 
         return [
             M("Email Channels (Inbound)", c="msg", f="email_channel"),
+            M("Facebook Channels", c="msg", f="facebook_channel"),
             M("RSS Channels", c="msg", f="rss_channel"),
             M("SMS Outbound Gateways", c="msg", f="sms_outbound_gateway")(
                 M("SMS Modem Channels", c="msg", f="sms_modem_channel"),

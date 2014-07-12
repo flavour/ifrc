@@ -2503,8 +2503,11 @@ class S3XML(S3Codec):
             col.set(FIELD, s3_unicode(key))
             if value:
                 text = s3_unicode(value).strip()
-                if text.lower() not in ("null", "<null>"):
-                    col.text = text
+                if text[:6].lower() not in ("null", "<null>"):
+                    try:
+                        col.text = text
+                    except MemoryError:
+                        current.log.error("S3XML: Unable to set value for key %s: MemoryError" % key)
             else:
                 col.text = ""
 

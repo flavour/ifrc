@@ -44,67 +44,98 @@ class S3MainMenu(default.S3MainMenu):
         return [
             homepage("gis")(
             ),
-            homepage("hrm", "org", name=T("Staff"),
+            homepage("cms", f="newsfeed", m="datalist", name=T("News"))(
+            ),
+            homepage("event", name= "Situational Awareness")(
+                MM("Incidents", c="event", f="incident"),
+                #MM("Incident Reports", c="event", f="incident_report"),
+                MM("Deployments", c="deploy", f="mission"),
+                MM("Assessments", c="survey", f="series"),
+                MM("Situation Reports", c="doc", f="sitrep"),
+                MM("Messages", c="msg", f="index"),
+                # Have as a Tab on the Incident?
+                #MM("Budgets", c="budget", f="budget"),
+                # Have as a Tab on the Incident?
+                #MM("Assignments", c="deploy", f="assignment"),
+            ),
+            #homepage("sit", "survey")(
+            #    MM("Assessment Templates", c="survey", f="template"),
+            #    MM("Assessments", c="survey", f="series"),
+            #    MM("Situation Reports", c="sit", f="report"),
+            #),
+            #homepage("deploy", f="mission", m="summary",
+            #         vars={"~.status__belongs": "2"})(
+            #    MM("Missions", c="deploy", f="mission", m="summary"),
+            #    MM("Human Resources", c="deploy", f="human_resource", m="summary"),
+            #),
+            homepage("cr", name="Operations Management")(
+                MM("Requests", c="req", f="req"),
+                MM("Received Shipments", c="inv", f="recv"),
+                MM("Sent Shipments", c="inv", f="send"),
+                MM("Shelters", c="cr", f="shelter", m="summary"),
+                MM("Warehouses", c="inv", f="warehouse"),
+            ),
+            homepage("project")(
+                MM("Projects", c="project", f="project"),
+                #MM("Communities", c="project", f="location"),
+                MM("Tasks", c="project", f="task"),
+            ),
+            homepage("hrm", "org", "vol", "asset", name=T("Resources"),
                      vars=dict(group="staff"))(
                 MM("Staff", c="hrm", f="staff", m="summary"),
+                MM("Volunteers", c="vol", f="volunteer", m="summary"),
                 MM("Teams", c="hrm", f="group"),
                 MM("Organizations", c="org", f="organisation",
                    #vars = red_cross_filter
                    ),
-                MM("Offices", c="org", f="office"),
+                MM("Facilities", c="org", f="facility", m="summary"),
+                MM("Offices", c="org", f="office", m="summary"),
                 MM("Job Titles", c="hrm", f="job_title"),
                 #MM("Skill List", c="hrm", f="skill"),
                 MM("Training Events", c="hrm", f="training_event"),
                 MM("Training Courses", c="hrm", f="course"),
                 MM("Certificate List", c="hrm", f="certificate"),
+                MM("Assets", c="asset", f="asset", m="summary"),
+                MM("Items", c="supply", f="item"),
+                MM("Vehicles", c="vehicle", f="vehicle", m="summary"),
             ),
-            homepage("vol", name=T("Volunteers"))(
-                MM("Volunteers", c="vol", f="volunteer", m="summary"),
-                MM("Teams", c="vol", f="group"),
-                MM("Volunteer Roles", c="vol", f="job_title"),
-                MM("Programs", c="vol", f="programme"),
-                #MM("Skill List", c="vol", f="skill"),
-                MM("Training Events", c="vol", f="training_event"),
-                MM("Training Courses", c="vol", f="course"),
-                MM("Certificate List", c="vol", f="certificate"),
-            ),
+            #homepage("vol", name=T("Volunteers"))(
+            #    MM("Volunteers", c="vol", f="volunteer", m="summary"),
+            #    MM("Teams", c="vol", f="group"),
+            #    MM("Volunteer Roles", c="vol", f="job_title"),
+            #    MM("Programs", c="vol", f="programme"),
+            #    #MM("Skill List", c="vol", f="skill"),
+            #    MM("Training Events", c="vol", f="training_event"),
+            #    MM("Training Courses", c="vol", f="course"),
+            #    MM("Certificate List", c="vol", f="certificate"),
+            #),
             #homepage("member")(
             #    MM("Members", c="member", f="membership", m="summary"),
             #),
-            homepage("inv", "supply", "req")(
-                MM("Warehouses", c="inv", f="warehouse"),
-                MM("Received Shipments", c="inv", f="recv"),
-                MM("Sent Shipments", c="inv", f="send"),
-                MM("Items", c="supply", f="item"),
-                MM("Item Catalogs", c="supply", f="catalog"),
-                MM("Item Categories", c="supply", f="item_category"),
-                M("Requests", c="req", f="req")(),
-                #M("Commitments", f="commit")(),
-            ),
-            homepage("asset")(
-                MM("Assets", c="asset", f="asset", m="summary"),
-                MM("Items", c="asset", f="item", m="summary"),
-            ),
-            homepage("survey")(
-                MM("Assessment Templates", c="survey", f="template"),
-                MM("Disaster Assessments", c="survey", f="series"),
-            ),
-            homepage("project")(
-                MM("Projects", c="project", f="project"),
-                MM("Communities", c="project", f="location"),
-            ),
+            #homepage("cr", "inv", "org", name="Facilities")(
+            #    MM("Facilities", c="org", f="facility", m="summary"),
+            #    MM("Offices", c="org", f="office", m="summary"),
+            #    MM("Shelters", c="cr", f="shelter", m="summary"),
+            #    MM("Warehouses", c="inv", f="warehouse", m="summary"),
+            #),
+            #homepage("asset")(
+            #    MM("Assets", c="asset", f="asset", m="summary"),
+            #    MM("Items", c="asset", f="item", m="summary"),
+            #    MM("Vehicles", c="vehicle", f="vehicle", m="summary"),
+            #),
+            #homepage("inv", "supply", "req", name="Inventory")(
+            #    MM("Warehouses", c="inv", f="warehouse"),
+            #    MM("Received Shipments", c="inv", f="recv"),
+            #    MM("Sent Shipments", c="inv", f="send"),
+            #    MM("Items", c="supply", f="item"),
+            #    MM("Item Catalogs", c="supply", f="catalog"),
+            #    MM("Item Categories", c="supply", f="item_category"),
+            #    MM("Requests", c="req", f="req"),
+            #    #MM("Commitments", f="commit"),
+            #),
             #homepage("vulnerability")(
             #    MM("Map", c="vulnerability", f="index"),
             #),
-            homepage("event")(
-                MM("Events", c="event", f="event"),
-                MM("Incident Reports", c="event", f="incident_report"),
-            ),
-            homepage("deploy", name="RDRT", f="mission", m="summary",
-                     vars={"~.status__belongs": "2"})(
-                MM("Missions", c="deploy", f="mission", m="summary"),
-                MM("Members", c="deploy", f="human_resource", m="summary"),
-            ),
         ]
 
     # -------------------------------------------------------------------------
@@ -165,6 +196,14 @@ class S3MainMenu(default.S3MainMenu):
         elif controller == "default" and request.function == "index":
 
             dashboard = DB(_id="dashboard")(
+                DB("Assessments", c="survey", f="index",
+                   image = "graphic_assessments.png",
+                   title = "Assessments",
+                   text = "Design, deploy & analyze surveys."),
+                DB("Projects", c="project", f="index",
+                   image = "graphic_tools.png",
+                   title = "Projects",
+                   text = "Tracking and analysis of Projects and Activities."),
                 DB("Staff", c="hrm", f="staff", m="summary",
                    image = "graphic_staff.png",
                    title = "Staff",
@@ -177,22 +216,14 @@ class S3MainMenu(default.S3MainMenu):
                 #   image = "graphic_members.png",
                 #   title = "Members",
                 #   text = "Add new and manage existing members."),
-                DB("Warehouses", c="inv", f="index",
-                   image = "graphic_warehouse.png",
-                   title = "Warehouses",
-                   text = "Stocks and relief items."),
                 DB("Assets", c="asset", f="index",
                    image = "graphic_assets.png",
                    title = "Assets",
                    text = "Manage office inventories and assets."),
-                DB("Assessments", c="survey", f="index",
-                   image = "graphic_assessments.png",
-                   title = "Assessments",
-                   text = "Design, deploy & analyze surveys."),
-                DB("Projects", c="project", f="index",
-                   image = "graphic_tools.png",
-                   title = "Projects",
-                   text = "Tracking and analysis of Projects and Activities.")
+                DB("Warehouses", c="inv", f="index",
+                   image = "graphic_warehouse.png",
+                   title = "Warehouses",
+                   text = "Stocks and relief items."),
             )
 
         else:
@@ -253,7 +284,10 @@ class S3MainMenu(default.S3MainMenu):
                         MP("Administration", c="admin", f="user",
                            check=is_org_admin),
                         MP("Profile", c="default", f="person"),
-                        MP("Change Password", c="default", f="user",
+                        MP("Subscription", c="default", f="index", args=["subscriptions"]),
+                        # Allow space for 'Subscription'
+                        #MP("Change Password", c="default", f="user",
+                        MP("Password", c="default", f="user",
                            m="change_password"),
                         MP("Logout", c="default", f="user",
                            m="logout"),
@@ -276,8 +310,92 @@ class S3OptionsMenu(default.S3OptionsMenu):
         return menu
 
     # -------------------------------------------------------------------------
+    @staticmethod
+    def asset():
+        """ ASSET Controller """
+
+        ADMIN = current.session.s3.system_roles.ADMIN
+
+        return M(c="asset")(
+                    M("Assets", f="asset", m="summary")(
+                        M("Create", m="create"),
+                        #M("Map", m="map"),
+                        M("Import", m="import", p="create"),
+                    ),
+                    #M("Brands", f="brand",
+                    #  restrict=[ADMIN])(
+                    #    M("Create", m="create"),
+                    #),
+                    M("Items", f="item", m="summary")(
+                        M("Create", m="create"),
+                        M("Import", f="catalog_item", m="import", p="create"),
+                    ),
+                    M("Item Categories", f="item_category",
+                      restrict=[ADMIN])(
+                        M("Create", m="create"),
+                    ),
+                    M("Catalogs", f="catalog",
+                      restrict=[ADMIN])(
+                        M("Create", m="create"),
+                    ),
+                    M("Suppliers", f="supplier")(
+                        M("Create", m="create"),
+                        M("Import", m="import", p="create"),
+                    ),
+                    M("Vehicles", c="vehicle" , f="vehicle")(
+                        M("Create", m="create"),
+                        M("Import", m="import", p="create"),
+                        M("Map", m="map"),
+                    ),
+                    M("Vehicle Types", c="vehicle", f="vehicle_type")(
+                        M("Create", m="create"),
+                    ),
+                )
+
+    # -------------------------------------------------------------------------
+    def doc(self):
+        """ Situation Reports """
+
+        # Same as Events
+        return self.event()
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def event():
+        """ Incidents """
+
+        return M()(
+                    #M("Events", c="event", f="event")(
+                    #    M("Create", m="create"),
+                    #),
+                    M("Incidents", c="event", f="incident", args="summary")(
+                        M("Create", m="create"),
+                    ),
+                    #M("Incident Reports", c="event", f="incident_report")(
+                    #    M("Create", m="create"),
+                    #    #M("Open Incidents", vars={"open": 1}),
+                    #    M("Map", m="map"),
+                    #    #M("Timeline", args="timeline"),
+                    #    M("Report", m="report")
+                    #),
+                    M("Assessments", c="survey", f="series")(
+                        M("Create", m="create"),
+                    ),
+                    M("Situation Reports", c="doc", f="sitrep")(
+                        M("Create", m="create"),
+                    ),
+                    M("Incident Types", c="event", f="incident_type",
+                      check=current.auth.s3_has_role(current.session.s3.system_roles.ADMIN))(
+                        M("Create", m="create"),
+                    ),
+                    #M("Reports", c="event", f="incident_report",  m="report")(
+                    #    M("Incident Reports", m="report"),
+                    #),
+                )
+
+    # -------------------------------------------------------------------------
     def gis(self):
-        """ GIS / GIS Controllers """
+        """ GIS / Mapping """
 
         if current.request.function == "index":
             # Empty so as to leave maximum space for the Map
@@ -289,7 +407,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
     # -------------------------------------------------------------------------
     @staticmethod
     def hrm():
-        """ HRM Human Resource Management """
+        """ HRM / Human Resource Management """
 
         session = current.session
         s3 = current.session.s3
@@ -412,6 +530,10 @@ class S3OptionsMenu(default.S3OptionsMenu):
         # Same as HRM
         return self.hrm()
     
+    # -------------------------------------------------------------------------
+    def vehicle(self):
+        return self.asset()
+
     # -------------------------------------------------------------------------
     @staticmethod
     def vol():
@@ -655,66 +777,49 @@ class S3OptionsMenu(default.S3OptionsMenu):
         return self.inv()
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def event():
-        """ Incident Reporting """
+    def survey(self):
+        """ Survey """
 
-        return M()(
-                    M("Events", c="event", f="event")(
+        # Same as Events
+        return self.event()
+
+        ADMIN = current.session.s3.system_roles.ADMIN
+
+        # Do we have a series_id?
+        series_id = False
+        get_vars = Storage()
+        try:
+            series_id = int(current.request.args[0])
+        except:
+            try:
+                (dummy, series_id) = current.request.get_vars["viewing"].split(".")
+                series_id = int(series_id)
+            except:
+                pass
+        if series_id:
+            get_vars.viewing = "survey_complete.%s" % series_id
+
+        return M(c="survey")(
+                    M("Assessment Templates", f="template")(
                         M("Create", m="create"),
                     ),
-                    M("Incident Reports", c="event", f="incident_report")(
-                        M("Create", m="create"),
-                        #M("Open Incidents", vars={"open": 1}),
-                        M("Map", m="map"),
-                        #M("Timeline", args="timeline"),
-                        M("Report", m="report")
-                    ),
-                    M("Incident Types", c="event", f="incident_type",
-                      check=current.auth.s3_has_role(current.session.s3.system_roles.ADMIN))(
+                    #M("Section", f="section")(
+                    #    M("Create", args="create"),
+                    #),
+                    M("Assessments", f="series")(
                         M("Create", m="create"),
                     ),
-                    M("Reports", c="event", f="incident_report",  m="report")(
-                        M("Incident Reports", m="report"),
+                    M("Situation Reports", c="sit", f="report")(
+                        M("Create", m="create"),
+                    ),
+                    M("Administration", f="admin", restrict=[ADMIN])(
+                        M("Import Templates", f="question_list",
+                          m="import", p="create"),
+                        M("Import Template Layout", f="formatter",
+                          m="import", p="create"),
+                        M("Import Completed Assessment Forms", f="complete",
+                          m="import", p="create", vars=get_vars, check=series_id),
                     ),
                 )
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def deploy():
-        """ RDRT Alerting and Deployments """
-
-        return M()(M("Missions",
-                     c="deploy", f="mission", m="summary")(
-                        M("Create", m="create"),
-                        M("Active Missions", m="summary",
-                          vars={"~.status__belongs": "2"}),
-                   ),
-                   M("Alerts",
-                     c="deploy", f="alert")(
-                        M("Create", m="create"),
-                        M("InBox",
-                          c="deploy", f="email_inbox",
-                        ),
-                        M("Settings",
-                          c="deploy", f="email_channel",
-                          p="update", t="msg_email_channel",
-                          ),
-                   ),
-                   M("Deployments",
-                     c="deploy", f="assignment", m="summary"
-                   ),
-                   M("Sectors",
-                     c="deploy", f="job_title", restrict=["ADMIN"],
-                   ),
-                   M("RDRT Members",
-                     c="deploy", f="human_resource", m="summary")(
-                        M("Add Member",
-                          c="deploy", f="application", m="select",
-                          p="create", t="deploy_application",
-                          ),
-                        M("Import Members", c="deploy", f="person", m="import"),
-                   ),
-               )
 
 # END =========================================================================

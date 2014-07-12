@@ -27,10 +27,11 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3DocumentLibrary",
+__all__ = ("S3DocumentLibrary",
+           "S3DocSitRepModel",
            "doc_image_represent",
            "doc_document_list_layout",
-          ]
+           )
 
 import os
 
@@ -41,11 +42,11 @@ from ..s3 import *
 # =============================================================================
 class S3DocumentLibrary(S3Model):
 
-    names = ["doc_entity",
+    names = ("doc_entity",
              "doc_document",
              "doc_document_id",
              "doc_image",
-             ]
+             )
 
     def model(self):
 
@@ -84,6 +85,7 @@ class S3DocumentLibrary(S3Model):
                                cms_post=T("Post"),
                                cr_shelter=T("Shelter"),
                                deploy_mission=T("Mission"),
+                               doc_sitrep=T("Situation Report"),
                                hms_hospital=T("Hospital"),
                                hrm_human_resource=T("Human Resource"),
                                inv_adj=T("Stock Adjustment"),
@@ -636,7 +638,6 @@ def doc_document_list_layout(list_id, item_id, resource, rfields, record):
 class doc_DocumentRepresent(S3Represent):
     """ Representation of Documents """
 
-    # -------------------------------------------------------------------------
     def link(self, k, v, row=None):
         """
             Represent a (key, value) as hypertext link.
@@ -659,5 +660,86 @@ class doc_DocumentRepresent(S3Represent):
                 elif url:
                     return A(v, _href=url)
         return v
+
+# =============================================================================
+class S3DocSitRepModel(S3Model):
+    """
+        Situation Reports
+    """
+
+    names = ("doc_sitrep",)
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Situation Reports
+        # - can be aggregated by OU
+        #
+        tablename = "doc_sitrep"
+        self.define_table(tablename,
+                          self.super_link("doc_id", "doc_entity"),
+                          Field("name", length=128,
+                               label = T("Name"),
+                               ),
+                          Field("description", "text",
+                                label = T("Description"),
+                                represent = lambda body: XML(body),
+                                widget = s3_richtext_widget,
+                                ),
+                          self.org_organisation_id(),
+                          self.gis_location_id(),
+                          s3_date(default = "now",
+                                  ),
+                          s3_comments(),
+                          *s3_meta_fields())
+
+        # CRUD strings
+        current.response.s3.crud_strings[tablename] = Storage(
+                label_create = T("Add Situation Report"),
+                title_display = T("Situation Report Details"),
+                title_list = T("Situation Reports"),
+                title_update = T("Edit Situation Report"),
+                title_upload = T("Import Situation Reports"),
+                label_list_button = T("List Situation Reports"),
+                label_delete_button = T("Delete Situation Report"),
+                msg_record_created = T("Situation Report added"),
+                msg_record_modified = T("Situation Report updated"),
+                msg_record_deleted = T("Situation Report deleted"),
+                msg_list_empty = T("No Situation Reports currently registered"))
+
+        crud_form = S3SQLCustomForm("name",
+                                    "description",
+                                    "organisation_id",
+                                    "location_id",
+                                    "date",
+                                    S3SQLInlineComponent(
+                                        "document",
+                                        name = "document",
+                                        label = T("Attachments"),
+                                        fields = [("", "file")],
+                                    ),
+                                    "comments",
+                                    )
+
+        self.configure(tablename,
+                       crud_form = crud_form,
+                       list_fields = ["date",
+                                      "location_id$L1",
+                                      "location_id$L2",
+                                      "location_id$L3",
+                                      "organisation_id",
+                                      "name",
+                                      (T("Attachments"), "document.file"),
+                                      "comments",
+                                      ],
+                       super_entity = "doc_entity",
+                       )
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return dict()
 
 # END =========================================================================

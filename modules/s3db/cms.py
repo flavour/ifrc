@@ -61,14 +61,14 @@ class S3ContentModel(S3Model):
         Content Management System
     """
 
-    names = ["cms_series",
+    names = ("cms_series",
              "cms_post",
              "cms_post_id",
              "cms_post_module",
              "cms_tag",
              "cms_tag_post",
              "cms_comment",
-             ]
+             )
 
     def model(self):
 
@@ -163,6 +163,13 @@ class S3ContentModel(S3Model):
         #   be viewed as full pages or as part of a Series
         #
 
+        if settings.get_cms_richtext():
+            body_represent = lambda body: XML(body)
+            body_widget = s3_richtext_widget
+        else:
+            body_represent = lambda body: XML(s3_URLise(body))
+            body_widget = None
+
         tablename = "cms_post"
         define_table(tablename,
                      self.super_link("doc_id", "doc_entity"),
@@ -177,7 +184,7 @@ class S3ContentModel(S3Model):
                            ),
                      Field("body", "text", notnull=True,
                            label = T("Body"),
-                           widget = s3_richtext_widget,
+                           widget = body_widget,
                            ),
                      # @ToDo: Move this to link table?
                      # - although this makes widget hard!
@@ -245,6 +252,22 @@ class S3ContentModel(S3Model):
                                   sortby = "name",
                                   )
 
+        list_fields = ["title",
+                       "body",
+                       "location_id",
+                       "date",
+                       "expired",
+                       "comments"
+                       ]
+
+        org_field = settings.get_cms_organisation()
+        if org_field == "created_by$organisation_id":
+            org_field = "auth_user.organisation_id"
+        elif org_field == "post_organisation.organisation_id":
+            org_field = "cms_post_organisation.organisation_id"
+        if org_field:
+            list_fields.append(org_field)
+
         filter_widgets = [S3TextFilter(["body"],
                                        label = T("Search"),
                                        _class = "filter-search",
@@ -293,10 +316,11 @@ class S3ContentModel(S3Model):
                                      },
                                     ],
                   filter_widgets = filter_widgets,
+                  list_fields = list_fields,
                   list_layout = cms_post_list_layout,
-                  list_orderby = "cms_post.created_on desc",
+                  list_orderby = "cms_post.date desc",
                   onaccept = self.cms_post_onaccept,
-                  orderby = "cms_post.created_on desc",
+                  orderby = "cms_post.date desc",
                   summary = [{"name": "table",
                               "label": "Table",
                               "widgets": [{"method": "datatable"}]
@@ -341,7 +365,7 @@ class S3ContentModel(S3Model):
                                                       "multiple": False,
                                                       },
 
-                       # For InlineForm to tag Posts to Events/Incidents
+                       # For InlineForm to tag Posts to Events/Incidents/Incident Types
                        event_post = (# Events
                                      {"name": "event_post",
                                       "joinby": "post_id",
@@ -351,6 +375,7 @@ class S3ContentModel(S3Model):
                                       "joinby": "post_id",
                                       }
                                      ),
+                       event_post_incident_type = "post_id",
 
                        # For Profile to filter appropriately
                        event_event = {"link": "event_post",
@@ -363,6 +388,11 @@ class S3ContentModel(S3Model):
                                          "key": "incident_id",
                                          "actuate": "hide",
                                          },
+                       event_incident_type = {"link": "event_post_incident_type",
+                                              "joinby": "post_id",
+                                              "key": "incident_type_id",
+                                              "actuate": "hide",
+                                              },
                        )
 
         # Custom Methods
@@ -508,9 +538,13 @@ class S3ContentModel(S3Model):
         """
             Safe defaults for model-global names in case module is disabled
         """
-        post_id = S3ReusableField("post_id", "integer",
-                                  readable=False, writable=False)
-        return dict(cms_post_id=post_id)
+
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False)
+
+        return dict(cms_post_id = lambda **attr: dummy("post_id"),
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -539,8 +573,7 @@ class S3ContentModel(S3Model):
 
         db = current.db
         s3db = current.s3db
-        form_vars = form.vars
-        post_id = form_vars.id
+        post_id = form.vars.id
         get_vars = current.request.get_vars
         module = get_vars.get("module", None)
         if module:
@@ -764,8 +797,7 @@ class S3ContentMapModel(S3Model):
         Use of the CMS to provide extra data about Map Layers
     """
 
-    names = ["cms_post_layer",
-             ]
+    names = ("cms_post_layer",)
 
     def model(self):
 
@@ -774,7 +806,7 @@ class S3ContentMapModel(S3Model):
         #
         tablename = "cms_post_layer"
         self.define_table(tablename,
-                          self.cms_post_id(empty=False),
+                          self.cms_post_id(empty = False),
                           self.super_link("layer_id", "gis_layer_entity"),
                           *s3_meta_fields())
 
@@ -789,8 +821,7 @@ class S3ContentOrgModel(S3Model):
         Link Posts to Organisations
     """
 
-    names = ["cms_post_organisation",
-             ]
+    names = ("cms_post_organisation",)
 
     def model(self):
 
@@ -799,8 +830,12 @@ class S3ContentOrgModel(S3Model):
         #
         tablename = "cms_post_organisation"
         self.define_table(tablename,
-                          self.cms_post_id(empty=False),
-                          self.org_organisation_id(empty=False),
+                          self.cms_post_id(empty = False,
+                                           ondelete = "CASCADE",
+                                           ),
+                          self.org_organisation_id(empty = False,
+                                                   ondelete = "CASCADE",
+                                                   ),
                           *s3_meta_fields())
 
         # ---------------------------------------------------------------------
@@ -814,8 +849,7 @@ class S3ContentOrgGroupModel(S3Model):
         Link Posts to Organisation Groups (Coalitions/Networks)
     """
 
-    names = ["cms_post_organisation_group",
-             ]
+    names = ("cms_post_organisation_group",)
 
     def model(self):
 
@@ -839,8 +873,7 @@ class S3ContentUserModel(S3Model):
         Link Posts to Users to allow Users to Bookmark posts
     """
 
-    names = ["cms_post_user",
-             ]
+    names = ("cms_post_user",)
 
     def model(self):
 
@@ -1140,11 +1173,6 @@ def cms_customise_post_fields():
     # Required
     field.requires = IS_LOCATION_SELECTOR2()
 
-    if settings.get_cms_richtext():
-        table.body.represent = lambda body: XML(body)
-    else:
-        table.body.represent = lambda body: XML(s3_URLise(body))
-
     list_fields = ["series_id",
                    "location_id",
                    "date",
@@ -1237,12 +1265,14 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
     NONE = current.messages["NONE"]
 
     org_field = settings.get_cms_organisation()
+    # Convert to the right format for this context
     if org_field == "created_by$organisation_id":
         org_field = "auth_user.organisation_id"
     elif org_field == "post_organisation.organisation_id":
         org_field = "cms_post_organisation.organisation_id"
 
     org_group_field = settings.get_cms_organisation_group()
+    # Convert to the right format for this context
     if org_group_field == "created_by$org_group_id":
         org_group_field = "auth_user.org_group_id"
     elif org_group_field == "post_organisation_group.group_id":
@@ -1252,7 +1282,15 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
     body = record["cms_post.body"]
     series_id = raw["cms_post.series_id"]
 
-    subtitle = []
+    title  = record["cms_post.title"]
+    if title and title != NONE:
+        subtitle = [DIV(title,
+                        _class="card-subtitle"
+                        )
+                    ]
+    else:
+        subtitle = []
+        
     for event_resource in ["event", "incident"]:
         label = record["event_post.%s_id" % event_resource]
         if label and label != NONE:
@@ -1362,12 +1400,14 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
                 avatar = IMG(_src=logo,
                              _height=50,
                              _width=50,
-                             _style="padding-right:5px;",
+                             _style="padding-right:5px",
                              _class="media-object")
-                avatar = A(avatar,
-                           _href=org_url,
-                           _class="pull-left",
-                           )
+            else:
+                avatar = organisation
+            avatar = A(avatar,
+                       _href=org_url,
+                       _class="pull-left",
+                       )
 
     org_group = ""
     if org_group_field:
@@ -1407,10 +1447,10 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
         card_person = DIV(person,
                           _class="card-person",
                           )
-    elif organisation:
-        card_person = DIV(organisation,
-                          _class="card-person",
-                          )
+    #elif organisation:
+    #    card_person = DIV(organisation,
+    #                      _class="card-person",
+    #                      )
     elif org_group:
         card_person = DIV(org_group,
                           _class="card-person",
@@ -1452,10 +1492,16 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
     else:
         series_title = series = ""
 
+    request = current.request
+
     # Tool box
     if updateable:
+        if request.function == "newsfeed":
+            fn = "newsfeed"
+        else:
+            fn = "post"
         edit_btn = A(I(" ", _class="icon icon-edit"),
-                     _href=URL(c="cms", f="post",
+                     _href=URL(c="cms", f=fn,
                                args=[record_id, "update.popup"],
                                vars={"refresh": list_id,
                                      "record": record_id}
@@ -1518,7 +1564,7 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
             try:
                 doc_name = retrieve(doc)[0]
             except (IOError, TypeError):
-                doc_name = messages["NONE"]
+                doc_name = NONE
             doc_url = URL(c="default", f="download",
                           args=[doc])
             doc_item = LI(A(I(_class="icon-file"),
@@ -1558,7 +1604,6 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
     else:
         link_list = ""
 
-    request = current.request
     if "profile" in request.args:
         # Single resource list
         # - don't show series_title

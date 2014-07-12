@@ -38,11 +38,13 @@
     <s3:fields tables="gis_layer_shapefile*" select="layer_id"/>
     <s3:fields tables="gis_theme_data" select="location_id,value"/>
     <!-- Need to be able to filter &/or style records -->
+    <s3:fields tables="cms_series" select="name"/>
     <s3:fields tables="deploy_application" select="human_resource_id"/>
     <!--
     <s3:fields tables="event_event" select="event_type_id"/>
     <s3:fields tables="event_event_location" select="event_id"/>-->
     <s3:fields tables="event_incident_report_group" select="incident_report_id"/>
+    <s3:fields tables="event_post_incident_type" select="incident_type_id,post_id"/>
     <s3:fields tables="project_activity_activity_type" select="activity_id"/>
     <s3:fields tables="project_activity_group" select="activity_id"/>
     <s3:fields tables="project_activity_organisation" select="activity_id"/>
@@ -51,6 +53,7 @@
     <s3:fields tables="stats_people_group" select="people_id"/>
     <s3:fields tables="stats_trained_group" select="trained_id"/>
     <s3:fields tables="supply_distribution" select="activity_id"/>
+    <s3:fields tables="vehicle_vehicle" select="asset_id,vehicle_type_id"/>
     <s3:fields tables="vulnerability_evac_route_group" select="evac_route_id"/>
     <s3:fields tables="vulnerability_risk_group" select="risk_id"/>
     <s3:fields tables="vulnerability_risk_tag" select="risk_id"/>
@@ -455,7 +458,7 @@
     <xsl:template name="Attribute">
         <xsl:param name="attribute"/>
 
-        <xsl:variable name="key" select="w(substring-after(substring-before($attribute,':'),'|'),'|')"/>
+        <xsl:variable name="key" select="substring-before(substring-after(substring-before($attribute,':'),'|'),'|')"/>
         <xsl:variable name="value" select="substring-after($attribute,':')"/>
         <xsl:choose>
             <xsl:when test="contains($value,'|')">
@@ -482,7 +485,7 @@
         <xsl:variable name="attr" select="substring-before(substring-after($attributes,'{'),'}')"/>
         <xsl:choose>
             <!--<xsl:when test="contains($attributes,'],[')">-->
-            <xsl:when test="contains($attr,',')">
+            <xsl:when test="contains($attr, ',')">
                 <!--
                 <xsl:variable name="attribute" select="substring-before($attributes,',[')"/>
                 <xsl:variable name="remainder" select="normalize-space(substring-after($attributes,'],'))"/>-->

@@ -21,10 +21,10 @@ T = current.T
 # System Settings
 # -----------------------------------------------------------------------------
 # Pre-Populate
-settings.base.prepopulate = ["ARC", "ARC/Demo", "demo/users"]
+settings.base.prepopulate = ("ARC", "ARC/Demo", "demo/users")
 
 settings.base.system_name = T("Resource Management System")
-settings.base.system_name_short = T("RMS")
+settings.base.system_name_short = T("ARC Demo")
 
 # =============================================================================
 # System Settings
@@ -188,7 +188,24 @@ settings.gis.map_width = 869
 # @ToDo: Move into gis_config?
 settings.gis.display_L0 = True
 # GeoNames username
-settings.gis.geonames_username = "arc"
+settings.gis.geonames_username = "rms_dev"
+# Resources which can be directly added to the main map
+settings.gis.poi_create_resources = \
+    [dict(c="gis",
+          f="poi",
+          table="gis_poi",
+          type="point",
+          label=T("Add PoI"),
+          layer="PoIs",
+          ),
+     dict(c="gis",
+          f="poi",
+          table="gis_poi",
+          type="line",
+          label=T("Add Route"),
+          layer="Routes",
+          ),
+     ]
 
 # Restrict the Location Selector to just certain countries
 # NB This can also be over-ridden for specific contexts later
@@ -224,6 +241,8 @@ settings.L10n.firstDOW = 0
 settings.base.paper_size = T("Letter")
 # Make last name in person/user records mandatory
 settings.L10n.mandatory_lastname = True
+# Uncomment this to Translate CMS Series Names
+#settings.L10n.translate_cms_series = True
 # Uncomment this to Translate Layer Names
 #settings.L10n.translate_gis_layer = True
 # Translate Location Names
@@ -232,6 +251,8 @@ settings.L10n.mandatory_lastname = True
 settings.ui.label_mobile_phone = "Cell Phone"
 # Enable this to change the label for 'Postcode'
 settings.ui.label_postcode = "ZIP Code"
+
+settings.msg.require_international_phone_numbers = False
 
 # -----------------------------------------------------------------------------
 # Finance settings
@@ -264,13 +285,57 @@ settings.msg.parser = "IFRC"
 # Module Settings
 
 # -----------------------------------------------------------------------------
+# CMS
+# Uncomment to use Bookmarks in Newsfeed
+settings.cms.bookmarks = True
+# Uncomment to use have Filter form in Newsfeed be open by default
+settings.cms.filter_open = True
+# Uncomment to adjust filters in Newsfeed when clicking on locations instead of opening the profile page
+#settings.cms.location_click_filters = True
+# Uncomment to use Rich Text editor in Newsfeed
+#settings.cms.richtext = True
+# Uncomment to show Events in Newsfeed
+settings.cms.show_events = True
+# Uncomment to show Links in Newsfeed
+settings.cms.show_links = True
+# Uncomment to show Tags in Newsfeed
+#settings.cms.show_tags = True
+# Uncomment to show post Titles in Newsfeed
+#settings.cms.show_titles = True
+# Uncomment to use organisation_id instead of created_by in Newsfeed
+settings.cms.organisation = "post_organisation.organisation_id"
+# Uncomment to use org_group_id in Newsfeed
+#settings.cms.organisation_group = "created_by$org_group_id"
+#settings.cms.organisation_group = "post_organisation_group.group_id"
+# Uncomment to use person_id instead of created_by in Newsfeed
+settings.cms.person = "person_id"
+
+# -----------------------------------------------------------------------------
+# Shelters
+# Uncomment to use a dynamic population estimation by calculations based on registrations  
+#settings.cr.shelter_population_dynamic = True
+
+# -----------------------------------------------------------------------------
+# Events
+# Make Event Types Hierarchical
+#settings.event.types_hierarchical = True
+# Make Incident Types Hierarchical
+#settings.event.incident_types_hierarchical = True
+
+# -----------------------------------------------------------------------------
 # Organisation Management
 # Enable the use of Organisation Branches
 settings.org.branches = True
+# Hierarchical Facility Types
+settings.org.facility_types_hierarchical = True
+# Organisation Location context
+settings.org.organisation_location_context = "organisation_location.location_id"
 # Set the length of the auto-generated org/site code the default is 10
 settings.org.site_code_len = 3
 # Set the label for Sites
-settings.org.site_label = "Office/Warehouse/Facility"
+settings.org.site_label = "Office/Shelter/Warehouse/Facility"
+# Uncomment to show a Tab for Organisation Resources
+settings.org.resources_tab = True
 
 # -----------------------------------------------------------------------------
 # Human Resource Management
@@ -289,7 +354,7 @@ settings.hrm.use_credentials = False
 # Uncomment to enable the use of HR Education
 settings.hrm.use_education = True
 # Custom label for Organisations in HR module
-settings.hrm.organisation_label = "National Society / Branch"
+#settings.hrm.organisation_label = "National Society / Branch"
 # Uncomment to consolidate tabs into a single CV
 settings.hrm.cv_tab = True
 # Uncomment to consolidate tabs into Staff Record
@@ -313,17 +378,14 @@ settings.hrm.staff_experience = False
 settings.hrm.use_skills = False
 
 # -----------------------------------------------------------------------------
-def ns_only(f, required=True, branches=True, updateable=True):
+def ns_only(f, required=True, updateable=True):
     """
         Function to configure an organisation_id field to be restricted to just
-        NS/Branch
+        an ARC Branch
     """
 
     # Label
-    if branches:
-        f.label = T("National Society / Branch")
-    else:
-        f.label = T("National Society")
+    f.label = T("ARC Branch")
 
     # Requires
     db = current.db
@@ -333,7 +395,7 @@ def ns_only(f, required=True, branches=True, updateable=True):
                                                                        limitby=(0, 1)
                                                                        ).first().id
     except:
-        # No IFRC prepop done - skip (e.g. testing impacts of CSS changes in this theme)
+        # No prepop done - skip (e.g. testing impacts of CSS changes in this theme)
         return
 
     # Filter by type
@@ -344,37 +406,27 @@ def ns_only(f, required=True, branches=True, updateable=True):
     auth = current.auth
     s3_has_role = auth.s3_has_role
     Admin = s3_has_role("ADMIN")
-    if branches:
-        if Admin:
-            parent = True
-        else:
-            # @ToDo: Set the represent according to whether the user can see resources of just a single NS or multiple
-            # @ToDo: Consider porting this into core
-            user = auth.user
-            if user:
-                realms = user.realms
-                #delegations = user.delegations
-                if realms:
-                    parent = True
-                else:
-                    parent = False
-            else:
-                parent = True
-
+    if Admin:
+        parent = True
     else:
-        # Keep the represent function as simple as possible
-        parent = False
-        # Exclude branches
-        btable = current.s3db.org_organisation_branch
-        rows = db((btable.deleted != True) &
-                  (btable.branch_id.belongs(filter_opts))).select(btable.branch_id)
-        filter_opts = list(set(filter_opts) - set(row.branch_id for row in rows))
+        # @ToDo: Set the represent according to whether the user can see resources of just a single NS or multiple
+        # @ToDo: Consider porting this into core
+        user = auth.user
+        if user:
+            realms = user.realms
+            #delegations = user.delegations
+            if realms:
+                parent = True
+            else:
+                parent = False
+        else:
+            parent = True
 
     organisation_represent = current.s3db.org_OrganisationRepresent
     represent = organisation_represent(parent=parent)
     f.represent = represent
 
-    from s3.s3validators import IS_ONE_OF
+    from s3 import IS_ONE_OF
     requires = IS_ONE_OF(db, "org_organisation.id",
                          represent,
                          filterby = "id",
@@ -409,11 +461,11 @@ def ns_only(f, required=True, branches=True, updateable=True):
     if (Admin or s3_has_role("ORG_ADMIN")):
         # Need to do import after setting Theme
         from s3layouts import S3AddResourceLink
-        from s3.s3navigation import S3ScriptItem
+        from s3 import S3ScriptItem
         add_link = S3AddResourceLink(c="org", f="organisation",
                                      vars={"organisation_type.name":"Red Cross / Red Crescent"},
-                                     label=T("Create National Society"),
-                                     title=T("National Society"),
+                                     label=T("Create ARC Branch"),
+                                     title=T("ARC Branch"),
                                      )
         comment = f.comment
         if not comment or isinstance(comment, S3AddResourceLink):
@@ -424,7 +476,7 @@ def ns_only(f, required=True, branches=True, updateable=True):
         else:
             f.comment = add_link
     else:
-        # Not allowed to add NS/Branch
+        # Not allowed to add ARC Branch
         f.comment = ""
 
 # -----------------------------------------------------------------------------
@@ -449,14 +501,13 @@ def customise_asset_asset_resource(r, tablename):
     s3db = current.s3db
     table = s3db.asset_asset
 
-    # Organisation needs to be an NS/Branch
+    # Organisation needs to be an ARC Branch
     ns_only(table.organisation_id,
             required = True,
-            branches = True,
             )
 
     # Custom CRUD Form to allow ad-hoc Kits & link to Teams
-    from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent
+    from s3 import S3SQLCustomForm, S3SQLInlineComponent
     table.kit.readable = table.kit.writable = True
     crud_form = S3SQLCustomForm("number",
                                 "type",
@@ -497,7 +548,7 @@ def customise_asset_asset_resource(r, tablename):
                                 "comments",
                                 )
 
-    from s3.s3filter import S3OptionsFilter
+    from s3 import S3OptionsFilter
     filter_widgets = s3db.get_config(tablename, "filter_widgets")
     filter_widgets.insert(-2, S3OptionsFilter("group.group_id",
                                               label = T("Team"),
@@ -509,63 +560,96 @@ def customise_asset_asset_resource(r, tablename):
                    crud_form = crud_form,
                    )
 
+    if r.representation == "geojson":
+        from s3 import S3Represent
+        s3db.vehicle_vehicle.vehicle_type_id.represent = S3Represent(lookup="vehicle_vehicle_type",
+                                                                     fields=("code",))
+
 settings.customise_asset_asset_resource = customise_asset_asset_resource
 
 # -----------------------------------------------------------------------------
-def customise_auth_user_controller(**attr):
+def customise_cms_post_resource(r, tablename):
+
+    s3db = current.s3db
+    table = s3db.cms_post
+    table.title.comment = None
+    s3db.cms_post_organisation.organisation_id.represent = s3db.org_OrganisationRepresent(acronym=False)
+
+    if r.function == "newsfeed":
+        # Inject Bootstrap JS for the attachments dropdown menu
+        s3 = current.response.s3
+        if s3.debug:
+            s3.scripts.append("/%s/static/scripts/bootstrap.js" % r.application)
+        elif s3.cdn:
+            s3.scripts.append("http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js")
+        else:
+            s3.scripts.append("/%s/static/scripts/bootstrap.min.js" % r.application)
+
+    elif r.representation == "plain":
+        # Map Popups
+        table.location_id.represent = s3db.gis_LocationRepresent(sep=" | ")
+        from s3 import s3_auth_user_represent_name
+        table.created_by.represent = s3_auth_user_represent_name
+        # Used by default popups
+        series = table.series_id.represent(r.record.series_id)
+        current.response.s3.crud_strings["cms_post"].title_display = "%(series)s Details" % dict(series=series)
+        s3db.configure("cms_post",
+                       popup_url="",
+                       )
+        table.avatar.readable = False
+        table.body.label = ""
+        table.expired.readable = False
+        table.replies.readable = False
+        table.created_by.readable = True
+        table.created_by.label = T("Author")
+        # Used by cms_post_popup
+        #table.created_on.represent = datetime_represent
+
+settings.customise_cms_post_resource = customise_cms_post_resource
+
+# -----------------------------------------------------------------------------
+def cms_post_popup(r, output):
     """
-        Customise admin/user() and default/user() controllers
+        Customised Map popup for cms_post resource
+        - include Photo if-present
+
+        @ToDo: Much better checking!
     """
 
-    #if "arg" in attr and attr["arg"] == "register":
-    # Organisation needs to be an NS/Branch
-    ns_only(current.db.auth_user.organisation_id,
-            required = True,
-            branches = True,
-            updateable = False, # Need to see all Orgs in Registration screens
-            )
+    doc_id = r.record.doc_id
+    table = current.s3db.doc_document
+    query = (table.deleted == False) & \
+            (table.doc_id == doc_id)
+    row = current.db(query).select(table.file,
+                                   limitby=(0, 1)
+                                   ).first()
+    if row and row.file:
+        from gluon import IMG, URL
+        image = IMG(_src=URL(c="default", f="download", args=[row.file]))
+        output["image"] = image
+
+# -----------------------------------------------------------------------------
+def customise_cms_post_controller(**attr):
+
+    s3 = current.response.s3
+
+    # Custom postp
+    standard_postp = s3.postp
+    def custom_postp(r, output):
+        # Call standard postp
+        if callable(standard_postp):
+            output = standard_postp(r, output)
+
+        if r.representation == "plain":
+            # Map Popups
+            cms_post_popup(r, output)
+
+        return output
+    s3.postp = custom_postp
 
     return attr
 
-settings.customise_auth_user_controller = customise_auth_user_controller
-
-# -----------------------------------------------------------------------------
-def customise_deploy_alert_resource(r, tablename):
-
-    current.s3db.deploy_alert_recipient.human_resource_id.label = T("Member")
-
-settings.customise_deploy_alert_resource = customise_deploy_alert_resource
-
-# -----------------------------------------------------------------------------
-def customise_deploy_application_resource(r, tablename):
-
-    r.table.human_resource_id.label = T("Member")
-
-settings.customise_deploy_application_resource = customise_deploy_application_resource
-
-# -----------------------------------------------------------------------------
-def _customise_assignment_fields(**attr):
-
-    MEMBER = T("Member")
-    from gluon.html import DIV
-    hr_comment =  \
-        DIV(_class="tooltip",
-            _title="%s|%s" % (MEMBER,
-                              current.messages.AUTOCOMPLETE_HELP))
-
-    from s3.s3validators import IS_ONE_OF
-    atable = current.s3db.deploy_assignment
-    atable.human_resource_id.label = MEMBER
-    atable.human_resource_id.comment = hr_comment
-    field = atable.job_title_id
-    field.comment = None
-    field.label = T("Sector")
-    field.requires = IS_ONE_OF(current.db, "hrm_job_title.id",
-                               field.represent,
-                               filterby = "type",
-                               filter_opts = (4,),
-                               )
-    return
+settings.customise_cms_post_controller = customise_cms_post_controller
 
 # -----------------------------------------------------------------------------
 def customise_deploy_assignment_controller(**attr):
@@ -574,20 +658,21 @@ def customise_deploy_assignment_controller(**attr):
     table = s3db.deploy_assignment
 
     # Labels
-    table.job_title_id.label = T("RDRT Type")
-    table.start_date.label = T("Deployment Date")
+    #table.job_title_id.label = T("RDRT Type")
+    #table.start_date.label = T("Deployment Date")
     #table.end_date.label = T("EOM")
 
     # List fields
     list_fields = [(T("Mission"), "mission_id$name"),
                    (T("Appeal Code"), "mission_id$code"),
                    (T("Country"), "mission_id$location_id"),
-                   (T("Disaster Type"), "mission_id$event_type_id"),
+                   (T("Incident Type"), "mission_id$event_type_id"),
                    # @todo: replace by date of first alert?
                    (T("Date"), "mission_id$created_on"),
                    "job_title_id",
+                   #(T("Member"), "human_resource_id$person_id"),
                    (T("Member"), "human_resource_id$person_id"),
-                   (T("Deploying NS"), "human_resource_id$organisation_id"),
+                   (T("Deploying Branch"), "human_resource_id$organisation_id"),
                    "start_date",
                    "end_date",
                    "appraisal.rating",
@@ -600,9 +685,9 @@ def customise_deploy_assignment_controller(**attr):
                    ]
     report_axis = [(T("Appeal Code"), "mission_id$code"),
                    (T("Country"), "mission_id$location_id"),
-                   (T("Disaster Type"), "mission_id$event_type_id"),
-                   (T("RDRT Type"), "job_title_id"),
-                   (T("Deploying NS"), "human_resource_id$organisation_id"),
+                   (T("Incident Type"), "mission_id$event_type_id"),
+                   "job_title_id",
+                   (T("Deploying Branch"), "human_resource_id$organisation_id"),
                   ]
     report_options = Storage(
         rows=report_axis,
@@ -619,29 +704,7 @@ def customise_deploy_assignment_controller(**attr):
                    list_fields = list_fields,
                    report_options = report_options,
                    )
-    
-    
-    # CRUD Strings
-    current.response.s3.crud_strings["deploy_assignment"] = Storage(
-        label_create = T("Add Deployment"),
-        title_display = T("Deployment Details"),
-        title_list = T("Deployments"),
-        title_update = T("Edit Deployment Details"),
-        title_upload = T("Import Deployments"),
-        label_list_button = T("List Deployments"),
-        label_delete_button = T("Delete Deployment"),
-        msg_record_created = T("Deployment added"),
-        msg_record_modified = T("Deployment Details updated"),
-        msg_record_deleted = T("Deployment deleted"),
-        msg_list_empty = T("No Deployments currently registered"))
 
-    _customise_assignment_fields()
-    
-    # Restrict Location to just Countries
-    from s3.s3fields import S3Represent
-    field = s3db.deploy_mission.location_id
-    field.represent = S3Represent(lookup="gis_location", translate=True)
-    
     return attr
 
 settings.customise_deploy_assignment_controller = customise_deploy_assignment_controller
@@ -652,37 +715,16 @@ def customise_deploy_mission_controller(**attr):
     db = current.db
     s3db = current.s3db
     s3 = current.response.s3
-    MEMBER = T("Member")
-    from gluon.html import DIV
-    hr_comment =  \
-        DIV(_class="tooltip",
-            _title="%s|%s" % (MEMBER,
-                              current.messages.AUTOCOMPLETE_HELP))
 
     table = s3db.deploy_mission
     table.code.label = T("Appeal Code")
-    table.event_type_id.label = T("Disaster Type")
+    table.event_type_id.label = T("Incident Type")
     table.organisation_id.readable = table.organisation_id.writable = False
-
-    # Restrict Location to just Countries
-    from s3.s3fields import S3Represent
-    from s3.s3widgets import S3MultiSelectWidget
-    field = table.location_id
-    field.label = current.messages.COUNTRY
-    field.requires = s3db.gis_country_requires
-    field.widget = S3MultiSelectWidget(multiple=False)
-    field.represent = S3Represent(lookup="gis_location", translate=True)
-
-    rtable = s3db.deploy_response
-    rtable.human_resource_id.label = MEMBER
-    rtable.human_resource_id.comment = hr_comment
-
-    _customise_assignment_fields()
 
     # Report options
     report_fact = [(T("Number of Missions"), "count(id)"),
                    (T("Number of Countries"), "count(location_id)"),
-                   (T("Number of Disaster Types"), "count(event_type_id)"),
+                   (T("Number of Incident Types"), "count(event_type_id)"),
                    (T("Number of Responses"), "sum(response_count)"),
                    (T("Number of Deployments"), "sum(hrquantity)"),
                   ]
@@ -705,50 +747,23 @@ def customise_deploy_mission_controller(**attr):
                    report_options = report_options,
                    )
 
-    # CRUD Strings
-    s3.crud_strings["deploy_assignment"] = Storage(
-        label_create = T("New Deployment"),
-        title_display = T("Deployment Details"),
-        title_list = T("Deployments"),
-        title_update = T("Edit Deployment Details"),
-        title_upload = T("Import Deployments"),
-        label_list_button = T("List Deployments"),
-        label_delete_button = T("Delete Deployment"),
-        msg_record_created = T("Deployment added"),
-        msg_record_modified = T("Deployment Details updated"),
-        msg_record_deleted = T("Deployment deleted"),
-        msg_list_empty = T("No Deployments currently registered"))
-
-    # Custom prep
-    standard_prep = s3.prep
-    def custom_prep(r):
-        # Call standard prep
-        if callable(standard_prep):
-            result = standard_prep(r)
-        else:
-            result = True
-
-        if not r.component and r.method == "create":
-            # Org is always IFRC
-            otable = s3db.org_organisation
-            query = (otable.name == "International Federation of Red Cross and Red Crescent Societies")
-            organisation = db(query).select(otable.id,
-                                            limitby = (0, 1),
-                                            ).first()
-            if organisation:
-                r.table.organisation_id.default = organisation.id
-
-        return result
-    s3.prep = custom_prep
-
     return attr
 
 settings.customise_deploy_mission_controller = customise_deploy_mission_controller
 
 # -----------------------------------------------------------------------------
+#def customise_event_incident_resource(r, tablename):
+
+#    # Use Polygons for Location
+#    field = current.s3db.event_incident.location_id
+
+#settings.customise_event_incident_resource = customise_event_incident_resource
+
+# -----------------------------------------------------------------------------
 def poi_marker_fn(record):
     """
         Function to decide which Marker to use for PoI KML export
+        - unused currently
     """
 
     db = current.db
@@ -757,12 +772,7 @@ def poi_marker_fn(record):
                                                       limitby=(0, 1)
                                                       ).first()
     if ptype:
-        marker = ptype.name.lower().replace(" ", "_")\
-                                   .replace("_cccm", "_CCCM")\
-                                   .replace("_nfi_", "_NFI_")\
-                                   .replace("_ngo_", "_NGO_")\
-                                   .replace("_wash", "_WASH")
-        marker = "OCHA/%s_40px.png" % marker
+        marker = "ARC/%s.png" % ptype.name.replace(" ", "_")
     else:
         # Fallback
         marker = "marker_red.png"
@@ -772,21 +782,34 @@ def poi_marker_fn(record):
 # -----------------------------------------------------------------------------
 def customise_gis_poi_resource(r, tablename):
 
-    if r.representation == "kml":
-        # Custom Marker function
-        current.s3db.configure("gis_poi",
-                               marker_fn = poi_marker_fn,
-                               )
+    #if r.representation == "kml":
+    #    # Custom Marker function
+    #    current.s3db.configure("gis_poi",
+    #                           marker_fn = poi_marker_fn,
+    #                           )
+    if current.request.get_vars.get("wkt"):
+        # Hide Lat/Lon
+        script = """$('#gis_poi_location_id_lat1,#gis_poi_location_id_lat,#gis_poi_location_id_lon1,#gis_poi_location_id_lon').hide()"""
+        current.response.s3.jquery_ready.append(script)
+        # Type is Feeding Route
+        s3db = current.s3db
+        table = s3db.gis_poi_type
+        type = current.db(table.name == "Feeding Route").select(table.id,
+                                                                limitby=(0, 1)
+                                                                ).first()
+        if type:
+            field = s3db.gis_poi.poi_type_id
+            field.default = type.id
+            field.readable = field.writable = False
 
 settings.customise_gis_poi_resource = customise_gis_poi_resource
 
 # -----------------------------------------------------------------------------
 def customise_hrm_certificate_controller(**attr):
 
-    # Organisation needs to be an NS/Branch
+    # Organisation needs to be an ARC Branch
     ns_only(current.s3db.hrm_certificate.organisation_id,
             required = False,
-            branches = False,
             )
 
     return attr
@@ -800,10 +823,9 @@ def customise_hrm_course_controller(**attr):
     table = s3db.hrm_course
     tablename = "hrm_course"
 
-    # Organisation needs to be an NS/Branch
+    # Organisation needs to be an ARC Branch
     ns_only(table.organisation_id,
             required = False,
-            branches = False,
             )
 
     list_fields = ["code",
@@ -812,7 +834,7 @@ def customise_hrm_course_controller(**attr):
                    (T("Sectors"), "course_sector.sector_id"),
                    ]
 
-    from s3.s3forms import S3SQLCustomForm, S3SQLInlineLink
+    from s3 import S3SQLCustomForm, S3SQLInlineLink
     crud_form = S3SQLCustomForm("code",
                                 "name",
                                 "organisation_id",
@@ -839,7 +861,7 @@ def customise_hrm_credential_controller(**attr):
     field = table.job_title_id
     field.comment = None
     field.label = T("Sector")
-    from s3.s3validators import IS_ONE_OF
+    from s3 import IS_ONE_OF
     field.requires = IS_ONE_OF(current.db, "hrm_job_title.id",
                                field.represent,
                                filterby = "type",
@@ -857,10 +879,9 @@ settings.customise_hrm_credential_controller = customise_hrm_credential_controll
 # -----------------------------------------------------------------------------
 def customise_hrm_department_controller(**attr):
 
-    # Organisation needs to be an NS/Branch
+    # Organisation needs to be an ARC Branch
     ns_only(current.s3db.hrm_department.organisation_id,
             required = False,
-            branches = False,
             )
 
     return attr
@@ -876,14 +897,13 @@ def customise_hrm_human_resource_controller(**attr):
                           user_org_default_filter,
                           tablename = "hrm_human_resource")
 
-    s3db = current.s3db
-    s3db.org_organisation.root_organisation.label = T("National Society")
+    #s3db = current.s3db
+    #s3db.org_organisation.root_organisation.label = T("National Society")
 
-    # Organisation needs to be an NS/Branch
-    ns_only(s3db.hrm_human_resource.organisation_id,
-            required = True,
-            branches = True,
-            )
+    # Organisation needs to be an ARC Branch
+    #ns_only(s3db.hrm_human_resource.organisation_id,
+    #        required = True,
+    #        )
 
     s3 = current.response.s3
 
@@ -896,8 +916,8 @@ def customise_hrm_human_resource_controller(**attr):
             if not result:
                 return False
 
-        from s3.s3filter import S3OptionsFilter
-        filter_widgets = s3db.get_config("hrm_human_resource", "filter_widgets")
+        from s3 import S3OptionsFilter
+        filter_widgets = current.s3db.get_config("hrm_human_resource", "filter_widgets")
         filter_widgets.insert(-1, S3OptionsFilter("training.course_id$course_sector.sector_id",
                                                   label = T("Training Sector"),
                                                   hidden = True,
@@ -931,7 +951,7 @@ def customise_hrm_human_resource_controller(**attr):
             # Custom list fields for RDRT
             phone_label = settings.get_ui_label_mobile_phone()
             list_fields = ["person_id",
-                           "organisation_id$root_organisation",
+                           "organisation_id",
                            "type",
                            "job_title_id",
                            (T("Email"), "email.value"),
@@ -959,7 +979,7 @@ def customise_hrm_human_resource_controller(**attr):
         if isinstance(output, dict):
             if r.controller == "deploy" and \
                "title" in output:
-                output["title"] = T("RDRT Members")
+                output["title"] = T("Damage Assessment Team Members")
 
         return output
     s3.postp = custom_postp
@@ -978,10 +998,9 @@ def customise_hrm_job_title_controller(**attr):
         # Filter to just deployables
         s3.filter = (table.type == 4)
     else:
-        # Organisation needs to be an NS/Branch
+        # Organisation needs to be an ARC Branch
         ns_only(table.organisation_id,
                 required = False,
-                branches = False,
                 )
     
     # Custom prep
@@ -1023,10 +1042,9 @@ settings.customise_hrm_job_title_controller = customise_hrm_job_title_controller
 # -----------------------------------------------------------------------------
 def customise_hrm_programme_controller(**attr):
 
-    # Organisation needs to be an NS/Branch
+    # Organisation needs to be an ARC Branch
     ns_only(current.s3db.hrm_programme.organisation_id,
             required = False,
-            branches = False,
             )
 
     return attr
@@ -1060,43 +1078,49 @@ def customise_hrm_training_controller(**attr):
 settings.customise_hrm_training_controller = customise_hrm_training_controller
 
 # -----------------------------------------------------------------------------
-def customise_member_membership_controller(**attr):
+#def customise_member_membership_resource(r, resource):
 
-    # Organisation needs to be an NS/Branch
-    ns_only(current.s3db.member_membership.organisation_id,
-            required = True,
-            branches = True,
-            )
+#    # Organisation needs to be an ARC Branch
+#    ns_only(current.s3db.member_membership.organisation_id,
+#            required = True,
+#            )
 
-    return attr
-
-settings.customise_member_membership_controller = customise_member_membership_controller
+#settings.customise_member_membership_resource = customise_member_membership_resource
 
 # -----------------------------------------------------------------------------
-def customise_member_membership_type_controller(**attr):
+#def customise_member_membership_type_resource(r, tablename):
 
-    # Organisation needs to be an NS/Branch
-    ns_only(current.s3db.member_membership_type.organisation_id,
-            required = False,
-            branches = False,
-            )
+#    # Organisation needs to be an ARC Branch
+#    ns_only(current.s3db.member_membership_type.organisation_id,
+#            required = False,
+#            )
 
-    return attr
-
-settings.customise_member_membership_type_controller = customise_member_membership_type_controller
+#settings.customise_member_membership_type_resource = customise_member_membership_type_resource
 
 # -----------------------------------------------------------------------------
-def customise_org_office_controller(**attr):
+def customise_org_facility_resource(r, tablename):
 
-    # Organisation needs to be an NS/Branch
-    ns_only(current.s3db.org_office.organisation_id,
-            required = True,
-            branches = True,
-            )
+    # Organisation needs to be an ARC Branch
+    #ns_only(current.s3db.org_office.organisation_id,
+    #        required = True,
+    #        )
 
-    return attr
+    if r.representation == "plain":
+        # Shorter version fits popup better
+        current.s3db.gis_location.addr_street.label = T("Address")
 
-settings.customise_org_office_controller = customise_org_office_controller
+settings.customise_org_facility_resource = customise_org_facility_resource
+
+# -----------------------------------------------------------------------------
+def customise_org_office_resource(r, tablename):
+
+    # Organisation needs to be an ARC Branch
+    #ns_only(current.s3db.org_office.organisation_id,
+    #        required = True,
+    #        )
+    pass
+
+#settings.customise_org_office_resource = customise_org_office_resource
 
 # -----------------------------------------------------------------------------
 def customise_org_organisation_controller(**attr):
@@ -1113,13 +1137,22 @@ def customise_org_organisation_controller(**attr):
             result = True
 
         if not r.component or r.component_name == "branch":
+            field = r.table.region_id
+            field.label = T("State")
+            field.comment = None # Don't Add
+
             if r.interactive or r.representation == "aadata":
                 s3db = current.s3db
+                #s3db.pr_contact.id.represent = s3db.pr_contact_represent
                 list_fields = ["name",
                                "acronym",
                                "organisation_organisation_type.organisation_type_id",
                                #"country",
-                               "website"
+                               "website",
+                               #(T("Facebook"), "facebook.id"),
+                               #(T("Twitter"), "twitter.id"),
+                               (T("Facebook"), "facebook.value"),
+                               (T("Twitter"), "twitter.value"),
                                ]
                 
                 type_filter = r.get_vars.get("organisation_type.name",
@@ -1138,7 +1171,7 @@ def customise_org_organisation_controller(**attr):
 
                 if r.interactive:
                     r.table.country.label = T("Country")
-                    from s3.s3forms import S3SQLCustomForm, S3SQLInlineLink
+                    from s3 import S3SQLCustomForm, S3SQLInlineLink, S3SQLInlineComponent
                     crud_form = S3SQLCustomForm(
                         "name",
                         "acronym",
@@ -1152,6 +1185,26 @@ def customise_org_organisation_controller(**attr):
                         "region_id",
                         "phone",
                         "website",
+                        S3SQLInlineComponent(
+                            "contact",
+                            name = "facebook",
+                            label = T("Facebook"),
+                            multiple = False,
+                            fields = [("", "value")],
+                            filterby = dict(field = "contact_method",
+                                            options = "FACEBOOK"
+                                            )
+                        ),
+                        S3SQLInlineComponent(
+                            "contact",
+                            name = "twitter",
+                            label = T("Twitter"),
+                            multiple = False,
+                            fields = [("", "value")],
+                            filterby = dict(field = "contact_method",
+                                            options = "TWITTER"
+                                            )
+                        ),
                         "logo",
                         "comments",
                         )
@@ -1169,10 +1222,9 @@ settings.customise_org_organisation_controller = customise_org_organisation_cont
 # -----------------------------------------------------------------------------
 def customise_pr_group_controller(**attr):
 
-    # Organisation needs to be an NS/Branch
+    # Organisation needs to be an ARC Branch
     ns_only(current.s3db.org_organisation_team.organisation_id,
             required = False,
-            branches = True,
             )
 
     return attr
@@ -1262,24 +1314,22 @@ def customise_pr_person_controller(**attr):
             # Organisation needs to be an NS
             #ns_only(atable.organisation_id,
             #        required = True,
-            #        branches = False,
             #        )
             field = atable.supervisor_id
             field.readable = field.writable = False
             field = atable.job_title_id
             field.comment = None
             field.label = T("Sector") # RDRT-specific
-            from s3.s3validators import IS_ONE_OF
+            from s3 import IS_ONE_OF
             field.requires = IS_ONE_OF(current.db, "hrm_job_title.id",
                                        field.represent,
                                        filterby = "type",
                                        filter_opts = (4,),
                                        )
         elif r.method =="record" or component_name == "human_resource":
-            # Organisation needs to be an NS/Branch
+            # Organisation needs to be an ARC Branch
             ns_only(s3db.hrm_human_resource.organisation_id,
                     required = True,
-                    branches = True,
                     )
 
         return True
@@ -1292,31 +1342,45 @@ settings.customise_pr_person_controller = customise_pr_person_controller
 # -----------------------------------------------------------------------------
 # Projects
 # Uncomment this to use settings suitable for a global/regional organisation (e.g. DRR)
-settings.project.mode_3w = True
-# Uncomment this to use DRR (Disaster Risk Reduction) extensions
-settings.project.mode_drr = True
+#settings.project.mode_3w = True
+# Uncomment this to use settings suitable for detailed Task management
+settings.project.mode_task = True
 # Uncomment this to use Codes for projects
 settings.project.codes = True
 # Uncomment this to call project locations 'Communities'
-settings.project.community = True
+#settings.project.community = True
 # Uncomment this to enable Hazards in 3W projects
-settings.project.hazards = True
+#settings.project.hazards = True
 # Uncomment this to use multiple Budgets per project
-settings.project.multiple_budgets = True
+#settings.project.multiple_budgets = True
 # Uncomment this to use multiple Organisations per project
 settings.project.multiple_organisations = True
 # Uncomment this to enable Themes in 3W projects
-settings.project.themes = True
+#settings.project.themes = True
 # Uncomment this to customise
 # Links to Filtered Components for Donors & Partners
 settings.project.organisation_roles = {
-    1: T("Host National Society"),
+    1: T("Lead Organization"),
     2: T("Partner"),
     3: T("Donor"),
     #4: T("Customer"), # T("Beneficiary")?
-    #5: T("Supplier"),
-    9: T("Partner National Society"),
+    5: T("Supplier"),
+    #9: T("Partner National Society"),
 }
+settings.project.task_status_opts = {1: T("Draft"),
+                                     2: T("New"),
+                                     3: T("Assigned"),
+                                     #4: T("Feedback"),
+                                     4: T("Accepted"),
+                                     5: T("Blocked"),
+                                     6: T("On Hold"),
+                                     7: T("Cancelled"),
+                                     8: T("Duplicate"),
+                                     9: T("Ready"),
+                                    10: T("Verified"),
+                                    11: T("Reopened"),
+                                    12: T("Completed"),
+                                    }
 
 # -----------------------------------------------------------------------------
 def customise_project_project_controller(**attr):
@@ -1355,12 +1419,11 @@ def customise_project_project_controller(**attr):
     f = table.organisation_id
     ns_only(f,
             required = True,
-            branches = False,
             )
-    f.label = T("Host National Society")
+    f.label = T("Lead Organization")
 
     # Custom Crud Form
-    from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentCheckbox
+    from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentCheckbox
     crud_form = S3SQLCustomForm(
         "organisation_id",
         "name",
@@ -1417,7 +1480,7 @@ S3OptionsFilter({
  'showEmptyField':false
 })'''
         ),
-        "drr.hfa",
+        #"drr.hfa",
         "objectives",
         "human_resource_id",
         # Disabled since we need organisation_id filtering to either organisation_type_id == RC or NOT
@@ -1546,7 +1609,7 @@ def customise_project_beneficiary_resource(r, tablename):
                               activity_type_id = activity_type_id,
                               )
 
-        from s3.s3forms import S3SQLCustomForm, S3SQLInlineLink
+        from s3 import S3SQLCustomForm, S3SQLInlineLink
         crud_form = S3SQLCustomForm(#"project_id",
                                     "project_location_id",
                                     S3SQLInlineLink("activity_type",
@@ -1570,7 +1633,7 @@ def customise_project_beneficiary_resource(r, tablename):
 
     elif not r.component:
         # Report
-        from s3.s3filter import S3OptionsFilter
+        from s3 import S3OptionsFilter
         resource = r.resource
         filter_widgets = resource.get_config("filter_widgets")
         filter_widgets.insert(1,
@@ -1592,7 +1655,7 @@ settings.customise_project_beneficiary_resource = customise_project_beneficiary_
 # -----------------------------------------------------------------------------
 def customise_project_location_resource(r, tablename):
 
-    from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponentCheckbox
+    from s3 import S3SQLCustomForm, S3SQLInlineComponentCheckbox
     crud_form = S3SQLCustomForm(
         "project_id",
         "location_id",
@@ -1638,26 +1701,26 @@ settings.req.use_commit = False
 settings.req.ask_transport = True
 
 # -----------------------------------------------------------------------------
-def customise_req_commit_controller(**attr):
+def customise_req_commit_resource(r, tablename):
 
     # Request is mandatory
     field = current.s3db.req_commit.req_id
     field.requires = field.requires.other
 
-    return attr
-
-settings.customise_req_commit_controller = customise_req_commit_controller
+settings.customise_req_commit_resource = customise_req_commit_resource
 
 # -----------------------------------------------------------------------------
-def customise_req_req_controller(**attr):
+def customise_survey_complete_resource(r, tablename):
 
-    # Request is mandatory
-    field = current.s3db.req_commit.req_id
-    field.requires = field.requires.other
+    if r.representation == "iframe":
+        # Use a custom Theme more suited to Mobile
+        # Doesn't work with Survey
+        #settings.base.theme = "bootstrap"
+        # Ensure the form is visible
+        script = """$('#popup form').show()"""
+        current.response.s3.jquery_ready.append(script)
 
-    return attr
-
-settings.customise_req_req_controller = customise_req_req_controller
+settings.customise_survey_complete_resource = customise_survey_complete_resource
 
 # =============================================================================
 # Template Modules
@@ -1668,167 +1731,186 @@ settings.modules = OrderedDict([
             name_nice = "RMS",
             restricted = False, # Use ACLs to control access to this module
             access = None,      # All Users (inc Anonymous) can see this module in the default menu & access the controller
-            module_type = None  # This item is not shown in the menu
+            #module_type = None  # This item is not shown in the menu
         )),
     ("admin", Storage(
             name_nice = T("Administration"),
             #description = "Site Administration",
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
-            module_type = None  # This item is handled separately for the menu
+            #module_type = None  # This item is handled separately for the menu
         )),
     ("appadmin", Storage(
             name_nice = T("Administration"),
             #description = "Site Administration",
             restricted = True,
-            module_type = None  # No Menu
+            #module_type = None  # No Menu
         )),
     ("errors", Storage(
             name_nice = T("Ticket Viewer"),
             #description = "Needed for Breadcrumbs",
             restricted = False,
-            module_type = None  # No Menu
+            #module_type = None  # No Menu
         )),
     ("sync", Storage(
             name_nice = T("Synchronization"),
             #description = "Synchronization",
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
-            module_type = None  # This item is handled separately for the menu
+            #module_type = None  # This item is handled separately for the menu
         )),
     ("translate", Storage(
             name_nice = T("Translation Functionality"),
             #description = "Selective translation of strings based on module.",
-            module_type = None,
+            #module_type = None,
         )),
     # Uncomment to enable internal support requests
     ("support", Storage(
             name_nice = T("Support"),
             #description = "Support Requests",
             restricted = True,
-            module_type = None  # This item is handled separately for the menu
+            #module_type = None  # This item is handled separately for the menu
         )),
     ("gis", Storage(
             name_nice = T("Map"),
             #description = "Situation Awareness & Geospatial Analysis",
             restricted = True,
-            module_type = 6,     # 6th item in the menu
+            #module_type = 6,     # 6th item in the menu
         )),
     ("pr", Storage(
             name_nice = T("Person Registry"),
             #description = "Central point to record details on People",
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu (access to controller is possible to all still)
-            module_type = 10
+            #module_type = 10
         )),
     ("org", Storage(
             name_nice = T("Organizations"),
             #description = 'Lists "who is doing what & where". Allows relief agencies to coordinate their activities',
             restricted = True,
-            module_type = 1
+            #module_type = 1
         )),
     # All modules below here should be possible to disable safely
     ("hrm", Storage(
             name_nice = T("Staff"),
             #description = "Human Resources Management",
             restricted = True,
-            module_type = 2,
+            #module_type = 2,
         )),
     ("vol", Storage(
             name_nice = T("Volunteers"),
             #description = "Human Resources Management",
             restricted = True,
-            module_type = 2,
+            #module_type = 2,
         )),
+    ("cms", Storage(
+      name_nice = T("Content Management"),
+      #description = "Content Management System",
+      restricted = True,
+      #module_type = 10,
+    )),
     ("doc", Storage(
             name_nice = T("Documents"),
             #description = "A library of digital resources, such as photos, documents and reports",
             restricted = True,
-            module_type = 10,
+            #module_type = 10,
         )),
     ("msg", Storage(
             name_nice = T("Messaging"),
             #description = "Sends & Receives Alerts via Email & SMS",
             restricted = True,
             # The user-visible functionality of this module isn't normally required. Rather it's main purpose is to be accessed from other modules.
-            module_type = None,
+            #module_type = None,
         )),
     ("supply", Storage(
             name_nice = T("Supply Chain Management"),
             #description = "Used within Inventory Management, Request Management and Asset Management",
             restricted = True,
-            module_type = None, # Not displayed
+            #module_type = None, # Not displayed
         )),
     ("inv", Storage(
             name_nice = T("Warehouses"),
             #description = "Receiving and Sending Items",
             restricted = True,
-            module_type = 4
+            #module_type = 4
         )),
     ("asset", Storage(
             name_nice = T("Assets"),
             #description = "Recording and Assigning Assets",
             restricted = True,
-            module_type = 5,
+            #module_type = 5,
         )),
+    # Vehicle depends on Assets
+    ("vehicle", Storage(
+        name_nice = T("Vehicles"),
+        #description = "Manage Vehicles",
+        restricted = True,
+        #module_type = 10,
+    )),
     ("req", Storage(
             name_nice = T("Requests"),
             #description = "Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested.",
             restricted = True,
-            module_type = 10,
+            #module_type = 10,
         )),
     ("project", Storage(
             name_nice = T("Projects"),
             #description = "Tracking of Projects, Activities and Tasks",
             restricted = True,
-            module_type = 2
+            #module_type = 2
         )),
     ("cr", Storage(
         name_nice = T("Shelters"),
         #description = "Tracks the location, capacity and breakdown of victims in Shelters",
         restricted = True,
-        module_type = 10
+        #module_type = 10
     )),
     ("survey", Storage(
             name_nice = T("Assessments"),
             #description = "Create, enter, and manage surveys.",
             restricted = True,
-            module_type = 5,
+            #module_type = 5,
         )),
     ("event", Storage(
-            name_nice = T("Events"),
+            name_nice = T("Incidents"),
             #description = "Events",
+            restricted = True,
+            #module_type = 10
+        )),
+    ("budget", Storage(
+            name_nice = T("Budgeting"),
+            #description = "Allows a Budget to be drawn up",
             restricted = True,
             module_type = 10
         )),
-    #("irs", Storage(
-    #        name_nice = T("Incidents"),
-    #        #description = "Incident Reporting System",
-    #        restricted = True,
-    #        module_type = 10
-    #    )),
     #("member", Storage(
     #       name_nice = T("Members"),
     #       #description = "Membership Management System",
     #       restricted = True,
-    #       module_type = 10,
+    #       #module_type = 10,
     #   )),
     ("deploy", Storage(
-           name_nice = T("Regional Disaster Response Teams"),
+           name_nice = T("Deployments"),
            #description = "Alerting and Deployment of Disaster Response Teams",
            restricted = True,
-           module_type = 10,
+           #module_type = 10,
        )),
+    ("sit", Storage(
+            name_nice = T("Situation Reports"),
+            #description = "Manages statistics",
+            restricted = True,
+            #module_type = None,
+        )),
     ("stats", Storage(
             name_nice = T("Statistics"),
             #description = "Manages statistics",
             restricted = True,
-            module_type = None,
+            #module_type = None,
         )),
-    #("vulnerability", Storage(
-    #        name_nice = T("Vulnerability"),
-    #        #description = "Manages vulnerability indicators",
-    #        restricted = True,
-    #        module_type = 10,
-    #    )),
+    ("vulnerability", Storage(
+            name_nice = T("Vulnerability"),
+            #description = "Manages vulnerability indicators",
+            restricted = True,
+            #module_type = 10,
+        )),
 ])

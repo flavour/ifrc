@@ -31,6 +31,11 @@
     @group Helper Classes: S3RecordMerger
 """
 
+__all__ = ("S3AxisFilter",
+           "S3Resource",
+           "S3ResourceFilter",
+           )
+
 import datetime
 import sys
 
@@ -1490,16 +1495,14 @@ class S3Resource(object):
             @return: a Row (if component is None) or a list of rows
         """
 
-        NOT_FOUND = KeyError("Record not found")
-
         if not key:
-            raise NOT_FOUND
+            raise KeyError("Record not found")
         if self._rows is None:
             self.load()
         try:
             master = self[key]
         except IndexError:
-            raise NOT_FOUND
+            raise KeyError("Record not found")
 
         if not component and not link:
             return master
@@ -3464,8 +3467,9 @@ class S3Resource(object):
         if not row:
             form = Storage(vars=Storage({lkey:_lkey, rkey:_rkey}))
             link_id = ltable.insert(**form.vars)
+            form.vars[ltable._id.name] = link_id
+            s3db.update_super(ltable, form)
             if link_id and onaccept:
-                form.vars[ltable._id.name] = link_id
                 callback(onaccept, form)
         else:
             link_id = row[ltable._id.name]

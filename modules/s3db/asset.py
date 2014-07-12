@@ -27,13 +27,13 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3AssetModel",
+__all__ = ("S3AssetModel",
            "S3AssetTeamModel",
            #"asset_rheader",
            "asset_types",
            "asset_log_status",
            "asset_controller",
-           ]
+           )
 
 try:
     import json # try stdlib (Python 2.6)
@@ -89,11 +89,11 @@ class S3AssetModel(S3Model):
         Asset Management
     """
 
-    names = ["asset_asset",
+    names = ("asset_asset",
              "asset_item",
              "asset_log",
              "asset_asset_id",
-             ]
+             )
 
     def model(self):
 
@@ -132,11 +132,11 @@ class S3AssetModel(S3Model):
                            ASSET_TYPE_OTHER       : T("Other"),
                            }
 
-        asset_condition_opts = {1:T("Good Condition"),
-                                2:T("Minor Damage"),
-                                3:T("Major Damage"),
-                                4:T("Un-Repairable"),
-                                5:T("Needs Maintenance"),
+        asset_condition_opts = {1: T("Good Condition"),
+                                2: T("Minor Damage"),
+                                3: T("Major Damage"),
+                                4: T("Un-Repairable"),
+                                5: T("Needs Maintenance"),
                                 }
 
         ctable = self.supply_item_category
@@ -156,13 +156,13 @@ class S3AssetModel(S3Model):
                            ),
                      # @ToDo: We could set this automatically based on Item Category
                      Field("type", "integer",
-                           label = T("Type"),
-                           readable = vehicle,
-                           writable = vehicle,
-                           requires = IS_IN_SET(asset_type_opts),
                            default = ASSET_TYPE_OTHER,
+                           label = T("Type"),
                            represent = lambda opt: \
                                        asset_type_opts.get(opt, UNKNOWN_OPT),
+                           requires = IS_IN_SET(asset_type_opts),
+                           readable = vehicle,
+                           writable = vehicle,
                            ),
                      item_id(represent = supply_item_represent,
                              requires = IS_ONE_OF(asset_items_set,
@@ -176,10 +176,10 @@ class S3AssetModel(S3Model):
                      Field("kit", "boolean",
                            default = False,
                            label = T("Kit?"),
-                           # Enable in template if-required
-                           readable = False,
                            represent = lambda opt: \
                                        (opt and [T("Yes")] or [NONE])[0],
+                           # Enable in template if-required
+                           readable = False,
                            writable = False,
                            ),
                      organisation_id(requires=self.org_organisation_requires(
@@ -200,12 +200,12 @@ S3OptionsFilter({
                      # This is a component, so needs to be a super_link
                      # - can't override field name, ondelete or requires
                      super_link("site_id", "org_site",
-                                label = org_site_label,
                                 default = auth.user.site_id if auth.is_logged_in() else None,
+                                empty = False,
+                                label = org_site_label,
+                                ondelete = "RESTRICT",
                                 readable = True,
                                 writable = True,
-                                empty = False,
-                                ondelete = "RESTRICT",
                                 represent = self.org_site_represent,
                                 # Comment these to use a Dropdown & not an Autocomplete
                                 #widget = S3SiteAutocompleteWidget(),
@@ -264,15 +264,16 @@ S3OptionsFilter({
             msg_record_deleted = T("Asset deleted"),
             msg_list_empty = T("No Assets currently registered"))
 
+        asset_represent = asset_AssetRepresent(show_link=True)
+
         # Reusable Field
         asset_id = S3ReusableField("asset_id", "reference %s" % tablename,
                                    label = T("Asset"),
                                    ondelete = "CASCADE",
-                                   # @ToDo: migrate to S3Represent
-                                   represent = self.asset_represent,
+                                   represent = asset_represent,
                                    requires = IS_EMPTY_OR(
                                                 IS_ONE_OF(db, "asset_asset.id",
-                                                          self.asset_represent,
+                                                          asset_represent,
                                                           sort=True)),
                                    sortby = "number",
                                    )
@@ -372,6 +373,7 @@ S3OptionsFilter({
                   # Open Tabs after creation
                   create_next = URL(c="asset", f="asset",
                                     args=["[id]"]),
+                  deduplicate = self.asset_duplicate,
                   filter_widgets = filter_widgets,
                   list_fields = list_fields,
                   mark_required = ["organisation_id"],
@@ -473,9 +475,9 @@ S3OptionsFilter({
                      asset_id(),
                      Field("status", "integer",
                            label = T("Status"),
-                           requires = IS_IN_SET(asset_log_status_opts),
                            represent = lambda opt: \
-                                       asset_log_status_opts.get(opt, UNKNOWN_OPT)
+                                       asset_log_status_opts.get(opt, UNKNOWN_OPT),
+                           requires = IS_IN_SET(asset_log_status_opts),
                            ),
                      s3_datetime("datetime",
                                  default = "now",
@@ -584,7 +586,7 @@ S3OptionsFilter({
         # Pass names back to global scope (s3.*)
         #
         return dict(asset_asset_id = asset_id,
-                    asset_represent = self.asset_represent,
+                    asset_represent = asset_represent,
                     )
 
     # -------------------------------------------------------------------------
@@ -601,40 +603,33 @@ S3OptionsFilter({
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def asset_represent(id, row=None):
+    def asset_duplicate(item):
         """
-            Represent an Asset
-
-            @ToDo: migrate to S3Represent
+            Deduplication of Assets
         """
 
-        if row:
-            id = row.id
-        elif not id:
-            return current.messages["NONE"]
+        if item.tablename != "asset_asset":
+            return
+        table = item.table
 
-        db = current.db
-        table = db.asset_asset
-        itable = db.supply_item
-        btable = db.supply_brand
-        query = (table.id == id) & \
-                (itable.id == table.item_id)
-        r = db(query).select(table.number,
-                             itable.name,
-                             btable.name,
-                             left = btable.on(itable.brand_id == btable.id),
-                             limitby=(0, 1)).first()
-        try:
-            represent = "%s (%s" % (r.asset_asset.number,
-                                    r.supply_item.name)
-            if r.supply_brand.name:
-                represent = "%s, %s)" % (represent,
-                                         r.supply_brand.name)
-            else:
-                represent = "%s)" % represent
-        except:
-            represent = current.messages.UNKNOWN_OPT
-        return represent
+        data = item.data
+        number = data.get("number", None)
+        query = (table.number == number)
+
+        organisation_id = data.get("organisation_id", None)
+        if organisation_id:
+            query &= (table.organisation_id == organisation_id)
+
+        site_id = data.get("site_id", None)
+        if site_id:
+            query &= (table.site_id == site_id)
+
+        _duplicate = current.db(query).select(table.id,
+                                              limitby=(0, 1)).first()
+        if _duplicate:
+            item.id = _duplicate.id
+            item.data.id = _duplicate.id
+            item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -820,8 +815,7 @@ class S3AssetTeamModel(S3Model):
         Optionally link Assets to Teams
     """
 
-    names = ["asset_group",
-             ]
+    names = ("asset_group",)
 
     def model(self):
 
@@ -1003,7 +997,9 @@ def asset_rheader(r):
             if record.type == ASSET_TYPE_VEHICLE:
                 tabs = [(T("Asset Details"), None, {"native": True}),
                         (T("Vehicle Details"), "vehicle"),
-                        (T("GPS Data"), "gps")]
+                        (T("GPS Data"), "gps"),
+                        (T("Check-In"), "check-in"),
+                        ]
             else:
                 tabs = [(T("Edit Details"), None)]
             #elif record.type == s3.asset.ASSET_TYPE_RADIO:
@@ -1116,7 +1112,14 @@ def asset_rheader(r):
 def asset_controller():
     """ RESTful CRUD controller """
 
+    s3db = current.s3db
     s3 = current.response.s3
+
+    s3db.set_method("asset", "asset", method="check-in",
+                    action = S3CheckInMethod())
+
+    s3db.set_method("asset", "asset", method="check-out",
+                    action = S3CheckOutMethod())
 
     # Pre-process
     def prep(r):
@@ -1139,7 +1142,6 @@ def asset_controller():
         current.response.s3.asset_import = True
         return
         # @ToDo: get this working
-        s3db = current.s3db
         ctable = s3db.pr_contact
         ptable = s3db.pr_person
 
@@ -1190,5 +1192,84 @@ def asset_controller():
     output = current.rest_controller("asset", "asset",
                                      rheader = asset_rheader)
     return output
+
+# =============================================================================
+class asset_AssetRepresent(S3Represent):
+    """ Representation of Assets """
+
+    def __init__(self,
+                 fields = ("number",), # unused
+                 show_link = False,
+                 translate = False,
+                 multiple = False,
+                 ):
+
+        # Need a custom lookup
+        self.lookup_rows = self.custom_lookup_rows
+
+        super(asset_AssetRepresent,
+              self).__init__(lookup="asset_asset",
+                             fields=fields,
+                             show_link=show_link,
+                             translate=translate,
+                             multiple=multiple)
+
+    # -------------------------------------------------------------------------
+    def custom_lookup_rows(self, key, values, fields=[]):
+        """
+            Custom lookup method for organisation rows, does a
+            left join with the parent organisation. Parameters
+            key and fields are not used, but are kept for API
+            compatibility reasons.
+
+            @param values: the organisation IDs
+        """
+
+        db = current.db
+        s3db = current.s3db
+        table = s3db.asset_asset
+        itable = db.supply_item
+        btable = db.supply_brand
+
+        qty = len(values)
+        if qty == 1:
+            query = (table.id == values[0])
+            limitby = (0, 1)
+        else:
+            query = (table.id.belongs(values))
+            limitby = (0, qty)
+
+        query &= (itable.id == table.item_id)
+
+        rows = db(query).select(table.id,
+                                table.number,
+                                itable.name,
+                                btable.name,
+                                left=btable.on(itable.brand_id == btable.id),
+                                limitby=limitby)
+        self.queries += 1
+        return rows
+
+    # -------------------------------------------------------------------------
+    def represent_row(self, row):
+        """
+            Represent a single Row
+
+            @param row: the asset_asset Row
+        """
+
+        # Custom Row (with the item & brand left-joined)
+        number = row["asset_asset.number"]
+        item = row["supply_item.name"]
+        brand = row.get("supply_brand.name", None)
+
+        if not number:
+            return self.default
+        represent = "%s (%s" % (number, item)
+        if brand:
+            represent = "%s, %s)" % (represent, brand)
+        else:
+            represent = "%s)" % represent
+        return s3_unicode(represent)
 
 # END =========================================================================
