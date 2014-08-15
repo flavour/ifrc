@@ -2839,7 +2839,9 @@ class S3Resource(object):
                         
                     item = {"@value": value, "$": represent}
                     if h:
-                        item["@parent"] = str(h.parent(row[h.pkey]))
+                        parent = h.parent(row[h.pkey])
+                        if parent:
+                            item["@parent"] = str(parent)
                     result = [item]
                 else:
                     result = []
@@ -3456,21 +3458,22 @@ class S3Resource(object):
 
         ltable = self.table
         ltn = ltable._tablename
-        s3db = current.s3db
-        onaccept = s3db.get_config(ltn, "create_onaccept",
-                   s3db.get_config(ltn, "onaccept", None))
 
         # Create the link if it does not already exist
         query = ((ltable[lkey] == _lkey) &
                  (ltable[rkey] == _rkey))
         row = current.db(query).select(ltable._id, limitby=(0, 1)).first()
         if not row:
-            form = Storage(vars=Storage({lkey:_lkey, rkey:_rkey}))
-            link_id = ltable.insert(**form.vars)
-            form.vars[ltable._id.name] = link_id
-            s3db.update_super(ltable, form)
+            s3db = current.s3db
+            onaccept = s3db.get_config(ltn, "create_onaccept")
+            if onaccept is None:
+                onaccept = s3db.get_config(ltn, "onaccept")
+            data = {lkey:_lkey, rkey:_rkey}
+            link_id = ltable.insert(**data)
+            data[ltable._id.name] = link_id
+            s3db.update_super(ltable, data)
             if link_id and onaccept:
-                callback(onaccept, form)
+                callback(onaccept, Storage(vars=Storage(data)))
         else:
             link_id = row[ltable._id.name]
         return link_id
@@ -4117,9 +4120,11 @@ class S3ResourceFilter(object):
                 resource.vars = Storage(vars)
 
                 # BBox
-                bbox = self.parse_bbox_query(resource, vars)
+                bbox, joins = self.parse_bbox_query(resource, vars)
                 if bbox is not None:
                     self.queries.append(bbox)
+                    if joins:
+                        self.ljoins.update(joins)
 
                 # Filters
                 add_filter = self.add_filter
@@ -4326,82 +4331,143 @@ class S3ResourceFilter(object):
 
         POLYGON = "POLYGON((%s %s, %s %s, %s %s, %s %s, %s %s))"
 
-        bbox_query = None
+        query = None
+        joins = {}
+        
         if get_vars:
-            for k, v in get_vars.items():
-                if k[:4] == "bbox":
-                    table = resource.table
-                    tablename = resource.tablename
-                    fields = table.fields
+            
+            table = resource.table
+            tablename = resource.tablename
+            fields = table.fields
 
-                    fname = None
-                    sname = None
+            introspect = tablename not in tablenames
+            for k, v in get_vars.items():
+
+                if k[:4] == "bbox":
+
+                    if type(v) is list:
+                        v = v[-1]
+                    try:
+                        minLon, minLat, maxLon, maxLat = v.split(",")
+                    except ValueError:
+                        # Badly-formed bbox - ignore
+                        continue
+
+                    # Identify the location reference
+                    field = None
+                    rfield = None
+                    alias = False
+                    
                     if k.find(".") != -1:
+                        
+                        # Field specified in query
                         fname = k.split(".")[1]
                         if fname not in fields:
                             # Field not found - ignore
                             continue
-                    elif tablename not in tablenames:
-                        for f in fields:
-                            if not fname and str(table[f].type) == "reference gis_location":
-                                fname = f
-                                break
-                            if not sname and str(table[f].type) == "reference org_site":
-                                sname = f
-                    try:
-                        minLon, minLat, maxLon, maxLat = v.split(",")
-                    except:
-                        # Badly-formed bbox - ignore
-                        continue
-                    else:
-                        bbox_filter = None
-                        if tablename in ("gis_location", "gis_feature_query"):
-                            gtable = table
-                        elif tablename == "gis_layer_shapefile":
-                            gtable = resource.components.items()[0][1].table
-                        else:
-                            gtable = current.s3db.gis_location
-                            if current.deployment_settings.get_gis_spatialdb():
-                                # Use the Spatial Database
-                                minLon = float(minLon)
-                                maxLon = float(maxLon)
-                                minLat = float(minLat)
-                                maxLat = float(maxLat)
-                                bbox = POLYGON % (minLon, minLat,
-                                                  minLon, maxLat,
-                                                  maxLon, maxLat,
-                                                  maxLon, minLat,
-                                                  minLon, minLat)
-                                try:
-                                    # Spatial DAL & Database
-                                    bbox_filter = gtable.the_geom \
-                                                        .st_intersects(bbox)
-                                except:
-                                    # Old DAL or non-spatial database
-                                    pass
-                        if not bbox_filter:
-                            bbox_filter = (gtable.lon > float(minLon)) & \
-                                          (gtable.lon < float(maxLon)) & \
-                                          (gtable.lat > float(minLat)) & \
-                                          (gtable.lat < float(maxLat))
-                        if fname is not None:
-                            # Need a join
-                            join = (gtable.id == table[fname])
-                            bbox = (join & bbox_filter)
-                        elif sname is not None:
-                            # Need a double join
+                        field = table[fname]
+                        if query is not None or "bbox" in get_vars:
+                            # Need alias
+                            alias = True
+                            
+                    elif introspect:
+                        
+                        # Location context?
+                        context = resource.get_config("context")
+                        if context and "location" in context:
+                            try:
+                                rfield = resource.resolve_selector("(location)$lat")
+                            except (SyntaxError, AttributeError):
+                                rfield = None
+                            else:
+                                if not rfield.field or rfield.tname != "gis_location":
+                                    # Invalid location context
+                                    rfield = None
+                                    
+                        # Fall back to location_id (or site_id as last resort)
+                        if rfield is None:
+                            fname = None
+                            for f in fields:
+                                ftype = str(table[f].type)
+                                if ftype[:22] == "reference gis_location":
+                                    fname = f
+                                    break
+                                elif not fname and \
+                                     ftype[:18] == "reference org_site":
+                                    fname = f
+                            field = table[fname] if fname else None
+                            
+                        if not rfield and not field:
+                            # No location reference could be identified => skip
+                            continue
+                                
+                    # Construct the join to gis_location
+                    gtable = current.s3db.gis_location
+                    if rfield:
+                        joins.update(rfield.left)
+                        
+                    elif field:
+                        fname = field.name
+                        gtable = current.s3db.gis_location
+                        if alias:
+                            gtable = gtable.with_alias("gis_%s_location" % fname)
+                        tname = str(gtable)
+                        ftype = str(field.type)
+                        if ftype == "reference gis_location":
+                            joins[tname] = [gtable.on(gtable.id == field)]
+                        elif ftype == "reference org_site":
                             stable = current.s3db.org_site
-                            join = (stable.site_id == table[sname]) & \
-                                   (gtable.id == stable.location_id)
-                            bbox = (join & bbox_filter)
-                        else:
-                            bbox = bbox_filter
-                    if bbox_query is None:
-                        bbox_query = bbox
+                            if alias:
+                                stable = stable.with_alias("org_%s_site" % fname)
+                            joins[tname] = [stable.on(stable.site_id == field),
+                                            gtable.on(gtable.id == stable.location_id)]
+                        elif introspect:
+                            # => not a location or site reference
+                            continue
+                        
+                    elif tablename in ("gis_location", "gis_feature_query"):
+                        gtable = table
+                        
+                    elif tablename == "gis_layer_shapefile":
+                        # @todo: this needs a join too, no?
+                        gtable = resource.components.items()[0][1].table
+
+                    # Construct the bbox filter
+                    bbox_filter = None
+                    if current.deployment_settings.get_gis_spatialdb():
+                        # Use the Spatial Database
+                        minLon = float(minLon)
+                        maxLon = float(maxLon)
+                        minLat = float(minLat)
+                        maxLat = float(maxLat)
+                        bbox = POLYGON % (minLon, minLat,
+                                            minLon, maxLat,
+                                            maxLon, maxLat,
+                                            maxLon, minLat,
+                                            minLon, minLat)
+                        try:
+                            # Spatial DAL & Database
+                            bbox_filter = gtable.the_geom \
+                                                .st_intersects(bbox)
+                        except:
+                            # Old DAL or non-spatial database
+                            pass
+                        
+                    if bbox_filter is None:
+                        # Standard Query
+                        bbox_filter = (gtable.lon > float(minLon)) & \
+                                      (gtable.lon < float(maxLon)) & \
+                                      (gtable.lat > float(minLat)) & \
+                                      (gtable.lat < float(maxLat))
+
+                    # Add bbox filter to query
+                    if query is None:
+                        query = bbox_filter
                     else:
                         # Merge with the previous BBOX
-                        bbox_query = bbox_query & bbox
-        return bbox_query
+                        query = query & bbox_filter
+                        
+        return query, joins
 
     # -------------------------------------------------------------------------
     def __call__(self, rows, start=None, limit=None):
@@ -5387,11 +5453,11 @@ class S3ResourceData(object):
             renderer = lambda v: s3_unicode(v) if v is not None else none
 
         # Deactivate linkto if so requested
-        if not show_links and hasattr(renderer, "linkto"):
-            linkto = renderer.linkto
-            renderer.linkto = None
+        if not show_links and hasattr(renderer, "show_link"):
+            show_link = renderer.show_link
+            renderer.show_link = False
         else:
-            linkto = None
+            show_link = None
 
         per_row_lookup = list_type and \
                          self.effort[colname] < len(fvalues) * 30
@@ -5468,8 +5534,8 @@ class S3ResourceData(object):
                     result["_row"][colname] = record.keys()
 
         # Restore linkto
-        if linkto is not None:
-            renderer.linkto = linkto
+        if show_link is not None:
+            renderer.show_link = show_link
 
         return results
         

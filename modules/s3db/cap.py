@@ -27,13 +27,13 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3CAPModel",
+__all__ = ("S3CAPModel",
            "cap_info_labels",
            "cap_alert_is_template",
            "cap_rheader",
            "cap_gis_location_xml_post_parse",
            "cap_gis_location_xml_post_render",
-           ]
+           )
 
 import datetime
 import urllib2          # Needed for quoting & error handling on fetch
@@ -56,7 +56,7 @@ class S3CAPModel(S3Model):
         http://eden.sahanafoundation.org/wiki/BluePrint/Messaging#CAP
     """
 
-    names = ["cap_alert",
+    names = ("cap_alert",
              "cap_alert_represent",
              "cap_info",
              "cap_info_represent",
@@ -66,7 +66,7 @@ class S3CAPModel(S3Model):
              "cap_area_location",
              "cap_area_tag",
              "cap_info_category_opts",
-             ]
+             )
 
     def model(self):
 
@@ -838,10 +838,11 @@ class S3CAPModel(S3Model):
                               ),
                      area_id(),
                      self.gis_location_id(
-                        widget = S3LocationSelectorWidget2(polygons=True,
-                                                           show_map=True,
-                                                           show_address=False,
-                                                           show_postcode=False,
+                        widget = S3LocationSelectorWidget2(points = False,
+                                                           polygons = True,
+                                                           show_map = True,
+                                                           show_address = False,
+                                                           show_postcode = False,
                                                            ),
                         ),
                      )

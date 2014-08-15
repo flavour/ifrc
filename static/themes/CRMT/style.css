@@ -18,6 +18,11 @@ h2 a {
     cursor: pointer;
 }
 
+h2 a:hover,
+h2 a:focus {
+    text-decoration: none;
+    }
+
 h2 i {
     font-size: 20px;
 }
@@ -74,31 +79,24 @@ h2 i {
     margin-bottom: -16px;
 }
 
-/* Main Map */
-.gis_fullscreen_map-btn {
-    display: none;
-}
-/* Hide the large legend for the Floods layer */
-.map_legend_div {
-    max-width: 400px;
-}
-
-/* Saved Maps */
-#config-gis_config_pe_id-options-filter__row .s3-groupedopts-widget td {
-    padding-right: 10px;
-}
-#config-gis_config_pe_id-options-filter__row .s3-groupedopts-widget td:last-child {
-    border-left: solid 1px;
-}
-
 /* Summary Page */
 h2 {
     float: left;
     margin-right: 15px;
 }
 
+h2.profile-header {
+    float: none;
+}
+
+.card_1_line {
+    height: 1.5em;
+}
+.dl-field p > i {
+    margin-right: 5px;
+}
+
 #list-btn-add {
-    margin-top: 15px;
     float: left;
 }
 
@@ -112,7 +110,7 @@ h2 {
 }
 
 #map {
-    float:left;
+    float: left;
 }
 
 #list-add,
@@ -126,6 +124,7 @@ h2 {
     /* Push above alert-space & Summary Tabs */
     position: relative;
     z-index: 1001;
+    margin-top: 15px;
 }
 
 #summary-common #cms {
@@ -133,12 +132,6 @@ h2 {
     margin-left: 20px;
     line-height: 12px;
     width: 50%;
-}
-
-.cms-edit {
-    float: right;
-    margin-top: -25px;
-}
 }
 
 .ui-tabs {
@@ -188,10 +181,6 @@ h2 {
 .dataTables_wrapper {
     clear: none;
 } */
-
-.dataTables_info {
-    margin: 8px 30px 4px 30px;
-}
 
 .dt-export-options {
     padding-top: 8px;
@@ -390,13 +379,6 @@ form#summary-filter-form {
 }
 
 /* Organisations */
-#org_organisation_sub_defaultfacility__label {
-    width: 0;
-}
-#sub-defaultfacility {
-    margin-left: -170px;
-}
-
 #sub-filedocument {
     float: left;
 }
@@ -412,32 +394,6 @@ form#summary-filter-form {
 
 #sub_defaultsite_org_group_defaultsite_org_group_i_status_edit_none {
     width: 270px;
-}
-
-/* Map */
-.map_home {
-    margin: 0;
-}
-
-.map_save_button,
-.map_save_panel,
-.map_legend_tab,
-.map_legend_panel,
-.x-panel-body {
-    border: 1px solid #B2B2B2;
-}
-
-.map_legend_tab {
-    border-right: none;
-    margin-right: -1px;
-}
-
-.map_legend_panel {
-    margin-bottom: 30px;
-}
-
-.map_save_panel {
-    margin-top: 10px;
 }
 
 /* Report */

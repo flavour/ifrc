@@ -184,14 +184,14 @@ class S3Request(object):
         if self.representation == "xml" and "include_deleted" in get_vars:
             include_deleted = True
         if "components" in get_vars:
-           cnames = get_vars["components"]
-           if isinstance(cnames, list):
-               cnames = ",".join(cnames)
-           cnames = cnames.split(",")
-           if len(cnames) == 1 and cnames[0].lower() == "none":
-               cnames = []
+            cnames = get_vars["components"]
+            if isinstance(cnames, list):
+                cnames = ",".join(cnames)
+            cnames = cnames.split(",")
+            if len(cnames) == 1 and cnames[0].lower() == "none":
+                cnames = []
         else:
-           cnames = None
+            cnames = None
 
         # Append component ID to the URL query
         component_name = self.component_name
@@ -653,8 +653,10 @@ class S3Request(object):
                 form = output.get("form")
                 if form:
                     if not hasattr(form, "errors"):
-                        form = form[0]
-                    if form.errors:
+                        # Form embedded in a DIV together with other components
+                        form = form.elements('form', first_only=True)
+                        form = form[0] if form else None
+                    if form and form.errors:
                         return output
 
             session = current.session
@@ -1303,7 +1305,8 @@ class S3Request(object):
             target=None,
             method=None,
             representation=None,
-            vars=None):
+            vars=None,
+            host=None):
         """
             Returns the URL of this request, use parameters to override
             current requests attributes:
@@ -1319,6 +1322,7 @@ class S3Request(object):
             @param method: the URL method
             @param representation: the representation for the URL
             @param vars: the URL query variables
+            @param host: string to force absolute URL with host (True means http_host)
 
             Particular behavior:
                 - changing the master record ID resets the component ID
@@ -1419,7 +1423,9 @@ class S3Request(object):
         return URL(r=self,
                    c=self.controller,
                    f=f,
-                   args=args, vars=vars)
+                   args=args,
+                   vars=vars,
+                   host=host)
 
     # -------------------------------------------------------------------------
     def target(self):

@@ -62,6 +62,7 @@ __all__ = ("S3OrganisationModel",
            "org_update_affiliations",
            "org_OrganisationRepresent",
            "org_SiteRepresent",
+           #"org_AssignMethod",
            "org_customise_org_resource_fields",
            "org_organisation_list_layout",
            "org_resource_list_layout",
@@ -549,6 +550,8 @@ class S3OrganisationModel(S3Model):
                        hrm_human_resource = "organisation_id",
                        # Members
                        member_membership = "organisation_id",
+                       # Evacuees
+                       evr_case = "organisation_id",
                        # Locations served
                        gis_location = {"link": "org_organisation_location",
                                        "joinby": "organisation_id",
@@ -1210,7 +1213,6 @@ class S3OrganisationGroupModel(S3Model):
         T = current.T
         db = current.db
 
-        add_components = self.add_components
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
@@ -1249,8 +1251,9 @@ class S3OrganisationGroupModel(S3Model):
                            ),
                      self.gis_location_id(
                          widget = S3LocationSelectorWidget2(
-                                     #catalog_layers=True,
-                                     polygons=True
+                                     #catalog_layers = True,
+                                     points = False,
+                                     polygons = True,
                          )),
                      s3_comments(),
                      *s3_meta_fields())
@@ -1307,22 +1310,27 @@ class S3OrganisationGroupModel(S3Model):
                                    )
 
         # Components
-        add_components(tablename,
-                       org_group_membership = {"name": "membership",
-                                               "joinby": "group_id",
-                                               },
-                       org_organisation = {"joinby": "group_id",
-                                           "key": "organisation_id",
-                                           "link": "org_group_membership",
-                                           "actuate": "replace",
-                                           },
-                       pr_group = {"name": "pr_group",
-                                   "joinby": "org_group_id",
-                                   "key": "group_id",
-                                   "link": "org_group_team",
-                                   "actuate": "replace",
-                                   },
-                       )
+        self.add_components(tablename,
+                            org_group_membership = {"name": "membership",
+                                                    "joinby": "group_id",
+                                                    },
+                            org_organisation = {"joinby": "group_id",
+                                                "key": "organisation_id",
+                                                "link": "org_group_membership",
+                                                "actuate": "replace",
+                                                },
+                            pr_group = {"name": "pr_group",
+                                        "joinby": "org_group_id",
+                                        "key": "group_id",
+                                        "link": "org_group_team",
+                                        "actuate": "replace",
+                                        },
+                            )
+
+        # Custom Method to Assign Orgs
+        self.set_method("org", "group",
+                        method = "assign",
+                        action = org_AssignMethod(component="membership"))
 
         # ---------------------------------------------------------------------
         # Group membership status
@@ -1620,9 +1628,9 @@ class S3OrganisationResourceModel(S3Model):
                           *s3_meta_fields())
 
         # CRUD strings
-        ADD_RESOURCE_TYPE = T("Add New Resource Type")
+        ADD_RESOURCE_TYPE = T("Create Resource Type")
         crud_strings[tablename] = Storage(
-            label_create = T("Add Resource Type"),
+            label_create = ADD_RESOURCE_TYPE,
             title_display = T("Resource Type Details"),
             title_list = T("Resource Types"),
             title_update = T("Edit Resource Type"),
@@ -2090,7 +2098,11 @@ class S3OrganisationServiceModel(S3Model):
                      s3_comments(),
                      *s3_meta_fields())
 
-        represent = S3Represent(lookup=tablename, translate=True)
+        represent = S3Represent(lookup = tablename,
+                                # Questionable UX:
+                                #hierarchy = hierarchical_service_types,
+                                translate = True,
+                                )
 
         if hierarchical_service_types:
             hierarchy = "parent"
@@ -2408,14 +2420,20 @@ class S3SiteModel(S3Model):
 
         # Custom Method for S3SiteAutocompleteWidget
         set_method("org", "site",
-                   method="search_ac",
-                   action=self.site_search_ac)
+                   method = "search_ac",
+                   action = self.site_search_ac)
 
         # Custom Method for S3AddPersonWidget2
         # @ToDo: One for HRMs
         set_method("org", "site",
                    method = "site_contact_person",
                    action = self.site_contact_person)
+
+        # Custom Method to Assign HRs
+        # - done in instances
+        #set_method("org", "site",
+        #           method = "assign",
+        #           action = self.hrm_AssignMethod(component="human_resource_site"))
 
         self.configure(tablename,
                        context = {"location": "location_id",
@@ -2437,69 +2455,69 @@ class S3SiteModel(S3Model):
         add_components(tablename,
                        # Facility Types
                        # Format for S3SQLInlineComponentCheckbox
-                       org_facility_type={"link": "org_site_facility_type",
-                                          "joinby": "site_id",
-                                          "key": "facility_type_id",
-                                          "actuate": "hide",
-                                          },
+                       org_facility_type = {"link": "org_site_facility_type",
+                                            "joinby": "site_id",
+                                            "key": "facility_type_id",
+                                            "actuate": "hide",
+                                            },
                        # Format for filter_widgets & imports
-                       org_site_facility_type="site_id",
+                       org_site_facility_type = "site_id",
 
                        # Human Resources
                        # - direct component (suitable for Create/List)
-                       hrm_human_resource="site_id",
+                       hrm_human_resource = "site_id",
                        # - via link table (suitable for Assign)
-                       hrm_human_resource_site="site_id",
+                       hrm_human_resource_site = "site_id",
 
                        # Documents
-                       doc_document="site_id",
-                       doc_image="site_id",
+                       doc_document = "site_id",
+                       doc_image = "site_id",
 
                        # Inventory
-                       inv_inv_item="site_id",
-                       inv_recv="site_id",
-                       inv_send="site_id",
+                       inv_inv_item = "site_id",
+                       inv_recv = "site_id",
+                       inv_send = "site_id",
 
                        # Assets
-                       asset_asset="site_id",
+                       asset_asset = "site_id",
 
                        # Procurement Plans
-                       proc_plan="site_id",
+                       proc_plan = "site_id",
 
                        # Needs
-                       req_site_needs=(# with alias
-                                       {"name": "needs",
-                                        "joinby": "site_id",
-                                        "multiple": False,
-                                        },
-                                       # without alias
-                                       {"joinby": "site_id",
-                                        "multiple": False,
-                                        },
-                                       ),
-                                      
+                       req_site_needs = (# with alias
+                                         {"name": "needs",
+                                          "joinby": "site_id",
+                                          "multiple": False,
+                                          },
+                                         # without alias
+                                         {"joinby": "site_id",
+                                          "multiple": False,
+                                          },
+                                         ),
+
                        # Requests
-                       req_req="site_id",
-                       req_commit="site_id",
+                       req_req = "site_id",
+                       req_commit = "site_id",
 
                        # Status
-                       org_site_status={"name": "status",
-                                        "joinby": "site_id",
-                                        "multiple": False,
-                                        },
+                       org_site_status = {"name": "status",
+                                          "joinby": "site_id",
+                                          "multiple": False,
+                                          },
                        # Coalitions
-                       org_group={"link": "org_site_org_group",
-                                  "joinby": "site_id",
-                                  "key": "group_id",
-                                  "actuate": "hide",
-                                  },
+                       org_group = {"link": "org_site_org_group",
+                                    "joinby": "site_id",
+                                    "key": "group_id",
+                                    "actuate": "hide",
+                                    },
                        # Format for InlineComponent/filter_widget
-                       org_site_org_group="site_id",
+                       org_site_org_group = "site_id",
                        )
 
         # Pass names back to global scope (s3.*)
-        return dict(org_site_id=site_id,
-                    org_site_represent=org_site_represent,
+        return dict(org_site_id = site_id,
+                    org_site_represent = org_site_represent,
                     )
 
     # -------------------------------------------------------------------------
@@ -2909,7 +2927,11 @@ class S3FacilityModel(S3Model):
                      *s3_meta_fields()
                      )
 
-        type_represent = S3Represent(lookup=tablename, translate=True)
+        type_represent = S3Represent(lookup = tablename,
+                                     # Questionable UX:
+                                     #hierarchy = hierarchical_facility_types,
+                                     translate = True,
+                                     )
 
         if hierarchical_facility_types:
             hierarchy = "parent"
@@ -3271,6 +3293,11 @@ class S3FacilityModel(S3Model):
                   update_realm = True,
                   )
 
+        # Custom Method to Assign HRs
+        self.set_method("org", "facility",
+                        method = "assign",
+                        action = self.hrm_AssignMethod(component="human_resource_site"))
+
         # ---------------------------------------------------------------------
         # Link Table: Sites <> Facility Types
         # - currently just used for Facilities but can be easily used by other
@@ -3280,14 +3307,14 @@ class S3FacilityModel(S3Model):
         define_table(tablename,
                      # Component not instance
                      super_link("site_id", "org_site",
-                                label=settings.get_org_site_label(),
                                 instance_types = current.auth.org_site_types,
+                                label = settings.get_org_site_label(),
                                 orderby = "org_site.name",
+                                represent = self.org_site_represent,
                                 not_filterby = "obsolete",
                                 not_filter_opts = (True,),
                                 readable = True,
                                 writable = True,
-                                represent = self.org_site_represent,
                                 ),
                      facility_type_id(),
                      *s3_meta_fields())
@@ -4740,8 +4767,12 @@ def org_rheader(r, tabs=[]):
                     tabs.insert(-1, (T("Resources"), "resource"))
 
             # Use branches?
-            if settings.org.branches and not skip_branches:
-                tabs.insert(1, (T("Branches"), "branch"))
+            if settings.get_org_branches() and not skip_branches:
+                if settings.get_org_branches_tree_view():
+                    presentation = "hierarchy"
+                else:
+                    presentation = "branch"
+                tabs.insert(1, (T("Branches"), presentation))
 
         rheader_tabs = s3_rheader_tabs(r, tabs)
 
@@ -4799,18 +4830,21 @@ def org_rheader(r, tabs=[]):
                 #(T("Contact Data"), "contact"),
                 (STAFF, "human_resource"),
                 ]
-        if current.auth.s3_has_permission("create", "hrm_human_resource"):
-            tabs.append((T("Assign %(staff)s") % dict(staff=STAFF), "human_resource_site"))
+        append = tabs.append
+        if current.auth.s3_has_permission("create", "hrm_human_resource_site"):
+            #append((T("Assign %(staff)s") % dict(staff=STAFF), "human_resource_site"))
+            append((T("Assign %(staff)s") % dict(staff=STAFF), "assign")),
         if settings.get_req_summary():
-            tabs.append((T("Needs"), "site_needs"))
+            append((T("Needs"), "site_needs"))
         if settings.has_module("asset"):
-            tabs.append((T("Assets"), "asset"))
+            append((T("Assets"), "asset"))
         if settings.has_module("inv"):
             tabs = tabs + s3db.inv_tabs(r)
         if settings.has_module("req"):
             tabs = tabs + s3db.req_tabs(r)
-        tabs.append((T("Attachments"), "document"))
-        tabs.append((T("User Roles"), "roles"))
+        tabs.extend(((T("Attachments"), "document"),
+                     (T("User Roles"), "roles"),
+                     ))
 
         if tablename == "org_office":
             rheader_fields = [["name", "organisation_id", "email"],
@@ -4856,6 +4890,8 @@ def org_rheader(r, tabs=[]):
                 (T("Groups"), "pr_group"),
                 (T("Documents"), "document"),
                 ]
+        if current.auth.s3_has_permission("create", "org_group_membership"):
+            tabs.insert(2, (T("Add Organization"), "assign"))
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(TABLE(TR(
                             TH("%s: " % table.name.label),
@@ -4904,38 +4940,34 @@ def org_organisation_controller():
             r.table.country.default = gis.get_default_country("code")
 
             method = r.method
-            if not r.component:
-                if method not in ("read", "update", "delete", "deduplicate"):
-                    use_branches = settings.get_org_branches()
-                    if use_branches:
-                        # Filter Branches
-                        branch_filter = (FS("parent.id") == None)
-                    # Filter Locations
-                    lfilter = current.session.s3.location_filter
-                    if lfilter:
-                        # Include those whose parent is in a different country
-                        gtable = s3db.gis_location
-                        query = (gtable.id == lfilter)
-                        row = db(query).select(gtable.id,
-                                               gtable.name,
-                                               gtable.level,
-                                               gtable.path,
-                                               limitby=(0, 1)).first()
-                        if row and row.level:
-                            if row.level != "L0":
-                                code = gis.get_parent_country(row, key_type="code")
-                            else:
-                                ttable = s3db.gis_location_tag
-                                query = (ttable.tag == "ISO2") & \
-                                        (ttable.location_id == row.id)
-                                tag = db(query).select(ttable.value,
-                                                       limitby=(0, 1)).first()
-                                code = tag.value
-                            # Filter out Branches
-                            branch_filter |= (FS("parent.country") != code) | \
-                                             (FS("parent.country") == None)
-                    if use_branches:
-                        r.resource.add_filter(branch_filter)
+            use_branches = settings.get_org_branches()
+            if use_branches and not r.component and not r.record:
+                # Filter out branches from multi-record views
+                branch_filter = (FS("parent.id") == None)
+                # Filter Locations
+                lfilter = current.session.s3.location_filter
+                if lfilter:
+                    # Include those whose parent is in a different country
+                    gtable = s3db.gis_location
+                    query = (gtable.id == lfilter)
+                    row = db(query).select(gtable.id,
+                                           gtable.name,
+                                           gtable.level,
+                                           gtable.path,
+                                           limitby=(0, 1)).first()
+                    if row and row.level:
+                        if row.level != "L0":
+                            code = gis.get_parent_country(row, key_type="code")
+                        else:
+                            ttable = s3db.gis_location_tag
+                            query = (ttable.tag == "ISO2") & \
+                                    (ttable.location_id == row.id)
+                            tag = db(query).select(ttable.value,
+                                                   limitby=(0, 1)).first()
+                            code = tag.value
+                        branch_filter |= (FS("parent.country") != code) | \
+                                         (FS("parent.country") == None)
+                r.resource.add_filter(branch_filter)
 
             if not r.component or r.component_name == "branch":
                 type_filter = r.get_vars.get("organisation_type.name", None)
@@ -5149,11 +5181,28 @@ def org_site_staff_config(r):
         Configure the Staff tab for Sites
     """
 
-    htable = current.s3db.hrm_human_resource
-    #record = r.record
+    table = current.s3db.hrm_human_resource
 
-    # Filter to just Staff
-    current.response.s3.filter = (htable.type == 1)
+    settings = current.deployment_settings
+    if settings.has_module("vol"):
+        if settings.get_hrm_show_staff():
+            if settings.get_org_site_volunteers():
+                # Show the type field
+                field = table.type
+                field.label = current.T("Type")
+                field.readable = field.writable = True
+            #else:
+            #    # Filter to just Staff
+            #    r.resource.add_filter(FS("human_resource.type") == 1)
+        elif settings.get_org_site_volunteers():
+            # Default to Volunteers
+            table.type.default = 2
+
+    # Cascade the organisation_id from the site to the staff
+    field = table.organisation_id
+    field.default = r.record.organisation_id
+    field.writable = False
+    field.comment = None
 
     # Filter out people which are already staff for this office
     # - this only works for an IS_ONE_OF dropdown
@@ -5173,31 +5222,6 @@ def org_site_staff_config(r):
     #                                            not_filter_opts = person_ids)
     #    except:
     #        pass
-
-    # Cascade the organisation_id from the site to the staff
-    field = htable.organisation_id
-    field.default = r.record.organisation_id
-    field.writable = False
-    field.comment = None
-
-    # Make it clear that this is for adding new staff, not assigning existing
-    # @ToDo: Review with new crud_strings & make it react to settings.hrm.staff_label
-    #s3.crud_strings.hrm_human_resource.label_create = current.T("Create Staff Member")
-
-    # Modify list_fields
-    # - we don't want this over-riding Templates' custom_configure_hrm_human_resource
-    #s3db.configure("hrm_human_resource",
-    #               list_fields = ["person_id",
-    #                              "phone",
-    #                              "email",
-    #                              #"organisation_id",
-    #                              "job_title_id",
-    #                              "department_id",
-    #                              "site_contact",
-    #                              "status",
-    #                              "comments",
-    #                              ]
-    #               )
 
 # =============================================================================
 def org_office_controller():
@@ -5243,10 +5267,10 @@ def org_office_controller():
 
                     # Remove CRUD generated buttons in the tabs
                     s3db.configure("inv_inv_item",
-                                   create=False,
-                                   listadd=False,
-                                   editable=False,
-                                   deletable=False,
+                                   create = False,
+                                   deletable = False,
+                                   editable = False,
+                                   listadd = False,
                                    )
 
                 elif cname == "human_resource":
@@ -5389,7 +5413,6 @@ def org_facility_controller():
         multiple controllers for unified menus
     """
 
-    db = current.db
     s3db = current.s3db
     s3 = current.response.s3
 
@@ -5436,12 +5459,38 @@ def org_facility_controller():
                                    create_next = None)
 
             elif r.id:
-                field = r.table.obsolete
+                table = r.table
+                field = table.obsolete
                 field.readable = field.writable = True
-            elif r.method in ("create", "create.popup"):
-                name = r.get_vars.get("name", None)
+                if r.method == "update" and \
+                   r.representation == "popup" and \
+                   r.get_vars.get("profile") == "org_organisation":
+                        # Coming from organisation profile
+                        # Don't allow change of organisation_id in this case
+                        field = table.organisation_id
+                        field.writable = False
+                        field.readable = False
+
+            elif r.method == "create":
+                table = r.table
+                get_vars = r.get_vars
+                name = get_vars.get("name")
                 if name:
-                    r.table.name.default = name
+                    table.name.default = name
+                if r.representation == "popup" and \
+                   get_vars.get("profile") == "org_organisation":
+                    # Coming from organisation profile
+                    organisation_id = None
+                    for k in ("~.organisation_id", "(organisation)", "~.(organisation)"):
+                        if k in get_vars:
+                            organisation_id = get_vars[k]
+                            break
+                    if organisation_id is not None:
+                        # Don't allow change of organisation_id in this case
+                        field = table.organisation_id
+                        field.default = organisation_id
+                        field.writable = False
+                        field.readable = False
 
         elif r.representation == "geojson":
             # Load these models now as they'll be needed when we encode
@@ -5470,6 +5519,7 @@ def org_facility_controller():
             site_id = record.site_id
 
             # Type(s)
+            db = current.db
             ttable = db.org_facility_type
             ltable = db.org_site_facility_type
             query = (ltable.site_id == site_id) & \
@@ -5564,7 +5614,8 @@ def org_facility_controller():
     s3.postp = postp
 
     output = current.rest_controller("org", "facility",
-                                     rheader = org_rheader)
+                                     rheader = org_rheader,
+                                     )
     return output
 
 # =============================================================================
@@ -5857,6 +5908,245 @@ def org_update_root_organisation(organisation_id, root_org=None):
 
     return root_org
     
+# =============================================================================
+class org_AssignMethod(S3Method):
+    """
+        Custom Method to allow organisations to be assigned to something
+        e.g. Organisation Group
+    """
+
+    def __init__(self, component, types=None):
+        """
+            @param component: the Component in which to create records
+        """
+
+        self.component = component
+
+    def apply_method(self, r, **attr):
+        """
+            Apply method.
+
+            @param r: the S3Request
+            @param attr: controller options for this request
+        """
+
+        component = self.component
+        components = r.resource.components
+        for c in components:
+            if c == component:
+                component = components[c]
+                break
+        try:
+            if component.link:
+                component = component.link
+        except:
+            current.log.error("Invalid Component!")
+            raise
+
+        tablename = component.tablename
+
+        # Requires permission to create component
+        authorised = current.auth.s3_has_permission("create", tablename)
+        if not authorised:
+            r.unauthorised()
+
+        T = current.T
+        s3db = current.s3db
+
+        get_vars = r.get_vars
+        response = current.response
+
+        if r.http == "POST":
+            added = 0
+            post_vars = r.post_vars
+            if all([n in post_vars for n in ("assign", "selected", "mode")]):
+                fkey = component.fkey
+                record = r.record
+                if fkey in record:
+                    # SuperKey
+                    record_id = r.record[fkey]
+                else:
+                    record_id = r.id
+                selected = post_vars.selected
+                if selected:
+                    selected = selected.split(",")
+                else:
+                    selected = []
+
+                db = current.db
+                table = s3db[tablename]
+                if selected:
+                    # Handle exclusion filter
+                    if post_vars.mode == "Exclusive":
+                        if "filterURL" in post_vars:
+                            filters = S3URLQuery.parse_url(post_vars.ajaxURL)
+                        else:
+                            filters = None
+                        query = ~(FS("id").belongs(selected))
+                        hresource = s3db.resource("org_organisation",
+                                                  filter=query, vars=filters)
+                        rows = hresource.select(["id"], as_rows=True)
+                        selected = [str(row.id) for row in rows]
+
+                    query = (table.organisation_id.belongs(selected)) & \
+                            (table[fkey] == record_id) & \
+                            (table.deleted != True)
+                    rows = db(query).select(table.id)
+                    rows = dict((row.id, row) for row in rows)
+                    onaccept = component.get_config("create_onaccept",
+                                                    component.get_config("onaccept",
+                                                                         None)
+                                                    )
+                    for organisation_id in selected:
+                        try:
+                            org_id = int(organisation_id.strip())
+                        except ValueError:
+                            continue
+                        if org_id not in rows:
+                            link = Storage(organisation_id = organisation_id)
+                            link[fkey] = record_id
+                            _id = table.insert(**link)
+                            if onaccept:
+                                link["id"] = _id
+                                form = Storage(vars=link)
+                                onaccept(form)
+                            added += 1
+            current.session.confirmation = T("%(number)s assigned") % \
+                                           dict(number=added)
+            if added > 0:
+                redirect(URL(args=[r.id, "organisation"], vars={}))
+            else:
+                redirect(URL(args=r.args, vars={}))
+
+        elif r.http == "GET":
+
+            # Filter widgets
+            filter_widgets = []
+
+            # List fields
+            list_fields = ["id",
+                           "name",
+                           ]
+
+            # Data table
+            resource = s3db.resource("org_organisation")
+            totalrows = resource.count()
+            if "iDisplayLength" in get_vars:
+                display_length = get_vars["iDisplayLength"]
+                if display_length == "None":
+                    display_length = None
+                else:
+                    display_length = int(display_length)
+            else:
+                display_length = 25
+            if display_length:
+                limit = 4 * display_length
+            else:
+                limit = None
+            filter, orderby, left = resource.datatable_filter(list_fields, get_vars)
+            resource.add_filter(filter)
+            data = resource.select(list_fields,
+                                   start=0,
+                                   limit=limit,
+                                   orderby=orderby,
+                                   left=left,
+                                   count=True,
+                                   represent=True)
+            filteredrows = data["numrows"]
+            dt = S3DataTable(data["rfields"], data["rows"])
+            dt_id = "datatable"
+
+            # Bulk actions
+            dt_bulk_actions = [(T("Add"), "assign")]
+
+            if r.representation == "html":
+                # Page load
+                resource.configure(deletable = False)
+
+                profile_url = URL(c = "org",
+                                  f = "organisation",
+                                  args = ["[id]", "profile"])
+                S3CRUD.action_buttons(r,
+                                      deletable = False,
+                                      read_url = profile_url,
+                                      update_url = profile_url)
+                response.s3.no_formats = True
+
+                # Data table (items)
+                items = dt.html(totalrows,
+                                filteredrows,
+                                dt_id,
+                                dt_displayLength=display_length,
+                                dt_ajax_url=URL(args = r.args,
+                                                extension="aadata",
+                                                vars={},
+                                                ),
+                                dt_bFilter="false",
+                                dt_pagination="true",
+                                dt_bulk_actions=dt_bulk_actions,
+                                )
+
+                # Filter form
+                if filter_widgets:
+
+                    # Where to retrieve filtered data from:
+                    _vars = resource.crud._remove_filters(r.get_vars)
+                    filter_submit_url = r.url(vars=_vars)
+
+                    # Where to retrieve updated filter options from:
+                    filter_ajax_url = URL(f="human_resource",
+                                          args=["filter.options"],
+                                          vars={})
+
+                    get_config = resource.get_config
+                    filter_clear = get_config("filter_clear", True)
+                    filter_formstyle = get_config("filter_formstyle", None)
+                    filter_submit = get_config("filter_submit", True)
+                    filter_form = S3FilterForm(filter_widgets,
+                                               clear=filter_clear,
+                                               formstyle=filter_formstyle,
+                                               submit=filter_submit,
+                                               ajax=True,
+                                               url=filter_submit_url,
+                                               ajaxurl=filter_ajax_url,
+                                               _class="filter-form",
+                                               _id="datatable-filter-form",
+                                               )
+                    fresource = current.s3db.resource(resource.tablename)
+                    alias = resource.alias if r.component else None
+                    ff = filter_form.html(fresource,
+                                          r.get_vars,
+                                          target="datatable",
+                                          alias=alias)
+                else:
+                    ff = ""
+                    
+                output = dict(items = items,
+                              title = T("Add Organization"),
+                              list_filter_form = ff)
+
+                response.view = "list_filter.html"
+                return output
+
+            elif r.representation == "aadata":
+                # Ajax refresh
+                if "sEcho" in get_vars:
+                    echo = int(get_vars.sEcho)
+                else:
+                    echo = None
+                items = dt.json(totalrows,
+                                filteredrows,
+                                dt_id,
+                                echo,
+                                dt_bulk_actions=dt_bulk_actions)
+                response.headers["Content-Type"] = "application/json"
+                return items
+
+            else:
+                r.error(501, current.ERROR.BAD_FORMAT)
+        else:
+            r.error(405, current.ERROR.BAD_METHOD)
+
 # =============================================================================
 def org_customise_org_resource_fields(method):
     """

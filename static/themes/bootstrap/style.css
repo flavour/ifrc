@@ -376,7 +376,7 @@ a.cancel-form-btn {
 
 /* Match .btn.btn-primary */
 a.cancel-form-btn,
-a.action-btn,
+.action-btn,
 a.delete-btn {
     border-color: rgba(0, 0, 0, 0.1) rgba(0, 0, 0, 0.1) rgba(0, 0, 0, 0.25);
     border-width: 1px;
@@ -394,12 +394,12 @@ a.delete-btn {
     vertical-align: middle;
     cursor: pointer;
 }
-a.action-btn i.icon,
+.action-btn i.icon,
 a.delete-btn i.icon {
     font-size: 13px;
 }
 
-a.action-btn {
+.action-btn {
     text-align: center;
     color: #333333;
     text-shadow: 0 1px 1px rgba(255, 255, 255, 0.75);
@@ -421,7 +421,8 @@ a.action-btn {
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-a.action-btn:hover {
+.action-btn:hover,
+.action-btn:focus {
     color: #333333;
     text-decoration: none;
     background-color: #e6e6e6;
@@ -471,17 +472,13 @@ a.cancel-form-btn,
 http://www.usabilitycounts.com/2009/11/18/form-design-and-the-fallacy-of-the-required-field/
 http://uxmovement.com/forms/always-mark-optional-form-fields-not-required-ones/ */
 .req_key {
-    /* Tested on CRMT, MCOP, DRMP & NYC */
-    float: left;
-    /* Broken on CRMT - overlapped with Header
     position: absolute;
     z-index: 1;
-    margin-left: 7px; */
-    margin-top: 5px;
-    /* This pushed it 'out of the way' on NYC so not easy to see (CRMT just pads it down a little, still looking worse, DRMP looks awful with this)
-    float: right;
-    margin-right: 7px;*/
+    margin: 7px 0 0 7px;
     font-size: 12px;
+}
+#component .req_key {
+    margin-top: 25px;
 }
 
 #last_update {
@@ -761,10 +758,9 @@ label.ui-corner-all span {
 #datatable_filter label {
     position: relative;
     padding-right: 25px;
-    margin-bottom: -37px;
     font-weight: bold;
-    margin-top: 7px;
-    margin-left: 13px;
+    margin-left: 10px;
+    margin-bottom: -5px;
 }
 
 .dataTables_info {
@@ -787,6 +783,7 @@ label.ui-corner-all span {
 
 .dataTables_length label select {
     width: auto;
+    margin-bottom: 0;
 }
 
 .dataTables_info,
@@ -801,7 +798,7 @@ label.ui-corner-all span {
 }
 
 .dataTables_info {
-    margin-top: 7px;
+    margin: 5px 30px 0px 5px;
 }
 
 .dataTables_wrapper {
@@ -809,12 +806,11 @@ label.ui-corner-all span {
 }
 
 .dt-export-options {
-    margin-right: 20px;
-    top: 10px;
+    margin-right: 5px;
     font-size: 12px;
     padding: 0;
     position: relative;
-    z-index: 1000;
+    z-index: 1;
 }
 
 .dataTable thead tr {
@@ -925,12 +921,17 @@ label.ui-corner-all span {
 
 #auth_user_remember__row label {
     margin-left: 28px;
-    margin-top: -21px;
+    margin-top: -19px;
 }
 
-.auth_login #submit_record__row .btn-primary {
+.form-container .auth_login #submit_record__row .btn-primary {
     margin-left: -70px;
     margin-right: 0;
+}
+
+.dropdown-menu #register-btn {
+    /* Layout on page needs fixing */
+    display: none;
 }
 
 #email__error,
@@ -944,6 +945,23 @@ label.ui-corner-all span {
     color: #b84947;
     background-color: #f2dedd;
 }
+
+.dropdown-menu input.btn {
+    /* Make appear on same row */
+    position: relative;
+    left: 150px;
+    top: -58px;
+}
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+    /* IE 10 */
+    .dropdown-menu form {
+        height: 100px;
+    }
+    .dropdown-menu input.btn {
+        left: 268px;
+    }
+}
+
 
 /* Registration Page */
 .auth_change_password .control-label,

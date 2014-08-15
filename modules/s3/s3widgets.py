@@ -1148,7 +1148,7 @@ $('#%s').click(function(){
 # =============================================================================
 class S3ColorPickerWidget(FormWidget):
     """
-        Displays an <input type="color"> widget to allow the user to pick a
+        Displays a widget to allow the user to pick a
         color, and falls back to using JSColor or a regular text input if
         necessary.
     """
@@ -1157,7 +1157,9 @@ class S3ColorPickerWidget(FormWidget):
         "showInput": True,
         "showInitial": True,
         "preferredFormat": "hex",
-        "showPalette": True,
+        #"showPalette": True,
+        "showPaletteOnly": True,
+        "togglePaletteOnly": True,
         "palette": ("red", "yellow", "green", "blue", "white", "black")
     }
 
@@ -1166,17 +1168,33 @@ class S3ColorPickerWidget(FormWidget):
             @param options: options for the JavaScript widget
             @see: http://bgrins.github.com/spectrum/
         """
+
         self.options = dict(self.DEFAULT_OPTIONS)
         self.options.update(options or {})
 
     def __call__(self, field, value, **attributes):
+
+        default = dict(#_type = "color", # We don't want to use native HTML5 widget as it doesn't support our options & is worse for documentation
+                       _type = "text",
+                       value = (value != None and str(value)) or "",
+                       )
+
+        attr = StringWidget._attributes(field, default, **attributes)
+        
+        widget = INPUT(**attr)
+
+        if "_id" in attr:
+            selector = attr["_id"]
+        else:
+            selector = str(field).replace(".", "_")
+
         s3 = current.response.s3
-        app = current.request.application
 
         _min = "" if s3.debug else ".min"
 
-        script = "/%s/static/scripts/spectrum%s.js" % (app, _min)
-        style = "spectrum%s.css" % _min
+        script = "/%s/static/scripts/spectrum%s.js" % \
+            (current.request.application, _min)
+        style = "plugins/spectrum%s.css" % _min
 
         if script not in s3.scripts:
             s3.scripts.append(script)
@@ -1184,17 +1202,27 @@ class S3ColorPickerWidget(FormWidget):
         if style not in s3.stylesheets:
             s3.stylesheets.append(style)
 
-        s3.jquery_ready.append('''
-var sp_options=%s
-sp_options.change=function(color){this.value=color.toHex()}
-$('.color').spectrum(sp_options)''' % \
-    json.dumps(self.options, separators=SEPARATORS) if self.options else "")
+        # i18n of Strings
+        T = current.T
+        options = self.options
+        options.update(cancelText = s3_unicode(T("cancel")),
+                       chooseText = s3_unicode(T("choose")),
+                       togglePaletteMoreText = s3_unicode(T("more")),
+                       togglePaletteLessText = s3_unicode(T("less")),
+                       clearText = s3_unicode(T("Clear Color Selection")),
+                       noColorSelectedText = s3_unicode(T("No Color Selected")),
+                       )
 
-        attr = self._attributes(field, {"_class": "color",
-                                        "_value": value
-                                        }, **attributes)
+        options = json.dumps(options, separators=SEPARATORS)
+        # Ensure we save in rrggbb format not #rrggbb (IS_HTML_COLOUR)
+        options = "%s,change:function(c){this.value=c.toHex()}}" % options[:-1]
+        script = \
+'''$('#%(selector)s').spectrum(%(options)s)''' % dict(selector = selector,
+                                                      options = options,
+                                                      )
+        s3.jquery_ready.append(script)
 
-        return INPUT(**attr)
+        return widget
 
 # =============================================================================
 class S3DateWidget(FormWidget):
@@ -3835,14 +3863,16 @@ class S3LocationSelectorWidget2(FormWidget):
 
     def __init__(self,
                  levels = None,          # Which levels of the hierarchy to expose?
-                 hide_lx = True,         # Whether to hide lower Lx fields until higher level selected
-                 reverse_lx = False,     # Whether to show Lx fields in the order usually used by Street Addresses
-                 show_address = False,   # Whether to show a field for Street Address
-                 show_postcode = False,  # Whether to show a field for Postcode
-                 show_map = True,        # Whether to show a Map to select specific points
-                 lines = False,          # Whether the Map uses a Line draw tool instead of Point
-                 polygons = False,       # Whether the Map uses a Polygon draw tool instead of Point
-                 catalog_layers = False, # Whether the Map should display Catalogue Layers or just the default base layer
+                 hide_lx = True,         # Hide lower Lx fields until higher level selected
+                 reverse_lx = False,     # Show Lx fields in the order usually used by Street Addresses
+                 show_address = False,   # Show a field for Street Address
+                 show_postcode = False,  # Show a field for Postcode
+                 show_map = True,        # Show a Map to select specific points
+                 lines = False,          # Use a Line draw tool
+                 points = True,          # Use a Point draw tool
+                 polygons = False,       # Use a Polygon draw tool
+                 color_picker = False,   # Display a Color Picker to set per-feature styling (also need to enable in the feature layer to show on map)
+                 catalog_layers = False, # Display Catalogue Layers or just the default base layer
                  ):
 
         self.levels = levels
@@ -3852,7 +3882,9 @@ class S3LocationSelectorWidget2(FormWidget):
         self.show_postcode = show_postcode
         self.show_map = show_map
         self.lines = lines
+        self.points = points
         self.polygons = polygons
+        self.color_picker = color_picker
         self.catalog_layers = catalog_layers
 
     def __call__(self, field, value, **attributes):
@@ -3952,7 +3984,9 @@ class S3LocationSelectorWidget2(FormWidget):
         show_postcode = self.show_postcode and settings.get_gis_postcode_selector()
         show_map = self.show_map
         lines = self.lines
-        polygons = self.polygons or lines
+        points = self.points
+        polygons = self.polygons
+        use_wkt = polygons or lines
 
         # Test the formstyle
         formstyle = s3.crud.formstyle
@@ -4036,12 +4070,17 @@ class S3LocationSelectorWidget2(FormWidget):
                 # Specific location
                 # Only use a specific Lat/Lon when they are not inherited
                 if not record.inherited:
-                    if polygons:
-                        wkt = wkt or record.wkt
-                    else:
+                    if points:
                         lat = lat or record.lat
                         lon = lon or record.lon
+                    else:
+                        lat = ""
+                        lon = ""
+                    if use_wkt:
+                        wkt = wkt or record.wkt
+                    else:
                         wkt = ""
+
                 address = address or record.addr_street
                 postcode = postcode or record.addr_postcode
                 values["specific"] = value
@@ -4079,15 +4118,7 @@ class S3LocationSelectorWidget2(FormWidget):
                              value=parent,
                              )
         if show_map:
-            if polygons:
-                # WKT INPUT field, will be hidden
-                wkt_input = INPUT(_name="wkt",
-                                  _id="%s_wkt" % fieldname,
-                                  value=wkt,
-                                  )
-                lat_input = ""
-                lon_input = ""
-            else:
+            if points:
                 # Lat/Lon INPUT fields, will be hidden
                 lat_input = INPUT(_name="lat",
                                   _id="%s_lat" % fieldname,
@@ -4097,6 +4128,17 @@ class S3LocationSelectorWidget2(FormWidget):
                                   _id="%s_lon" % fieldname,
                                   value=lon,
                                   )
+            else:
+                lat_input = ""
+                lon_input = ""
+
+            if use_wkt:
+                # WKT INPUT field, will be hidden
+                wkt_input = INPUT(_name="wkt",
+                                  _id="%s_wkt" % fieldname,
+                                  value=wkt,
+                                  )
+            else:
                 wkt_input = ""
         else:
             lat_input = ""
@@ -4566,28 +4608,93 @@ class S3LocationSelectorWidget2(FormWidget):
         if show_map:
             # @ToDo: handle multiple LocationSelectors in 1 page
             # (=> multiple callbacks, as well as the need to migrate options from globals to a parameter)
-            map = gis.show_map(id = "location_selector_%s" % fieldname,
-                               collapsed = True,
-                               height = 340,
-                               width = 480,
-                               add_feature = not polygons,
-                               add_feature_active = not polygons,
-                               add_line = lines,
-                               add_line_active = lines,
-                               add_polygon = polygons and not lines,
-                               add_polygon_active = polygons and not lines,
-                               catalogue_layers = self.catalog_layers,
-                               # Hide controls from toolbar
-                               nav = False,
-                               area = False,
-                               zoomWheelEnabled = False,
-                               # Don't use normal callback (since we postpone rendering Map until DIV unhidden)
-                               # but use our one if we need to display a map by default
-                               callback = callback if use_callback else None,
-                               )
+            if points and lines:
+                toolbar = True              # Allow selection between
+                add_feature_active = True   # Default to Points
+                add_line_active = add_polygon_active = False
+            elif points and polygons:
+                toolbar = True              # Allow selection between
+                add_feature_active = True   # Default to Points
+                add_line_active = add_polygon_active = False
+            elif points:
+                toolbar = False             # No need to select between
+                add_feature_active = True   # Default to Points
+                add_line_active = add_polygon_active = False
+            elif lines and polygons:
+                toolbar = True              # Allow selection between
+                add_polygon_active = True   # Default to Polygons
+                add_feature_active = add_line_active = False
+            elif lines:
+                toolbar = False             # No need to select between
+                add_line_active = True      # Default to Lines
+                add_feature_active = add_polygon_active = False
+            elif polygons:
+                toolbar = False             # No need to select between
+                add_polygon_active = True   # Default to Polygons
+                add_feature_active = add_line_active = False
+            else:
+                # No Valid options!
+                raise SyntaxError
+            if not self.color_picker:
+                color_picker = False
+            else:
+                # Requires the custom controller to store this before calling the widget
+                # - a bit hacky, but can't think of a better option currently without rewriting completely as an S3SQLSubForm
+                record_id = s3.record_id
+                if not record_id:
+                    # Show Color Picker with default Style
+                    color_picker = True
+                else:
+                    # Do we have a style defined for this record?
+                    # @ToDo: Support Layers using alternate controllers/functions
+                    c, f = field.tablename.split("_", 1)
+                    ftable = s3db.gis_layer_feature
+                    query = (ftable.deleted == False) & \
+                            (ftable.controller == c) & \
+                            (ftable.function == f) & \
+                            (ftable.individual == True)
+                    rows = db(query).select(ftable.layer_id)
+                    if not rows:
+                        # Show Color Picker with default Style
+                        color_picker = True
+                    else:
+                        # @ToDo: Handle multiple rows?
+                        layer_id = rows.first().layer_id
+                        stable = s3db.gis_style
+                        query = (stable.deleted == False) & \
+                                (stable.layer_id == layer_id) & \
+                                (stable.record_id == record_id)
+                        rows = db(query).select(stable.style)
+                        row = rows.first()
+                        if row:
+                            color_picker = row.style
+                        else:
+                            # Show Color Picker with default Style
+                            color_picker = True
+            _map = gis.show_map(id = "location_selector_%s" % fieldname,
+                                collapsed = True,
+                                height = 340,
+                                width = 480,
+                                add_feature = points,
+                                add_feature_active = add_feature_active,
+                                add_line = lines,
+                                add_line_active = add_line_active,
+                                add_polygon = polygons,
+                                add_polygon_active = add_polygon_active,
+                                catalogue_layers = self.catalog_layers,
+                                color_picker = color_picker,
+                                toolbar = toolbar,
+                                # Hide controls from toolbar
+                                nav = False,
+                                area = False,
+                                zoomWheelEnabled = False,
+                                # Don't use normal callback (since we postpone rendering Map until DIV unhidden)
+                                # but use our one if we need to display a map by default
+                                callback = callback if use_callback else None,
+                                )
             icon_id = "%s_map_icon" % fieldname
             row_id = "%s_map_icon__row" % fieldname
-            if polygons:
+            if use_wkt:
                 label = T("Draw on Map")
             else:
                 label = T("Find on Map")
@@ -4636,7 +4743,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                                     _id="%s_geocode" % fieldname,
                                     _class="controls geocode",
                                     ))
-            map_icon.append(map)
+            map_icon.append(_map)
         else:
             map_icon = ""
 
@@ -4662,7 +4769,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                        postcode_label,
                        postcode_row,
                        map_icon,
-                       requires=field.requires
+                       requires = field.requires
                        )
 
 # =============================================================================
@@ -5405,9 +5512,15 @@ class S3SiteAutocompleteWidget(FormWidget):
             except ValueError:
                 pass
             # Provide the representation for the current/default Value
-            text = s3_unicode(field.represent(value))
-            if "<" in text:
-                text = s3_strip_markup(text)
+            represent = field.represent
+            if hasattr(represent, "link"):
+                # S3Represent, so don't generate HTML
+                text = s3_unicode(represent(value, show_link=False))
+            else:
+                # Custom represent, so filter out HTML later
+                text = s3_unicode(represent(value))
+                if "<" in text:
+                    text = s3_strip_markup(text)
             represent = text.encode("utf-8")
         else:
             represent = ""

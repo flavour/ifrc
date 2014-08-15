@@ -317,6 +317,8 @@ settings.hrm.skill_types = True
 settings.hrm.staff_experience = False
 # Uncomment to disable the use of HR Skills
 settings.hrm.use_skills = False
+# Activity types for experience record
+settings.hrm.activity_types = {"rdrt": "RDRT Mission"}
 
 # -----------------------------------------------------------------------------
 def ns_only(f, required=True, branches=True, updateable=True):
@@ -599,7 +601,8 @@ def _customise_assignment_fields(**attr):
                               current.messages.AUTOCOMPLETE_HELP))
 
     from s3 import IS_ONE_OF
-    atable = current.s3db.deploy_assignment
+    s3db = current.s3db
+    atable = s3db.deploy_assignment
     atable.human_resource_id.label = MEMBER
     atable.human_resource_id.comment = hr_comment
     field = atable.job_title_id
@@ -610,6 +613,11 @@ def _customise_assignment_fields(**attr):
                                filterby = "type",
                                filter_opts = (4,),
                                )
+                               
+    # Default activity_type when creating experience records from assignments
+    activity_type = s3db.hrm_experience.activity_type
+    activity_type.default = activity_type.update = "rdrt"
+
     return
 
 # -----------------------------------------------------------------------------
@@ -686,7 +694,7 @@ def customise_deploy_assignment_controller(**attr):
     from s3 import S3Represent
     field = s3db.deploy_mission.location_id
     field.represent = S3Represent(lookup="gis_location", translate=True)
-    
+
     return attr
 
 settings.customise_deploy_assignment_controller = customise_deploy_assignment_controller
@@ -918,17 +926,58 @@ def customise_hrm_department_controller(**attr):
 settings.customise_hrm_department_controller = customise_hrm_department_controller
 
 # -----------------------------------------------------------------------------
+def customise_hrm_experience_controller(**attr):
+
+    s3 = current.response.s3
+
+    standard_prep = s3.prep
+    def custom_prep(r):
+        # Call standard prep
+        if callable(standard_prep):
+            if not standard_prep(r):
+                return False
+
+        if r.controller == "deploy":
+            # Popups in RDRT Member Profile
+
+            table = r.table
+
+            job_title_id = table.job_title_id
+            job_title_id.label = T("Sector / Area of Expertise")
+            job_title_id.comment = None
+            jtable = current.s3db.hrm_job_title
+            query = (jtable.type == 4)
+            if r.method == "update" and r.record.job_title_id:
+                # Allow to keep the current value
+                query |= (jtable.id == r.record.job_title_id)
+            from s3 import IS_ONE_OF
+            job_title_id.requires = IS_ONE_OF(current.db(query),
+                                              "hrm_job_title.id",
+                                              job_title_id.represent,
+                                              )
+            job_title = table.job_title
+            job_title.readable = job_title.writable = True
+        return True
+    s3.prep = custom_prep
+
+    return attr
+
+settings.customise_hrm_experience_controller = customise_hrm_experience_controller
+
+# -----------------------------------------------------------------------------
 def customise_hrm_human_resource_controller(**attr):
 
-    # Default Filter
-    from s3 import s3_set_default_filter
-    s3_set_default_filter("~.organisation_id",
-                          user_org_and_children_default_filter,
-                          tablename = "hrm_human_resource")
+    controller = current.request.controller
+    if controller != "deploy":
+        # Default Filter
+        from s3 import s3_set_default_filter
+        s3_set_default_filter("~.organisation_id",
+                              user_org_and_children_default_filter,
+                              tablename = "hrm_human_resource")
 
     arcs = False
     vnrc = False
-    if current.request.controller == "vol":
+    if controller == "vol":
         # Special cases for different NS
         root_org = current.auth.root_org_name()
         if root_org == ARCS:
@@ -982,30 +1031,33 @@ def customise_hrm_human_resource_controller(**attr):
                                                       hidden = True,
                                                       ))
 
-        if r.controller == "deploy":
+        if controller == "deploy":
 
             # Custom profile widgets for hrm_competency ("skills"):
             from s3 import FS
-            subsets = (("Computer", "Computer Skills"),
-                       ("Language", "Language Skills"),
+            subsets = (("Computer", "Computer Skills", "Add Computer Skills"),
+                       ("Language", "Language Skills", "Add Language Skills"),
                        )
             widgets = []
+            append_widget = widgets.append
             profile_widgets = r.resource.get_config("profile_widgets")
             while profile_widgets:
                 widget = profile_widgets.pop(0)
                 if widget["tablename"] == "hrm_competency":
-                    for skill_type, label in subsets:
+                    for skill_type, label, label_create in subsets:
                         query = widget["filter"] & \
                                 (FS("skill_id$skill_type_id$name") == skill_type)
                         new_widget = dict(widget)
                         new_widget["label"] = label
+                        new_widget["label_create"] = label_create
                         new_widget["filter"] = query
-                        widgets.append(new_widget)
-                    break
+                        append_widget(new_widget)
+                elif widget["tablename"] == "hrm_experience":
+                    new_widget = dict(widget)
+                    new_widget["create_controller"] = "deploy"
+                    append_widget(new_widget)
                 else:
-                    widgets.append(widget)
-            if profile_widgets:
-                widgets.extend(profile_widgets)
+                    append_widget(widget)
             
             # Custom list fields for RDRT
             phone_label = settings.get_ui_label_mobile_phone()
@@ -1036,13 +1088,13 @@ def customise_hrm_human_resource_controller(**attr):
             output = standard_postp(r, output)
 
         if isinstance(output, dict):
-            if r.controller == "deploy" and \
+            if controller == "deploy" and \
                "title" in output:
                 output["title"] = T("RDRT Members")
             elif vnrc and \
                  r.method != "report" and \
                  "form" in output and \
-                 (r.controller == "vol" or \
+                 (controller == "vol" or \
                   r.component_name == "human_resource"):
                 # Remove the injected Programme field
                 del output["form"][0].components[4]
@@ -1721,6 +1773,8 @@ settings.customise_survey_series_controller = customise_survey_series_controller
 settings.project.mode_3w = True
 # Uncomment this to use DRR (Disaster Risk Reduction) extensions
 settings.project.mode_drr = True
+# Uncomment this to use Activity Types for Activities & Projects
+settings.project.activity_types = True
 # Uncomment this to use Codes for projects
 settings.project.codes = True
 # Uncomment this to call project locations 'Communities'

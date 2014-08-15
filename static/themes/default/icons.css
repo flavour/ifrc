@@ -53,6 +53,9 @@
 .icon-skype:before {
   content: "\f17e";
 }
+.icon-star:before {
+  content: "\f005";
+}
 .icon-twitter:before {
   content: "\f099";
 }
@@ -69,6 +72,9 @@
 .icon-bookmark-empty:before {
   /* Used to show that there is not yet a bookmark, & allow it's addition */
   content: "\f097";
+}
+.icon-briefcase:before {
+  content: "\f0b1";
 }
 .icon-calendar:before {
   /* Used for Planned Events & Date fields */

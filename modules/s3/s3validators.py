@@ -42,6 +42,7 @@ __all__ = ("single_phone_number_pattern",
            "IS_INT_AMOUNT",
            "IS_IN_SET_LAZY",
            "IS_HTML_COLOUR",
+           "IS_JSONS3",
            "IS_LAT",
            "IS_LON",
            "IS_LAT_LON",
@@ -63,6 +64,14 @@ __all__ = ("single_phone_number_pattern",
 import re
 import time
 from datetime import datetime, timedelta
+
+try:
+    import json # try stdlib (Python 2.6)
+except ImportError:
+    try:
+        import simplejson as json # try external module
+    except:
+        import gluon.contrib.simplejson as json # fallback to pure-Python module
 
 from gluon import *
 #from gluon import current
@@ -104,7 +113,45 @@ s3_phone_requires = IS_MATCH(multi_phone_number_pattern,
                              error_message="Invalid phone number!")
 
 # =============================================================================
-class IS_LAT(object):
+class IS_JSONS3(Validator):
+    """
+    Example:
+        Used as::
+
+            INPUT(_type='text', _name='name',
+                requires=IS_JSON(error_message="This is not a valid json input")
+
+            >>> IS_JSON()('{"a": 100}')
+            ({u'a': 100}, None)
+
+            >>> IS_JSON()('spam1234')
+            ('spam1234', 'invalid json')
+    """
+
+    def __init__(self, error_message="Invalid JSON"):
+        self.native_json = current.db._adapter.native_json
+        self.error_message = error_message
+
+    # -------------------------------------------------------------------------
+    def __call__(self, value):
+        # Convert CSV import format to valid JSON
+        value = value.replace("'", "\"")
+        try:
+            if self.native_json:
+                json.loads(value) # raises error in case of malformed JSON
+                return (value, None) #  the serialized value is not passed
+            return (json.loads(value), None)
+        except JSONErrors, e:
+            return (value, "%s: %s" % (current.T(self.error_message), e))
+
+    # -------------------------------------------------------------------------
+    def formatter(self, value):
+        if value is None:
+            return None
+        return json.dumps(value)
+
+# =============================================================================
+class IS_LAT(Validator):
     """
         example:
 
@@ -113,6 +160,7 @@ class IS_LAT(object):
         Latitude has to be in decimal degrees between -90 & 90
         - we attempt to convert DMS format into decimal degrees
     """
+
     def __init__(self,
                  error_message = "Latitude/Northing should be between -90 & 90!"
                  ):
@@ -169,7 +217,7 @@ class IS_LAT(object):
                 return (value, None)
 
 # =============================================================================
-class IS_LON(object):
+class IS_LON(Validator):
     """
         example:
 
@@ -178,6 +226,7 @@ class IS_LON(object):
         Longitude has to be in decimal degrees between -180 & 180
         - we attempt to convert DMS format into decimal degrees
     """
+
     def __init__(self,
                  error_message = "Longitude/Easting should be between -180 & 180!"
                  ):
@@ -1677,10 +1726,13 @@ class IS_LOCATION_SELECTOR2(Validator):
     """
         Designed for use with the S3LocationSelectorWidget2
 
-        For Create forms, this will create a new location if there is a Lat/Lon submitted
-        For Update forms, this will check that we have a valid location_id FK and update any changes
+        For Create forms, this will create a new location if there is a Lat/Lon
+                          submitted
+        For Update forms, this will check that we have a valid location_id FK
+                          and update any changes
 
         @ToDo: Audit
+        @ToDo: Allow multiple in a single page
     """
 
     def __init__(self,
@@ -1770,7 +1822,8 @@ class IS_LOCATION_SELECTOR2(Validator):
                     errors = form.errors
                     error = ""
                     for e in errors:
-                        error = "%s\n%s" % (error, errors[e]) if error else errors[e]
+                        error = "%s\n%s" % (error, errors[e]) if error else \
+                                errors[e]
                     return (parent, error)
                 _id = table.insert(**feature)
                 feature.id = _id
@@ -1816,7 +1869,9 @@ class IS_LOCATION_SELECTOR2(Validator):
                                 if wkt and wkt != location.wkt:
                                     changed = True
                                 else:
-                                    # Float comparisons need care - just check the 1st 5 decimal points, as that's all we care about
+                                    # Float comparisons need care
+                                    # - just check the 1st 5 decimal points, as
+                                    #   that's all we care about
                                     llat = location.lat
                                     if lat is not None and llat is not None:
                                         if round(lat, 5) != round(llat, 5):
@@ -1833,7 +1888,8 @@ class IS_LOCATION_SELECTOR2(Validator):
 
                     if changed:
                         # Update the record
-                        if not current.auth.s3_has_permission("update", table, record_id=value):
+                        if not current.auth.s3_has_permission("update", table,
+                                                              record_id=value):
                             return (value, current.auth.messages.access_denied)
                         feature = Storage(addr_street=address,
                                           addr_postcode=postcode,
@@ -1847,7 +1903,8 @@ class IS_LOCATION_SELECTOR2(Validator):
                             feature.wkt = wkt
                             feature.inherited = False
                         # onvalidation
-                        # - includes detailed bounds check if deployment_setting doesn't disable it
+                        # - includes detailed bounds check if deployment_setting
+                        #   doesn't disable it
                         form = Storage()
                         form.errors = errors
                         form.vars = feature
@@ -1856,7 +1913,8 @@ class IS_LOCATION_SELECTOR2(Validator):
                             errors = form.errors
                             error = ""
                             for e in errors:
-                                error = "%s\n%s" % (error, errors[e]) if error else errors[e]
+                                error = "%s\n%s" % (error, errors[e]) if error \
+                                   else errors[e]
                             return (value, error)
                         # Update the record
                         db(table.id == value).update(**feature)
@@ -1894,8 +1952,8 @@ class IS_LOCATION_SELECTOR2(Validator):
                     # OK
                     return (value, None)
                 else:
-                    return (value,
-                            self.error_message or current.T("Location is of incorrect level!"))
+                    return (value, self.error_message or \
+                            current.T("Location is of incorrect level!"))
             else:
                 # Clear the Parent/Lat/Lon/Address
                 feature = Storage(lat = None,
@@ -2249,11 +2307,27 @@ class IS_ADD_PERSON_WIDGET2(Validator):
     """
 
     def __init__(self,
-                 error_message=None):
+                 error_message=None,
+                 allow_empty=False):
+        """
+            Constructor
+
+            @param error_message: alternative error message
+            @param allow_empty: allow the selector to be left empty
+
+            @note: This validator can *not* be used together with IS_EMPTY_OR,
+                   because when a new person gets entered, the submitted value
+                   for person_id would be None and hence satisfy IS_EMPTY_OR,
+                   and then this validator would never be reached and no new
+                   person record would be created => instead of IS_EMPTY_OR,
+                   use IS_ADD_PERSON_WIDGET2(allow_empty=True).
+        """
 
         self.error_message = error_message
+        self.allow_empty = allow_empty
+        
         # Tell s3_mark_required that this validator doesn't accept NULL values
-        self.mark_required = True
+        self.mark_required = not allow_empty
 
     # -------------------------------------------------------------------------
     def __call__(self, value):
@@ -2478,13 +2552,17 @@ class IS_ADD_PERSON_WIDGET2(Validator):
             _vars = Storage([(k, _vars[k])
                              for k in _vars if k != "location_id"])
 
+            fullname = _vars["full_name"]
+            if not fullname and self.allow_empty:
+                return None, None
+
             # Validate the email
             email, error = email_validate(_vars.email, None)
             if error:
                 return (None, error)
 
             # Separate the Name into components
-            first_name, middle_name, last_name = name_split(_vars["full_name"])
+            first_name, middle_name, last_name = name_split(fullname)
             _vars["first_name"] = first_name
             _vars["middle_name"] = middle_name
             _vars["last_name"] = last_name

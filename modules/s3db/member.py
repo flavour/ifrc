@@ -27,9 +27,9 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3MembersModel",
+__all__ = ("S3MembersModel",
            "member_rheader"
-           ]
+           )
 
 import datetime
 from gluon import *
@@ -42,9 +42,9 @@ class S3MembersModel(S3Model):
     """
     """
 
-    names = ["member_membership_type",
+    names = ("member_membership_type",
              "member_membership",
-             ]
+             )
 
     def model(self):
 
@@ -216,7 +216,7 @@ class S3MembersModel(S3Model):
 
         report_fields = ["person_id",
                          "membership_type_id",
-                         "paid",
+                         (T("Paid"), "paid"),
                          "organisation_id",
                          ]
 
@@ -245,6 +245,7 @@ class S3MembersModel(S3Model):
                             ),
             S3OptionsFilter("paid",
                             cols = 3,
+                            label = T("Paid"),
                             options = {T("paid"):    T("paid"),
                                        T("overdue"): T("overdue"),
                                        T("expired"): T("expired"),

@@ -69,10 +69,8 @@
    </button>
    <div class='nav-collapse collapse'>
     <ul class='nav'>
-     <li><a href='/{{=appname}}/default/index'>
-      <img id='logo' src='/{{=appname}}/static/themes/{{=theme}}/img/logo.png' alt=''/>
-     </a></li>
-     <li><a href='/{{=appname}}/hrm/staff'> <i class='icon-news'></i> {{=T("Contributors")}}</a></li>
+     <li><a class='home' href='/{{=appname}}/default/index'><img src='/{{=appname}}/static/img/sahanalarge_14.png' alt='Sahana'/></a></li>
+     <li><a href='/{{=appname}}/pr/person'> <i class='icon-news'></i> {{=T("Contributors")}}</a></li>
      <li><a href='/{{=appname}}/project/project?sector.name=None,Deployment'><i class='icon-check'></i> {{=T("Deployments")}}</a></li>
      <li><a href='/{{=appname}}/project/project?sector.name=None,Project'><i class='icon-project'></i> {{=T("Projects")}}</a></li>
      <li><a href='/{{=appname}}/project/task'><i class='icon-pencil'></i> {{=T("Tasks")}}</a></li>
@@ -87,17 +85,21 @@
        <li><a href='/{{=appname}}/admin/user'><i class='icon-cogs'></i> {{=T("Admin")}}</a></li>
        <li class='divider'></li>
        {{pass}}
+       <li><a href='/{{=appname}}/pr/person/{{=auth.user.id}}'><i class='icon-edit'></i> Edit Profile</a></li>
        <li><a href='/{{=appname}}/default/user/profile'><i class='icon-user'></i> {{=auth.user.email}}</a></li>
+       <li><a href='/{{=appname}}/default/index/subscriptions'><i class='icon-envelope'></i> {{=T("Notification Settings")}}</a></li>
        <li><a href='/{{=appname}}/default/user/change_password'><i class='icon-lock'></i> {{=T("Change Password")}}</a></li>
        <li><a href='/{{=appname}}/default/user/logout'><i class='icon-off'></i> {{=T("Logout")}}</a></li>
       </ul>
      </li>
      {{else:}}
-     <li class='dropdown'><a href='#' class='dropdown-toggle' data-toggle='dropdown'><i class='icon-signin'></i><b class='caret'></b></a>
-      <ul class='dropdown-menu'>
-       {{=auth.login(inline=True, lost_pw_link=False)}}
-      </ul>
-     </li>
+      {{if request.controller == "default" and request.function == "user" or "login" in request.args:}} {{else:}}
+       <li class='dropdown'><a href='#' class='dropdown-toggle' data-toggle='dropdown'><i class='icon-signin'></i><b class='caret'></b></a>
+        <ul class='dropdown-menu'>
+         {{=auth.login(inline=True, lost_pw_link=False)}}
+        </ul>
+       </li>
+      {{pass}}
      {{pass}}
      <li class='dropdown'><a href='#' class='dropdown-toggle' data-toggle='dropdown'><i class='icon-comment-alt'></i><b class='caret'></b></a>
       <ul class='dropdown-menu'>
@@ -117,16 +119,31 @@
   </div>
  </div>
 </div>
-<div class='container main-container'>
- <div id='alert-space'>
-  {{if response.error:}}<div class='alert alert-error'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.error}}</div>{{pass}}
-  {{if response.warning:}}<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.warning}}</div>{{pass}}
-  {{if response.information:}}<div class='alert alert-info'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.information}}</div>{{pass}}
-  {{if response.confirmation:}}<div class='alert alert-success'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.confirmation}}</div>{{pass}}
-  {{if response.flash:}}<div class='alert alert-success'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.flash}}</div>{{pass}}
+
+  {{if current.menu.options is not None:}}
+  <div class='container colmask fullpage'>
+  <div class='aside'>
+   <div id='menu_options'>
+    {{=current.menu.options}}
+   </div>
+  </div>
+  {{else:}}
+  <div class='container main-container'>
+  {{pass}}
+  <div {{if current.menu.options is not None:}}class='rightside'{{pass}}>
+   <div id='alert-space'>
+    {{if response.error:}}<div class='alert alert-error'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.error}}</div>{{pass}}
+    {{if response.warning:}}<div class='alert alert-warning'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.warning}}</div>{{pass}}
+    {{if response.information:}}<div class='alert alert-info'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.information}}</div>{{pass}}
+    {{if response.confirmation:}}<div class='alert alert-success'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.confirmation}}</div>{{pass}}
+    {{if response.flash:}}<div class='alert alert-success'><button type='button' class='close' data-dismiss='alert'>×</button>{{=response.flash}}</div>{{pass}}
+   </div>
+   <div id='content' class='cf'>
+    {{include}}
+   </div>
+  </div>
  </div>
- {{include}}
-</div>
+
  <div id='footer'>
   {{include "../private/templates/%s/views/footer.html" % response.s3.theme}}
   {{if s3.debug:}}{{=s3.toolbar()}}{{pass}}

@@ -165,6 +165,22 @@ def project():
                     query = FS("status").belongs(statuses)
                     r.resource.add_component_filter("task", query)
 
+                # Filter activities and milestones to the current project
+                options_filter = {"filterby": "project_id",
+                                  "filter_opts": (r.id,),
+                                  }
+                fields = []
+                if settings.get_project_activities():
+                    fields.append(s3db.project_task_activity.activity_id)
+                if settings.get_project_milestones():
+                    fields.append(s3db.project_task_milestone.milestone_id)
+                for f in fields:
+                    requires = f.requires
+                    if isinstance(requires, IS_EMPTY_OR):
+                        requires = requires.other
+                    if hasattr(requires, "set_filter"):
+                        requires.set_filter(**options_filter)
+                                            
             elif component_name == "beneficiary":
                 # Filter the location selector to the project's locations
                 component.table.project_location_id.requires = \
@@ -802,6 +818,19 @@ def task_milestone():
     return s3_rest_controller()
 
 # =============================================================================
+def task_tag():
+    """ RESTful CRUD controller for options.s3json lookups """
+
+    # Pre-process
+    def prep(r):
+        if r.method != "options" or r.representation != "s3json":
+            return False
+        return True
+    s3.prep = prep
+
+    return s3_rest_controller()
+
+# =============================================================================
 def milestone():
     """ RESTful CRUD controller """
 
@@ -810,6 +839,12 @@ def milestone():
         field.default = get_vars.project_id
         field.writable = False
         field.comment = None
+
+    return s3_rest_controller()
+
+# =============================================================================
+def tag():
+    """ RESTful CRUD controller """
 
     return s3_rest_controller()
 

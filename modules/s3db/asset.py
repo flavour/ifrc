@@ -28,11 +28,13 @@
 """
 
 __all__ = ("S3AssetModel",
+           "S3AssetHRModel",
            "S3AssetTeamModel",
            #"asset_rheader",
            "asset_types",
            "asset_log_status",
            "asset_controller",
+           "asset_AssetRepresent",
            )
 
 try:
@@ -188,13 +190,13 @@ class S3AssetModel(S3Model):
                                               ),
                                      required = True,
                                      script = '''
-S3OptionsFilter({
- 'triggerName':'organisation_id',
- 'targetName':'site_id',
+$.filterOptionsS3({
+ 'trigger':'organisation_id',
+ 'target':'site_id',
  'lookupResource':'site',
  'lookupPrefix':'org',
  'lookupField':'site_id',
- 'lookupURL':S3.Ap.concat('/org/sites_for_org/'),
+ 'lookupURL':S3.Ap.concat('/org/sites_for_org/')
 })''',
                                      ),
                      # This is a component, so needs to be a super_link
@@ -390,6 +392,12 @@ S3OptionsFilter({
                        asset_group = "asset_id",
                        asset_item = "asset_id",
                        asset_log = "asset_id",
+                       asset_human_resource = "asset_id",
+                       hrm_human_resource = {"link": "asset_human_resource",
+                                             "joinby": "asset_id",
+                                             "key": "human_resource_id",
+                                             "actuate": "hide",
+                                             },
                        vehicle_gps = "asset_id",
                        vehicle_vehicle = {"joinby": "asset_id",
                                           "multiple": False,
@@ -457,9 +465,9 @@ S3OptionsFilter({
                 site_types[key] = str(site_types[key])
             site_types = json.dumps(site_types)
             script = '''
-S3OptionsFilter({
- 'triggerName':'organisation_id',
- 'targetName':'site_id',
+$.filterOptionsS3({
+ 'trigger':'organisation_id',
+ 'target':'site_id',
  'lookupPrefix':'org',
  'lookupResource':'site',
  'lookupField':'site_id',
@@ -810,6 +818,36 @@ S3OptionsFilter({
         return
 
 # =============================================================================
+class S3AssetHRModel(S3Model):
+    """
+        Optionally link Assets to Human Resources
+        - useful for staffing a vehicle
+    """
+
+    names = ("asset_human_resource",)
+
+    def model(self):
+
+        #T = current.T
+
+        #--------------------------------------------------------------------------
+        # Assets <> Human Resources
+        #
+        tablename = "asset_human_resource"
+        self.define_table(tablename,
+                          self.asset_asset_id(empty = False),
+                          self.hrm_human_resource_id(empty = False,
+                                                     ondelete = "CASCADE",
+                                                     ),
+                          #s3_comments(),
+                          *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return dict()
+
+# =============================================================================
 class S3AssetTeamModel(S3Model):
     """
         Optionally link Assets to Teams
@@ -819,7 +857,7 @@ class S3AssetTeamModel(S3Model):
 
     def model(self):
 
-        T = current.T
+        #T = current.T
 
         #--------------------------------------------------------------------------
         # Assets <> Groups
@@ -995,8 +1033,11 @@ def asset_rheader(r):
             NONE = current.messages["NONE"]
 
             if record.type == ASSET_TYPE_VEHICLE:
+                STAFF = current.deployment_settings.get_hrm_staff_label()
                 tabs = [(T("Asset Details"), None, {"native": True}),
                         (T("Vehicle Details"), "vehicle"),
+                        (STAFF, "human_resource"),
+                        (T("Assign %(staff)s") % dict(staff=STAFF), "assign"),
                         (T("Check-In"), "check-in"),
                         (T("Check-Out"), "check-out"),
                         (T("GPS Data"), "gps"),
@@ -1102,7 +1143,7 @@ def asset_rheader(r):
                                    ltable.site_id.represent(current_log.site_id),
                                    ),
                                 ),
-                          DIV(_style = "margin-top:5px;", # @ToDo: Move to CSS
+                          DIV(_style = "margin-top:5px", # @ToDo: Move to CSS
                               *asset_action_btns
                               ),
                           rheader_tabs)
@@ -1239,6 +1280,7 @@ class asset_AssetRepresent(S3Represent):
 
         rows = db(query).select(table.id,
                                 table.number,
+                                table.type,
                                 itable.name,
                                 btable.name,
                                 left=btable.on(itable.brand_id == btable.id),
@@ -1267,5 +1309,26 @@ class asset_AssetRepresent(S3Represent):
         else:
             represent = "%s)" % represent
         return s3_unicode(represent)
+
+    # -------------------------------------------------------------------------
+    def link(self, k, v, row=None):
+        """
+            Represent a (key, value) as hypertext link.
+
+            @param k: the key (site_id)
+            @param v: the representation of the key
+            @param row: the row with this key
+        """
+
+        if row:
+            type = row.get("asset_asset.type", None)
+            if type == 1:
+                return A(v, _href=URL(c="vehicle", f="vehicle", args=[k],
+                                      # remove the .aaData extension in paginated views
+                                      extension=""
+                                      ))
+        k = s3_unicode(k)
+        return A(v, _href=self.linkto.replace("[id]", k) \
+                                     .replace("%5Bid%5D", k))
 
 # END =========================================================================

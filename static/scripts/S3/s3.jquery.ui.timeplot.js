@@ -1,5 +1,5 @@
 /**
- * jQuery UI timeplot Widget for S3Timeline
+ * jQuery UI timeplot Widget for S3TimePlot
  *
  * @copyright: 2013-14 (c) Sahana Software Foundation
  * @license: MIT
@@ -27,10 +27,13 @@
          *                                  deactivate auto-submit
          * @prop {string} emptyMessage - message to show when no data are
          *                               available for the time interval
+         * @prop {bool} burnDown - render as burnDown from baseline
+         *                         rather than as burnUp from zero
          */
         options: {
             ajaxURL: null,
             autoSubmit: 1000,
+            burnDown: false,
             emptyMessage: 'No data available'
         },
 
@@ -48,12 +51,10 @@
          */
         _init: function() {
 
+            // Initialize instance data
             this.widget_id = $(this.element).attr('id');
-            
             this.input = $(this.element).find('input[type="hidden"][name="tp-data"]').first();
             this.data = null;
-
-            // Render all initial contents
             this.svg = null;
 
             // Refresh
@@ -62,11 +63,25 @@
 
         /**
          * Remove generated elements & reset other changes
-         *
-         * @todo: implement
          */
         _destroy: function() {
-            
+
+            var el = this.element;
+
+            // Unbind events
+            this._unbindEvents();
+
+            // Remove the chart
+            if (this.svg) {
+                this.svg.remove();
+                this.svg = null;
+                el.find('.tp-chart').empty();
+            }
+
+            // Forget the data
+            this.data = null;
+
+            $.Widget.prototype.destroy.call(this);
         },
         
         /**
@@ -74,7 +89,7 @@
          */
         refresh: function() {
 
-            var $el = this.element
+            var el = this.element
 
             this._unbindEvents();
             
@@ -82,13 +97,13 @@
 
             // Hide submit-button if autoSubmit
             if (this.options.autoSubmit) {
-                $el.find('.tp-submit').hide();
+                el.find('.tp-submit').hide();
             } else {
-                $el.find('.tp-submit').show();
+                el.find('.tp-submit').show();
             }
             this._bindEvents();
             
-            $el.find('.tp-throbber').hide();
+            el.find('.tp-throbber').hide();
         },
 
         /**
@@ -117,8 +132,12 @@
             // Compute width and height
             var available_width = el.width();
             var available_height = available_width / 16 * 5;
+
+            var values = this._computeValues(data);
+            var marginLeft = this.options.burnDown ? 10 : values.maxValue.toString().length * 6 + 18;
+            var marginRight = this.options.burnDown ? values.maxValue.toString().length * 6 + 18 : 10;
             
-            var margin = {top: 40, right: 10, bottom: 70, left: 40},
+            var margin = {top: 40, right: marginRight, bottom: 70, left: marginLeft},
                 width = available_width - margin.left - margin.right,
                 height = available_height - margin.top - margin.bottom;
 
@@ -131,8 +150,67 @@
                         .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
             this.svg = svg;
 
-            // @todo: move into subfunction per chart type
-            // @todo: split groups, stack or group bars
+            this._renderBarChart(values, width, height);
+        },
+
+        /**
+         * Compute the chart values
+         *
+         * @param {object} data - the data (from the server)
+         * @return chart data object including min/max values
+         */
+        _computeValues: function(data) {
+            
+            var values = data.items,
+                baseline = data.baseline,
+                burnDown = this.options.burnDown;
+
+            var results = [],
+                minValue,
+                maxValue;
+            if (!data.empty) {
+                var items = data.items, v;
+                for (var i=0, len=items.length; i<len; i++) {
+                    item = items[i];
+                    if (burnDown && (baseline || baseline == 0)) {
+                        v = baseline - item[2];
+                    } else {
+                        v = item[2];
+                    }
+                    results.push([item[0], item[1], v]);
+                }
+                var minValue = d3.min(results, function(d) {
+                    return burnDown ? d[2] : Math.min(d[2], baseline);
+                });
+                var maxValue = d3.max(results, function(d) {
+                    return burnDown ? d[2] : Math.max(d[2], baseline);
+                });
+            } else {
+                results = [];
+                minValue = d3.min([baseline, 0]);
+                maxValue = d3.max([baseline, 0]);
+            }
+            return {
+                baseline: baseline,
+                items: results,
+                empty: data.empty,
+                minValue: minValue,
+                maxValue: maxValue
+            }
+        },
+
+        /**
+         * Render Bar Chart
+         *
+         * @param {object} data - the computed data (from _computeValues)
+         * @param {number} width - the chart width
+         * @param {number} height - the chart height
+         */
+
+        _renderBarChart: function(data, width, height) {
+
+            var svg = this.svg,
+                burnDown = this.options.burnDown;
 
             // Create the x axis
             var x = d3.scale.ordinal()
@@ -150,20 +228,14 @@
 
             var yAxis = d3.svg.axis()
                               .scale(y)
-                              .orient("left");
+                              .orient(burnDown? "right" : "left");
 
             // Compute the scales
             var self = this;
             x.domain(data.items.map(function(d) {
                 return self._parseDate(d[0]);
             }));
-            var values = data.items,
-                baseline = data.baseline;
-            if (baseline) {
-                var b = [[null, null, baseline]];
-                values = values ? values.concat(b) : b;
-            }
-            y.domain([0, d3.max(values, function(d) { return d[2]; })]);
+            y.domain([Math.min(0, data.minValue), data.maxValue]);
 
             // Add x axis
             svg.append("g")
@@ -178,8 +250,10 @@
                .attr("transform", "rotate(-90)" );
 
             // Add y axis
+            var yAxisPosition = burnDown ? width : 0;
             svg.append("g")
                .attr("class", "y axis")
+               .attr("transform", "translate(" + yAxisPosition + ",0)")
                .call(yAxis);
 
             if (data.empty) {
@@ -196,19 +270,31 @@
                 // Add horizontal grid lines
                 svg.append("g")
                    .attr("class", "grid")
-                   .call(yAxis.tickSize(-width).tickFormat(""));
+                   .call(yAxis.tickSize(burnDown ? width : -width).tickFormat(""));
 
                 // Render baseline?
-                if (baseline) {
-                    svg.selectAll("baseline")
+                var baseline = data.baseline;
+                if (baseline && !burnDown) {
+                    
+                    svg.selectAll("basearea")
                        .data([baseline])
                        .enter()
                        .append("rect")
-                       .attr("class", "baseline")
+                       .attr("class", baseline > 0 ? "basearea positive" : "basearea negative")
                        .attr("x", 0 )
                        .attr("width", width )
-                       .attr("y", function(d) { return y(d); })
-                       .attr("height", function(d) { return height - y(d); });
+                       .attr("y", function(d) { return d < 0 ? y(0) : y(d); })
+                       .attr("height", function(d) { return Math.abs(y(d) - y(0)); });
+                       
+                    svg.selectAll("baseline")
+                       .data([baseline])
+                       .enter()
+                       .append("line")
+                       .attr("class",  baseline > 0 ? "baseline positive" : "baseline negative")
+                       .attr("x1", 0)
+                       .attr("x2", width)
+                       .attr("y1", function(d) { return y(d);} )
+                       .attr("y2", function(d) { return y(d);} );
                 }
 
                 // Add the bars
@@ -217,13 +303,12 @@
 
                 bar.enter()
                    .append("rect")
-                   .attr("class", "bar")
+                   .attr("class", function(d, i) { return d[2] < 0 ? "bar negative" : "bar positive"; })
                    .attr("x", function(d) { return x(self._parseDate(d[0])); })
                    .attr("width", x.rangeBand())
-                   .attr("y", function(d) { return y(d[2]); })
-                   .attr("height", function(d) { return height - y(d[2]); });
+                   .attr("y", function(d) { return d[2] < 0 ? y(0) : y(d[2]); })
+                   .attr("height", function(d) { return Math.abs(y(d[2]) - y(0)); });
             }
-
         },
 
         /**
@@ -290,8 +375,28 @@
             var $el = $(this.element);
             var widget_id = '#' + $el.attr('id');
 
+            var time = $(widget_id + '-time').val(),
+                time_options = null,
+                start = null,
+                end = null,
+                slots = null;
+                
+            if (time != 'custom') {
+                time_options = time.split('|');
+                if (time_options.length == 3) {
+                    start = time_options[0];
+                    end = time_options[1];
+                    slots = time_options[2];
+                }
+            } else {
+                // @todo
+            }
+
             var options = {
-                fact: $(widget_id + '-fact').val(),
+//                 fact: $(widget_id + '-fact').val(),
+                start: start,
+                end: end,
+                slots: slots
             };
             return options;
         },
@@ -441,7 +546,8 @@
          */
         _bindEvents: function() {
 
-            var self = this;
+            var self = this,
+                widget_id = this.widget_id;
 
             // Refresh on resize in order to adapt to page width
             // @todo: make configurable
@@ -449,6 +555,21 @@
                 self.refresh();
             });
             
+            // Show/hide report options
+            $('#' + widget_id + '-options legend').click(function() {
+                $(this).siblings().toggle();
+                $(this).children().toggle();
+            });
+            $('#' + widget_id + '-filters legend').click(function() {
+                $(this).siblings().toggle();
+                $(this).children().toggle();
+            });
+
+            // Axis selectors to fire optionChanged-event
+            $('#' + widget_id + '-time').on('change.autosubmit', function() {
+                $('#' + widget_id + '-tp-form').trigger('optionChanged');
+            });
+
             // Form submission
             if (this.options.autoSubmit) {
                 // Auto-submit
@@ -465,7 +586,7 @@
                     }
                     timer = setTimeout(function () {
                         // @todo: implement _getOptions
-                        var options = null, //self._getOptions(),
+                        var options = self._getOptions(),
                             filters = self._getFilters();
                         self.reload(options, filters, false);
                     }, timeout);
@@ -475,7 +596,7 @@
                 // Manual submit
                 $('#' + this.widget_id + '-tp-form input.tp-submit').on('click.timeplot', function() {
                     // @todo: implement _getOptions
-                    var options = null, // self._getOptions(),
+                    var options = self._getOptions(),
                         filters = self._getFilters();
                     self.reload(options, filters, false);
                 });
@@ -487,9 +608,15 @@
          */
         _unbindEvents: function() {
 
+            var widget_id = this.widget_id;
+
             $(window).off("resize.timeplot");
-            $('#' + this.widget_id + '-tp-form').off('optionChanged');
-            $('#' + this.widget_id + '-tp-form input.tp-submit').off('click.timeplot');
+            $('#' + widget_id + '-tp-form').off('optionChanged');
+            $('#' + widget_id + '-tp-form input.tp-submit').off('click.timeplot');
+            $('#' + widget_id + '-time').unbind('change.autosubmit');
+
+            $('#' + widget_id + '-options legend').unbind('click');
+            $('#' + widget_id + '-filters legend').unbind('click');
         }
     });
 })(jQuery);

@@ -119,40 +119,41 @@ class S3Msg(object):
 
         MOBILE = current.deployment_settings.get_ui_label_mobile_phone()
         # Full range of contact options
-        self.CONTACT_OPTS = {
-                "EMAIL":       T("Email"),
-                "FACEBOOK":    T("Facebook"),
-                "FAX":         T("Fax"),
-                "HOME_PHONE":  T("Home phone"),
-                "RADIO":       T("Radio Callsign"),
-                "RSS":         T("RSS Feed"),
-                "SKYPE":       T("Skype"),
-                "SMS":         MOBILE,
-                "TWITTER":     T("Twitter"),
-                #"XMPP":       "XMPP",
-                #"WEB":        T("Website"),
-                "WORK_PHONE":  T("Work phone"),
-                "OTHER":       T("other")
-            }
+        self.CONTACT_OPTS = {"EMAIL":       T("Email"),
+                             "FACEBOOK":    T("Facebook"),
+                             "FAX":         T("Fax"),
+                             "HOME_PHONE":  T("Home phone"),
+                             "RADIO":       T("Radio Callsign"),
+                             "RSS":         T("RSS Feed"),
+                             "SKYPE":       T("Skype"),
+                             "SMS":         MOBILE,
+                             "TWITTER":     T("Twitter"),
+                             #"XMPP":       "XMPP",
+                             #"WEB":        T("Website"),
+                             "WORK_PHONE":  T("Work phone"),
+                             "IRC":         T("IRC handle"),
+                             "GITHUB":      T("Github Repo"),
+                             "LINKEDIN":    T("LinkedIn Profile"),
+                             "BLOG":        T("Blog"),
+                             "OTHER":       T("Other")
+                             }
 
         # Those contact options to which we can send notifications
         # NB Coded into hrm_map_popup & s3.msg.js
-        self.MSG_CONTACT_OPTS = {
-                "EMAIL":   T("Email"),
-                "SMS":     MOBILE,
-                "TWITTER": T("Twitter"),
-                #"XMPP":   "XMPP",
-            }
+        self.MSG_CONTACT_OPTS = {"EMAIL":   T("Email"),
+                                 "SMS":     MOBILE,
+                                 "TWITTER": T("Twitter"),
+                                 #"XMPP":   "XMPP",
+                                 }
 
         # SMS Gateways
-        self.GATEWAY_OPTS = {
-                "MODEM":   T("Modem"),
-                "SMTP":    T("SMTP"),
-                "TROPO":   T("Tropo"),
-                # Currently only available for Inbound
-                #"TWILIO":  T("Twilio"),
-                "WEB_API": T("Web API"),
-            }
+        self.GATEWAY_OPTS = {"MODEM":   T("Modem"),
+                             "SMTP":    T("SMTP"),
+                             "TROPO":   T("Tropo"),
+                             # Currently only available for Inbound
+                             #"TWILIO":  T("Twilio"),
+                             "WEB_API": T("Web API"),
+                             }
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -178,6 +179,28 @@ class S3Msg(object):
                                   clean.lstrip("0"))
 
         return clean
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def decode_email(header):
+        """
+            Decode an RFC2047-encoded email header (e.g.
+            "Dominic =?ISO-8859-1?Q?K=F6nig?=") and return it as unicode.
+
+            @param header: the header
+        """
+
+        # Deal with missing word separation (thanks Ingmar Hupp)
+        import re
+        header = re.sub(r"(=\?.*\?=)(?!$)", r"\1 ", header)
+
+        # Decode header
+        from email.header import decode_header
+        decoded = decode_header(header)
+
+        # Build string
+        return " ".join([s3_unicode(part[0], part[1] or "ASCII")
+                         for part in decoded])
 
     # =========================================================================
     # Inbound Messages

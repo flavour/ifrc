@@ -81,7 +81,8 @@ class S3CRUD(S3Method):
         """
 
         self.settings = current.response.s3.crud
-        self.sqlform = self._config("crud_form", S3SQLDefaultForm())
+        sqlform = self._config("crud_form")
+        self.sqlform = sqlform if sqlform else S3SQLDefaultForm()
 
         # Pre-populate create-form?
         self.data = None
@@ -109,7 +110,7 @@ class S3CRUD(S3Method):
             output = self.update(r, **attr)
             
         # Standard list view: list-type and hide-filter set by controller
-        # (default: list_type="datatable", hide_filter=True)
+        # (default: list_type="datatable", hide_filter=None)
         elif method == "list":
             output = self.select(r, **attr)
 
@@ -154,7 +155,8 @@ class S3CRUD(S3Method):
 
         # Settings
         self.settings = current.response.s3.crud
-        self.sqlform = self._config("crud_form", S3SQLDefaultForm())
+        sqlform = self._config("crud_form")
+        self.sqlform = sqlform if sqlform else S3SQLDefaultForm()
 
         _attr = Storage(attr)
         _attr["list_id"] = widget_id
@@ -267,13 +269,29 @@ class S3CRUD(S3Method):
                 else:
                     link = Storage(resource=resource.link, master=r.record)
 
+            get_vars = r.get_vars
+
+            # Hierarchy parent
+            hierarchy = None
+            link_to_parent = get_vars.get("link_to_parent")
+            if link_to_parent:
+                try:
+                    parent = long(link_to_parent)
+                except ValueError:
+                    pass
+                else:
+                    from s3hierarchy import S3Hierarchy
+                    h = S3Hierarchy(tablename)
+                    if h.config:
+                        hierarchy = h.preprocess_create_node(r, table, parent)
+
             # Copy record
             from_table = None
-            from_record = r.get_vars.get("from_record", None)
-            map_fields = r.get_vars.get("from_fields", None)
+            from_record = get_vars.get("from_record")
+            map_fields = get_vars.get("from_fields")
 
             if from_record:
-                del r.get_vars["from_record"] # forget it
+                del get_vars["from_record"] # forget it
                 if from_record.find(".") != -1:
                     from_table, from_record = from_record.split(".", 1)
                     from_table = current.db.get(from_table, None)
@@ -344,6 +362,7 @@ class S3CRUD(S3Method):
                                           onvalidation=onvalidation,
                                           onaccept=onaccept,
                                           link=link,
+                                          hierarchy=hierarchy,
                                           message=message,
                                           subheadings=subheadings,
                                           format=representation)
@@ -353,7 +372,7 @@ class S3CRUD(S3Method):
                 response.s3.jquery_ready.append("S3EnableNavigateAwayConfirm()")
 
             # Redirection
-            if representation in ("popup", "iframe"):
+            if representation in ("popup", "iframe", "plain", "dl"):
                 self.next = None
             else:
                 if r.http == "POST" and "interim_save" in r.post_vars:
@@ -890,14 +909,15 @@ class S3CRUD(S3Method):
                                   vars=next_vars)
             else:
                 update_next = _config("update_next")
-                if representation in ("popup", "iframe", "plain"):
+                if representation in ("popup", "iframe", "plain", "dl"):
                     self.next = None
                 elif not update_next:
                     next_vars = self._remove_filters(r.get_vars)
                     if r.component:
                         self.next = r.url(method="", vars=next_vars)
                     else:
-                        self.next = r.url(id="[id]", method="read",
+                        self.next = r.url(id="[id]",
+                                          method="read",
                                           vars=next_vars)
                 else:
                     try:
@@ -1019,9 +1039,9 @@ class S3CRUD(S3Method):
             show_filter_form = False
             if filter_widgets and not hide_filter and \
                representation not in ("aadata", "dl"):
+                show_filter_form = True
                 # Apply filter defaults (before rendering the data!)
                 from s3filter import S3FilterForm
-                show_filter_form = True
                 S3FilterForm.apply_filter_defaults(r, resource)
             
             # Data
@@ -2705,8 +2725,7 @@ class S3CRUD(S3Method):
             # Extract data for embedded form from post_vars
             post_vars = request.post_vars
             form_vars = Storage(table._filter_fields(post_vars))
-            form_vars[table._id.name] = selected
-            
+
             # Pass values through validator to convert them into db-format
             for k in form_vars:
                 value, error = s3_validate(table, k, form_vars[k])
@@ -2716,6 +2735,7 @@ class S3CRUD(S3Method):
             _form = Storage(vars = form_vars, errors = Storage())
             if _form.vars:
                 if selected:
+                    form_vars[table._id.name] = selected
                     # Onvalidation
                     onvalidation = get_config("update_onvalidation") or \
                                    get_config("onvalidation")
@@ -2738,6 +2758,7 @@ class S3CRUD(S3Method):
                                get_config("onaccept")
                     callback(onaccept, _form, tablename=component)
                 else:
+                    form_vars.pop(table._id.name, None)
                     # Onvalidation
                     onvalidation = get_config("create_onvalidation") or \
                                    get_config("onvalidation")

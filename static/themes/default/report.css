@@ -87,7 +87,8 @@
 .pt-show-table {
     display: none;
 }
-.pt-form button:first-child {
+.pt-form fieldset legend button:first-child,
+.tp-form fieldset legend button:first-child {
     display: none;
 }
 
@@ -165,12 +166,27 @@
 .grid {
     fill: none;
 }
-rect.baseline {
-    fill: lightgreen;
-    opacity: 0.2;
+rect.basearea {
+    opacity: 0.4;
+    stroke-width: 0;
 }
-rect.bar {
+rect.basearea.positive {
+    fill: lightgreen;
+}
+rect.basearea.negative {
+    fill: #fcc;
+}
+line.baseline.positive {
+    stroke: green;
+}
+line.baseline.negative {
+    stroke: red;
+}
+rect.bar.positive {
     fill: steelblue;
+}
+rect.bar.negative {
+    fill: brown;
 }
 text.empty {
     font-size: 12px;

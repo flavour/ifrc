@@ -60,17 +60,14 @@ from gluon import *
 from gluon.dal import Row, Rows, Query, Table
 from gluon.sqlhtml import OptionsWidget
 from gluon.storage import Storage
-from gluon.tools import Auth, callback
+from gluon.tools import Auth, callback, DEFAULT, replace_id
 from gluon.utils import web2py_uuid
 
 from s3error import S3PermissionError
 from s3fields import S3Represent, s3_uid, s3_timestamp, s3_deletion_status, s3_comments
 from s3rest import S3Method
 from s3track import S3Tracker
-from s3utils import s3_addrow, s3_get_extension, s3_mark_required
-
-DEFAULT = lambda: None
-#table_field = re.compile("[\w_]+\.[\w_]+")
+from s3utils import s3_addrow, S3DateTime, s3_get_extension, s3_mark_required
 
 DEBUG = False
 if DEBUG:
@@ -848,7 +845,13 @@ Thank you"""
                                log=DEFAULT,
                                ):
         """
-            Returns a form to reset the user password
+            Returns a form to reset the user password, overrides web2py's
+            version of the method to apply Eden formstyles.
+
+            @param next: URL to redirect to after successful form submission
+            @param onvalidation: callback to validate password reset form
+            @param onaccept: callback to post-process password reset request
+            @param log: event description for the log (string)
         """
 
         messages = self.messages
@@ -858,7 +861,7 @@ Thank you"""
         response = current.response
         session = current.session
         captcha = settings.retrieve_password_captcha or \
-                (settings.retrieve_password_captcha != False and settings.captcha)
+                  (settings.retrieve_password_captcha != False and settings.captcha)
 
         if next is DEFAULT:
             next = self.get_vars_next() or settings.request_reset_password_next
@@ -898,7 +901,7 @@ Thank you"""
                         formname="reset_password", dbio=False,
                         onvalidation=onvalidation,
                         hideerror=settings.hideerror):
-            user = table_user(**{userfield:form.vars.get(userfield)})
+            user = utable(**{userfield:form.vars.get(userfield)})
             if not user:
                 session.error = messages["invalid_%s" % userfield]
                 redirect(self.url(args=request.args),
@@ -918,7 +921,7 @@ Thank you"""
             else:
                 next = replace_id(next, form)
             redirect(next, client_side=settings.client_side)
-        # old_requires = table_user.email.requires
+        # old_requires = utable.email.requires
         return form
 
     # -------------------------------------------------------------------------
@@ -1313,22 +1316,28 @@ Thank you"""
     # -------------------------------------------------------------------------
     def email_reset_password(self, user):
         """
-             Overrides Web2Py's email_reset_password() to modify the message structure
-        """
+             Overrides Web2Py's email_reset_password() to modify the message
+             structure
 
-        import time
-        settings = self.settings
-        if not settings.mailer:
+             @param user: the auth_user record (Row)
+        """
+        
+        mailer = self.settings.mailer
+        if not mailer:
             return False
+            
+        import time
         reset_password_key = str(int(time.time())) + '-' + web2py_uuid()
-        message = self.messages.reset_password % \
-            dict(url="%s/default/user/reset_password/%s" % \
-                dict(current.response.s3.base_url, reset_password_key))
-        if settings.mailer.send(to=user.email,
-                                subject=self.messages.reset_password_subject,
-                                message=message):
+        reset_password_url = "%s/default/user/reset_password/%s" % \
+                             (current.response.s3.base_url, reset_password_key)
+
+        message = self.messages.reset_password % dict(url=reset_password_url)
+        if mailer.send(to=user.email,
+                       subject=self.messages.reset_password_subject,
+                       message=message):
             user.update_record(reset_password_key=reset_password_key)
             return True
+            
         return False
 
     # -------------------------------------------------------------------------
@@ -2000,9 +2009,16 @@ S3OptionsFilter({
     def auth_user_onaccept(self, email, user_id):
         db = current.db
         if self.settings.login_userfield != "username":
+            deployment_settings = current.deployment_settings
             chat_username = email.replace("@", "_")
             db(db.auth_user.id == user_id).update(username = chat_username)
-
+            chat_server = deployment_settings.get_chat_server()
+            if chat_server:
+                chatdb = DAL(deployment_settings.get_chatdb_string(), migrate=False)
+                # Using RawSQL as table not created in web2py
+                sql_query="insert into ofGroupUser values (\'%s\',\'%s\' ,0);" % (chat_server["groupname"], chat_username)
+                chatdb.executesql(sql_query)
+    
     # -------------------------------------------------------------------------
     def s3_user_register_onaccept(self, form):
         """
@@ -4890,14 +4906,15 @@ class S3Permission(object):
 
     TABLENAME = "s3_permission"
 
-    CREATE = 0x0001
-    READ = 0x0002
-    UPDATE = 0x0004
-    DELETE = 0x0008
-    REVIEW = 0x0010
-    APPROVE = 0x0020
+    CREATE = 0x0001     # Permission to create new records
+    READ = 0x0002       # Permission to read records
+    UPDATE = 0x0004     # Permission to update records
+    DELETE = 0x0008     # Permission to delete records
+    REVIEW = 0x0010     # Permission to review unapproved records
+    APPROVE = 0x0020    # Permission to approve records
+    PUBLISH = 0x0040    # Permission to publish records outside of Eden
 
-    ALL = CREATE | READ | UPDATE | DELETE | REVIEW | APPROVE
+    ALL = CREATE | READ | UPDATE | DELETE | REVIEW | APPROVE | PUBLISH
     NONE = 0x0000 # must be 0!
 
     PERMISSION_OPTS = OrderedDict([
@@ -4907,9 +4924,11 @@ class S3Permission(object):
         [UPDATE, "UPDATE"],
         [DELETE, "DELETE"],
         [REVIEW, "REVIEW"],
-        [APPROVE, "APPROVE"]])
+        [APPROVE, "APPROVE"],
+        [PUBLISH, "PUBLISH"],
+    ])
 
-    # Method string <-> required permission
+    # Method <-> required permission
     METHODS = Storage({
         "create": CREATE,
         "read": READ,
@@ -4922,6 +4941,7 @@ class S3Permission(object):
         "review": REVIEW,
         "approve": APPROVE,
         "reject": APPROVE,
+        "publish": PUBLISH,
     })
 
     # Lambda expressions for ACL handling
@@ -6549,7 +6569,9 @@ class S3Audit(object):
         db = current.db
         if tablename not in db:
             db.define_table(tablename,
-                            Field("timestmp", "datetime"),
+                            Field("timestmp", "datetime",
+                                  represent = S3DateTime.datetime_represent,
+                                  ),
                             Field("user_id", db.auth_user),
                             Field("method"),
                             Field("tablename"),

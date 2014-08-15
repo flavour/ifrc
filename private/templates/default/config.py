@@ -264,6 +264,8 @@ settings.L10n.decimal_separator = "."
 #settings.gis.layer_tree_radio = True
 # Uncomment to display the Map Legend as a floating DIV
 #settings.gis.legend = "float"
+# Uncomment to prevent showing LatLon in Location Represents
+#settings.gis.location_represent_address_only = True
 # Mouse Position: 'normal', 'mgrs' or None
 #settings.gis.mouse_position = "mgrs"
 # Uncomment to show the Navigation controls on the toolbar
@@ -366,7 +368,7 @@ settings.gis.geonames_username = "eden_test"
 # Uncomment to show created_by/modified_by using Names not Emails
 #settings.ui.auth_user_represent = "name"
 # Uncomment to restrict the export formats available
-#settings.ui.export_formats = ["kml", "pdf", "rss", "xls", "xml"]
+#settings.ui.export_formats = ("kml", "pdf", "rss", "xls", "xml")
 # Uncomment to include an Interim Save button on CRUD forms
 #settings.ui.interim_save = True
 # Uncomment to enable glyphicon icons on action buttons (requires bootstrap CSS)
@@ -445,6 +447,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.org.autocomplete = True
 # Enable the use of Organisation Branches
 #settings.org.branches = True
+# Show branches as tree rather than as table
+#settings.org.branches_tree_view = True
 # Make Facility Types Hierarchical
 #settings.org.facility_types_hierarchical = True
 # Enable the use of Organisation Groups & what their name is
@@ -476,6 +480,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.org.site_autocomplete_fields = ("instance_type", "location_id$L1", "location_id$addr_street", "organisation_id$name")
 # Uncomment to hide inv & req tabs from Sites
 #settings.org.site_inv_req_tabs = False
+# Uncomment to allow Sites to be staffed by Volunteers
+#settings.org.site_volunteers = True
 # Uncomment to add summary fields for Organisations/Offices for # National/International staff
 #settings.org.summary = True
 # Enable certain fields just for specific Organisations
@@ -548,6 +554,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.hrm.teams = False
 # Uncomment to disable the use of HR Trainings
 #settings.hrm.use_trainings = False
+# Uncomment to use activity types in experience record, specify as {"code":"label", ...}
+#settings.hrm.activity_types = {"rdrt": "RDRT Mission"}
 
 # -----------------------------------------------------------------------------
 # Inventory Management
@@ -706,6 +714,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.project.projects = True
 # Uncomment this to disable Sectors in projects
 #settings.project.sectors = False
+# Uncomment this to use Tags in Tasks
+#settings.project.task_tag = True
 # Uncomment this to enable Themes in 3W projects
 #settings.project.themes = True
 # Uncomment this to use Theme Percentages for projects

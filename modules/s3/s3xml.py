@@ -175,10 +175,11 @@ class S3XML(S3Codec):
         marker_height="marker_height",
         marker_width="marker_width",
         parent="parent",
-        popup="popup",          # for GIS Feature Layers/Queries
+        #popup="popup",          # for GIS Feature Layers/Queries
         popup_url="popup_url",  # for map popups
         sym="sym",              # for GPS
         attributes="attributes",# For GeoJSON exports
+        style="style",          # For GeoJSON exports
         type="type",
         readable="readable",
         writable="writable",
@@ -277,6 +278,10 @@ class S3XML(S3Codec):
                 e = sys.exc_info()[1]
                 self.error = e
                 current.log.error(e)
+                #output = self.tostring(tree, pretty_print=True)
+                #outputFile = open("failed_transform.xml", "w")
+                #outputFile.write(output)
+                #outputFile.close()
                 return None
         else:
             # Error parsing the XSL stylesheet
@@ -813,7 +818,7 @@ class S3XML(S3Codec):
         tablename = resource.tablename
         if tablename == "gis_feature_query":
             # Requires no special handling: XSLT uses normal fields
-            return dict()
+            return
 
         db = current.db
         gis = current.gis
@@ -827,10 +832,9 @@ class S3XML(S3Codec):
         latlons = location_data.get("latlons", [])
         geojsons = location_data.get("geojsons", [])
         wkts = location_data.get("wkts", [])
-        #popup_url = location_data.get("popup_url", [])
-        markers = location_data.get("markers", [])
-        tooltips = location_data.get("tooltips", [])
         attributes = location_data.get("attributes", [])
+        markers = location_data.get("markers", [])
+        styles = location_data.get("styles", [])
 
         map_data = element.find("map")
         if map_data:
@@ -848,28 +852,7 @@ class S3XML(S3Codec):
                 if geojson:
                     geometry = etree.SubElement(map_data, "geometry")
                     geometry.set("value", geojson)
-                    #if tablename in attributes:
-                    #    # Add Attributes
-                    #    _attr = ""
-                    #    attrs = attributes[tablename][record_id]
-                    #    for a in attrs:
-                    #        if _attr:
-                    #            _attr = "%s,[%s]=[%s]" % (_attr, a, attrs[a])
-                    #        else:
-                    #            _attr = "[%s]=[%s]" % (a, attrs[a])
-                    #    if _attr:
-                    #        attr[ATTRIBUTE.attributes] = _attr
-                if tablename in tooltips:
-                    # Retrieve the HTML for the onHover Tooltip
-                    tooltip = tooltips[tablename][record_id]
-                    if type(tooltip) is not unicode:
-                        try:
-                            # encode suitable for use as XML attribute
-                            tooltip = tooltip.decode("utf-8")
-                        except:
-                            pass
-                    else:
-                        attr[ATTRIBUTE.popup] = tooltip
+
                 # Use the current controller for map popup URLs to get
                 # the controller settings applied even for map popups
                 url = URL(request.controller,
@@ -941,24 +924,20 @@ class S3XML(S3Codec):
                     geometry.set("value", geojson)
                     if tablename in attributes:
                         # Add Attributes
-                        #_attr = ""
                         attrs = attributes[tablename][record_id]
-                        #for a in attrs:
-                        #    if _attr:
-                        #        _attr = "%s,[%s]=[%s]" % (_attr, a, attrs[a])
-                        #    else:
-                        #        _attr = "[%s]=[%s]" % (a, attrs[a])
-                        #if _attr:
-                        #    attr[ATTRIBUTE.attributes] = _attr
                         if attrs:
-                            _attr = json.dumps(attrs, separators=SEPARATORS)
-                            attr[ATTRIBUTE.attributes] = _attr.replace('"', "|")
+                            # Encode in a way which we can decode in static/formats/geojson/export.xsl
+                            # - double up all tokens to reduce chances of them being within represents
+                            _attr = json.dumps(attrs, separators=(",,", "::"))
+                            attr[ATTRIBUTE.attributes] = "{%s}" % _attr.replace('"', "||")
+
             elif tablename in wkts:
                 # Nothing gets here currently
                 # tbc: KML Polygons (or we should also do these outside XSLT)
                 wkt = wkts[tablename][record_id]
                 # Convert the WKT in XSLT
                 attr[ATTRIBUTE.wkt] = wkt
+
             else:
                 # Lookup record by record :/
                 table = resource.table
@@ -1018,22 +997,16 @@ class S3XML(S3Codec):
                         attr[ATTRIBUTE.lon] = "%.4f" % lon
             else:
                 # Error
-                raise
+                raise RuntimeError("Bulk lookup of GeoJSON or Lat/Lon data failed for %s" % tablename)
 
             if tablename in attributes:
                 # Add Attributes
-                #_attr = ""
                 attrs = attributes[tablename][record_id]
-                #for a in attrs:
-                #    if _attr:
-                #        _attr = "%s,[%s]=[%s]" % (_attr, a, attrs[a])
-                #    else:
-                #        _attr = "[%s]=[%s]" % (a, attrs[a])
-                #if _attr:
-                #    attr[ATTRIBUTE.attributes] = _attr
                 if attrs:
-                    _attr = json.dumps(attrs, separators=SEPARATORS)
-                    attr[ATTRIBUTE.attributes] = _attr.replace('"', "|")
+                    # Encode in a way which we can decode in static/formats/geojson/export.xsl
+                    # - double up all tokens to reduce chances of them being within represents
+                    _attr = json.dumps(attrs, separators=(",,", "::"))
+                    attr[ATTRIBUTE.attributes] = "{%s}" % _attr.replace('"', "||")
 
             if tablename in markers:
                 _markers = markers[tablename]
@@ -1052,17 +1025,13 @@ class S3XML(S3Codec):
                                                             m["image"])
                     attr[ATTRIBUTE.marker_height] = str(m["height"])
                     attr[ATTRIBUTE.marker_width] = str(m["width"])
-            if tablename in tooltips:
-                # Retrieve the HTML for the onHover Tooltip
-                tooltip = tooltips[tablename][record_id]
-                if type(tooltip) is not unicode:
-                    try:
-                        # encode suitable for use as XML attribute
-                        tooltip = tooltip.decode("utf-8")
-                    except:
-                        pass
-                else:
-                    attr[ATTRIBUTE.popup] = tooltip
+
+            if tablename in styles:
+                # Add Styles
+                style = styles[tablename].get(record_id)
+                if style:
+                    _style = etree.SubElement(map_data, "style")
+                    _style.set("value", style)
 
             # Use the current controller for map popup URLs to get
             # the controller settings applied even for map popups

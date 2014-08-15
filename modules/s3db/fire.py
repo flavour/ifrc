@@ -27,9 +27,9 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3FireModel",
+__all__ = ("S3FireModel",
            "S3FireStationModel",
-           ]
+           )
 
 from gluon import *
 from gluon.dal import Row
@@ -43,9 +43,9 @@ class S3FireModel(S3Model):
         Fire Zones: Burn Perimeter, Burnt zone, Evacuation Zone, etc
     """
 
-    names = ["fire_zone_type",
+    names = ("fire_zone_type",
              "fire_zone",
-             ]
+             )
 
     def model(self):
 
@@ -68,7 +68,7 @@ class S3FireModel(S3Model):
                      *s3_meta_fields())
 
         # CRUD strings
-        ADD_ZONE_TYPE = T("Add Zone Type")
+        ADD_ZONE_TYPE = T("Create Zone Type")
         crud_strings[tablename] = Storage(
             label_create = ADD_ZONE_TYPE,
             title_display = T("Zone Type Details"),
@@ -107,8 +107,9 @@ class S3FireModel(S3Model):
                            label=T("Type")),
                      self.gis_location_id(
                        widget = S3LocationSelectorWidget2(
-                           catalog_layers=True,
-                           polygons=True
+                           catalog_layers = True,
+                           points = False,
+                           polygons = True,
                            )
                        ),
                      s3_comments(),
@@ -116,7 +117,7 @@ class S3FireModel(S3Model):
 
         # CRUD strings
         crud_strings[tablename] = Storage(
-            label_create = T("Add Zone"),
+            label_create = T("Create Zone"),
             title_display = T("Zone Details"),
             title_list = T("Zones"),
             title_update = T("Edit Zone"),
@@ -158,12 +159,12 @@ class S3FireStationModel(S3Model):
         http://eden.sahanafoundation.org/wiki/Deployments/Bombeiros
     """
 
-    names = ["fire_station",
+    names = ("fire_station",
              "fire_station_vehicle",
              "fire_water_source",
              "fire_hazard_point",
              "fire_staff_on_duty"
-             ]
+             )
 
     def model(self):
 

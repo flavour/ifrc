@@ -51,7 +51,7 @@ from gluon.html import *
 from gluon.storage import Storage
 from gluon.validators import IS_EMPTY_OR, IS_IN_SET
 
-from s3utils import s3_flatlist, s3_has_foreign_key, s3_orderby_fields, s3_truncate, s3_unicode, S3MarkupStripper, s3_represent_value
+from s3utils import s3_flatlist, s3_has_foreign_key, s3_orderby_fields, s3_truncate, s3_unicode, S3MarkupStripper, s3_represent_value, s3_set_extension
 from s3validators import IS_NUMBER
 
 DEBUG = False
@@ -441,14 +441,14 @@ class S3DataTable(object):
         if base_url is None:
             base_url = request.url
 
-        # @todo: this needs rework
-        #        - other data formats could have other list_fields,
-        #          hence applying the datatable sorting/filters is
-        #          not transparent
+        # @todo: other data formats could have other list_fields,
+        #        so position-based datatable sorting/filters may
+        #        be applied wrongly
         if s3.datatable_ajax_source:
             default_url = s3.datatable_ajax_source
         else:
             default_url = base_url
+
         # Strip format extensions (e.g. .aadata or .iframe)
         default_url = re.sub("(\/[a-zA-Z0-9_]*)(\.[a-zA-Z]*)", "\g<1>", default_url)
 
@@ -458,85 +458,64 @@ class S3DataTable(object):
             query = "&".join("%s=%s" % (k, v) for k, v in get_vars.items())
             default_url = "%s?%s" % (default_url, query)
 
-        div = SPAN(_id = "%s_list_formats" % id, # Used by s3.filter.js to update URLs
-                   _class = "list_formats")
+        # Construct row of export icons
+        # @note: icons appear in reverse order due to float-right
+        icons = SPAN(_class = "list_formats")
+                   
         export_formats = current.deployment_settings.get_ui_export_formats()
         if export_formats:
-            div.append("%s:" % current.T("Export as"))
-            iconList = []
-            formats = s3.formats
+            
+            icons.append("%s:" % current.T("Export as"))
+            
+            formats = dict(s3.formats)
+
+            # Auto-detect KML fields
+            if "kml" not in formats and rfields:
+                kml_fields = set(["location_id", "site_id"])
+                if any(rfield.fname in kml_fields for rfield in rfields):
+                    formats["kml"] = default_url
+
+            default_formats = ("xml", "rss", "xls", "pdf")
             EXPORT = T("Export in %(format)s format")
 
-            # In reverse-order of appearance due to float-right
-            if "map" in formats and "map" in export_formats:
-                iconList.append(DIV(_class="export_map",
-                                    _onclick="S3.dataTables.formatRequest('map','%s','%s')" % (id, formats.map),
-                                    _title=T("Show on Map"),
-                                    ))
-            if "kml" in export_formats:
-                if "kml" in formats:
-                    iconList.append(DIV(_class="export_kml",
-                                        _onclick="S3.dataTables.formatRequest('kml','%s','%s')" % (id, formats.kml),
-                                        _title=EXPORT % dict(format="KML"),
-                                        ))
-                elif rfields:
-                    kml_list = ["location_id",
-                                "site_id",
-                                ]
-                    for r in rfields:
-                        if r.fname in kml_list:
-                            iconList.append(DIV(_class="export_kml",
-                                                _onclick="S3.dataTables.formatRequest('kml','%s','%s')" % (id, default_url),
-                                                _title=EXPORT % dict(format="KML"),
-                                                ))
-                            break
-            if "cap" in formats and "cap" in export_formats:
-                iconList.append(DIV(_class="export_cap",
-                                    _onclick="S3.dataTables.formatRequest('cap','%s','%s')" % (id, formats.cap),
-                                    _title=EXPORT % dict(format="CAP"),
-                                    ))
-            if "have" in formats and "have" in export_formats:
-                iconList.append(DIV(_class="export_have",
-                                    _onclick="S3.dataTables.formatRequest('have','%s','%s')" % (id, formats.have),
-                                    _title=EXPORT % dict(format="HAVE"),
-                                    ))
-            if "xml" in export_formats:
-                url = formats.xml if formats.xml else default_url
-                iconList.append(DIV(_class="export_xml",
-                                    _onclick="S3.dataTables.formatRequest('xml','%s','%s')" % (id, url),
-                                    _title=EXPORT % dict(format="XML"),
-                                    ))
-            if "rss" in export_formats:
-                url = formats.rss if formats.rss else default_url
-                iconList.append(DIV(_class="export_rss",
-                                    _onclick="S3.dataTables.formatRequest('rss','%s','%s')" % (id, url),
-                                    _title=EXPORT % dict(format="RSS"),
-                                    ))
-            if "xls" in export_formats:
-                url = formats.xls if formats.xls else default_url
-                iconList.append(DIV(_class="export_xls",
-                                    _onclick="S3.dataTables.formatRequest('xls','%s','%s')" % (id, url),
-                                    _title=EXPORT % dict(format="XLS"),
-                                    ))
-            if "pdf" in export_formats:
-                url = formats.pdf if formats.pdf else default_url
-                iconList.append(DIV(_class="export_pdf",
-                                    _onclick="S3.dataTables.formatRequest('pdf','%s','%s')" % (id, url),
-                                    _title=EXPORT % dict(format="PDF"),
-                                    ))
+            append_icon = icons.append
+            for fmt in export_formats:
 
-            for icon in iconList:
-                div.append(icon)
+                # Export format URL
+                if fmt in default_formats:
+                    url = formats.get(fmt, default_url)
+                else:
+                    url = formats.get(fmt)
+                if not url:
+                    continue
 
-        output = DIV(_class="dt-export-options")
+                # Onhover title for the icon
+                if fmt == "map":
+                    title = T("Show on Map")
+                else:
+                    title = EXPORT % dict(format=fmt.upper())
+
+                append_icon(DIV(_class="dt-export export_%s" % fmt,
+                                _title=title,
+                                data = {"url": url,
+                                        "extension": fmt,
+                                        },
+                                ))
+
+        export_options = DIV(_class="dt-export-options")
+
+        # Append the permalink (if any)
         if permalink is not None:
             link = A(T("Link to this result"),
                      _href=permalink,
                      _class="permalink")
-            output.append(link)
-            output.append(" | ")
-        output.append(div)
-        return output
+            export_options.append(link)
+            export_options.append(" | ")
+
+        # Append the icons
+        export_options.append(icons)
+
+        return export_options
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -694,14 +673,14 @@ class S3DataTable(object):
         config.pagination = attr.get("dt_pagination", "true")
         config.paginationType = attr.get("dt_pagination_type", "full_numbers")
         config.bFilter = attr.get("dt_bFilter", "true")
-        config.ajaxUrl = attr.get("dt_ajax_url", URL(c=request.controller,
-                                                     f=request.function,
-                                                     extension="aadata",
-                                                     args=request.args,
-                                                     vars=request.get_vars,
-                                                     ))
+        url = URL(c=request.controller,
+                  f=request.function,
+                  args=request.args,
+                  vars=request.get_vars,
+                  )
+        _ajaxUrl = s3_set_extension( url, "aadata")           
+        config.ajaxUrl = attr.get("dt_ajax_url", _ajaxUrl)
         config.rowStyles = attr.get("dt_styles", [])
-
 
         rowActions = attr.get("dt_row_actions", s3.actions)
         if rowActions:
@@ -1120,6 +1099,19 @@ class S3DataListLayout(object):
     """ DataList default layout """
 
     item_class = "thumbnail"
+
+    # ---------------------------------------------------------------------
+    def __init__(self, profile=None):
+        """
+            Constructor
+
+            @param profile: table name of the master resource of the
+                            profile page (if used for a profile), can be
+                            used in popup URLs to indicate the master
+                            resource
+        """
+
+        self.profile = profile
 
     # ---------------------------------------------------------------------
     def __call__(self, list_id, item_id, resource, rfields, record):

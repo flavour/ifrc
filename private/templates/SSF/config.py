@@ -7,8 +7,9 @@ except:
     # Python 2.6
     from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
-from gluon import current, URL, TR, TD, DIV
+from gluon import current, URL
 from gluon.storage import Storage
+from gluon.validators import IS_IN_SET
 
 T = current.T
 settings = current.deployment_settings
@@ -18,7 +19,7 @@ settings = current.deployment_settings
 """
 
 # Pre-Populate
-settings.base.prepopulate = ["SSF", "demo/users"]
+settings.base.prepopulate = ("SSF", "demo/users")
 
 # Theme
 settings.base.theme = "SSF"
@@ -30,37 +31,10 @@ settings.security.self_registration = True
 settings.auth.registration_requires_verification = True
 settings.auth.registration_requires_approval = False
 
-# The name of the teams that users are added to when they opt-in to receive alerts
-# settings.auth.opt_in_team_list = ["Updates"]
 # Uncomment this to set the opt in default to True
 settings.auth.opt_in_default = True
-# Uncomment this to request the Mobile Phone when a user registers
-#settings.auth.registration_requests_mobile_phone = True
-# Uncomment this to have the Mobile Phone selection during registration be mandatory
-#settings.auth.registration_mobile_phone_mandatory = True
-# Uncomment this to request the Organisation when a user registers
-#settings.auth.registration_requests_organisation = True
-# Uncomment this to have the Organisation selection during registration be mandatory
-#settings.auth.registration_organisation_mandatory = True
-# Uncomment this to have the Organisation input hidden unless the user enters a non-whitelisted domain
-#settings.auth.registration_organisation_hidden = True
 # Uncomment this to default the Organisation during registration
 settings.auth.registration_organisation_default = "Sahana Software Foundation"
-# Uncomment & populate these to set the default roelsd assigned to newly-registered users
-# settings.auth.registration_roles = ["STAFF", "PROJECT_EDIT"]
-# Uncomment this to request an image when users register
-# settings.auth.registration_requests_image = True
-# Uncomment this to direct newly-registered users to their volunteer page to be able to add extra details
-# NB This requires Verification/Approval to be Off
-# @ToDo: Extend to all optional Profile settings: Homepage, Twitter, Facebook, Mobile Phone, Image
-#settings.auth.registration_volunteer = True
-# Terms of Service to be able to Register on the system
-# uses <template>/views/tos.html
-#settings.auth.terms_of_service = True
-# Uncomment this to allow users to Login using OpenID
-#settings.auth.openid = True
-# Uncomment this to allow users to Login using Gmail's SMTP
-#settings.auth.gmail_domains = ["gmail.com"]
 
 # Always notify the approver of a new (verified) user, even if the user is automatically approved
 settings.auth.always_notify_approver = True
@@ -107,10 +81,6 @@ settings.L10n.display_toolbar = True
 settings.L10n.utc_offset = "UTC +0000"
 # Default timezone for users
 settings.L10n.utc_offset = "UTC +0000"
-# Uncomment these to use US-style dates in English (localisations can still convert to local format)
-#settings.L10n.date_format = T("%m-%d-%Y")
-# Make last name in person/user records mandatory
-#settings.L10n.mandatory_lastname = True
 
 # Add thousands separator to numbers, eg. 1,000,000
 #settings.L10n.thousands_separator = True
@@ -123,42 +93,10 @@ settings.L10n.utc_offset = "UTC +0000"
 #}
 #settings.fin.currency_default = "USD" # Dollars
 #settings.fin.currency_writable = False # False currently breaks things
-
-# PDF settings
-# Default page size for reports (defaults to A4)
-#settings.base.paper_size = T("Letter")
-# Location of Logo used in pdfs headers
-#settings.ui.pdf_logo = "static/img/mylogo.png"
-
-# GIS (Map) settings
-# Size of the Embedded Map
-# Change this if-required for your theme
-# NB API can override this in specific modules
-#settings.gis.map_height = 600
-#settings.gis.map_width = 1000
-# Restrict the Location Selector to just certain countries
-# NB This can also be over-ridden for specific contexts later
-# e.g. Activities filtered to those of parent Project
-#settings.gis.countries = ["US"]
-# Hide the Map-based selection tool in the Location Selector
-#settings.gis.map_selector = False
-# Hide LatLon boxes in the Location Selector
-#settings.gis.latlon_selector = False
-# Use Building Names as a separate field in Street Addresses?
-#settings.gis.building_name = False
 # Display Resources recorded to Admin-Level Locations on the map
+
 # @ToDo: Move into gis_config?
 settings.gis.display_L0 = False
-# Currently unused
-#settings.gis.display_L1 = True
-# Set this if there will be multiple areas in which work is being done,
-# and a menu to select among them is wanted. With this on, any map
-# configuration that is designated as being available in the menu will appear
-#settings.gis.menu = T("Maps")
-# Maximum Marker Size
-# (takes effect only on display)
-#settings.gis.marker_max_height = 35
-#settings.gis.marker_max_width = 30
 # Duplicate Features so that they show wrapped across the Date Line?
 # Points only for now
 # lon<0 have a duplicate at lon+360
@@ -166,22 +104,8 @@ settings.gis.display_L0 = False
 settings.gis.duplicate_features = False
 # Mouse Position: 'normal', 'mgrs' or 'off'
 settings.gis.mouse_position = "normal"
-# Print Service URL: http://eden.sahanafoundation.org/wiki/BluePrintGISPrinting
-#settings.gis.print_service = "/geoserver/pdf/"
 # Do we have a spatial DB available? (currently unused. Will support PostGIS & Spatialite.)
 settings.gis.spatialdb = False
-# Bing API Key (for Map layers)
-#settings.gis.api_bing = ""
-# Google API Key (for Earth & MapMaker Layers)
-# default works for localhost
-#settings.gis.api_google = ""
-# Yahoo API Key (for Geocoder)
-#settings.gis.api_yahoo = ""
-# GeoServer (Currently used by GeoExplorer. Will allow REST control of GeoServer.)
-# NB Needs to be publically-accessible URL for querying via client JS
-#settings.gis.geoserver_url = "http://localhost/geoserver"
-#settings.gis.geoserver_username = "admin"
-#settings.gis.geoserver_password = ""
 
 # Use 'soft' deletes
 settings.security.archive_not_delete = True
@@ -197,128 +121,30 @@ settings.security.archive_not_delete = True
 # 5: Apply Controller, Function & Table ACLs
 # 6: Apply Controller, Function, Table & Organisation ACLs
 # 7: Apply Controller, Function, Table, Organisation & Facility ACLs
-#
 
 settings.security.policy = 5
-#acl = settings.aaa.acl
-#settings.aaa.default_uacl =  acl.READ   # User ACL
-#settings.aaa.default_oacl =  acl.CREATE | acl.READ | acl.UPDATE # Owner ACL
 
-# Lock-down access to Map Editing
-#settings.security.map = True
-# Allow non-MapAdmins to edit hierarchy locations? Defaults to True if not set.
-# (Permissions can be set per-country within a gis_config)
-#settings.gis.edit_Lx = False
-# Allow non-MapAdmins to edit group locations? Defaults to False if not set.
-#settings.gis.edit_GR = True
-# Note that editing of locations used as regions for the Regions menu is always
-# restricted to MapAdmins.
-
-# Audit settings
-# NB Auditing (especially Reads) slows system down & consumes diskspace
-#settings.security.audit_write = False
-#settings.security.audit_read = False
-
-# UI/Workflow options
-# Should user be prompted to save before navigating away?
-#settings.ui.navigate_away_confirm = False
-# Should user be prompted to confirm actions?
-#settings.ui.confirm = False
-# Should potentially large dropdowns be turned into autocompletes?
-# (unused currently)
-#settings.ui.autocomplete = True
-#settings.ui.update_label = "Edit"
-# Enable this for a UN-style deployment
-#settings.ui.cluster = True
-# Enable this to use the label 'Camp' instead of 'Shelter'
-#settings.ui.camp = True
-# Enable this to change the label for 'Mobile Phone'
-#settings.ui.label_mobile_phone = T("Cell Phone")
-# Enable this to change the label for 'Postcode'
-#settings.ui.label_postcode = T("ZIP Code")
-# Enable Social Media share buttons
-#settings.ui.social_buttons = True
-
-# Request
-#settings.req.type_inv_label = T("Donations")
-#settings.req.type_hrm_label = T("Volunteers")
-# Allow the status for requests to be set manually,
-# rather than just automatically from commitments and shipments
-#settings.req.status_writable = False
-#settings.req.quantities_writable = True
-#settings.req.show_quantity_transit = False
-#settings.req.multiple_req_items = False
-#settings.req.use_commit = False
-#settings.req.use_req_number = False
-# Restrict the type of requests that can be made, valid values in the
-# list are ["Stock", "People", "Other"]. If this is commented out then
-# all types will be valid.
-#settings.req.req_type = ["Stock"]
-
-# Custom Crud Strings for specific req_req types
-#settings.req.req_crud_strings = dict()
-#ADD_ITEM_REQUEST = T("Make a Request for Donations")
-#LIST_ITEM_REQUEST = T("List Requests for Donations")
-# req_req Crud Strings for Item Request (type=1)
-#settings.req.req_crud_strings[1] = Storage(
-#    label_create = ADD_ITEM_REQUEST,
-#    title_display = T("Request for Donations Details"),
-#    title_list = LIST_ITEM_REQUEST,
-#    title_update = T("Edit Request for Donations"),
-#    subtitle_list = T("Requests for Donations"),
-#    label_list_button = LIST_ITEM_REQUEST,
-#    label_delete_button = T("Delete Request for Donations"),
-#    msg_record_created = T("Request for Donations Added"),
-#    msg_record_modified = T("Request for Donations Updated"),
-#    msg_record_deleted = T("Request for Donations Canceled"),
-#    msg_list_empty = T("No Requests for Donations"))
-#ADD_PEOPLE_REQUEST = T("Make a Request for Volunteers")
-#LIST_PEOPLE_REQUEST = T("List Requests for Volunteers")
-# req_req Crud Strings for People Request (type=3)
-#settings.req.req_crud_strings[3] = Storage(
-#    label_create = ADD_PEOPLE_REQUEST,
-#    title_display = T("Request for Volunteers Details"),
-#    title_list = LIST_PEOPLE_REQUEST,
-#    title_update = T("Edit Request for Volunteers"),
-#    subtitle_list = T("Requests for Volunteers"),
-#    label_list_button = LIST_PEOPLE_REQUEST,
-#    label_delete_button = T("Delete Request for Volunteers"),
-#    msg_record_created = T("Request for Volunteers Added"),
-#    msg_record_modified = T("Request for Volunteers Updated"),
-#    msg_record_deleted = T("Request for Volunteers Canceled"),
-#    msg_list_empty = T("No Requests for Volunteers"))
-
-# Inventory Management
-#settings.inv.collapse_tabs = False
-# Use the term 'Order' instead of 'Shipment'
-#settings.inv.shipment_name = "order"
-
-# Supply
-#settings.supply.use_alt_name = False
-# Do not edit after deployment
-#settings.supply.catalog_default = T("Other Items")
 
 # Human Resource Management
-# Uncomment to allow Staff & Volunteers to be registered without an email address
-#settings.hrm.email_required = False
 # Uncomment to hide the Staff resource
 settings.hrm.show_staff = False
-# Uncomment to hide the Volunteer resource
-#settings.hrm.show_vols = False
-# Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
-#settings.hrm.skill_types = True
 
-# Project 
+# Enable the use of Organisation Branches
+settings.org.branches = True
+
+# Project
 # Uncomment this to use settings suitable for detailed Task management
 settings.project.mode_task = True
 # Uncomment this to use Activities for projects & tasks
-settings.project.activities = True
+#settings.project.activities = True
 # Uncomment this to enable Milestones in tasks
 settings.project.milestones = True
 # Uncomment this to enable Sectors in projects
 settings.project.sectors = True
 # Uncomment this to use Projects for Activities & Tasks
 settings.project.projects = True
+# Uncomment this to use Tags in Tasks
+settings.project.task_tag = True
 # Uncomment this to enable Hazards in 3W projects
 settings.project.hazards = True
 # Uncomment this to enable Themes in 3W projects
@@ -326,43 +152,72 @@ settings.project.themes = True
 # Uncomment this to use multiple Organisations per project
 settings.project.multiple_organisations = True
 
-# Enable the use of Organisation Branches
-settings.org.branches = True
+# Uncomment this to use emergency contacts in pr
+settings.pr.show_emergency_contacts = False
 
-# Formstyle
-def formstyle_row(id, label, widget, comment, hidden=False):
-    if hidden:
-        hide = "hide"
-    else:
-        hide = ""
-    row = TR(TD(DIV(label,
-                _id=id + "1",
-                _class="w2p_fl %s" % hide),
-            DIV(widget,
-                _id=id,
-                _class="w2p_fw %s" % hide),
-            DIV(comment,
-                _id=id, 
-                _class="w2p_fc %s" % hide),
-           ))
-    return row
-def form_style(self, xfields):
+# -----------------------------------------------------------------------------
+def deployment_page(r, **attr):
     """
-        @ToDo: Requires further changes to code to use
-        - Adding a formstyle_row setting to use for indivdual rows
-        Use new Web2Py formstyle to generate form using DIVs & CSS
-        CSS can then be used to create MUCH more flexible form designs:
-        - Labels above vs. labels to left
-        - Multiple Columns 
+        Custom Method for deployment page.
     """
-    form = DIV()
 
-    for id, a, b, c, in xfields:
-        form.append(formstyle_row(id, a, b, c))
+    if r.http != "GET":
+        r.error(405, current.ERROR.BAD_METHOD)
 
-    return form
-# settings.ui.formstyle_row = formstyle_row
-# settings.ui.formstyle = formstyle_row
+    db = current.db
+    s3db = current.s3db
+    output = {}
+
+    output["deployment_name"] = r.record.name
+    output["description"] = r.record.description
+
+    # Query the organisation name
+    otable = s3db.org_organisation
+    query = (otable.id == r.record.organisation_id) & \
+            (otable.deleted == False)
+
+    rows = db(query).select(otable.name,
+                                limitby=(0, 1)).first()
+    output["org_name"] = rows.name
+
+    # Query the locations
+    ltable = s3db.project_location
+    gtable = s3db.gis_location
+    query = (ltable.project_id == r.id) & \
+            (ltable.location_id == gtable.id) & \
+            (gtable.deleted == False)
+    rows = db(query).select(gtable.name)
+    output["locations"] = [row.name for row in rows]
+
+    # Query the links
+    dtable = s3db.doc_document
+    query = (dtable.doc_id == r.record.doc_id) & \
+            (dtable.url != "") & \
+            (dtable.url != None) & \
+            (dtable.deleted == False)
+    rows = db(query).select(dtable.name, dtable.url)
+    output["links"] = [(row.name, row.url) for row in rows]
+
+
+    query = (dtable.doc_id == r.record.doc_id) & \
+            (dtable.file != "") & \
+            (dtable.file != None) & \
+            (dtable.deleted == False)
+    rows = db(query).select(dtable.name, dtable.file)
+    output["files"] = [(row.name, row.file) for row in rows]
+
+    # Set the custom view
+    from os import path
+    view = path.join(current.request.folder, "private", "templates",
+                     "SSF", "views", "deployment_page.html")
+    try:
+        # Pass view as file not str to work in compiled mode
+        current.response.view = open(view, "rb")
+    except IOError:
+        from gluon.http import HTTP
+        raise HTTP(404, "Unable to open Custom View: %s" % view)
+
+    return output
 
 # -----------------------------------------------------------------------------
 def customise_project_project_controller(**attr):
@@ -387,9 +242,9 @@ def customise_project_project_controller(**attr):
             stable = s3db.project_sector_project
             otable = s3db.org_sector
 
-            # Viewing details of project_project record
+            # Check if current record is Deployment
             if r.id:
-                # Check if current record is Deployment
+                # Viewing details of project_project record
                 query = (stable.project_id == r.id) & \
                         (otable.id == stable.sector_id)
                 rows = db(query).select(otable.name)
@@ -403,9 +258,8 @@ def customise_project_project_controller(**attr):
             if request_sector and "Deployment" in request_sector:
                 is_deployment = True
 
-            from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink
-
             if is_deployment:
+                # Change the CRUD strings and labels
                 s3db[tablename].name.label = T("Deployment Name")
                 s3.crud_strings[tablename] = Storage(
                     label_create = T("Create Deployment"),
@@ -421,17 +275,27 @@ def customise_project_project_controller(**attr):
                     msg_record_deleted = T("Deployment deleted"),
                     msg_list_empty = T("No Deployments currently registered")
                 )
+                # Set the method for deployment page
+                s3db.set_method(r.controller,
+                                r.function,
+                                method = "deployment",
+                                action = deployment_page)
 
-                # Bring back to the Deployments page if record deleted
-                var = {"sector.name": "None,Deployment"}
-                delete_next = URL(c="project", f="project", vars=var)
+            if not r.component:
+                # Viewing project/deployment's Basic Details
+                from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink
+                if is_deployment:
+                    # Bring back to the Deployments page if record deleted
+                    delete_next = URL(c="project", f="project",
+                                      vars={"sector.name": "None,Deployment"})
 
-                # Get sector_id for Deployment
-                query = (otable.name == "Deployment")
-                row = db(query).select(otable.id, limitby=(0, 1)).first()
+                    # Get sector_id for Deployment
+                    row = db(otable.name == "Deployment").select(otable.id,
+                                                                 limitby=(0, 1)
+                                                                 ).first()
 
-                # Modify the CRUD form
-                crud_form = S3SQLCustomForm(
+                    # Modify the CRUD form
+                    crud_form = S3SQLCustomForm(
                         "organisation_id",
                         "name",
                         "sector_project.sector_id",
@@ -458,59 +322,434 @@ def customise_project_project_controller(**attr):
                             field = "theme_id",
                         ),
                         "human_resource_id",
-                        "comments",
-                    )
-
-                location_id = s3db.project_location.location_id
-                # Limit to just Countries
-                location_id.requires = s3db.gis_country_requires
-                # Use dropdown, not AC
-                location_id.widget = None
-
-            else:
-                # Bring back to the Projects page if record deleted
-                var = {"sector.name": "None,Project"}
-                delete_next = URL(c="project", f="project", vars=var)
-
-                # Get sector_id for Project
-                query = (otable.name == "Project")
-                row = db(query).select(otable.id, limitby=(0, 1)).first()
-
-                # Modify the CRUD form
-                crud_form = S3SQLCustomForm("organisation_id",
-                                            "name",
-                                            "sector_project.sector_id",
-                                            "description",
-                                            "status_id",
-                                            "start_date",
-                                            "end_date",
-                                            "calendar",
-                                            "human_resource_id",
-                                            "comments",
+                        # Files
+                        S3SQLInlineComponent(
+                            "document",
+                            name = "file",
+                            label = T("Files"),
+                            fields = [(T("Type"), "name"), "file"],
+                            filterby = dict(field = "file",
+                                            options = "",
+                                            invert = True,
                                             )
+                        ),
+                        # Links
+                        S3SQLInlineComponent(
+                            "document",
+                            name = "url",
+                            label = T("Links"),
+                            fields = [(T("Type"), "name"), "url"],
+                            filterby = dict(field = "url",
+                                            options = None,
+                                            invert = True,
+                                            )
+                        ),
+                        S3SQLInlineComponent(
+                            "image",
+                            fields = ["", "file"],
+                            filterby = dict(field = "file",
+                                            options = "",
+                                            invert = True,
+                                            )
+                        ),
+                        "comments",
+                        )
 
-            # Set the default sector
-            try:
-                stable.sector_id.default = row.id
-            except:
-                current.log.error("Pre-Populate",
-                                  "Sectors not prepopulated")
+                    location_id = s3db.project_location.location_id
+                    # Limit to just Countries
+                    location_id.requires = s3db.gis_country_requires
+                    # Use dropdown, not AC
+                    location_id.widget = None
+                else:
+                    # Bring back to the Projects page if record deleted
+                    delete_next = URL(c="project", f="project",
+                                      vars={"sector.name": "None,Project"})
 
-            # Remove Add Sector button
-            stable.sector_id.comment = None
+                    # Get sector_id for Project
+                    row = db(otable.name == "Project").select(otable.id,
+                                                              limitby=(0, 1)
+                                                              ).first()
 
-            s3db.configure(tablename,
-                           crud_form = crud_form,
-                           delete_next = delete_next,
-                           )
+                    # Modify the CRUD form
+                    crud_form = S3SQLCustomForm("organisation_id",
+                                                "name",
+                                                "sector_project.sector_id",
+                                                "description",
+                                                "status_id",
+                                                "start_date",
+                                                "end_date",
+                                                "calendar",
+                                                "human_resource_id",
+                                                "comments",
+                                                )
+
+                # Set the default sector
+                try:
+                    stable.sector_id.default = row.id
+                except:
+                    current.log.error("Pre-Populate",
+                                      "Sectors not prepopulated")
+
+                # Remove Add Sector button
+                stable.sector_id.comment = None
+
+                s3db.configure(tablename,
+                               crud_form = crud_form,
+                               delete_next = delete_next,
+                               )
 
         return True
 
     s3.prep = custom_prep
 
+    # Custom postp
+    standard_postp = s3.postp
+    def custom_postp(r, output):
+        # Call standard postp
+        if callable(standard_postp):
+            output = standard_postp(r, output)
+
+        if r.interactive and r.id is None:
+            # Change the Open button to deployment page if deployment
+            request_sector = r.get_vars.get("sector.name")
+
+            if request_sector and "Deployment" in request_sector:
+                s3.actions[0]["url"] = URL(c="project", f="project",
+                                           args=["[id]", "deployment"])
+
+        return output
+    s3.postp = custom_postp
+
+    args = current.request.args
+    if len(args) > 1 and args[1] == "task":
+        attr["hide_filter"] = False
+
     return attr
 
 settings.customise_project_project_controller = customise_project_project_controller
+
+# -----------------------------------------------------------------------------
+def customise_project_task_resource(r, tablename):
+    """
+        Customise project_task resource
+        - CRUD Form
+        Runs after controller customisation
+        But runs before prep
+    """
+
+    s3db = current.s3db
+    db = current.db
+
+    if r.interactive:
+        trimmed_task = False
+        get_vars = r.get_vars
+
+        # Check if it is a bug report
+        if get_vars.get("bug"):
+            tagname = "bug"
+            trimmed_task = True
+
+        # Check if it is a feature request
+        elif get_vars.get("featureRequest"):
+            tagname = "feature request"
+            trimmed_task = True
+
+        # Check if it is a support task
+        elif get_vars.get("support"):
+            tagname = "support"
+            trimmed_task = True
+
+        from s3.s3forms import S3SQLCustomForm, S3SQLInlineLink, S3SQLInlineComponent
+        if trimmed_task:
+            # Show a trimmed view of creating task
+            crud_fields = ["name",
+                           "description",
+                           S3SQLInlineLink(
+                               "tag",
+                               label = T("Tag"),
+                               field = "tag_id",
+                           ),
+                           "priority",
+                           "status",
+                           S3SQLInlineComponent(
+                               "document",
+                               label = T("Attachment"),
+                               fields = ["", "file"],
+                           ),
+                           ]
+
+            tagtable = s3db.project_tag
+            query = (tagtable.deleted != True) & \
+                    (tagtable.name == tagname)
+            row = db(query).select(tagtable.id, limitby=(0, 1)).first()
+
+            # Set the tag
+            try:
+                s3db.project_task_tag.tag_id.default = row.id
+            except:
+                current.log.error("Pre-Populate",
+                                  "Tags not prepopulated")
+        else:
+            # Show all fields for creating the task
+            crud_fields = [S3SQLInlineComponent(
+                               "task_milestone",
+                               label = T("Milestone"),
+                               fields = [("", "milestone_id")],
+                               multiple = False,
+                           ),
+                           "name",
+                           "description",
+                           S3SQLInlineComponent(
+                               "task_tag",
+                               label = T("Tags"),
+                               fields = [("", "tag_id")],
+                           ),
+                           "priority",
+                           "status",
+                           "pe_id",
+                           "source",
+                           "date_due",
+                           "time_estimated",
+                           S3SQLInlineComponent(
+                               "document",
+                               label = T("Attachment"),
+                               fields = ["", "file"],
+                           ),
+                           S3SQLInlineComponent("time",
+                                label = T("Time Log"),
+                                fields = ["date",
+                                          "person_id",
+                                          "hours",
+                                          "comments"
+                                          ],
+                                orderby = "date"
+                           ),
+                           "time_actual",
+                           ]
+            if r.tablename == "project_task":
+                # Add the project field if it is not under the component
+                crud_fields.insert(0, S3SQLInlineComponent("task_project",
+                                                           label = T("Project"),
+                                                           fields = [("", "project_id")],
+                                                           multiple = False,
+                                                           ))
+        crud_form = S3SQLCustomForm(*crud_fields)
+
+        s3db.configure(tablename,
+                       crud_form = crud_form,
+                       )
+
+settings.customise_project_task_resource = customise_project_task_resource
+
+# -----------------------------------------------------------------------------
+def customise_delphi_problem_controller(**attr):
+
+    tablename = "delphi_problem"
+
+    current.response.s3.crud_strings[tablename] = Storage(
+        label_create = T("Create Goal"),
+        title_display = T("Goal Details"),
+        title_list = T("Goals"),
+        title_update = T("Edit Goal"),
+        title_report = T("Goal Report"),
+        title_upload = T("Import Goals"),
+        label_list_button = T("List Goals"),
+        label_delete_button = T("Delete Goal"),
+        msg_record_created = T("Goal added"),
+        msg_record_modified = T("Goal updated"),
+        msg_record_deleted = T("Goal deleted"),
+        msg_list_empty = T("No Goals currently registered")
+    )
+    return attr
+
+settings.customise_delphi_problem_controller = customise_delphi_problem_controller
+
+# -----------------------------------------------------------------------------
+def customise_delphi_solution_controller(**attr):
+
+    tablename = "delphi_solution"
+
+    current.response.s3.crud_strings[tablename] = Storage(
+        label_create = T("Create Initiative"),
+        title_display = T("Initiative Details"),
+        title_list = T("Initiatives"),
+        title_update = T("Edit Initiative"),
+        title_report = T("Initiative Report"),
+        title_upload = T("Import Initiatives"),
+        label_list_button = T("List Initiatives"),
+        label_delete_button = T("Delete Initiative"),
+        msg_record_created = T("Initiative added"),
+        msg_record_modified = T("Initiative updated"),
+        msg_record_deleted = T("Initiative deleted"),
+        msg_list_empty = T("No Initiatives currently registered")
+    )
+    return attr
+
+settings.customise_delphi_solution_controller = customise_delphi_solution_controller
+
+# -----------------------------------------------------------------------------
+def customise_pr_person_controller(**attr):
+
+    s3 = current.response.s3
+    s3db = current.s3db
+
+    # Custom Prep
+    standard_prep = s3.prep
+    def custom_prep(r):
+        # Call standard prep
+        if callable(standard_prep):
+            result = standard_prep(r)
+            if not result:
+                return False
+
+        s3db = current.s3db
+        tablename = "pr_person"
+
+        if r.interactive:
+            # Set the list fields
+            list_fields = ["first_name",
+                           "middle_name",
+                           "last_name",
+                           "human_resource.organisation_id",
+                           "address.location_id"
+                           ]
+
+            # Set the CRUD Strings
+            s3.crud_strings[tablename] = Storage(
+                label_create = T("Create a Contributor"),
+                title_display = T("Contributor Details"),
+                title_list = T("Contributors"),
+                title_update = T("Edit Contributor Details"),
+                label_list_button = T("List Contributors"),
+                label_delete_button = T("Delete Contributor"),
+                msg_record_created = T("Contributor added"),
+                msg_record_modified = T("Contributor details updated"),
+                msg_record_deleted = T("Contributor deleted"),
+                msg_list_empty = T("No Contributors currently registered")
+            )
+
+            # Custom Form (Read/Create/Update)
+            from s3.s3forms import S3SQLCustomForm, S3SQLInlineComponent
+
+            crud_form = S3SQLCustomForm(
+                "first_name",
+                "middle_name",
+                "last_name",
+                S3SQLInlineComponent("contact",
+                    label = T("Email"),
+                    multiple = False,
+                    fields = [("", "value")],
+                    filterby = dict(field = "contact_method",
+                                    options = "EMAIL"),
+                    ),
+                "gender",
+                S3SQLInlineComponent("note",
+                    name = "bio",
+                    label = T("Bio Paragraph"),
+                    multiple = False,
+                    fields = [("", "note_text")],
+                    ),
+                S3SQLInlineComponent(
+                    "image",
+                    name = "image",
+                    label = T("Photo"),
+                    multiple = False,
+                    fields = [("", "image")],
+                    filterby = dict(field = "profile",
+                                    options=[True]
+                                    ),
+                    ),
+                S3SQLInlineComponent(
+                    "human_resource",
+                    name = "hrm_human_resource",
+                    label = "",
+                    multiple = False,
+                    fields = ["", "organisation_id", "job_title_id"],
+                    ),
+                S3SQLInlineComponent(
+                        "address",
+                        label = T("Home Location"),
+                        fields = [("", "location_id")],
+                        render_list = True
+                    ),
+                )
+
+            s3db.configure(tablename,
+                           crud_form = crud_form,
+                           list_fields = list_fields
+                           )
+        return True
+    s3.prep = custom_prep
+
+    # Custom postp
+    standard_postp = s3.postp
+    def custom_postp(r, output):
+        # Call standard postp
+        if callable(standard_postp):
+            output = standard_postp(r, output)
+
+        if r.interactive and isinstance(output, dict):
+            # Change the tabs in the rheader
+            tabs = [(T("Basic Details"), None),
+                    ]
+            has_permission = current.auth.s3_has_permission
+            if has_permission("read", "pr_contact"):
+                tabs.append((T("Contact Details"), "contacts"))
+            output["rheader"] = s3db.pr_rheader(r, tabs=tabs)
+
+        return output
+    s3.postp = custom_postp
+
+    return attr
+
+settings.customise_pr_person_controller = customise_pr_person_controller
+
+# -----------------------------------------------------------------------------
+def customise_pr_contact_controller(**attr):
+
+    s3 = current.response.s3
+    s3db = current.s3db
+
+    # Custom Prep
+    standard_prep = s3.prep
+    def custom_prep(r):
+        # Call standard prep
+        if callable(standard_prep):
+            result = standard_prep(r)
+            if not result:
+                return False
+
+        if r.interactive:
+            # Change the contact methods appearing in adding contact info
+            MOBILE = current.deployment_settings.get_ui_label_mobile_phone()
+            contact_methods = {"SKYPE":       T("Skype"),
+                               "SMS":         MOBILE,
+                               "IRC":         T("IRC handle"),
+                               "GITHUB":      T("Github Repo"),
+                               "LINKEDIN":    T("LinkedIn Profile"),
+                               "BLOG":        T("Blog"),
+                               }
+            s3db.pr_contact.contact_method.requires = IS_IN_SET(contact_methods,
+                                                                zero=None)
+
+            from s3.s3forms import S3SQLCustomForm
+
+            crud_form = S3SQLCustomForm(
+                    "contact_method",
+                    "value",
+                )
+            s3db.configure("pr_contact",
+                           crud_form = crud_form,
+                           )
+
+        return True
+    s3.prep = custom_prep
+
+    return attr
+
+settings.customise_pr_contact_controller = customise_pr_contact_controller
+
+# -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Comment/uncomment modules here to disable/enable them
@@ -524,239 +763,128 @@ settings.modules = OrderedDict([
         )),
     ("admin", Storage(
             name_nice = T("Administration"),
-            description = T("Site Administration"),
+            #description = T("Site Administration"),
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
         )),
     ("appadmin", Storage(
             name_nice = T("Administration"),
-            description = T("Site Administration"),
+            #description = T("Site Administration"),
             restricted = True,
             module_type = None  # No Menu
         )),
     ("errors", Storage(
             name_nice = T("Ticket Viewer"),
-            description = T("Needed for Breadcrumbs"),
+            #description = T("Needed for Breadcrumbs"),
             restricted = False,
             module_type = None  # No Menu
         )),
     ("sync", Storage(
             name_nice = T("Synchronization"),
-            description = T("Synchronization"),
+            #description = T("Synchronization"),
             restricted = True,
             access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
             module_type = None  # This item is handled separately for the menu
         )),
     ("gis", Storage(
             name_nice = T("Map"),
-            description = T("Situation Awareness & Geospatial Analysis"),
+            #description = T("Situation Awareness & Geospatial Analysis"),
             restricted = True,
             module_type = 6,     # 6th item in the menu
         )),
     ("pr", Storage(
-            name_nice = T("Person Registry"),
-            description = T("Central point to record details on People"),
+            name_nice = T("Contributors"),
+            description = T("Contributors to Sahana"),
             restricted = True,
-            access = "|1|",     # Only Administrators can see this module in the default menu (access to controller is possible to all still)
-            module_type = 10
+            module_type = 2
         )),
     ("org", Storage(
             name_nice = T("Organizations"),
-            description = T('Lists "who is doing what & where". Allows relief agencies to coordinate their activities'),
+            #description = T('Lists "who is doing what & where". Allows relief agencies to coordinate their activities'),
             restricted = True,
             module_type = 10
         )),
     # All modules below here should be possible to disable safely
     ("hrm", Storage(
             name_nice = T("Volunteers"),
-            description = T("Human Resource Management"),
+            #description = T("Human Resource Management"),
             restricted = True,
-            module_type = 2,
+            access = "|1|",     # Only Administrators can see this module in the default menu (access to controller is possible to all still)
+            module_type = 10,
         )),
     ("doc", Storage(
             name_nice = T("Documents"),
-            description = T("A library of digital resources, such as photos, documents and reports"),
+            #description = T("A library of digital resources, such as photos, documents and reports"),
             restricted = True,
             module_type = 10,
         )),
     ("msg", Storage(
             name_nice = T("Messaging"),
-            description = T("Sends & Receives Alerts via Email & SMS"),
+            #description = T("Sends & Receives Alerts via Email & SMS"),
             restricted = True,
             # The user-visible functionality of this module isn't normally required. Rather it's main purpose is to be accessed from other modules.
             module_type = None,
         )),
     #("supply", Storage(
     #        name_nice = T("Supply Chain Management"),
-    #        description = T("Used within Inventory Management, Request Management and Asset Management"),
+    #        #description = T("Used within Inventory Management, Request Management and Asset Management"),
     #        restricted = True,
     #        module_type = None, # Not displayed
     #    )),
-    #("inv", Storage(
-    #        name_nice = T("Warehouse"),
-    #        description = T("Receiving and Sending Items"),
-    #        restricted = True,
-    #        module_type = 4
-    #    )),
-    #("proc", Storage(
-    #        name_nice = T("Procurement"),
-    #        description = T("Ordering & Purchasing of Goods & Services"),
-    #        restricted = True,
-    #        module_type = 10
-    #    )),
     #("asset", Storage(
     #        name_nice = T("Assets"),
-    #        description = T("Recording and Assigning Assets"),
+    #        #description = T("Recording and Assigning Assets"),
     #        restricted = True,
     #        module_type = 5,
     #    )),
-    # Vehicle depends on Assets
-    #("vehicle", Storage(
-    #        name_nice = T("Vehicles"),
-    #        description = T("Manage Vehicles"),
-    #        restricted = True,
-    #        module_type = 10,
-    #    )),
     #("req", Storage(
     #        name_nice = T("Requests"),
-    #        description = T("Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested."),
+    #        #description = T("Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested."),
     #        restricted = True,
     #        module_type = 10,
     #    )),
     ("project", Storage(
             name_nice = T("Task Lists"),
-            description = T("Tracking of Projects, Activities and Tasks"),
+            #description = T("Tracking of Projects, Activities and Tasks"),
             restricted = True,
             module_type = 1
         )),
     ("survey", Storage(
             name_nice = T("Surveys"),
-            description = T("Create, enter, and manage surveys."),
+            #description = T("Create, enter, and manage surveys."),
             restricted = True,
             module_type = 5,
         )),
-    #("cr", Storage(
-    #        name_nice = T("Shelters"),
-    #        description = T("Tracks the location, capacity and breakdown of victims in Shelters"),
-    #        restricted = True,
-    #        module_type = 10
-    #    )),
-    #("hms", Storage(
-    #        name_nice = T("Hospitals"),
-    #        description = T("Helps to monitor status of hospitals"),
-    #        restricted = True,
-    #        module_type = 10
-    #    )),
-    #("irs", Storage(
-    #        name_nice = T("Incidents"),
-    #        description = T("Incident Reporting System"),
-    #        restricted = False,
-    #        module_type = 10
-    #    )),
-    #("impact", Storage(
-    #        name_nice = T("Impacts"),
-    #        description = T("Used by Assess"),
-    #        restricted = True,
-    #        module_type = None,
-    #    )),
-    # Assess currently depends on CR, IRS & Impact
-    # Deprecated by Surveys module
-    #("assess", Storage(
-    #        name_nice = T("Assessments"),
-    #        description = T("Rapid Assessments & Flexible Impact Assessments"),
-    #        restricted = True,
-    #        module_type = 10,
-    #    )),
     #("scenario", Storage(
     #        name_nice = T("Scenarios"),
-    #        description = T("Define Scenarios for allocation of appropriate Resources (Human, Assets & Facilities)."),
+    #        #description = T("Define Scenarios for allocation of appropriate Resources (Human, Assets & Facilities)."),
     #        restricted = True,
     #        module_type = 10,
     #    )),
     #("event", Storage(
     #        name_nice = T("Events"),
-    #        description = T("Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities)."),
+    #        #description = T("Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities)."),
     #        restricted = True,
     #        module_type = 10,
     #    )),
     # NB Budget module depends on Project Tracking Module
-    # @ToDo: Rewrite in a modern style
     #("budget", Storage(
     #        name_nice = T("Budgeting Module"),
-    #        description = T("Allows a Budget to be drawn up"),
+    #        #description = T("Allows a Budget to be drawn up"),
     #        restricted = True,
     #        module_type = 10
     #    )),
-    # @ToDo: Port these Assessments to the Survey module
-    #("building", Storage(
-    #        name_nice = T("Building Assessments"),
-    #        description = T("Building Safety Assessments"),
-    #        restricted = True,
-    #        module_type = 10,
-    #    )),
-    # These are specialist modules
-    # Requires RPy2
-    #("climate", Storage(
-    #    name_nice = T("Climate"),
-    #    description = T("Climate data portal"),
-    #    restricted = True,
-    #    module_type = 10,
-    #)),
-    #("delphi", Storage(
-    #        name_nice = T("Delphi Decision Maker"),
-    #        description = T("Supports the decision making of large groups of Crisis Management Experts by helping the groups create ranked list."),
-    #        restricted = False,
-    #        module_type = 10,
-    #    )),
-    #("dvi", Storage(
-    #       name_nice = T("Disaster Victim Identification"),
-    #       description = T("Disaster Victim Identification"),
-    #       restricted = True,
-    #       module_type = 10,
-    #       #access = "|DVI|",      # Only users with the DVI role can see this module in the default menu & access the controller
-    #   )),
-    #("mpr", Storage(
-    #       name_nice = T("Missing Person Registry"),
-    #       description = T("Helps to report and search for missing persons"),
-    #       restricted = False,
-    #       module_type = 10,
-    #   )),
+    ("delphi", Storage(
+            name_nice = T("Delphi Decision Maker"),
+            #description = T("Supports the decision making of large groups of Crisis Management Experts by helping the groups create ranked list."),
+            restricted = False,
+            module_type = 10,
+        )),
     ("cms", Storage(
            name_nice = T("Content Management"),
-           description = T("Content Management System"),
+           #description = T("Content Management System"),
            restricted = True,
            module_type = 3,
        )),
-    ("deployment", Storage(
-           name_nice = T("Deployments"),
-           description = T("Deployment Registry"),
-           restricted = True,
-           module_type = 4,
-       )),
-    #("fire", Storage(
-    #       name_nice = T("Fire Stations"),
-    #       description = T("Fire Station Management"),
-    #       restricted = True,
-    #       module_type = 1,
-    #   )),
-    #("patient", Storage(
-    #        name_nice = T("Patient Tracking"),
-    #        description = T("Tracking of Patients"),
-    #        restricted = True,
-    #        module_type = 10
-    #    )),
-    #("ocr", Storage(
-    #       name_nice = T("Optical Character Recognition"),
-    #       description = T("Optical Character Recognition for reading the scanned handwritten paper forms."),
-    #       restricted = False,
-    #       module_type = 10
-    #   )),
-    # This module has very limited functionality
-    #("flood", Storage(
-    #        name_nice = T("Flood Alerts"),
-    #        description = T("Flood Alerts show water levels in various parts of the country"),
-    #        restricted = False,
-    #        module_type = 10
-    #    )),
 ])

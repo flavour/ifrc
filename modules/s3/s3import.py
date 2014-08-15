@@ -3873,6 +3873,8 @@ class S3BulkImporter(object):
                     aclValue = aclValue | acl.REVIEW
                 if permission == "APPROVE":
                     aclValue = aclValue | acl.APPROVE
+                if permission == "PUBLISH":
+                    aclValue = aclValue | acl.PUBLISH
                 if permission == "ALL":
                     aclValue = aclValue | acl.ALL
             return aclValue
@@ -3933,14 +3935,14 @@ class S3BulkImporter(object):
                             *acls[rulelist[0]])
 
     # -------------------------------------------------------------------------
-    def import_user(self, csv_filename):
+    def import_user(self, filename):
         """ Import Users from CSV """
 
         current.response.s3.import_prep = current.auth.s3_import_prep
         user_task = [1,
                      "auth",
                      "user",
-                     csv_filename,
+                     filename,
                      os.path.join(current.request.folder,
                                   "static",
                                   "formats",
@@ -4092,7 +4094,14 @@ class S3BulkImporter(object):
         if extension == "zip":
             # Need to unzip
             import zipfile
-            myfile = zipfile.ZipFile(fp)
+            try:
+                myfile = zipfile.ZipFile(fp)
+            except zipfile.BadZipfile, exception:
+                # e.g. trying to download through a captive portal
+                current.log.error(exception)
+                # Revert back to the working directory as before.
+                os.chdir(cwd)
+                return
             files = myfile.infolist()
             for f in files:
                 filename = f.filename
@@ -4125,6 +4134,28 @@ class S3BulkImporter(object):
                 None
                 ]
         self.execute_import_task(task)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def import_script(filename):
+        """
+            Run a custom Import Script
+
+            @ToDo: Report Errors during Script run to console better
+        """
+
+        from gluon.cfs import getcfs
+        from gluon.compileapp import build_environment
+        from gluon.restricted import restricted
+
+        environment = build_environment(current.request, current.response, current.session)
+        environment["auth"] = current.auth
+        environment["db"] = current.db
+        environment["s3db"] = current.s3db
+        environment["settings"] = current.deployment_settings
+
+        code = getcfs(filename, filename, None)
+        restricted(code, environment, layer=filename)
 
     # -------------------------------------------------------------------------
     def perform_tasks(self, path):

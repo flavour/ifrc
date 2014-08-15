@@ -777,27 +777,27 @@ class TimePlotTests(unittest.TestCase):
 
         query = FS("event_type") == "STARTEND"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end)
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2011, 1, 3, 0, 0, 0))
         assertTrue(is_now(ef.end))
 
         query = FS("event_type") == "NOSTART"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end)
         # falls back to first end date minus 1 day
         assertEqual(ef.start, tp_datetime(2012, 2, 12, 0, 0, 0))
         assertTrue(is_now(ef.end))
 
         query = FS("event_type") == "NOEND"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end)
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2012, 7, 21, 0, 0, 0))
         assertTrue(is_now(ef.end))
 
         tp.resource = s3db.resource("tp_test_events")
-        ef = tp.create_event_frame(event_start, event_end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end)
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2011, 1, 3, 0, 0, 0))
         assertTrue(is_now(ef.end))
@@ -819,7 +819,7 @@ class TimePlotTests(unittest.TestCase):
         end = "2011-03-01"
         query = FS("event_type") == "STARTEND"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end, end=end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end, end=end)
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2011, 1, 3, 0, 0, 0))
         assertEqual(ef.end, tp_datetime(2011, 3, 1, 0, 0, 0))
@@ -829,7 +829,7 @@ class TimePlotTests(unittest.TestCase):
         end = "2013-01-01"
         query = FS("event_type") == "NOSTART"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end, end=end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end, end=end)
         # falls back to first end date minus 1 day
         assertEqual(ef.start, tp_datetime(2012, 2, 12, 0, 0, 0))
         assertEqual(ef.end, tp_datetime(2013, 1, 1, 0, 0))
@@ -839,7 +839,7 @@ class TimePlotTests(unittest.TestCase):
         end = "2016-06-01"
         query = FS("event_type") == "NOEND"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end, end=end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end, end=end)
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2012, 7, 21, 0, 0, 0))
         assertEqual(ef.end, tp_datetime(2016, 6, 1, 0, 0))
@@ -848,7 +848,7 @@ class TimePlotTests(unittest.TestCase):
 
         end = "2011-01-15"
         tp.resource = s3db.resource("tp_test_events")
-        ef = tp.create_event_frame(event_start, event_end, end=end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end, end=end)
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2011, 1, 3, 0, 0, 0))
         assertEqual(ef.end, tp_datetime(2011, 1, 15, 0, 0))
@@ -859,7 +859,7 @@ class TimePlotTests(unittest.TestCase):
         end = "2016-06-01"
         query = FS("event_type") == "NOEND"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end, end=end, slots="years")
+        ef = tp.create_event_frame(tp.resource, event_start, event_end, end=end, slots="years")
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2012, 7, 21, 0, 0, 0))
         assertEqual(ef.end, tp_datetime(2016, 6, 1, 0, 0))
@@ -870,7 +870,7 @@ class TimePlotTests(unittest.TestCase):
         end = "2011-03-01"
         query = FS("event_type") == "STARTEND"
         tp.resource = s3db.resource("tp_test_events", filter = query)
-        ef = tp.create_event_frame(event_start, event_end, start=start, end=end)
+        ef = tp.create_event_frame(tp.resource, event_start, event_end, start=start, end=end)
         # falls back to first start date
         assertEqual(ef.start, tp_datetime(2011, 2, 15, 0, 0, 0))
         assertEqual(ef.end, tp_datetime(2011, 3, 1, 0, 0, 0))
@@ -893,7 +893,8 @@ class TimePlotTests(unittest.TestCase):
         fact2 = resource.resolve_selector("parameter2")
         
         end = "2013-01-01"
-        ef = tp.create_event_frame(event_start,
+        ef = tp.create_event_frame(tp.resource, 
+                                   event_start,
                                    event_end,
                                    end=end,
                                    slots="months")
@@ -947,6 +948,90 @@ class TimePlotTests(unittest.TestCase):
                         msg="Period %s sum should be %s, but is %s" %
                         (i, expected_value, value1))
 
+            # Indirect count-check: average should be constant
+            value2 = period.aggregate(method="avg",
+                                      fields=[fact2.colname],
+                                      event_type=resource.tablename)
+            assertEqual(value2, 0.5)
+
+    # -------------------------------------------------------------------------
+    def testEventDataCumulativeAggregation(self):
+        """ Test aggregation of event data, cumulative """
+
+        s3db = current.s3db
+        resource = s3db.resource("tp_test_events")
+
+        tp = S3TimePlot()
+        tp.resource = resource
+
+        event_start = resource.resolve_selector("event_start")
+        event_end =  resource.resolve_selector("event_end")
+        fact1 = resource.resolve_selector("parameter1")
+        fact2 = resource.resolve_selector("parameter2")
+
+        start = "2012-01-01"
+        end = "2013-01-01"
+        ef = tp.create_event_frame(tp.resource,
+                                   event_start,
+                                   event_end,
+                                   start=start,
+                                   end=end,
+                                   slots="months")
+        tp.add_event_data(ef,
+                          resource,
+                          event_start,
+                          event_end,
+                          [fact1, fact2],
+                          cumulative=True,
+                          )
+
+        expected = [
+            ((2012,1,1), (2012,2,1), 45, 12),       # 01 P NS1 NS2 NS3 (SE1 SE2 SE3)
+            ((2012,2,1), (2012,3,1), 45, 12),       # 02 P NS1 NS2 NS3 (SE1 SE2 SE3)
+            ((2012,3,1), (2012,4,1), 45, 9),        # 03 P NS2 NS3 (SE1 SE2 SE3)
+            ((2012,4,1), (2012,5,1), 45, 9),        # 04 P NS2 NS3 (SE1 SE2 SE3)
+            ((2012,5,1), (2012,6,1), 45, 9),        # 05 P NS2 NS3 (SE1 SE2 SE3)
+            ((2012,6,1), (2012,7,1), 45, 6),        # 06 P NS3 (SE1 SE2 SE3)
+            ((2012,7,1), (2012,8,1), 48, 9),        # 07 P NS3 (SE1 SE2 SE3) NE1
+            ((2012,8,1), (2012,9,1), 51, 9),        # 08 P NS3 (SE1 SE2 SE3) NE1
+            ((2012,9,1), (2012,10,1), 54, 6),       # 09 P (SE1 SE2 SE3) NE1
+            ((2012,10,1), (2012,11,1), 60, 9),      # 10 P (SE1 SE2 SE3) NE1 NE2
+            ((2012,11,1), (2012,12,1), 66, 9),      # 11 P (SE1 SE2 SE3) NE1 NE2
+            ((2012,12,1), (2013,1,1), 72, 9),       # 12 P (SE1 SE2 SE3) NE1 NE2
+        ]
+
+        assertEqual = self.assertEqual
+
+        assertEqual(ef.slots, "months")
+        for i, period in enumerate(ef):
+            expected_start, expected_end, expected_cumulative, expected_sum = expected[i]
+            expected_start = tp_datetime(*expected_start)
+            expected_end = tp_datetime(*expected_end)
+
+            # Verify period start and end
+            assertEqual(period.start, expected_start,
+                        msg="Period %s start should be %s, but is %s" %
+                        (i, expected_start, period.start))
+            assertEqual(period.end, expected_end,
+                        msg="Period %s end should be %s, but is %s" %
+                        (i, expected_end, period.end))
+
+            # Verify cumulative value
+            value1 = period.aggregate(method="cumulate",
+                                      fields=[fact1.colname],
+                                      arguments=["months"],
+                                      event_type=resource.tablename)
+            assertEqual(value1, expected_cumulative,
+                        msg="Period %s cumulative sum should be %s, but is %s" %
+                        (i, expected_cumulative, value1))
+
+            value1 = period.aggregate(method="sum",
+                                      fields=[fact1.colname],
+                                      event_type=resource.tablename)
+            assertEqual(value1, expected_sum,
+                        msg="Period %s sum should be %s, but is %s" %
+                        (i, expected_sum, value1))
+                        
             # Indirect count-check: average should be constant
             value2 = period.aggregate(method="avg",
                                       fields=[fact2.colname],

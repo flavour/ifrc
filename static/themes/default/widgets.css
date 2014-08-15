@@ -270,6 +270,9 @@ textarea.richtext {
     font-weight: bold;
 }
 
+.controls {
+    white-space: pre;
+}
 .dt-export-options {
     float: right;
     padding-top: 5px;
@@ -540,6 +543,9 @@ div.dl {
     text-overflow: none;
     overflow: hidden;
 }
+.card_1_line i {
+    margin-right: 5px;
+}
 
 /* Display view */
 .item-container {
@@ -737,6 +743,7 @@ button.close {
 #rheader td {
     text-align: left;
     padding: 1px 5px 1px 5px;
+    white-space: pre;
 }
 #rheader th {
     font-weight: bold;
@@ -879,7 +886,10 @@ span.tab_next_inactive a {
 }
 .action-btn:hover,
 .delete-btn-ajax:hover,
-.delete-btn:hover {
+.delete-btn:hover,
+.action-btn:focus,
+.delete-btn-ajax:focus,
+.delete-btn:focus  {
     text-decoration: none;
     color: #fff;
     background-color: #164b8b;
@@ -902,6 +912,13 @@ span.tab_next_inactive a {
 }
 .action-lnk:first-child {
     margin-left: 0;
+}
+.form-toggle,
+.form-toggle:hover {
+    text-decoration: none;
+}
+.form-toggle i {
+    margin-left: 3px;
 }
 
 .sublabels {
@@ -1104,6 +1121,9 @@ li input + a {
 .comment-text {
     padding: 0 0 0 20px;
     float: left;
+}
+.comment-text div {
+    white-space: pre;
 }
 .comment-header {
     margin: 0 0 10px 0;
@@ -1515,6 +1535,7 @@ body.rtl label.ui-corner-all span {
 .s3-hierarchy-tree.jstree {
     border: 1px solid #ccc;
     padding: 2px 3px 4px 3px;
+    background: white;
 /*  @todo: make this work - currently overflow:auto conflicts with
            bootstrap popovers (because they are inside the box and
            become inaccessible when overflowing)
@@ -1536,6 +1557,7 @@ form.jeditable-input input {
 button.toggle-text {
     font-size: 10px !important;
     margin-left: 12px !important;
+    line-height: 1.0;
 }
 
 /* Action Toolbar */

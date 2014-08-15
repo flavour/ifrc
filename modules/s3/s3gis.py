@@ -76,6 +76,7 @@ from gluon import *
 #from gluon.html import *
 #from gluon.http import HTTP, redirect
 from gluon.dal import Rows
+from gluon.languages import lazyT
 from gluon.storage import Storage
 
 from s3fields import s3_all_meta_field_names
@@ -2239,11 +2240,11 @@ class GIS(object):
         if layer_id:
             # Feature Layer
             # e.g. Search results loaded as a Feature Resource layer
-            layer = db(ftable.id == layer_id).select(ftable.trackable,
+            layer = db(ftable.id == layer_id).select(ftable.attr_fields,
+                                                     ftable.popup_fields, # @ToDo: Deprecate
                                                      ftable.polygons,
-                                                     ftable.popup_label,
-                                                     ftable.popup_fields,
-                                                     ftable.attr_fields,
+                                                     ftable.individual,
+                                                     ftable.trackable,
                                                      limitby=(0, 1)).first()
 
         else:
@@ -2253,12 +2254,13 @@ class GIS(object):
             function = request.function
             query = (ftable.controller == controller) & \
                     (ftable.function == function)
-            layers = db(query).select(ftable.style_default,
-                                      ftable.trackable,
-                                      ftable.polygons,
-                                      ftable.popup_label,
-                                      ftable.popup_fields,
+            layers = db(query).select(ftable.layer_id,
                                       ftable.attr_fields,
+                                      ftable.popup_fields, # @ToDo: Deprecate
+                                      ftable.style_default,
+                                      ftable.polygons,
+                                      ftable.individual,
+                                      ftable.trackable,
                                       )
             if len(layers) > 1:
                 layers.exclude(lambda row: row.style_default == False)
@@ -2267,6 +2269,7 @@ class GIS(object):
                     return None
             if layers:
                 layer = layers.first()
+                layer_id = layer.layer_id
 
         attr_fields = get_vars.get("attr", [])
         if attr_fields:
@@ -2275,60 +2278,55 @@ class GIS(object):
         if popup_fields:
             popup_fields = popup_fields.split(",")
         if layer:
-            popup_label = layer.popup_label
             if not popup_fields:
                 popup_fields = layer.popup_fields or []
             if not attr_fields:
                 attr_fields = layer.attr_fields or []
-            trackable = layer.trackable
+            individual = layer.individual
             polygons = layer.polygons
+            trackable = layer.trackable
         else:
-            popup_label = ""
-            popup_fields = ["name"]
-            trackable = False
+            if not popup_fields:
+                popup_fields = ["name"]
+            individual = False
             polygons = False
-        
+            trackable = False
+
         table = resource.table
         pkey = table._id.name
 
-        markers = {}
-        tooltips = {}
         attributes = {}
+        markers = {}
+        styles = {}
         _pkey = table[pkey]
         # Ensure there are no ID represents to confuse things
         _pkey.represent = None
         geojson = current.auth.permission.format == "geojson"
         if geojson:
-            if popup_fields or attr_fields:
-                # Build the Attributes &/Popup Tooltips now so that representations can be
-                # looked-up in bulk rather than as a separate lookup per record
-                if popup_fields:
-                    tips = {}
-                    label_off = get_vars.get("label_off", None)
-                    if popup_label and not label_off:
-                        _tooltip = " (%s)" % current.T(popup_label)
-                    else:
-                        _tooltip = ""
+            # Build the Attributes now so that representations can be
+            # looked-up in bulk rather than as a separate lookup per record
+            if popup_fields:
+                # Old-style
+                attr_fields = list(set(popup_fields + attr_fields))
+            if attr_fields:
                 attr = {}
 
-                fields = list(set(popup_fields + attr_fields))
+                # Make a copy for the pkey insertion
+                fields = list(attr_fields)
+
                 if pkey not in fields:
                     fields.insert(0, pkey)
 
                 data = resource.select(fields,
-                                       limit=None,
-                                       represent=True)
+                                       limit = None,
+                                       represent = True,
+                                       show_links = False)
 
                 rfields = data["rfields"]
                 attr_cols = {}
-                _popup_cols = {}
                 for f in rfields:
                     fname = f.fname
                     selector = f.selector
-                    if fname in popup_fields:
-                        _popup_cols[fname] = f.colname
-                    elif selector in popup_fields:
-                        _popup_cols[selector] = f.colname
                     if fname in attr_fields or selector in attr_fields:
                         fieldname = f.colname
                         tname, fname = fieldname.split(".")
@@ -2339,15 +2337,8 @@ class GIS(object):
                             ftype = None
                         attr_cols[fieldname] = (ftype, fname)
 
-                # Want to control sort order
-                popup_cols = []
-                for f in popup_fields:
-                    colname = _popup_cols.get(f, None)
-                    if colname:
-                        popup_cols.append(colname)
-
-                rows = data["rows"]
                 _pkey = str(_pkey)
+                rows = data["rows"]
                 for row in rows:
                     record_id = int(row[_pkey])
                     if attr_cols:
@@ -2359,14 +2350,18 @@ class GIS(object):
                                 _attr = attr_cols[fieldname]
                                 ftype = _attr[0]
                                 if ftype == "integer":
-                                    # Attributes should be numbers not strings
-                                    # NB This also relies on decoding within geojson/export.xsl and S3XML.__element2json()
-                                    try:
-                                        represent = int(represent.replace(",", ""))
-                                    except:
-                                        # @ToDo: Don't assume this i18n formatting...better to have no represent & then bypass the s3_unicode in select too
-                                        #        (although we *do* want the represent in the tooltips!)
-                                        pass
+                                    if isinstance(represent, lazyT):
+                                        # Integer is just a lookup key
+                                        represent = s3_unicode(represent)
+                                    else:
+                                        # Attributes should be numbers not strings
+                                        # NB This also relies on decoding within geojson/export.xsl and S3XML.__element2json()
+                                        try:
+                                            represent = int(represent.replace(",", ""))
+                                        except:
+                                            # @ToDo: Don't assume this i18n formatting...better to have no represent & then bypass the s3_unicode in select too
+                                            #        (although we *do* want the represent in the tooltips!)
+                                            pass
                                 elif ftype == "double":
                                     # Attributes should be numbers not strings
                                     try:
@@ -2385,25 +2380,7 @@ class GIS(object):
                                 attribute[_attr[1]] = represent
                         attr[record_id] = attribute
 
-                    if popup_cols:
-                        tooltip = s3_unicode(_tooltip)
-                        first = True
-                        for fieldname in popup_cols:
-                            represent = row[fieldname]
-                            if represent and represent != NONE:
-                                represent = s3_unicode(represent)
-                                # Skip empty fields
-                                if first:
-                                    tooltip = "%s%s" % (represent, tooltip)
-                                    first = False
-                                else:
-                                    tooltip = "%s<br />%s" % (tooltip, represent)
-                        tips[record_id] = tooltip
-
-                if attr_fields:
-                    attributes[tablename] = attr
-                if popup_fields:
-                    tooltips[tablename] = tips
+                attributes[tablename] = attr
 
                 #if DEBUG:
                 #    end = datetime.datetime.now()
@@ -2415,7 +2392,7 @@ class GIS(object):
                 #                                                      ).first().name
                 #    else:
                 #        layer_name = "Unknown"
-                #    _debug("Attributes/Tooltip lookup of layer %s completed in %s seconds" % \
+                #    _debug("Attributes lookup of layer %s completed in %s seconds" % \
                 #            (layer_name, duration))
 
             _markers = get_vars.get("markers", None)
@@ -2431,6 +2408,23 @@ class GIS(object):
                     markers = GIS.get_marker(c, f)
 
                 markers[tablename] = markers
+
+            if individual:
+                # Add a per-feature Style
+                config = GIS.get_config()
+                stable = s3db.gis_style
+                query = (stable.deleted == False) & \
+                        (stable.layer_id == layer_id) & \
+                        (stable.record_id.belongs(resource._ids)) & \
+                        ((stable.config_id == config.id) | \
+                         (stable.config_id == None))
+                rows = db(query).select(stable.record_id,
+                                        stable.style)
+                for row in rows:
+                    styles[row.record_id] = row.style
+
+                styles[tablename] = styles
+
         else:
             # KML, GeoRSS or GPX
             marker_fn = s3db.get_config(tablename, "marker_fn")
@@ -2528,6 +2522,7 @@ class GIS(object):
                 if settings.get_gis_spatialdb():
                     if geojson:
                         # Do the Simplify & GeoJSON direct from the DB
+                        # @ToDo: Use http://www.postgis.org/docs/ST_SimplifyPreserveTopology.html
                         rows = db(query).select(table.id,
                                                 gtable.the_geom.st_simplify(tolerance).st_asgeojson(precision=4).with_alias("geojson"))
                         for row in rows:
@@ -2607,12 +2602,12 @@ class GIS(object):
         #            (layer_name, duration))
 
         # Used by S3XML's gis_encode()
-        return dict(latlons = _latlons,
+        return dict(geojsons = _geojsons,
+                    latlons = _latlons,
                     wkts = _wkts,
-                    geojsons = _geojsons,
-                    markers = markers,
-                    tooltips = tooltips,
                     attributes = attributes,
+                    markers = markers,
+                    styles = styles,
                     )
 
     # -------------------------------------------------------------------------
@@ -5996,6 +5991,7 @@ class GIS(object):
                  legend = False,
                  toolbar = False,
                  area = False,
+                 color_picker = False,
                  nav = None,
                  save = False,
                  search = False,
@@ -6079,6 +6075,8 @@ class GIS(object):
             @param legend: True: Show the GeoExt Legend panel, False: No Panel, "float": New floating Legend Panel
             @param toolbar: Show the Icon Toolbar of Controls
             @param area: Show the Area tool on the Toolbar
+            @param color_picker: Show the Color Picker tool on the Toolbar (used for S3LocationSelectorWidget2...pick up in postprocess)
+                                 If a style is provided then this is used as the default style
             @param nav: Show the Navigation controls on the Toolbar
             @param save: Show the Save tool on the Toolbar
             @param search: Show the Geonames search box (requires a username to be configured)
@@ -6127,6 +6125,7 @@ class GIS(object):
                    legend = legend,
                    toolbar = toolbar,
                    area = area,
+                   color_picker = color_picker,
                    nav = nav,
                    save = save,
                    search = search,
@@ -6186,6 +6185,17 @@ class MAP(DIV):
                            "_id": map_id,
                            }
         self.parent = None
+
+        # Show Color Picker?
+        if opts.get("color_picker", False):
+            # Can't be done in _setup() as usually run from xml() and hence we've already passed this part of the layout.html
+            s3 = current.response.s3
+            if s3.debug:
+                style = "plugins/spectrum.css"
+            else:
+                style = "plugins/spectrum.min.css"
+            if style not in s3.stylesheets:
+                s3.stylesheets.append(style)
 
     # -------------------------------------------------------------------------
     def _setup(self):
@@ -6305,6 +6315,12 @@ class MAP(DIV):
         options["zoom"] = zoom or 1
 
         options["numZoomLevels"] = config.zoom_levels
+
+        options["restrictedExtent"] = [config.lon_min,
+                                       config.lat_min,
+                                       config.lon_max,
+                                       config.lat_max,
+                                       ]
 
         ############
         # Projection
@@ -6462,6 +6478,20 @@ class MAP(DIV):
                 options["area"] = True
                 i18n["gis_area_message"] = T("The area is")
                 i18n["gis_area_tooltip"] = T("Measure Area: Click the points around the polygon & end with a double-click")
+
+            # Show Color Picker?
+            color_picker = opts.get("color_picker", False)
+            if color_picker:
+                options["color_picker"] = True
+                if color_picker is not True:
+                    options["draft_style"] = json.loads(color_picker)
+                #i18n["gis_color_picker_tooltip"] = T("Select Color")
+                i18n["gis_cancelText"] = T("cancel")
+                i18n["gis_chooseText"] = T("choose")
+                i18n["gis_togglePaletteMoreText"] = T("more")
+                i18n["gis_togglePaletteLessText"] = T("less")
+                i18n["gis_clearText"] = T("Clear Color Selection")
+                i18n["gis_noColorSelectedText"] = T("No Color Selected")
 
             # Show Print control?
             print_control = settings.get_gis_print()
@@ -6826,8 +6856,33 @@ class MAP(DIV):
         if js_globals not in js_global:
             js_global_append(js_globals)
 
+        debug = s3.debug
         scripts = s3.scripts
-        script = URL(c="static", f="scripts/S3/s3.gis.loader.js")
+        if s3.cdn:
+            if debug:
+                script = "//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore.js"
+            else:
+                script = "//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"
+        else:
+            if debug:
+                script = URL(c="static", f="scripts/underscore.js")
+            else:
+                script = URL(c="static", f="scripts/underscore-min.js")
+        if script not in scripts:
+            scripts.append(script)
+
+        if self.opts.get("color_picker", False):
+            if debug:
+                script = URL(c="static", f="scripts/spectrum.js")
+            else:
+                script = URL(c="static", f="scripts/spectrum.min.js")
+            if script not in scripts:
+                scripts.append(script)
+
+        if debug:
+            script = URL(c="static", f="scripts/S3/s3.gis.loader.js")
+        else:
+            script = URL(c="static", f="scripts/S3/s3.gis.loader.min.js")
         if script not in scripts:
             scripts.append(script)
 
@@ -7061,6 +7116,9 @@ def addFeatureResources(feature_resources):
                                    ftable.trackable,
                                    ftable.use_site,
                                    ftable.opacity,
+                                   ftable.popup_format,
+                                   ftable.popup_fields, # @ToDo: Deprecate Legacy
+                                   ftable.popup_label,  # @ToDo: Deprecate Legacy
                                    ftable.cluster_attribute,
                                    ftable.cluster_distance,
                                    ftable.cluster_threshold,
@@ -7086,7 +7144,8 @@ def addFeatureResources(feature_resources):
                 url = "%s&track=1" % url
             opacity = layer.get("opacity", row.opacity)
             cluster_attribute = layer.get("cluster_attribute",
-                                          row.cluster_attribute) or CLUSTER_ATTRIBUTE
+                                          row.cluster_attribute) or \
+                                CLUSTER_ATTRIBUTE
             cluster_distance = layer.get("cluster_distance",
                                          row.cluster_distance)
             cluster_threshold = layer.get("cluster_threshold",
@@ -7101,12 +7160,26 @@ def addFeatureResources(feature_resources):
             if not style:
                 marker = layer.get("marker",
                                    Marker(layer_id=layer_id).as_dict())
+
+            popup_format = row["popup_format"]
+            if not popup_format:
+                # Old-style
+                popup_fields = row["popup_fields"]
+                if popup_fields:
+                    popup_label = row["popup_label"]
+                    if popup_label:
+                        popup_format = "{%s} (%s)" % (popup_fields[0], current.T(popup_label))
+                    else:
+                        popup_format = "%s" % popup_fields[0]
+                    for f in popup_fields[1:]:
+                        popup_format = "%s<br />{%s}" % (popup_format, f)
+
         else:
             # URL to retrieve the data
             url = layer["url"]
             tablename = layer["tablename"]
             table = s3db[tablename]
-            # Optimise the query & tell back-end not to add the type to the tooltips
+            # Optimise the query
             if "location_id" in table.fields:
                 maxdepth = 0
                 show_ids = ""
@@ -7119,8 +7192,7 @@ def addFeatureResources(feature_resources):
             else:
                 # Not much we can do!
                 continue
-            options = "components=None&maxdepth=%s%s&label_off=1" % \
-                        (maxdepth, show_ids)
+            options = "components=None&maxdepth=%s%s" % (maxdepth, show_ids)
             if "?" in url:
                 url = "%s&%s" % (url, options)
             else:
@@ -7142,11 +7214,14 @@ def addFeatureResources(feature_resources):
                     style = None
             if not style:
                 marker = layer.get("marker", None)
+            popup_format = layer.get("popup_format")
 
         if "active" in layer and not layer["active"]:
             _layer["visibility"] = False
         if opacity != 1:
             _layer["opacity"] = "%.1f" % opacity
+        if popup_format:
+            _layer["popup_format"] = popup_format
         if cluster_attribute != CLUSTER_ATTRIBUTE:
             _layer["cluster_attribute"] = cluster_attribute
         if cluster_distance != CLUSTER_DISTANCE:
@@ -7700,10 +7775,27 @@ class LayerFeature(Layer):
                       "url": url,
                       }
 
+            popup_format = self.popup_format
+            if popup_format:
+                # New-style
+                output["popup_format"] = popup_format
+            else:
+                popup_fields = self.popup_fields
+                if popup_fields:
+                    # Old-style
+                    popup_label = self.popup_label
+                    if popup_label:
+                        popup_format = "{%s} (%s)" % (popup_fields[0], current.T(popup_label))
+                    else:
+                        popup_format = "%s" % popup_fields[0]
+                    for f in popup_fields[1:]:
+                        popup_format = "%s<br/>{%s}" % (popup_format, f)
+                    output["popup_format"] = popup_format
+
             # Attributes which are defaulted client-side if not set
             self.setup_folder_visibility_and_opacity(output)
             self.setup_clustering(output)
-            if not self.popup_fields:
+            if not popup_format:
                 output["no_popups"] = 1
             style = self.style
             if style:

@@ -25,7 +25,7 @@ settings = current.deployment_settings
 
 # -----------------------------------------------------------------------------
 # Pre-Populate
-settings.base.prepopulate = ["MCOP", "demo/users"]
+settings.base.prepopulate = ("MCOP", "demo/users")
 
 settings.base.system_name = T("Sahana: Puget Sound Common Maritime Operating Picture (MCOP)")
 settings.base.system_name_short = T("Sahana")
@@ -56,7 +56,7 @@ settings.auth.show_link = False
 
 # -----------------------------------------------------------------------------
 # Security Policy
-settings.security.policy = 5 # Apply Controller, Function and Table ACLs
+settings.security.policy = 7 # Apply Controller, Function and Table ACLs
 settings.security.map = True
 
 # -----------------------------------------------------------------------------
@@ -109,7 +109,7 @@ settings.base.paper_size = T("Letter")
 # -----------------------------------------------------------------------------
 # GIS settings
 # Restrict the Location Selector to just certain countries
-settings.gis.countries = ["US"]
+settings.gis.countries = ("US",)
 # Levels for the LocationSelector
 levels = ("L1", "L2", "L3")
 
@@ -118,12 +118,16 @@ levels = ("L1", "L2", "L3")
 
 # Until we add support to LocationSelector2 to set dropdowns from LatLons
 #settings.gis.check_within_parent_boundaries = False
+# GeoNames username
+settings.gis.geonames_username = "mcop"
 # Uncomment to hide Layer Properties tool
 #settings.gis.layer_properties = False
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
-# GeoNames username
-settings.gis.geonames_username = "mcop"
+# Uncomment to prevent showing LatLon in Location Represents
+settings.gis.location_represent_address_only = True
+# Resources which can be directly added to the main map
+settings.gis.poi_create_resources = None
 
 # -----------------------------------------------------------------------------
 # Module settings
@@ -150,7 +154,7 @@ settings.project.task_status_opts = {2: T("Active"),
 
 # -----------------------------------------------------------------------------
 # Uncomment to restrict the export formats available
-#settings.ui.export_formats = ["xls"]
+#settings.ui.export_formats = ("xls",)
 
 settings.ui.update_label = "Edit"
 # -----------------------------------------------------------------------------
@@ -374,8 +378,9 @@ def open_incident_filter(selector, tablename=None):
 # -----------------------------------------------------------------------------
 def customise_event_incident_controller(**attr):
 
-    # Not working
     if "summary" in current.request.args:
+        settings.gis.legend = None
+        # Not working
         from s3 import s3_set_default_filter
         s3_set_default_filter("~.closed",
                               open_incident_filter,
@@ -395,10 +400,6 @@ def customise_event_incident_controller(**attr):
                             _class="action-btn",
                             url=URL(c="event", f="incident",
                                     args=["[id]", "profile"])),
-                       dict(label=str(T("Edit")),
-                            _class="action-btn",
-                            url=URL(c="event", f="incident",
-                                    args=["[id]", "update"]))
                        ]
             s3.actions = actions
 
@@ -557,10 +558,20 @@ def customise_event_incident_resource(r, tablename):
                         (r.application, record_id),
                      marker = marker,
                      )
-
+        if current.auth.s3_has_permission("update", table, record_id=record_id):
+            edit_btn = A(I(_class="icon icon-edit"),
+                         _href=URL(c="event", f="incident",
+                                   args=[record_id, "update.popup"],
+                                   vars={"refresh": "datalist"}),
+                         _class="s3_modal",
+                         _title=s3.crud_strings["event_incident"].title_update,
+                         )
+        else:
+            edit_btn = ""
         s3db.configure("event_incident",
                        profile_title = title,
-                       profile_header = DIV(H2(title),
+                       profile_header = DIV(edit_btn,
+                                            H2(title),
                                             _class="profile-header",
                                             ),
                        profile_layers = [layer],
@@ -653,6 +664,9 @@ def customise_org_facility_resource(r, tablename):
                    summary = settings.ui.summary,
                    update_next = url_next,
                    )
+
+    if r.method == "summary":
+        settings.gis.legend = None
 
 settings.customise_org_facility_resource = customise_org_facility_resource
 
@@ -948,6 +962,9 @@ def customise_org_resource_resource(r, tablename):
         # This is awful in Popups & inconsistent in dataTable view (People/Documents don't have this & it breaks the styling of the main Save button)
         s3.cancel = URL(c="org", f="resource")
 
+    if r.method == "summary":
+        settings.gis.legend = None
+
 settings.customise_org_resource_resource = customise_org_resource_resource
 
 # -----------------------------------------------------------------------------
@@ -973,6 +990,9 @@ def customise_event_resource_resource(r, tablename):
             msg_record_deleted = T("Resource Responding deleted"),
             msg_list_empty = T("No Resources Responding"))
 
+    if r.method == "summary":
+        settings.gis.legend = None
+
 settings.customise_event_resource_resource = customise_event_resource_resource
 
 # -----------------------------------------------------------------------------
@@ -988,8 +1008,9 @@ def active_status_filter(selector, tablename=None):
 # -----------------------------------------------------------------------------
 def customise_project_task_controller(**attr):
 
-    # Not working
     if "summary" in current.request.args:
+        settings.gis.legend = None
+        # Not working
         from s3 import s3_set_default_filter
         s3_set_default_filter("~.status",
                               active_status_filter,
@@ -1080,7 +1101,8 @@ def customise_project_task_resource(r, tablename):
                                                    multiple = False,
                                                    ))
 
-    if (r.method == None or r.method == "update") and r.record.source_url:
+    if (r.method == None or r.method == "update") and \
+       r.record and r.record.source_url:
         # Task imported from Wrike
         # - lock all fields which should only be edited within Wrike
         #crud_fields.insert(0, "source_url")

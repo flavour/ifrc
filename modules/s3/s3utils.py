@@ -545,12 +545,14 @@ def s3_datatable_truncate(string, maxlength=40):
         @note: the JS click-event will be attached by S3.datatables.js
     """
 
+    string = s3_unicode(string)
     if string and len(string) > maxlength:
         _class = "dt-truncate"
         return TAG[""](
                 DIV(SPAN(_class="ui-icon ui-icon-zoomin",
-                            _style="float:right"),
-                    XML(string[:37] + "&hellip;"),
+                         _style="float:right",
+                         ),
+                    string[:maxlength-3] + "...",
                     _class=_class),
                 DIV(SPAN(_class="ui-icon ui-icon-zoomout",
                             _style="float:right"),
@@ -716,6 +718,8 @@ def s3_comments_represent(text, show_link=True):
         Represent Comments Fields
     """
 
+    # Make sure text is multi-byte-aware before truncating it
+    text = s3_unicode(text)
     if len(text) < 80:
         return text
     elif not show_link:
@@ -743,7 +747,7 @@ def s3_url_represent(url):
 
     if not url:
         return ""
-    return A(url, _href=url, _target="blank")
+    return A(url, _href=url, _target="_blank")
 
 # =============================================================================
 def s3_URLise(text):
