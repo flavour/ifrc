@@ -1457,6 +1457,110 @@ class S3PivotTable(object):
             return len(self.records)
 
     # -------------------------------------------------------------------------
+    def geojson(self,
+                layer=None,
+                level="L0"):
+        """
+            Render the pivot table data as a dict ready to be exported as
+            GeoJSON for display on a Map.
+
+            Called by S3Report.geojson()
+
+            @param layer: the layer. e.g. ("id", "count")
+                          - we only support methods "count" & "sum"
+                          - @ToDo: Support density: 'per sqkm' and 'per population'
+            @param level: the aggregation level (defaults to Country)
+        """
+
+        # The layer
+        if layer is None:
+            layer = self.layers[0]
+        #field, method = layer
+
+        # The rows dimension
+        # @ToDo: We can add sanity-checking using resource.parse_bbox_query() if-desired
+        context = self.resource.get_config("context")
+        if context and "location" in context:
+            rows_dim = "(location)$%s" % level
+        else:
+            # Fallback to location_id
+            rows_dim = "location_id$%s" % level
+            # Fallback we can add if-required
+            #rows_dim = "site_id$location_id$%s" % level
+
+        # The data
+        attributes = {}
+        geojsons = {}
+
+        if self.empty:
+            location_ids = []
+        else:
+            numeric = lambda x: isinstance(x, (int, long, float))
+            row_repr = lambda v: s3_unicode(v)
+
+            ids = {}
+            irows = self.row
+            rows = []
+
+            # Group and sort the rows
+            is_numeric = None
+            for i in xrange(self.numrows):
+                irow = irows[i]
+                total = irow[layer]
+                if is_numeric is None:
+                    is_numeric = numeric(total)
+                if not is_numeric:
+                    total = len(irow.records)
+                header = Storage(value = irow.value,
+                                 text = irow.text if "text" in irow
+                                                  else row_repr(irow.value))
+                rows.append((i, total, header))
+
+            self._sortdim(rows, self.rfields[rows_dim])
+
+            # Aggregate the grouped values
+            db = current.db
+            gtable = current.s3db.gis_location
+            query = (gtable.level == level) & (gtable.deleted == False)
+            for rindex, rtotal, rtitle in rows:
+                rval = rtitle.value
+                if rval:
+                    # @ToDo: Handle duplicate names ;)
+                    if rval in ids:
+                        _id = ids[rval]
+                    else:
+                        q = query & (gtable.name == rval)
+                        row = db(q).select(gtable.id,
+                                           gtable.parent,
+                                           limitby=(0, 1)
+                                           ).first()
+                        try:
+                            _id = row.id
+                            # Cache
+                            ids[rval] = _id
+                        except:
+                            continue
+
+                    attribute = dict(name=s3_unicode(rval),
+                                     value=rtotal)
+                    attributes[_id] = attribute
+
+            location_ids = [ids[r] for r in ids]
+            query = (gtable.id.belongs(location_ids))
+            geojsons = current.gis.get_locations(gtable,
+                                                 query,
+                                                 join=False,
+                                                 geojson=True)
+
+        # Prepare for export via xml.gis_encode() and geojson/export.xsl
+        location_data = {}
+        geojsons = dict(gis_location = geojsons)
+        location_data["geojsons"] = geojsons
+        attributes = dict(gis_location = attributes)
+        location_data["attributes"] = attributes
+        return location_ids, location_data
+
+    # -------------------------------------------------------------------------
     def json(self,
              layer=None,
              maxrows=None,

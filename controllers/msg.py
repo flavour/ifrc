@@ -1411,7 +1411,7 @@ def twitter_search():
 
         try:
             supported_languages = map(lambda x: str(x["code"]), twitter_api.supported_languages())
-        except tweepy.TweepError:
+        except (tweepy.TweepError, AttributeError):
             # List according to Twitter 1.1 API https://dev.twitter.com/docs/api/1.1/get/help/languages
             pass
 
@@ -1528,7 +1528,7 @@ def twitter_result():
     s3.crud_strings[tablename] = Storage(
         title_display = T("Twitter Search Results"),
         title_list = T("Twitter Search Results"),
-        label_list_button = T("View Tweet"),
+        label_list_button = T("View Tweets"),
         msg_record_deleted = T("Tweet deleted"),
         msg_list_empty = T("No Tweets Available."),
         )
@@ -1564,7 +1564,6 @@ def twitter_result():
             totals=True,
         )
     )
-
     s3db.configure(tablename,
                    deletable=False,
                    editable=False,
@@ -1572,6 +1571,42 @@ def twitter_result():
                    filter_widgets=filter_widgets,
                    report_options=report_options,
                    )
+
+    def postp(r, output):
+        if r.id or r.method in ("read", "display"):
+            # Display the Tweet as an Embedded tweet
+            record = output["item"].record
+            # Tweet link
+            twitter_url = "https://twitter.com/%s/statuses/%s" % (record.from_address, 
+                                                                  record.tweet_id)
+            script_url = "https://platform.twitter.com/widgets.js"
+            # Themeable Throbber
+            throbber = DIV(_class = "s3-twitter-throbber",
+                           )
+            # Display throbber while Tweet loads
+            tweet_container = DIV(throbber,
+                                  _class = "s3-twitter-container",
+                                  )
+            tweet_user = TAG[""](A(_href = twitter_url,
+                                   _style = "display: none"),
+                                 )
+            # Configure Tweet display
+            attributes = {"_width": "350px",
+                          "_data-conversation": "none",
+                          "_class": "twitter-tweet",
+                          "lang": record.lang,
+                          } 
+            tweet = TAG["blockquote"](tweet_container,
+                                      tweet_user,
+                                      SCRIPT(_src = script_url,
+                                             _charset = "utf-8"),
+                                      **attributes
+                                      ) 
+            # Insert tweet 
+            output["item"] = tweet
+        return output
+    
+    s3.postp = postp
 
     return s3_rest_controller()
 

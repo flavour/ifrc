@@ -2633,9 +2633,9 @@ class S3HRSkillModel(S3Model):
         if current.deployment_settings.get_hrm_skill_types():
             s3.js_global.append('''i18n.no_ratings="%s"''' % T("No Ratings for Skill Type"))
             s3.jquery_ready.append(
-'''S3OptionsFilter({
- 'triggerName':'skill_id',
- 'targetName':'competency_id',
+'''$.filterOptionsS3({
+ 'trigger':'skill_id',
+ 'target':'competency_id',
  'lookupResource':'competency',
  'lookupURL':S3.Ap.concat('/%s/skill_competencies/'),
  'msgNoRecords':i18n.no_ratings
@@ -5342,7 +5342,7 @@ def hrm_competency_controller():
                               "person_id$last_name",
                               "person_id$hrm_human_resource.job_title_id$name",
                              ],
-                             label = T("Name"),
+                             label = T("Search"),
                              comment = T("You can search by job title or person name - enter any of the first, middle or last names, separated by spaces. You may use % as wildcard. Press 'Search' without input to list all persons."),
                              ),
                 S3OptionsFilter("skill_id",
@@ -5735,8 +5735,8 @@ def hrm_human_resource_controller(extra_filter=None):
 
             comments = table.organisation_id.represent(record.organisation_id)
             if record.job_title_id:
-                comments = "%s, %s" % \
-                           (s3_unicode(table.job_title_id.represent(record.job_title_id)),
+                comments = (SPAN("%s, " % \
+                                 s3_unicode(table.job_title_id.represent(record.job_title_id))),
                             comments)
 
             # Configure widgets
@@ -7444,7 +7444,7 @@ def hrm_human_resource_filters(resource_type=None,
                                     "person_id$middle_name",
                                     "person_id$last_name",
                                     ],
-                                   label = T("Name"),
+                                   label = T("Search"),
                                    ),
                       ]
     append_filter = filter_widgets.append

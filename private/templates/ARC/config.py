@@ -21,7 +21,7 @@ T = current.T
 # System Settings
 # -----------------------------------------------------------------------------
 # Pre-Populate
-settings.base.prepopulate = ("ARC", "ARC/Demo", "demo/users")
+settings.base.prepopulate = ("ARC", "ARC/Demo", "default/users")
 
 settings.base.system_name = T("Resource Management System")
 settings.base.system_name_short = T("ARC Demo")
@@ -1573,11 +1573,11 @@ def customise_project_project_controller(**attr):
             match = "sector_project.sector_id",
             script = '''
 $.filterOptionsS3({
-  'trigger': {'alias': 'sector', 'name': 'sector_id', 'inlineType': 'link'},
-  'target': {'alias': 'theme', 'name': 'theme_id', 'inlineType': 'link'},
-  'lookupPrefix': 'project',
+  'trigger':{'alias':'sector','name':'sector_id','inlineType':'link'},
+  'target':{'alias':'theme','name':'theme_id','inlineType':'link'},
+  'lookupPrefix':'project',
   'lookupResource':'theme',
-  'lookupKey': 'theme_id:project_theme_sector.sector_id',
+  'lookupKey':'theme_id:project_theme_sector.sector_id',
   'showEmptyField':false
 })'''
         ),

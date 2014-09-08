@@ -55,6 +55,7 @@ __all__ = ("S3ACLWidget",
            "S3LocationAutocompleteWidget",
            "S3LocationDropdownWidget",
            "S3LocationLatLonWidget",
+           "S3PasswordWidget",
            "S3LocationSelectorWidget",
            "S3LocationSelectorWidget2",
            "S3MultiSelectWidget",
@@ -1324,11 +1325,12 @@ class S3DateWidget(FormWidget):
 '''$('#%(selector)s').datepicker('option',{yearRange:'c-100:c+100',
  dateFormat:'%(format)s',
  minDate:%(past)s,
- maxDate:%(future)s})''' % dict(selector = selector,
-                                format = format,
-                                past = minDate,
-                                future = maxDate,
-                                )
+ maxDate:%(future)s}).one('click',function(){$(this).focus()})''' % \
+            dict(selector = selector,
+                 format = format,
+                 past = minDate,
+                 future = maxDate,
+                 )
 
         if script not in jquery_ready: # Prevents loading twice when form has errors
             jquery_ready.append(script)
@@ -2532,7 +2534,7 @@ i18n.cancel_crop="%s"''' % (T("Please select a valid image!"),
             if image_bounds:
                 canvas.attributes["_width"] = image_bounds[0]
                 canvas.attributes["_height"] = image_bounds[1]
-                canvas.attributes["_style"] = "background:black;"
+                canvas.attributes["_style"] = "background:black"
             append(INPUT(**attr))
             append(INPUT(_type="hidden",
                          _name="imagecrop-data",
@@ -5816,6 +5818,37 @@ class CheckboxesWidgetS3(OptionsWidget):
         if opts:
             opts[-1][0][0]["hideerror"] = False
         return TABLE(*opts, **attr)
+
+# =============================================================================
+class S3PasswordWidget(FormWidget):
+    """
+        Widget for password fields, allows unmasking of passwords
+    """
+    def __call__(self, field, value, **attributes):
+
+        s3 = current.response.s3
+        T = current.T
+
+        tablename = field._tablename
+        fieldname = field.name
+        s3.js_global.append('''i18n.password_view="%s"''' % T("View"))
+        s3.js_global.append('''i18n.password_mask="%s"''' % T("Mask"))
+
+        password_input = INPUT(_name = fieldname,
+                               _id = "%s_%s" % (tablename, fieldname),
+                               _type = "password",
+                               _value = value,
+                               requires = field.requires,
+                               )
+        password_unmask = A(T("View"),
+                            _class = "s3-unmask",
+                            _onclick = '''S3.unmask('%s','%s')''' % (tablename,
+                                                                     fieldname),
+                            _id = "%s_%s_unmask" % (tablename, fieldname),
+                            )
+        return DIV(password_input, 
+                   password_unmask,
+                   )
 
 # =============================================================================
 def s3_comments_widget(field, value, **attr):
