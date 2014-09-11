@@ -2610,7 +2610,7 @@ class S3LayerEntityModel(S3Model):
                                          _title="%s|%s" % (T("Popup Format"),
                                                            T("Used in onHover Tooltip & Cluster Popups to differentiate between types."))),
                            ),
-                     Field("cluster_distance", "integer", notnull=True,
+                     Field("cluster_distance", "integer",
                            default = 20,
                            label = T("Cluster Distance"),
                            requires = IS_INT_IN_RANGE(1, 51),
@@ -2618,7 +2618,7 @@ class S3LayerEntityModel(S3Model):
                                          _title="%s|%s" % (T("Cluster Distance"),
                                                            T("The number of pixels apart that features need to be before they are clustered."))),
                            ),
-                     Field("cluster_threshold", "integer", notnull=True,
+                     Field("cluster_threshold", "integer",
                            default = 2,
                            label = T("Cluster Threshold"),
                            requires = IS_INT_IN_RANGE(0, 10),
@@ -2964,10 +2964,17 @@ class S3FeatureLayerModel(S3Model):
             # Match if controller, function, filter and name are identical
             table = item.table
             data = item.data
-            query = (table.controller.lower() == data.controller.lower()) & \
-                    (table.function.lower() == data.function.lower()) & \
-                    (table.filter == data.filter) & \
-                    (table.name == data.name)
+            query = (table.name == data.name)
+            controller = data.controller
+            if controller:
+                query &= (table.controller.lower() == controller.lower())
+            function = data.function
+            if function:
+                query &= (table.function.lower() == function.lower())
+            filter = data.filter
+            if filter:
+                query &= (table.filter == filter)
+
             duplicate = current.db(query).select(table.id,
                                                  limitby=(0, 1)).first()
             if duplicate:
@@ -3147,7 +3154,7 @@ class S3MapModel(S3Model):
         # ---------------------------------------------------------------------
         # Bing tiles
         #
-        bing_layer_types = ["aerial", "road", "hybrid"]
+        bing_layer_types = ("aerial", "road", "hybrid")
 
         tablename = "gis_layer_bing"
         define_table(tablename,
@@ -3337,9 +3344,9 @@ class S3MapModel(S3Model):
         # ---------------------------------------------------------------------
         # Google tiles
         #
-        google_layer_types = ["satellite", "maps", "hybrid", "terrain",
+        google_layer_types = ("satellite", "maps", "hybrid", "terrain",
                               "mapmaker", "mapmakerhybrid",
-                              "earth", "streetview"]
+                              "earth", "streetview")
 
         tablename = "gis_layer_google"
         define_table(tablename,
@@ -3617,7 +3624,7 @@ class S3MapModel(S3Model):
         # ---------------------------------------------------------------------
         # OpenWeatherMap
         #
-        openweathermap_layer_types = ["station", "city"]
+        openweathermap_layer_types = ("station", "city")
 
         tablename = "gis_layer_openweathermap"
         define_table(tablename,
@@ -3896,9 +3903,9 @@ class S3MapModel(S3Model):
         # ---------------------------------------------------------------------
         # WMS
         #
-        wms_img_formats = ["image/jpeg", "image/jpeg;mode=24bit", "image/png",
+        wms_img_formats = ("image/jpeg", "image/jpeg;mode=24bit", "image/png",
                            "image/gif", "image/bmp", "image/tiff",
-                           "image/svg+xml"]
+                           "image/svg+xml")
 
         tablename = "gis_layer_wms"
         define_table(tablename,
