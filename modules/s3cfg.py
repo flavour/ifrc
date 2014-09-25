@@ -51,11 +51,13 @@ class S3Config(Storage):
 
     # Used by modules/s3theme.py
     FORMSTYLE = {
+        "default": formstyle_foundation,
+        "default_inline": formstyle_foundation_inline,
         "bootstrap": formstyle_bootstrap,
         "foundation": formstyle_foundation,
         "foundation_inline": formstyle_foundation_inline,
-        "default": formstyle_default,
-        "default_inline": formstyle_default_inline,
+        "table": formstyle_table,
+        "table_inline": formstyle_table_inline,
     }
 
     # Formats from static/scripts/i18n/jquery-ui-i18n.js converted to Python style
@@ -699,9 +701,9 @@ class S3Config(Storage):
     def get_fin_currencies(self):
         T = current.T
         currencies = {
-            "EUR" :T("Euros"),
-            "GBP" :T("Great British Pounds"),
-            "USD" :T("United States Dollars"),
+            "EUR" : T("Euros"),
+            "GBP" : T("Great British Pounds"),
+            "USD" : T("United States Dollars"),
         }
         return self.fin.get("currencies", currencies)
     def get_fin_currency_default(self):
@@ -1860,7 +1862,16 @@ class S3Config(Storage):
             "population_day",
             "population_night".
         """
+        # Only together with people registration:
+        if not self.get_cr_shelter_people_registration():
+            return False
         return self.cr.get("shelter_population_dynamic", False)
+    
+    def get_cr_shelter_people_registration(self):
+        """
+            Disable functionality to track individuals in shelters
+        """
+        return self.cr.get("people_registration", True)
 
     def get_cr_shelter_housing_unit_management(self):
         """
@@ -2017,6 +2028,12 @@ class S3Config(Storage):
             - options are: False, "experience"
         """
         return self.hrm.get("staff_experience", "experience")
+        
+    def get_hrm_salary(self):
+        """
+            Whether to track salaries of staff
+        """
+        return self.hrm.get("salary", False)
 
     def get_hrm_vol_active(self):
         """

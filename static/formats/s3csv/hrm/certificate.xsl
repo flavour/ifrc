@@ -23,6 +23,8 @@
          Expiry..........................hrm_certificate.expiry (in months)
 
     *********************************************************************** -->
+    <xsl:import href="../commons.xsl"/>
+
     <xsl:output method="xml"/>
 
     <xsl:key name="organisation" match="row" use="col[@field='Organisation']"/>
@@ -55,20 +57,6 @@
                     <xsl:value-of select="$OrgName"/>
                 </xsl:attribute>
             </reference>
-        </resource>
-
-    </xsl:template>
-
-    <!-- ****************************************************************** -->
-
-    <xsl:template name="Organisation">
-        <xsl:variable name="OrgName" select="col[@field='Organisation']/text()"/>
-
-        <resource name="org_organisation">
-            <xsl:attribute name="tuid">
-                <xsl:value-of select="$OrgName"/>
-            </xsl:attribute>
-            <data field="name"><xsl:value-of select="$OrgName"/></data>
         </resource>
 
     </xsl:template>

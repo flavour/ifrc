@@ -4667,13 +4667,18 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
             } else {
                 var tooltip = i18n.gis_draw_feature;
             }
+            var map_id = map.s3.id;
             var pointButton = new GeoExt.Action({
                 control: control,
                 handler: function() {
                     if (pointButton.items[0].pressed) {
-                        $('.olMapViewport').addClass('crosshair');
+                        $('#' + map_id + '_panel .olMapViewport').addClass('crosshair');
+                        var colorpicker = $('#' + map_id + '_panel .gis_colorpicker');
+                        if (colorpicker.length) {
+                            colorpicker.spectrum('disable');
+                        }
                     } else {
-                        $('.olMapViewport').removeClass('crosshair');
+                        $('#' + map_id + '_panel .olMapViewport').removeClass('crosshair');
                     }
                 },
                 map: map,
@@ -4685,6 +4690,13 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
                 pressed: active
             });
             toolbar.add(pointButton);
+            if (active) {
+                $('#' + map_id + '_panel .olMapViewport').addClass('crosshair');
+                var colorpicker = $('#' + map_id + '_panel .gis_colorpicker');
+                if (colorpicker.length) {
+                    colorpicker.spectrum('disable');
+                }
+            }
             // Pass to Global scope for LocationSelectorWidget
             map.s3.pointButton = pointButton;
         } else {
@@ -4692,7 +4704,7 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
             map.addControl(control);
             if (active) {
                 control.activate();
-                $('.olMapViewport').addClass('crosshair');
+                $('#' + map.s3.id + '_panel .olMapViewport').addClass('crosshair');
             }
         }
     };
@@ -4730,13 +4742,22 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
             } else {
                 var tooltip = i18n.gis_draw_line;
             }
+            var map_id = map.s3.id;
             var lineButton = new GeoExt.Action({
                 control: control,
                 handler: function() {
                     if (lineButton.items[0].pressed) {
-                        $('.olMapViewport').addClass('crosshair');
+                        $('#' + map_id + '_panel .olMapViewport').addClass('crosshair');
+                        var colorpicker = $('#' + map_id + '_panel .gis_colorpicker');
+                        if (colorpicker.length) {
+                            colorpicker.spectrum('enable');
+                        }
                     } else {
-                        $('.olMapViewport').removeClass('crosshair');
+                        $('#' + map_id + '_panel .olMapViewport').removeClass('crosshair');
+                        var colorpicker = $('#' + map_id + '_panel .gis_colorpicker');
+                        if (colorpicker.length) {
+                            colorpicker.spectrum('disable');
+                        }
                     }
                 },
                 map: map,
@@ -4757,7 +4778,7 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
             map.addControl(control);
             if (active) {
                 control.activate();
-                $('.olMapViewport').addClass('crosshair');
+                $('#' + map.s3.id + '_panel .olMapViewport').addClass('crosshair');
             }
         }
     };
@@ -4817,13 +4838,22 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
             } else {
                 var tooltip = i18n.gis_draw_polygon;
             }
+            var map_id = map.s3.id;
             var polygonButton = new GeoExt.Action({
                 control: control,
                 handler: function(){
                     if (polygonButton.items[0].pressed) {
-                        $('.olMapViewport').addClass('crosshair');
+                        $('#' + map_id + '_panel .olMapViewport').addClass('crosshair');
+                        var colorpicker = $('#' + map_id + '_panel .gis_colorpicker');
+                        if (colorpicker.length) {
+                            colorpicker.spectrum('enable');
+                        }
                     } else {
-                        $('.olMapViewport').removeClass('crosshair');
+                        $('#' + map_id + '_panel .olMapViewport').removeClass('crosshair');
+                        var colorpicker = $('#' + map_id + '_panel .gis_colorpicker');
+                        if (colorpicker.length) {
+                            colorpicker.spectrum('disable');
+                        }
                     }
                 },
                 map: map,
@@ -4844,7 +4874,7 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
             map.addControl(control);
             if (active) {
                 control.activate();
-                $('.olMapViewport').addClass('crosshair');
+                $('#' + map.s3.id + '_panel .olMapViewport').addClass('crosshair');
             }
         }
     };
@@ -4882,8 +4912,8 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
         return [r, g, b].join();
     }
 
-    var rgb2hex = function(r,g,b) {
-        return Number(0x1000000 + r*0x10000 + g*0x100 + b).toString(16).substring(1);
+    var rgb2hex = function(r, g, b) {
+        return Number(0x1000000 + Math.round(r)*0x10000 + Math.round(g)*0x100 + Math.round(b)).toString(16).substring(1);
     }
 
     // ColorPicker to style Features
@@ -4916,6 +4946,7 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
                     showPaletteOnly: true,
                     togglePaletteOnly: true,
                     palette: ['rgba(255, 0, 0, .5)',    // red
+                              'rgba(255, 165, 0, .5)',  // orange
                               'rgba(255, 255, 0, .5)',  // yellow
                               'rgba(0, 255, 0, .5)',    // green
                               'rgba(0, 0, 255, .5)',    // blue

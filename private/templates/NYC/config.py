@@ -30,6 +30,7 @@ settings.base.system_name_short = T("NYC Prepared")
 settings.base.theme = "NYC"
 settings.ui.formstyle_row = "bootstrap"
 settings.ui.formstyle = "bootstrap"
+settings.ui.filter_formstyle = "table_inline"
 
 settings.msg.parser = "NYC"
 
@@ -833,6 +834,18 @@ def customise_org_group_controller(**attr):
                                crud_form = crud_form,
                                )
 
+        elif r.component_name == "pr_group":
+            list_fields = [#(T("Network"), "group_team.org_group_id"),
+                           "name",
+                           "description",
+                           "meetings",
+                           (T("Chairperson"), "chairperson"),
+                           "comments",
+                           ]
+
+            s3db.configure("pr_group",
+                           list_fields = list_fields,
+                           )
         return result
     s3.prep = custom_prep
 
@@ -851,6 +864,8 @@ settings.pr.request_dob = False
 settings.pr.request_gender = False
 # Doesn't yet work (form fails to submit)
 #settings.pr.select_existing = False
+
+settings.pr.show_emergency_contacts = False
 
 # -----------------------------------------------------------------------------
 # Persons
@@ -1045,17 +1060,13 @@ def customise_pr_group_controller(**attr):
             if not result:
                 return False
 
-        s3db = current.s3db
-
-        # Format for filter_widgets & imports
-        s3db.add_components("pr_group",
-                            org_group_team = "group_id",
-                            )
-
         from s3 import S3Represent, S3TextFilter, S3OptionsFilter, S3SQLCustomForm, S3SQLInlineComponent
+
+        s3db = current.s3db
 
         s3db.org_group_team.org_group_id.represent = S3Represent(lookup="org_group",
                                                                  show_link=True)
+
         crud_form = S3SQLCustomForm("name",
                                     "description",
                                     S3SQLInlineComponent("group_team",
@@ -1084,9 +1095,19 @@ def customise_pr_group_controller(**attr):
                             ),
             ]
 
+        # Need to re-do list_fields as get over_written by hrm_group_controller()
+        list_fields = [(T("Network"), "group_team.org_group_id"),
+                       "name",
+                       "description",
+                       "meetings",
+                       (T("Chairperson"), "chairperson"),
+                       "comments",
+                       ]
+
         s3db.configure("pr_group",
                        crud_form = crud_form,
                        filter_widgets = filter_widgets,
+                       list_fields = list_fields,
                        )
 
         s3db.pr_group_membership.group_head.label = T("Group Chairperson")
@@ -1134,19 +1155,15 @@ def customise_pr_group_resource(r, tablename):
     from gluon import Field
     table.chairperson = Field.Method("chairperson", chairperson)
 
-    list_fields = [(T("Network"), "group_team.org_group_id"),
-                   "name",
-                   "description",
-                   "meetings",
-                   #(T("Chairperson"), "chairperson"),
-                   "comments",
-                   ]
+    # Format for filter_widgets & imports
+    s3db.add_components("pr_group",
+                        org_group_team = "group_id",
+                        )
 
     s3db.configure("pr_group",
                    # Redirect to member list when a new group has been created
                    create_next = URL(c="hrm", f="group",
                                      args=["[id]", "group_membership"]),
-                   list_fields = list_fields,
                    )
 
 settings.customise_pr_group_resource = customise_pr_group_resource

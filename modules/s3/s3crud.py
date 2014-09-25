@@ -528,7 +528,7 @@ class S3CRUD(S3Method):
                         s3.jquery_ready.append(script)
 
                     # Add-button script
-                    script = '''$('#show-add-btn').click(function(){$('#list-add').slideDown('medium',function(){$('#show-add-btn').hide()})})'''
+                    script = '''$('#show-add-btn').click(function(){$('#show-add-btn').hide(10, function(){$('#list-add').slideDown('medium')})})'''
                     s3.jquery_ready.append(script)
 
             elif addbtn:
@@ -758,7 +758,15 @@ class S3CRUD(S3Method):
 
         elif representation == "json":
             exporter = S3Exporter().json
-            return exporter(resource)
+
+            # Render extra "_tooltip" field for each row?
+            get_vars = request.get_vars
+            if "tooltip" in get_vars:
+                tooltip = get_vars["tooltip"]
+            else:
+                tooltip = None
+
+            return exporter(resource, tooltip=tooltip)
 
         else:
             r.error(501, current.ERROR.BAD_FORMAT)
@@ -1226,6 +1234,12 @@ class S3CRUD(S3Method):
             else:
                 start = None
 
+            # Render extra "_tooltip" field for each row?
+            if "tooltip" in get_vars:
+                tooltip = get_vars["tooltip"]
+            else:
+                tooltip = None
+
             fields = resource.list_fields(id_column=True)
             rfields = resource.resolve_selectors(fields,
                                                  extra_fields=False)[0]
@@ -1238,7 +1252,8 @@ class S3CRUD(S3Method):
                             start=start,
                             limit=limit,
                             fields=fields,
-                            orderby=orderby)
+                            orderby=orderby,
+                            tooltip=tooltip)
 
         elif representation == "pdf":
 
@@ -2259,18 +2274,20 @@ class S3CRUD(S3Method):
 
             if fields:
                 query = (table._id == record_id)
-                record = current.db(query).select(limitby=(0, 1), *fields).first()
+                record = current.db(query).select(limitby=(0, 1),
+                                                  *fields).first()
 
-                # @todo: "on" and "by" particles are problematic in translations
-                if "modified_by" in record:
-                    if not record.modified_by:
-                        modified_by = T("anonymous user")
-                    else:
-                        modified_by = table.modified_by.represent(record.modified_by)
-                    output["modified_by"] = T("by %(person)s") % \
-                                               dict(person = modified_by)
-                if "modified_on" in record:
-                    output["modified_on"] = T("on %(date)s") % \
+                if record:
+                    if "modified_by" in record:
+                        if not record.modified_by:
+                            modified_by = T("anonymous user")
+                        else:
+                            modified_by = \
+                                table.modified_by.represent(record.modified_by)
+                        output["modified_by"] = T("by %(person)s") % \
+                                                  dict(person = modified_by)
+                    if "modified_on" in record:
+                        output["modified_on"] = T("on %(date)s") % \
                                                 dict(date = record.modified_on)
 
         return output
@@ -2894,6 +2911,14 @@ class S3CRUD(S3Method):
             c = prefix
             f = name
 
+        if r.representation == "iframe":
+            if current.deployment_settings.get_ui_iframe_opens_full():
+                iframe_safe = lambda url: s3_set_extension(url, "html")
+            else:
+                iframe_safe = lambda url: s3_set_extension(url, "iframe")
+        else:
+            iframe_safe = False
+
         def list_linkto(record_id, r=r, c=c, f=f,
                         linkto=linkto,
                         update=authorised and update):
@@ -2903,7 +2928,6 @@ class S3CRUD(S3Method):
                     url = str(linkto(record_id))
                 except TypeError:
                     url = linkto % record_id
-                return url
             else:
                 if r.component:
                     if r.link and not r.actuate_link():
@@ -2928,31 +2952,35 @@ class S3CRUD(S3Method):
                         f = r.function
                         args = [r.id, r.component_name, record_id]
                     if update:
-                        return str(URL(r=r, c=c, f=f,
-                                       args=args + ["update"],
-                                       # Don't forward all vars unconditionally
-                                       #vars=r.get_vars
-                                       ))
+                        url = str(URL(r=r, c=c, f=f,
+                                      args=args + ["update"],
+                                      # Don't forward all vars unconditionally
+                                      #vars=r.get_vars
+                                      ))
                     else:
-                        return str(URL(r=r, c=c, f=f,
-                                       args=args + ["read"],
-                                       # Don't forward all vars unconditionally
-                                       #vars=r.get_vars
-                                       ))
+                        url = str(URL(r=r, c=c, f=f,
+                                      args=args + ["read"],
+                                      # Don't forward all vars unconditionally
+                                      #vars=r.get_vars
+                                      ))
                 else:
                     args = [record_id]
                     if update:
-                        return str(URL(r=r, c=c, f=f,
-                                       args=args + ["update"],
-                                       # Don't forward all vars unconditionally
-                                       #vars=r.get_vars
-                                       ))
+                        url = str(URL(r=r, c=c, f=f,
+                                      args=args + ["update"],
+                                      # Don't forward all vars unconditionally
+                                      #vars=r.get_vars
+                                      ))
                     else:
-                        return str(URL(r=r, c=c, f=f,
-                                       args=args + ["read"],
-                                       # Don't forward all vars unconditionally
-                                       #vars=r.get_vars
-                                       ))
+                        url = str(URL(r=r, c=c, f=f,
+                                      args=args + ["read"],
+                                      # Don't forward all vars unconditionally
+                                      #vars=r.get_vars
+                                      ))
+            if iframe_safe:
+                url = iframe_safe(url)
+            return url
+
         return list_linkto
 
     # -------------------------------------------------------------------------

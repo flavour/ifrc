@@ -183,6 +183,11 @@ settings.auth.realm_entity = ifrc_realm_entity
 # Theme (folder to use for views/layout.html)
 settings.base.theme = "IFRC"
 settings.base.xtheme = "IFRC/xtheme-ifrc.css"
+
+# Formstyle
+settings.ui.formstyle = "table"
+settings.ui.filter_formstyle = "table_inline"
+
 settings.gis.map_height = 600
 settings.gis.map_width = 869
 # Display Resources recorded to Admin-Level Locations on the map
@@ -1436,6 +1441,17 @@ def customise_pr_contact_resource(r, tablename):
 settings.customise_pr_contact_resource = customise_pr_contact_resource
 
 # -----------------------------------------------------------------------------
+def customise_pr_contact_emergency_resource(r, tablename):
+
+    # Special cases for different NS
+    root_org = current.auth.root_org_name()
+    if root_org == VNRC:
+        address = r.table.address
+        address.readable = address.writable = True
+
+settings.customise_pr_contact_emergency_resource = customise_pr_contact_emergency_resource
+
+# -----------------------------------------------------------------------------
 def customise_pr_group_controller(**attr):
 
     s3db = current.s3db
@@ -1679,16 +1695,38 @@ def customise_pr_person_controller(**attr):
                 settings.gis.latlon_selector = False
                 settings.gis.map_selector = False
 
+            elif r.method == "contacts":
+                table = s3db.pr_contact_emergency
+                table.address.readable = table.address.writable = True
+
             elif component_name == "identity":
-                table = s3db.pr_identity
-                table.description.readable = False
-                table.description.writable = False
+                controller = r.controller
+                table = r.component.table
+
+                # Limit options for identity document type
                 pr_id_type_opts = {1: T("Passport"),
                                    2: T("National ID Card"),
                                    }
                 from gluon.validators import IS_IN_SET
-                table.type.requires = IS_IN_SET(pr_id_type_opts,
-                                                zero=None)
+                table.type.requires = IS_IN_SET(pr_id_type_opts, zero=None)
+                
+                if controller == "hrm":
+                    # For staff, set default for ID document type and do not
+                    # allow selection of other options
+                    table.type.default = 2
+                    table.type.writable = False
+                    hide_fields = ("description", "valid_until", "country_code", "ia_name")
+                else:
+                    hide_fields = ("description",)
+                
+                # Hide unneeded fields
+                for fname in hide_fields:
+                    field = table[fname]
+                    field.readable = field.writable = False
+                list_fields = s3db.get_config("pr_identity", "list_fields")
+                hide_fields = set(hide_fields)
+                list_fields = (fs for fs in list_fields if fs not in hide_fields)
+                s3db.configure("pr_identity", list_fields = list_fields)
 
             elif component_name == "hours":
                 field = s3db.hrm_programme_hours.job_title_id
@@ -1746,9 +1784,13 @@ def pr_rheader(r, vnrc):
     """
 
     controller = current.request.controller
-    if vnrc and controller == "vol":
-        # Simplify RHeader
-        settings.hrm.vol_experience = None
+    if vnrc :
+        if controller == "vol":
+            # Simplify RHeader
+            settings.hrm.vol_experience = None
+        elif controller == "hrm":
+            # Expose Salary Tab
+            settings.hrm.salary = True
 
     if controller == "member":
         return current.s3db.member_rheader(r)
@@ -1844,6 +1886,7 @@ def customise_project_project_controller(**attr):
 
     # Custom Crud Form
     from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink
+    s3db = current.s3db
     crud_form = S3SQLCustomForm(
         "organisation_id",
         "name",
@@ -1868,6 +1911,7 @@ def customise_project_project_controller(**attr):
             "hazard",
             label = T("Hazards"),
             field = "hazard_id",
+            help_field = s3db.project_hazard_help_fields,
             cols = 4,
             translate = True,
         ),
@@ -1882,6 +1926,7 @@ def customise_project_project_controller(**attr):
             "theme",
             label = T("Themes"),
             field = "theme_id",
+            help_field = s3db.project_theme_help_fields,
             cols = 4,
             translate = True,
             # Filter Theme by Sector
@@ -1894,7 +1939,8 @@ $.filterOptionsS3({
  'lookupPrefix':'project',
  'lookupResource':'theme',
  'lookupKey':'theme_id:project_theme_sector.sector_id',
- 'showEmptyField':false
+ 'showEmptyField':false,
+ 'tooltip':'project_theme_help_fields(id,name)'
 })'''
         ),
         "drr.hfa",

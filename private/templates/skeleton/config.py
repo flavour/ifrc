@@ -21,6 +21,9 @@ settings = current.deployment_settings
     Deployers should ideally not need to edit any other files outside of their template folder
 """
 
+#settings.base.system_name = T("Sahana Skeleton")
+#settings.base.system_name_short = T("Sahana")
+
 # PrePopulate data
 settings.base.prepopulate = ("skeleton", "default/users")
 
@@ -34,11 +37,15 @@ settings.base.theme = "skeleton"
 #settings.auth.registration_requires_verification = True
 # Do new users need to be approved by an administrator prior to being able to login?
 #settings.auth.registration_requires_approval = True
+#settings.auth.registration_requests_organisation = True
+
+# Approval emails get sent to all admins
+settings.mail.approver = "ADMIN"
 
 # Restrict the Location Selector to just certain countries
 # NB This can also be over-ridden for specific contexts later
 # e.g. Activities filtered to those of parent Project
-#settings.gis.countries = ["US"]
+#settings.gis.countries = ("US",)
 
 # L10n settings
 # Languages used in the deployment (used for Language Toolbar & GIS Locations)
@@ -72,6 +79,8 @@ settings.base.theme = "skeleton"
 #settings.L10n.default_language = "en"
 # Uncomment to Hide the language toolbar
 #settings.L10n.display_toolbar = False
+# Default timezone for users
+#settings.L10n.utc_offset = "UTC +0100"
 
 # Security Policy
 # http://eden.sahanafoundation.org/wiki/S3AAA#System-widePolicy
@@ -85,6 +94,23 @@ settings.base.theme = "skeleton"
 # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
 #
 #settings.security.policy = 7 # Organisation-ACLs
+
+# RSS feeds
+settings.frontpage.rss = [
+    {"title": "Eden",
+     # Trac timeline
+     "url": "http://eden.sahanafoundation.org/timeline?ticket=on&changeset=on&milestone=on&wiki=on&max=50&daysback=90&format=rss"
+    },
+    {"title": "Twitter",
+     # @SahanaFOSS
+     #"url": "https://search.twitter.com/search.rss?q=from%3ASahanaFOSS" # API v1 deprecated, so doesn't work, need to use 3rd-party service, like:
+     "url": "http://www.rssitfor.me/getrss?name=@SahanaFOSS"
+     # Hashtag
+     #url: "http://search.twitter.com/search.atom?q=%23eqnz" # API v1 deprecated, so doesn't work, need to use 3rd-party service, like:
+     #url: "http://api2.socialmention.com/search?q=%23eqnz&t=all&f=rss"
+    }
+]
+
 
 # Comment/uncomment modules here to disable/enable them
 # Modules menu is defined in modules/eden/menu.py
@@ -150,4 +176,10 @@ settings.modules = OrderedDict([
         restricted = True,
         module_type = 1
     )),
+    #("hrm", Storage(
+    #    name_nice = T("Staff"),
+    #    #description = "Human Resources Management",
+    #    restricted = True,
+    #    module_type = 2,
+    #)),
 ])

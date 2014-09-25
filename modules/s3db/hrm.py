@@ -29,6 +29,7 @@
 
 __all__ = ("S3HRModel",
            "S3HRSiteModel",
+           "S3HRSalaryModel",
            "S3HRSkillModel",
            "S3HRAppraisalModel",
            "S3HRExperienceModel",
@@ -623,6 +624,7 @@ class S3HRModel(S3Model):
                                         "fkey": "person_id",
                                         "pkey": "person_id",
                                         },
+                        hrm_salary = "human_resource_id",
                         hrm_training={"link": "pr_person",
                                       "joinby": "id",
                                       "key": "id",
@@ -1308,14 +1310,17 @@ class S3HRSiteModel(S3Model):
 
             if record:
                 deleted_fks = json.loads(record.deleted_fk)
-                human_resource_id = deleted_fks["human_resource_id"]
-                db(table.id == human_resource_id).update(location_id=None,
-                                                         site_id=None,
-                                                         site_contact=False
-                                                         )
-                # Update realm_entity of HR
-                current.auth.set_realm_entity(table, human_resource_id,
-                                              force_update = True)
+                human_resource_id = deleted_fks.get("human_resource_id")
+                if human_resource_id:
+                    db(table.id == human_resource_id).update(location_id=None,
+                                                             site_id=None,
+                                                             site_contact=False,
+                                                             )
+                    # Update realm_entity of HR
+                    current.auth.set_realm_entity(table,
+                                                  human_resource_id,
+                                                  force_update = True,
+                                                  )
         else:
             human_resource_id = form_vars.human_resource_id
 
@@ -1374,6 +1379,160 @@ class S3HRSiteModel(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
+
+# =============================================================================
+class S3HRSalaryModel(S3Model):
+    """ Data Model to track salaries of staff """
+    
+    names = ("hrm_staff_level",
+             "hrm_salary_grade",
+             "hrm_salary",
+             )
+
+    def model(self):
+        
+        db = current.db
+        T = current.T
+        define_table = self.define_table
+        configure = self.configure
+        
+        organisation_id = self.org_organisation_id
+        organisation_requires = self.org_organisation_requires
+
+        # =====================================================================
+        # Staff Level
+        # 
+        tablename = "hrm_staff_level"
+        table = define_table(tablename,
+                             organisation_id(
+                                requires = organisation_requires(updateable=True),
+                             ),
+                             Field("name",
+                                   label = T("Staff Level"),
+                             ),
+                             *s3_meta_fields())
+
+        ADD_STAFF_LEVEL = T("Add Staff Level")
+        staff_level_represent = S3Represent(lookup="hrm_staff_level")
+
+        # =====================================================================
+        # Salary Grades
+        # 
+        tablename = "hrm_salary_grade"
+        table = define_table(tablename,
+                             organisation_id(
+                                requires = organisation_requires(updateable=True),
+                             ),
+                             Field("name",
+                                   label = T("Salary Grade"),
+                             ),
+                             *s3_meta_fields())
+
+        ADD_SALARY_GRADE = T("Add Salary Grade")
+        salary_grade_represent = S3Represent(lookup="hrm_salary_grade")
+
+        # =====================================================================
+        # Salary
+        # 
+        tablename = "hrm_salary"
+        table = define_table(tablename,
+                             self.pr_person_id(),
+                             self.hrm_human_resource_id(
+                                label = T("Staff Record"),
+                                widget = None,
+                                comment = None,
+                             ),
+                             Field("staff_level_id", "reference hrm_staff_level",
+                                   label = T("Staff Level"),
+                                   represent = staff_level_represent,
+                                   requires = IS_EMPTY_OR(
+                                                IS_ONE_OF(db, 
+                                                          "hrm_staff_level.id",
+                                                          staff_level_represent,
+                                                          )),
+                                   comment = S3AddResourceLink(f = "staff_level",
+                                                               label = ADD_STAFF_LEVEL),
+                                   ),
+                             Field("salary_grade_id", "reference hrm_salary_grade",
+                                   label = T("Salary Grade"),
+                                   represent = salary_grade_represent,
+                                   requires = IS_EMPTY_OR(
+                                                IS_ONE_OF(db, 
+                                                          "hrm_salary_grade.id",
+                                                          salary_grade_represent,
+                                                          )),
+                                   comment = S3AddResourceLink(f = "salary_grade",
+                                                               label = ADD_SALARY_GRADE),
+                                   ),
+                             s3_date("start_date",
+                                     default = "now",
+                                     label = T("From"),
+                                     widget = S3DateTimeWidget(hide_time=True,
+                                                               set_min="hrm_salary_end_date",
+                                                               ),
+                                     ),
+                             s3_date("end_date",
+                                     label = T("To"),
+                                     widget = S3DateTimeWidget(hide_time=True,
+                                                               set_max="hrm_salary_start_date",
+                                                               ),
+                                     ),
+                             Field("monthly_amount", "double",
+                                   requires = IS_EMPTY_OR(
+                                              IS_FLOAT_IN_RANGE(minimum=0.0)),
+                                   default = 0.0,
+                                   ),
+                             *s3_meta_fields())
+        
+        current.response.s3.crud_strings[tablename] = Storage(
+            label_create = T("Add Salary"),
+            title_display = T("Salary Details"),
+            title_list = T("Salaries"),
+            title_update = T("Edit Salary"),
+            label_list_button = T("List Salaries"),
+            label_delete_button = T("Delete Salary"),
+            msg_record_created = T("Salary added"),
+            msg_record_modified = T("Salary updated"),
+            msg_record_deleted = T("Salary removed"),
+            msg_no_match = T("No entries found"),
+            msg_list_empty = T("Currently no salary registered"))
+            
+        configure(tablename,
+                  onvalidation = self.hrm_salary_onvalidation,
+                  orderby = "%s.start_date desc" % tablename,
+                  )
+
+        # =====================================================================
+        # Salary Coefficient
+        # 
+        # @todo: implement
+        
+        # =====================================================================
+        # Allowance Level
+        # 
+        # @todo: implement
+        
+        return {}
+        
+    # -------------------------------------------------------------------------
+    def defaults(self):
+        
+        return {}
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def hrm_salary_onvalidation(form):
+        
+        try:
+            form_vars = form.vars
+            start_date = form_vars.get("start_date")
+            end_date = form_vars.get("end_date")
+        except AttributeError:
+            return
+            
+        if start_date and end_date and start_date > end_date:
+            form.errors["end_date"] = current.T("End date must be after start date.")
+        return
 
 # =============================================================================
 class S3HRJobModel(S3Model):
@@ -2582,6 +2741,26 @@ class S3HRSkillModel(S3Model):
                     hrm_multi_skill_id = multi_skill_id,
                     hrm_multi_skill_represent = multi_skill_represent,
                     hrm_certification_onaccept = self.hrm_certification_onaccept,
+                    )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """
+            Return safe defaults in case the model has been deactivated.
+        """
+
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False)
+
+        dummy_listref = S3ReusableField("dummy_id", "list:reference",
+                                        readable = False,
+                                        writable = False)
+
+        return dict(hrm_course_id = lambda **attr: dummy("course_id"),
+                    hrm_skill_id = lambda **attr: dummy("skill_id"),
+                    hrm_multi_skill_id = lambda **attr: dummy_listref("skill_id"),
                     )
 
     # -------------------------------------------------------------------------
@@ -5132,6 +5311,11 @@ def hrm_rheader(r, tabs=[],
             id_tab = (T("ID"), "identity")
         else:
             id_tab = None
+            
+        if settings.get_hrm_salary():
+            salary_tab = (T("Salary"), "salary")
+        else:
+            salary_tab = None
 
         if settings.get_hrm_use_skills() and not use_cv:
             skills_tab = (T("Skills"), "competency")
@@ -5213,6 +5397,7 @@ def hrm_rheader(r, tabs=[],
                     description_tab,
                     (T("Address"), "address"),
                     (T("Contacts"), "contacts"),
+                    salary_tab,
                     education_tab,
                     trainings_tab,
                     certificates_tab,
@@ -5509,7 +5694,8 @@ def hrm_group_controller():
             msg_list_empty = T("No Teams currently registered"))
 
     # Format for filter_widgets & imports
-    s3db.add_components("pr_group", org_organisation_team="group_id")
+    s3db.add_components("pr_group",
+                        org_organisation_team = "group_id")
 
     # Pre-process
     def prep(r):
@@ -6313,6 +6499,9 @@ def hrm_person_controller(**attr):
 
                 elif r.component_name == "group_membership":
                     hrm_configure_pr_group_membership()
+                    
+                elif r.component_name == "salary":
+                    hrm_configure_salary(r)
 
             if r.method == "record" or r.component_name == "human_resource":
                 table = s3db.hrm_human_resource
@@ -6836,6 +7025,76 @@ def hrm_record(r, **attr):
 
     else:
         raise HTTP(501, current.ERROR.BAD_METHOD)
+
+# =============================================================================
+def hrm_configure_salary(r):
+    """ 
+        Configure the salary tab 
+
+        @param r: the S3Request
+    """
+
+    hr_id = None
+    multiple = False
+
+    # Get all accessible HR records of this person
+    resource = r.resource
+    rows = resource.select(["human_resource.id",
+                            "human_resource.type",
+                            ], as_rows=True)
+
+    # Only staff records, of course
+    rows = [row for row in rows if row["hrm_human_resource.type"] == 1]
+
+    HR_ID = "hrm_human_resource.id"
+    if len(rows) == 1:
+        hr_id = rows[0][HR_ID]
+        multiple = False
+    else:
+        hr_id = [row[HR_ID] for row in rows]
+        multiple = True
+
+    component = r.component
+    ctable = component.table
+
+    field = ctable.human_resource_id
+    list_fields = [fs for fs in component.list_fields() if fs != "person_id"]
+
+    if multiple or not hr_id:
+        # Default to the staff record selected in URL
+        default_hr_id = hr_id
+        if "human_resource.id" in r.get_vars:
+            try: 
+                default_hr_id = long(r.get_vars["human_resource.id"])
+            except ValueError:
+                pass
+        if default_hr_id in hr_id:
+            field.default = default_hr_id
+
+        # Filter field options
+        field.requires = IS_ONE_OF(current.db, "hrm_human_resource.id",
+                                   current.s3db.hrm_human_resource_represent,
+                                   sort=True,
+                                   filterby="id",
+                                   filter_opts = hr_id,
+                                   )
+        # Show the list_field
+        if "human_resource_id" not in list_fields:
+            list_fields.insert(1, "human_resource_id")
+    else:
+        # Only one HR record => set as default and make read-only
+        field.default = hr_id
+        field.writable = False
+
+        # Hiding the field can be confusing if there are mixed single/multi HR
+        #field.readable = False 
+
+        # Hide the list field
+        if "human_resource_id" in list_fields:
+            list_fields.remove("human_resource_id")
+
+    component.configure(list_fields=list_fields)
+    return
 
 # =============================================================================
 def hrm_configure_pr_group_membership():

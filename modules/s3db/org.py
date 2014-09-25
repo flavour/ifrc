@@ -1457,11 +1457,11 @@ class S3OrganisationGroupPersonModel(S3Model):
         #
         tablename = "org_group_person"
         self.define_table(tablename,
-                          self.org_group_id(ondelete="CASCADE",
-                                            empty=False,
+                          self.org_group_id(empty = False,
+                                            ondelete = "CASCADE",
                                             ),
-                          self.pr_person_id(ondelete="CASCADE",
-                                            empty=False,
+                          self.pr_person_id(empty = False,
+                                            ondelete = "CASCADE",
                                             ),
                           *s3_meta_fields())
 
@@ -1486,11 +1486,11 @@ class S3OrganisationGroupTeamModel(S3Model):
         tablename = "org_group_team"
         self.define_table(tablename,
                           self.org_group_id("org_group_id",
-                                            ondelete="CASCADE",
-                                            empty=False,
+                                            empty = False,
+                                            ondelete = "CASCADE",
                                             ),
-                          self.pr_group_id(ondelete="CASCADE",
-                                           empty=False,
+                          self.pr_group_id(empty = False,
+                                           ondelete = "CASCADE",
                                            ),
                           *s3_meta_fields())
 
@@ -4848,7 +4848,8 @@ def org_rheader(r, tabs=[]):
                 (STAFF, "human_resource"),
                 ]
         append = tabs.append
-        if current.auth.s3_has_permission("create", "hrm_human_resource_site"):
+        if settings.has_module("hrm") and \
+           current.auth.s3_has_permission("create", "hrm_human_resource_site"):
             #append((T("Assign %(staff)s") % dict(staff=STAFF), "human_resource_site"))
             append((T("Assign %(staff)s") % dict(staff=STAFF), "assign")),
         if settings.get_req_summary():

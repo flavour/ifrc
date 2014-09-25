@@ -410,6 +410,8 @@ settings.gis.geonames_username = "eden_test"
 # Shelters
 # Uncomment to use a dynamic population estimation by calculations based on registrations
 #settings.cr.shelter_population_dynamic = True
+# Uncomment to disable people registration in shelters
+#settings.cr.people_registration = False
 
 # -----------------------------------------------------------------------------
 # Events
@@ -556,6 +558,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.hrm.use_id = False
 # Uncomment to disable the use of HR Skills
 #settings.hrm.use_skills = False
+# Uncomment to enable tracking of staff salaries
+#settings.hrm.salary = True
 # Uncomment to disable the use of HR Teams
 #settings.hrm.teams = False
 # Uncomment to disable the use of HR Trainings

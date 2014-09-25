@@ -135,7 +135,11 @@ class IS_JSONS3(Validator):
     """
 
     def __init__(self, error_message="Invalid JSON"):
-        self.native_json = current.db._adapter.native_json
+        try:
+            self.driver_auto_json = current.db._adapter.driver_auto_json
+        except:
+            current.log.warning("Update Web2Py to 2.9.11 to get native JSON support")
+            self.driver_auto_json = []
         self.error_message = error_message
 
     # -------------------------------------------------------------------------
@@ -143,10 +147,11 @@ class IS_JSONS3(Validator):
         # Convert CSV import format to valid JSON
         value = value.replace("'", "\"")
         try:
-            if self.native_json:
+            if "dumps" in self.driver_auto_json:
                 json.loads(value) # raises error in case of malformed JSON
                 return (value, None) #  the serialized value is not passed
-            return (json.loads(value), None)
+            else:
+                return (json.loads(value), None)
         except JSONErrors, e:
             return (value, "%s: %s" % (current.T(self.error_message), e))
 
@@ -154,7 +159,10 @@ class IS_JSONS3(Validator):
     def formatter(self, value):
         if value is None:
             return None
-        return json.dumps(value)
+        if "loads" in self.driver_auto_json:
+            return value
+        else:
+            return json.dumps(value)
 
 # =============================================================================
 class IS_LAT(Validator):
