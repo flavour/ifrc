@@ -368,7 +368,7 @@
             if (opts.showTotals) {
                 header.append('th')
                       .attr({'scope': 'col',
-                             'class': 'totals_header row_totals',
+                             'class': 'pt-totals-header pt-row-total',
                              'rowspan': 2
                              })
                       .text(labels.total);
@@ -395,7 +395,7 @@
             // Append the rows header
             columns.append('th')
                    .attr({'scope': 'col',
-                          'class': 'rows_header'
+                          'class': 'pt-rows-header'
                           })
                    .text(labels.rows);
 
@@ -410,7 +410,7 @@
                    .enter()
                    .append('th')
                    .attr({'scope': 'col',
-                          'class': 'col_label'
+                          'class': 'pt-col-label'
                           })
                    .text(function(d) {
                        if (singleColumn) {
@@ -472,6 +472,7 @@
             // Render the row total
             if (opts.showTotals) {
                 rows.append('td')
+                    .attr('class', 'pt-row-total')
                     .text(function(d) {
                         return d[2];
                     });
@@ -532,25 +533,26 @@
                 rowClass = 'even';
             }
             var footer = tfoot.append('tr')
-                              .attr('class', rowClass + ' totals_row');
+                              .attr('class', rowClass + ' pt-totals-row');
 
             // Totals header
             footer.append('th')
-                  .attr({'class': 'totals_header',
+                  .attr({'class': 'pt-totals-header',
                          'scope': 'row'
                          })
                   .text(labels.total);
 
-            // Row totals
-            footer.selectAll('td.row-total')
+            // Column totals
+            footer.selectAll('td.pt-col-total')
                   .data(cols)
                   .enter()
                   .append('td')
-                  .attr('class', 'row-total')
+                  .attr('class', 'pt-col-total')
                   .text(function(col) { return col[2]; });
 
             // Grand total
             footer.append('td')
+                  .attr('class', 'pt-total')
                   .text(total);
 
             return footer;
@@ -811,7 +813,7 @@
 
                 reportChart.pie.dispatch.on('elementMouseover', onhoverTooltip)
                                         .on('elementMouseout', function(e) {
-                    $('.pt-chart-tooltip').remove();
+                    $('.pt-tooltip').remove();
                     pt.chartOptions.currentDataIndex = null;
                     pt.chartOptions.currentSeriesIndex = null;
                 });
@@ -1175,7 +1177,7 @@
          */
         _renderChartTooltip: function(x, y, contents) {
 
-            $('<div class="pt-chart-tooltip">' + contents + '</div>').css({
+            $('<div class="pt-tooltip">' + contents + '</div>').css({
                 position: 'absolute',
                 display: 'none',
                 top: y - 50,
@@ -1195,7 +1197,7 @@
          * Remove all onhover-tooltips for chart data points
          */
         _removeChartTooltip: function() {
-            $('.pt-chart-tooltip').remove();
+            $('.pt-tooltip').remove();
             this.chartOptions.currentDataIndex = null;
             this.chartOptions.currentSeriesIndex = null;
         },

@@ -13,7 +13,7 @@ SEPARATORS = (",", ":")
 # -----------------------------------------------------------------------------
 def index():
     """
-       Module's Home Page
+       Module's Home Page: Show the Main map
     """
 
     module_name = settings.modules[module].name_nice
@@ -48,8 +48,10 @@ def index():
             script = "/%s/static/scripts/S3/s3.gis.fullscreen.min.js" % appname
         s3.scripts.append(script)
 
-    save = settings.get_gis_save()
+    # Allow us to target CSS to make map full-width
+    s3.jquery_ready.append('''$('body').addClass('gis')''')
 
+    save = settings.get_gis_save()
     if not save:
         help = T("To Print or Share the Map you will have to take a screenshot. If you need help taking a screen shot, have a look at these instructions for %(windows)s or %(mac)s") \
             % dict(windows="<a href='http://www.wikihow.com/Take-a-Screenshot-in-Microsoft-Windows' target='_blank'>Windows</a>",
@@ -542,12 +544,10 @@ def ldata():
                    }}
     """
 
-    args = request.args
-
-    if len(args) == 0:
+    try:
+        _id = request.args[0]
+    except:
         raise HTTP(400)
-
-    id = args[0]
 
     # Translate options using gis_location_name?
     translate = settings.get_L10n_translate_gis_location()
@@ -558,9 +558,10 @@ def ldata():
 
     table = s3db.gis_location
     query = (table.deleted == False) & \
+            (table.level != None) & \
             (table.end_date == None) & \
-            ((table.parent == id) | \
-             (table.id == id))
+            ((table.parent == _id) | \
+             (table.id == _id))
     fields = [table.id,
               table.name,
               table.level,
@@ -582,12 +583,12 @@ def ldata():
                                  left=left)
     if translate:
         try:
-            id_level = int(locations.as_dict(key="gis_location.id")[int(id)]["gis_location"]["level"][1:])
+            id_level = int(locations.as_dict(key="gis_location.id")[int(_id)]["gis_location"]["level"][1:])
         except:
             return ""
     else:
         try:
-            id_level = int(locations.as_dict()[int(id)]["level"][1:])
+            id_level = int(locations.as_dict()[int(_id)]["level"][1:])
         except:
             return ""
     output_level = id_level + 1
@@ -597,40 +598,60 @@ def ldata():
         for location in locations:
             l = location["gis_location"]
             if l.level == search_level:
-                name = location["gis_location_name.name_l10n"] or l.name
-                if l.lon_min is not None:
-                    location_dict[int(l.id)] = dict(n=name,
-                                                    l=output_level,
-                                                    f=int(l.parent),
-                                                    b=[l.lon_min,
-                                                       l.lat_min,
-                                                       l.lon_max,
-                                                       l.lat_max
-                                                       ],
-                                                    )
+                this_level = output_level
+                f = int(l.parent)
+            else:
+                # A Missing Level
+                this_level = int(l.level[1:])
+                parent = l.parent
+                if parent:
+                    f = int(parent)
                 else:
-                    location_dict[int(l.id)] = dict(n=name,
-                                                    l=output_level,
-                                                    f=int(l.parent),
-                                                    )
+                    f = None
+            name = location["gis_location_name.name_l10n"] or l.name
+            if l.lon_min is not None:
+                location_dict[int(l.id)] = dict(n=name,
+                                                l=this_level,
+                                                f=f,
+                                                b=[l.lon_min,
+                                                   l.lat_min,
+                                                   l.lon_max,
+                                                   l.lat_max
+                                                   ],
+                                                )
+            else:
+                location_dict[int(l.id)] = dict(n=name,
+                                                l=this_level,
+                                                f=f,
+                                                )
     else:
         for l in locations:
             if l.level == search_level:
-                if l.lon_min is not None:
-                    location_dict[int(l.id)] = dict(n=l.name,
-                                                    l=output_level,
-                                                    f=int(l.parent),
-                                                    b=[l.lon_min,
-                                                       l.lat_min,
-                                                       l.lon_max,
-                                                       l.lat_max
-                                                       ],
-                                                    )
+                this_level = output_level
+                f = int(l.parent)
+            else:
+                # A Missing Level
+                this_level = int(l.level[1:])
+                parent = l.parent
+                if parent:
+                    f = int(parent)
                 else:
-                    location_dict[int(l.id)] = dict(n=l.name,
-                                                    l=output_level,
-                                                    f=int(l.parent),
-                                                    )
+                    f = None
+            if l.lon_min is not None:
+                location_dict[int(l.id)] = dict(n=l.name,
+                                                l=this_level,
+                                                f=f,
+                                                b=[l.lon_min,
+                                                   l.lat_min,
+                                                   l.lon_max,
+                                                   l.lat_max
+                                                   ],
+                                                )
+            else:
+                location_dict[int(l.id)] = dict(n=l.name,
+                                                l=this_level,
+                                                f=f,
+                                                )
 
     script = '''n=%s\n''' % json.dumps(location_dict, separators=SEPARATORS)
     response.headers["Content-Type"] = "application/json"
@@ -648,12 +669,10 @@ def hdata():
                       }}
     """
 
-    args = request.args
-
-    if len(args) == 0:
+    try:
+        _id = request.args[0]
+    except:
         raise HTTP(400)
-
-    _id = args[0]
 
     # @ToDo: Translate options using gis_hierarchy_name?
     #translate = settings.get_L10n_translate_gis_location()
@@ -665,13 +684,11 @@ def hdata():
     table = s3db.gis_hierarchy
     query = (table.deleted == False) & \
             (table.location_id == _id)
-    fields = [table.L1,
-              table.L2,
-              table.L3,
-              table.L4,
-              table.L5,
-              ]
-    row = db(query).select(*fields,
+    row = db(query).select(table.L1,
+                           table.L2,
+                           table.L3,
+                           table.L4,
+                           table.L5,
                            limitby=(0, 1)
                            ).first()
     if not row:
