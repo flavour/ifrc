@@ -204,8 +204,9 @@ settings.gis.geonames_username = "rms_dev"
 settings.L10n.languages = OrderedDict([
     ("en-gb", "English"),
     ("es", "Español"),
-    ("km", "ភាសាខ្មែរ"),       # Khmer
-    ("ne", "नेपाली"),         # Nepali
+    ("km", "ភាសាខ្មែរ"),        # Khmer
+    ("mn", "Монгол хэл"),   # Mongolian
+    ("ne", "नेपाली"),          # Nepali
     ("prs", "دری"),         # Dari
     ("ps", "پښتو"),         # Pashto
     ("vi", "Tiếng Việt"),   # Vietnamese
@@ -1843,9 +1844,15 @@ def customise_pr_person_controller(**attr):
                                    "site_id",
                                    "department_id",
                                    "status",
-                                   # @todo: type of employment contract
-                                   # @todo: full time / part time
+                                   S3SQLInlineComponent("contract",
+                                                        label=T("Contract Details"),
+                                                        fields=["term",
+                                                                (T("Hours Model"), "hours"),
+                                                                ],
+                                                        multiple=False,
+                                                        ),
                                    S3SQLInlineComponent("social_insurance",
+                                                        label=T("Social Insurance"),
                                                         name="social",
                                                         fields=["insurance_number",
                                                                 "insurer",
@@ -1854,6 +1861,7 @@ def customise_pr_person_controller(**attr):
                                                         multiple=False,
                                                         ),
                                    S3SQLInlineComponent("health_insurance",
+                                                        label=T("Health Insurance"),
                                                         name="health",
                                                         fields=["insurance_number",
                                                                 "provider",

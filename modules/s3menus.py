@@ -27,9 +27,9 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3MainMenu",
-           "S3OptionsMenu"
-           ]
+__all__ = ("S3MainMenu",
+           "S3OptionsMenu",
+           )
 
 import re
 
@@ -42,6 +42,7 @@ from s3layouts import *
 class S3MainMenu(object):
     """ The default configurations for the main application menu """
 
+    # -------------------------------------------------------------------------
     @classmethod
     def menu(cls):
 
@@ -1125,7 +1126,7 @@ class S3OptionsMenu(object):
                         M("Summary of Releases", c="inv", f="track_item",
                           vars=dict(report="rel")),
                     ),
-                    M(inv_recv_list, c="inv", f="recv")(
+                    M(inv_recv_list, c="inv", f="recv", translate=False)( # Already T()
                         M("Create", m="create"),
                         M("Timeline", args="timeline"),
                     ),
