@@ -74,6 +74,7 @@ __all__ = ("S3ACLWidget",
            "s3_comments_widget",
            "s3_richtext_widget",
            "search_ac",
+           "ICON",
            )
 
 import datetime
@@ -1267,7 +1268,7 @@ class S3DateWidget(FormWidget):
             #    # Urdu uses Arabic
             #    language = "ar"
             elif "-" in language:
-                parts = language.split("_", 1)
+                parts = language.split("-", 1)
                 language = "%s-%s" % (parts[0], parts[1].upper())
             path = os.path.join(request.folder, "static", "scripts", "ui", "i18n", "datepicker-%s.js" % language)
             if os.path.exists(path):
@@ -1575,7 +1576,7 @@ class S3DateTimeWidget(FormWidget):
  useLocalTimezone:true,
  defaultValue:'%(default)s',
  onClose:%(onclose)s
-})
+}).one('click',function(){$(this).focus()})
 var clear_button=$('<button id="%(selector)s_clear" class="btn date-clear-btn" type="button">%(clear)s</button>').click(function(){
  $('#%(selector)s').val('');%(onclear)s;$('#%(selector)s').closest('.filter-form').trigger('optionChanged')
 })
@@ -4689,6 +4690,7 @@ class S3LocationSelectorWidget2(FormWidget):
             if not self.color_picker:
                 color_picker = False
             else:
+                toolbar = True
                 # Requires the custom controller to store this before calling the widget
                 # - a bit hacky, but can't think of a better option currently without rewriting completely as an S3SQLSubForm
                 record_id = s3.record_id
@@ -4736,7 +4738,9 @@ class S3LocationSelectorWidget2(FormWidget):
                                 color_picker = color_picker,
                                 toolbar = toolbar,
                                 # Hide controls from toolbar
+                                clear_layers = False,
                                 nav = False,
+                                print_control = False,
                                 area = False,
                                 zoomWheelEnabled = False,
                                 # Don't use normal callback (since we postpone rendering Map until DIV unhidden)
@@ -4881,7 +4885,6 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
                                                            child: 'child', (optional: which field to lookup options for)
                                                            }
             @ToDo: Complete the 'create' feature:
-                * Check User is allowed to create resources before rendering the option
                 * Ensure the Create option doesn't get filtered out when searching for items
                 * Style option to make it clearer that it's an Action item
         """
@@ -4951,10 +4954,13 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
         noneSelectedText = self.noneSelectedText
         if not isinstance(noneSelectedText, lazyT):
             noneSelectedText = T(noneSelectedText)
-        if self.create:
-            create = ",create:%s" % json.dumps(self.create, separators=SEPARATORS)
-        else:
-            create = ""
+        create = self.create or ""
+        if create:
+            tablename = "%s_%s" % (create["c"], create["f"])
+            if current.auth.s3_has_permission("create", tablename):
+                create = ",create:%s" % json.dumps(create, separators=SEPARATORS)
+            else:
+                create = ""
         script = '''$('#%s').multiselect({allSelectedText:'%s',selectedText:'%s',%s,height:300,minWidth:0,selectedList:%s,noneSelectedText:'%s',multiple:%s%s})''' % \
                  (selector,
                   T("All selected"),
@@ -5786,9 +5792,11 @@ class S3StringWidget(StringWidget):
 
     def __init__(self,
                  placeholder = None,
+                 prefix = None,
                  textarea = False,
                  ):
         self.placeholder = placeholder
+        self.prefix = prefix
         self.textarea = textarea
 
     def __call__(self, field, value, **attributes):
@@ -5798,13 +5806,24 @@ class S3StringWidget(StringWidget):
             value = (value != None and str(value)) or "",
             )
         attr = StringWidget._attributes(field, default, **attributes)
+
         placeholder = self.placeholder
         if placeholder:
             attr["_placeholder"] = placeholder
+
         if self.textarea:
             widget = TEXTAREA(**attr)
         else:
             widget = INPUT(**attr)
+
+        if self.prefix:
+            # NB These classes target Foundation Themes
+            widget = TAG[""](DIV(SPAN(self.prefix,
+                                      _class="prefix"),
+                                 _class="small-1 columns"),
+                             DIV(widget,
+                                 _class="small-9 columns"),
+                             )
 
         return TAG[""](widget,
                        requires = field.requires
@@ -6273,5 +6292,235 @@ def search_ac(r, **attr):
 
     current.response.headers["Content-Type"] = "application/json"
     return json.dumps(output, separators=SEPARATORS)
+
+# =============================================================================
+class ICON(I):
+    """ 
+        Helper class to render <i> tags for icons, mapping abstract
+        icon names to theme-specific CSS classes. The standard icon
+        set can be configured using settings.ui.icons
+        
+        e.g. ICON("book"), gives:
+            - font-awesome: <i class="icon icon-book">
+            - foundation: <i class="fi-book">
+            
+        Standard sets are defined below.
+            
+        Additional icons (beyond the standard set) can be configured
+        per deployment (settings.ui.custom_icons).
+        
+        If <i class=""> is not suitable for the CSS, a custom HTML
+        layout can be configured as settings.ui.icon_layout. See
+        S3Config for more details.
+        
+        @todo: apply in widgets/crud/profile+datalist layouts etc.
+        @todo: better abstract names for the icons to indicate what they
+               symbolize rather than what they depict, e.g. "sitemap" is
+               typically used to symbolize an organisation => rename into
+               "organisation".
+    """
+
+    # -------------------------------------------------------------------------
+    # Standard icon sets, 
+    # - "_base" can be used to define a common CSS class for all icons
+    #
+    icons = {
+        "font-awesome": {
+            "_base": "icon",
+            "add": "icon-plus",
+            "arrow-down": "icon-arrow-down",
+            "bar-chart": "icon-bar-chart",
+            "book": "icon-book",
+            "bookmark": "icon-bookmark",
+            "bookmark-empty": "icon-bookmark-empty",
+            "briefcase": "icon-briefcase",
+            "calendar": "icon-calendar",
+            "certificate": "icon-certificate",
+            "comment-alt": "icon-comment-alt",
+            "delete": "icon-trash",
+            "down": "icon-caret-down",
+            "edit": "icon-edit",
+            "envelope-alt": "icon-envelope-alt",
+            "exclamation": "icon-exclamation",
+            "file": "icon-file",
+            "file-alt": "icon-file-alt",
+            "folder-open-alt": "icon-folder-open-alt",
+            "fullscreen": "icon-fullscreen",
+            "globe": "icon-globe",
+            "home": "icon-home",
+            "link": "icon-link",
+            "list": "icon-list",
+            "map-marker": "icon-map-marker",
+            "offer": "icon-truck",
+            "paper-clip": "icon-paper-clip",
+            "phone": "icon-phone",
+            "plus": "icon-plus",
+            "plus-sign": "icon-plus-sign",
+            "remove": "icon-remove",
+            "request": "icon-flag",
+            "sitemap": "icon-sitemap",
+            "star": "icon-star",
+            "table": "icon-table",
+            "tag": "icon-tag",
+            "tags": "icon-tags",
+            "time": "icon-time",
+            "trash": "icon-trash",
+            "truck": "icon-truck",
+            "up": "icon-caret-up",
+            "user": "icon-user",
+            "wrench": "icon-wrench",
+            "zoomin": "icon-zoomin",
+            "zoomout": "icon-zoomout",
+        },
+        # @todo: integrate
+        #"font-awesome4": {
+            #"_base": "fa",
+            #"add": "fa-plus",
+            #"arrow-down": "fa-arrow-down",
+            #"bar-chart": "fa-bar-chart",
+            #"book": "fa-book",
+            #"bookmark": "fa-bookmark",
+            #"bookmark-empty": "fa-bookmark-empty",
+            #"briefcase": "fa-briefcase",
+            #"calendar": "fa-calendar",
+            #"certificate": "fa-certificate",
+            #"comment-alt": "fa-comment-o",
+            #"delete": "fa-trash",
+            #"down": "fa-caret-down",
+            #"edit": "fa-edit",
+            #"envelope-alt": "fa-envelope-o",
+            #"exclamation": "fa-exclamation",
+            #"file": "fa-file",
+            #"file-alt": "fa-file-alt",
+            #"folder-open-alt": "fa-folder-open-o",
+            #"fullscreen": "fa-fullscreen",
+            #"globe": "fa-globe",
+            #"home": "fa-home",
+            #"link": "fa-link",
+            #"list": "fa-list",
+            #"map-marker": "fa-map-marker",
+            #"offer": "fa-truck",
+            #"paper-clip": "fa-paper-clip",
+            #"phone": "fa-phone",
+            #"plus": "fa-plus",
+            #"plus-sign": "fa-plus-sign",
+            #"remove": "fa-remove",
+            #"request": "fa-flag",
+            #"sitemap": "fa-sitemap",
+            #"star": "fa-star",
+            #"table": "fa-table",
+            #"tag": "fa-tag",
+            #"tags": "fa-tags",
+            #"time": "fa-time",
+            #"trash": "fa-trash",
+            #"truck": "fa-truck",
+            #"up": "fa-caret-up",
+            #"user": "fa-user",
+            #"wrench": "fa-wrench",
+            #"zoomin": "fa-zoomin",
+            #"zoomout": "fa-zoomout",
+        #},
+        "foundation": {
+            "add": "fi-plus",
+            "arrow-down": "fi-arrow-down",
+            "bar-chart": "fi-graph-bar",
+            "book": "fi-book",
+            "bookmark": "fi-bookmark",
+            "bookmark-empty": "fi-bookmark-empty",
+            "calendar": "fi-calendar",
+            "certificate": "fi-burst",
+            "comment-alt": "fi-comment",
+            "delete": "fi-trash",
+            "edit": "fi-page-edit",
+            "envelope-alt": "fi-mail",
+            "exclamation": "fi-alert",
+            "file": "fi-page-filled",
+            "file-alt": "fi-page",
+            "folder-open-alt": "fi-folder",
+            "fullscreen": "fi-arrows-out",
+            "globe": "fi-map",
+            "home": "fi-home",
+            "link": "fi-link",
+            "list": "fi-list",
+            "map-marker": "fi-marker",
+            "offer": "fi-burst",
+            "paper-clip": "fi-paperclip",
+            "phone": "fi-telephone",
+            "plus": "fi-plus",
+            "plus-sign": "fi-plus",
+            "remove": "fi-x",
+            "request": "fi-flag",
+            "star": "fi-star",
+            "table": "fi-list-thumbnails",
+            "tag": "fi-price-tag",
+            "tags": "fi-pricetag-multiple",
+            "time": "fi-clock",
+            "trash": "fi-trash",
+            "user": "fi-torso",
+            "wrench": "fi-wrench",
+            "zoomin": "fi-zoom-in",
+            "zoomout": "fi-zoom-out",
+        },
+    }
+
+    # -------------------------------------------------------------------------
+    def __init__(self, name, _class=None):
+        """
+            Constructor
+
+            @param name: the abstract icon name
+            @param _class: additional HTML classes (optional)
+        """
+
+        self.name = name
+        super(ICON, self).__init__(" ", _class=_class)
+
+    # -------------------------------------------------------------------------
+    def xml(self):
+        """
+            Render this instance as XML
+        """
+
+        # Custom layout?
+        layout = current.deployment_settings.get_ui_icon_layout()
+        if layout:
+            return layout(self)
+
+        css_class = self.css_class(self.name)
+        
+        if css_class:
+            self.add_class(css_class)
+
+        return super(ICON, self).xml()
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def css_class(cls, name):
+        
+        settings = current.deployment_settings
+        fallback = "font-awesome"
+
+        # Lookup the default set
+        icons = cls.icons
+        default_set = settings.get_ui_icons()
+        default = icons[fallback]
+        if default_set != fallback:
+            default.pop("_base", None)
+            default.update(icons.get(default_set, {}))
+
+        # Custom set?
+        custom = settings.get_ui_custom_icons()
+
+        if custom and name in custom:
+            css = custom[name]
+            base = custom.get("_base")
+        elif name in default:
+            css = default[name]
+            base = default.get("_base")
+        else:
+            css = name
+            base = None
+
+        return " ".join([c for c in (css, base) if c])
 
 # END =========================================================================

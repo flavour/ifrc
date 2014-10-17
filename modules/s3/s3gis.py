@@ -2436,14 +2436,15 @@ class GIS(object):
                 # Add a per-feature Marker
                 marker_fn = s3db.get_config(tablename, "marker_fn")
                 if marker_fn:
+                    m = {}
                     for record in resource:
-                        markers[record[pkey]] = marker_fn(record)
+                        m[record[pkey]] = marker_fn(record)
                 else:
                     # No configuration found so use default marker for all
                     c, f = tablename.split("_", 1)
-                    markers = GIS.get_marker(c, f)
+                    m = GIS.get_marker(c, f)
 
-                markers[tablename] = markers
+                markers[tablename] = m
 
             if individual:
                 # Add a per-feature Style
@@ -5855,7 +5856,9 @@ class GIS(object):
                  toolbar = False,
                  area = False,
                  color_picker = False,
+                 clear_layers = None,
                  nav = None,
+                 print_control = None,
                  save = False,
                  search = False,
                  mouse_position = None,
@@ -5989,7 +5992,9 @@ class GIS(object):
                    toolbar = toolbar,
                    area = area,
                    color_picker = color_picker,
+                   clear_layers = clear_layers,
                    nav = nav,
+                   print_control = print_control,
                    save = save,
                    search = search,
                    mouse_position = mouse_position,
@@ -6358,7 +6363,7 @@ class MAP(DIV):
                 i18n["gis_noColorSelectedText"] = T("No Color Selected")
 
             # Show Print control?
-            print_control = settings.get_gis_print()
+            print_control = opts.get("print_control") is not False and settings.get_gis_print()
             if print_control:
                 # @ToDo: Use internal Printing or External Service
                 # http://eden.sahanafoundation.org/wiki/BluePrint/GIS/Printing
@@ -6466,7 +6471,7 @@ class MAP(DIV):
                 options["draw_polygon"] = "inactive"
 
         # Clear Layers
-        clear_layers = settings.get_gis_clear_layers()
+        clear_layers = opts.get("clear_layers") is not False and settings.get_gis_clear_layers()
         if clear_layers:
             options["clear_layers"] = clear_layers
             i18n["gis_clearlayers"] = T("Clear all Layers")

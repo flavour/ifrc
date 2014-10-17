@@ -166,6 +166,10 @@ settings.ui.export_formats = ["xls"]
 
 settings.ui.update_label = "Edit"
 
+# Uncomment to disable responsive behavior of datatables
+# - Disabled until tested
+settings.ui.datatables_responsive = False
+
 # Disabled until ready for prime-time
 settings.search.filter_manager = False
 

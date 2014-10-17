@@ -86,38 +86,44 @@ settings.security.map = True
 settings.auth.person_realm_human_resource_site_then_org = False
 
 # -----------------------------------------------------------------------------
-# Audit
-def audit_write(method, tablename, form, record, representation):
-    if not current.auth.user:
-        # Don't include prepop
-        return False
-    if tablename in ("gis_poi",
-                     "org_facility",
-                     "org_organisation",
-                     "pr_filter",
-                     "project_activity",
-                     ):
-        # Perform normal Audit
-        return True
-    elif tablename == "gis_config":
-        if form.vars.get("temp") != "1":
-            # Perform normal Audit
-            return True
-    # Don't Audit non user-visible resources
-    return False
-
-settings.security.audit_write = audit_write
-
-# -----------------------------------------------------------------------------
 # Theme (folder to use for views/layout.html)
 settings.base.theme = "CRMT2"
 settings.ui.formstyle = "foundation_2col"
 settings.ui.hide_report_options = False
-settings.ui.update_label = "Update" 
+settings.ui.read_label = "" # replaced with icon
+#settings.ui.update_label = "Update"
+# Uncomment to control the dataTables layout: https://datatables.net/reference/option/dom
+settings.ui.datatables_dom = "<'data-info row'<'large-4 columns'i><'large-3 columns'l><'large-3 columns search'f><'large-2 columns right'>r><'dataTable_table't><'row'p>"
+# Move the export_formats inside the row above it
+settings.ui.datatables_initComplete = \
+'''
+$('.dataTables_paginate').after($('.dt-export-options'))
+$('.dataTables_wrapper').prepend($('#filter-form'))
+$('#filter-form').addClass('data-sort')
+$('#summary-filter-form').children().first().addClass('row').wrap('<div class="data-filter"></div>')
+$('#summary-filter-form').prepend($('.dataTables_wrapper .data-info'))
+$('.data-filter').hide()
+$('.data-sort .large-3.columns select').addClass('large-5')
+$('.data-sort .search').append('<div class="row collapse"><div class="small-10 columns"></div></div>')
+$('.data-sort .search .small-10').after($('.search_text')).remove()
+$('.search_text').wrap('<div class="small-10 columns"></div>')
+$('.data-sort .search .small-10').after('<div class="small-2 columns"><a class="button postfix" href="#"><i class="fi-magnifying-glass"></i></a></div>')
+$('.data-sort .right').html('<a id="js-toggle-filters" class="button tiny right">%s</a>')
+$('#js-toggle-filters').click(function(){$('.data-filter').slideToggle()})
+''' % T("Filter")
+# Uncomment for dataTables to use a different paging style:
+settings.ui.datatables_pagingType = "bootstrap"
 settings.ui.export_formats = ("xls", "xml")
+# Uncomment to change the label/class of FilterForm clear buttons
+settings.ui.filter_clear = "Clear"
 # Uncomment to use S3MultiSelectWidget on all dropdowns (currently the Auth Registration page & LocationSelectorWidget2 listen to this)
 settings.ui.multiselect_widget = True
-settings.ui.use_button_glyphicons = True
+settings.ui.use_button_icons = True
+# Uncomment to disable responsive behavior of datatables
+# - Disabled until tested
+settings.ui.datatables_responsive = False
+# Uncomment to modify the label of the Permalink
+settings.ui.label_permalink = "Permalink"
 
 # Set Map to fill the container
 #settings.gis.map_width = 1178
@@ -146,10 +152,10 @@ settings.base.youtube_id = (dict(id = "introduction",
 
 # -----------------------------------------------------------------------------
 # Summary Pages
-settings.ui.summary = ({"common": True,
-                        "name": "add",
-                        "widgets": [{"method": "create"}],
-                        },
+settings.ui.summary = (#{"common": True,    # Added in View instead
+                       # "name": "add",
+                       # "widgets": [{"method": "create"}],
+                       # },
                        {"common": True,
                         "name": "cms",
                         "widgets": [{"method": "cms"}]
@@ -158,27 +164,27 @@ settings.ui.summary = ({"common": True,
                         "label": "Table",
                         "widgets": [{"method": "datatable"}]
                         },
-                       {"name": "charts",
-                        "label": "Charts",
-                        "widgets": [{"method": "report", "ajax_init": True}]
-                        },
                        {"name": "map",
                         "label": "Map",
                         "widgets": [{"method": "map", "ajax_init": True}],
                         },
+                       {"name": "charts",
+                        "label": "Chart",
+                        "widgets": [{"method": "report", "ajax_init": True}]
+                        },
                        )
 
-settings.search.filter_manager = True
-settings.search.filter_manager_allow_delete = False
-settings.search.filter_manager_save = "Save"
-settings.search.filter_manager_update = "Update"
+settings.search.filter_manager = False
+#settings.search.filter_manager_allow_delete = False
+#settings.search.filter_manager_save = "Save"
+#settings.search.filter_manager_update = "Update"
 
 # -----------------------------------------------------------------------------
 # Filter forms - style for Summary pages
 def filter_formstyle(row_id, label, widget, comment, hidden=False):
     return DIV(label, widget, comment, 
                _id=row_id,
-               _class="horiz_filter_form")
+               _class="large-3 columns")
 
 # -----------------------------------------------------------------------------
 # L10n (Localization) settings
@@ -219,7 +225,7 @@ settings.gis.layer_properties = False
 # Uncomment to hide the Overlays folder in the LayerTree
 #settings.gis.layer_tree_overlays = False
 # Uncomment to change the label of the Overlays folder in the LayerTree
-settings.gis.label_overlays = "Places"
+#settings.gis.label_overlays = "Places"
 # Uncomment to not expand the folders in the LayerTree by default
 settings.gis.layer_tree_expanded = False
 # Uncomment to have custom folders in the LayerTree use Radio Buttons
@@ -318,7 +324,7 @@ settings.org.services_hierarchical = True
 # Enable the use of Organisation Groups
 settings.org.groups = "Coalition"
 # Set the label for Sites
-settings.org.site_label = "Place"
+settings.org.site_label = "Location"
 
 # -----------------------------------------------------------------------------
 # projects
@@ -327,7 +333,7 @@ settings.org.site_label = "Place"
 settings.project.sectors = False
 
 # -----------------------------------------------------------------------------
-# Contacts
+# People
 #
 def user_coalition(row):
     """
@@ -411,16 +417,16 @@ def customise_pr_person_controller(**attr):
             if r.controller != "default":
                 # CRUD Strings
                 s3.crud_strings[tablename] = Storage(
-                    label_create = T("Add"),
-                    title_display = T("Contact Details"),
-                    title_list = T("Contact Directory"),
-                    title_update = T("Update Contact Details"),
-                    label_list_button = T("List Contacts"),
-                    label_delete_button = T("Delete Contact"),
-                    msg_record_created = T("Contact added"),
-                    msg_record_modified = T("Contact details updated"),
-                    msg_record_deleted = T("Contact deleted"),
-                    msg_list_empty = T("No Contacts currently registered"))
+                    label_create = T("Add Person"),
+                    title_display = T("Person Details"),
+                    title_list = T("People"),
+                    title_update = T("Update Person Details"),
+                    label_list_button = T("List People"),
+                    label_delete_button = T("Delete Person"),
+                    msg_record_created = T("Person added"),
+                    msg_record_modified = T("Person details updated"),
+                    msg_record_deleted = T("Person deleted"),
+                    msg_list_empty = T("No People currently registered"))
 
             # Custom Form (Read/Create/Update)
             from s3 import S3Represent, S3SQLCustomForm, S3SQLInlineComponent
@@ -432,34 +438,59 @@ def customise_pr_person_controller(**attr):
 
             htable = s3db.hrm_human_resource
             htable.organisation_id.widget = None
-            site_field = htable.site_id
-            site_field.label = T("Place")
-            represent = S3Represent(lookup="org_site")
-            site_field.represent = represent
+            #site_field = htable.site_id
+            #site_field.label = T("Place")
+            #represent = S3Represent(lookup="org_site")
+            #site_field.represent = represent
             if widgets:
                 from s3 import IS_ONE_OF, S3MultiSelectWidget
                 from s3layouts import S3AddResourceLink
                 htable.organisation_id.widget = S3MultiSelectWidget(multiple=False)
-                site_field.widget = S3MultiSelectWidget(multiple=False)
-                site_field.requires = IS_ONE_OF(db, "org_site.site_id",
-                                                represent,
-                                                orderby = "org_site.name")
-                site_field.comment = S3AddResourceLink(c="org", f="office",
-                                                       vars={"child": "site_id"},
-                                                       label=T("Add New Place"),
-                                                       title=T("Place"),
-                                                       tooltip=T("If you don't see the Place in the list, you can add a new one by clicking link 'Add New Place'."))
+                #site_field.widget = S3MultiSelectWidget(multiple=False)
+                #site_field.requires = IS_ONE_OF(db, "org_site.site_id",
+                #                                represent,
+                #                                orderby = "org_site.name")
+                #site_field.comment = S3AddResourceLink(c="org", f="office",
+                #                                       vars={"child": "site_id"},
+                #                                       label=T("Add New Place"),
+                #                                       title=T("Place"),
+                #                                       tooltip=T("If you don't see the Place in the list, you can add a new one by clicking link 'Add New Place'."))
+                from s3 import S3StringWidget
+                table = s3db[tablename]
+                table.first_name.widget = S3StringWidget(placeholder=T("Text"))
+                table.last_name.widget = S3StringWidget(placeholder=T("Text"))
+                if r.method == "update":
+                    # Normal Submit buttons
+                    s3.crud.submit_button = T("Save & Close")
+                    create_next = r.url(method="summary", id=0)
+                    create_next_close = None
+                else:
+                    s3.crud.submit_button = T("Save & Add Another")
+                    s3.crud.custom_submit = (("save_close", T("Save & Close"), "button small secondary"),
+                                             #("cancel", T("Cancel"), "button small secondary cancel"),
+                                             )
+                    create_next = r.url(method="create")
+                    create_next_close = r.url(method="summary", id=0)
 
-            s3db.pr_image.profile.default = True
-            # ImageCrop widget doesn't currently work within an Inline Form
-            from gluon.validators import IS_IMAGE
-            image_field = s3db.pr_image.image
-            image_field.requires = IS_IMAGE()
-            image_field.widget = None
+                s3.cancel = A(T("Cancel"),
+                              _class="button small secondary cancel",
+                              _href=r.url(method="summary", id=0),
+                              )
+
+                # ImageCrop widget doesn't currently work within an Inline Form
+                from gluon.validators import IS_IMAGE
+                itable = s3db.pr_image
+                itable.profile.default = True
+                image_field = itable.image
+                image_field.requires = IS_IMAGE()
+                image_field.widget = None
+
+            else:
+                create_next = create_next_close = None
 
             hr_fields = ["organisation_id",
                          #"job_title_id",
-                         "site_id",
+                         #"site_id",
                          ]
             #if widgets:
             #    # Context from a Profile page?"
@@ -486,16 +517,17 @@ def customise_pr_person_controller(**attr):
                         multiple = False,
                         fields = hr_fields,
                     ),
-                    S3SQLInlineComponent(
-                        "user",
-                        name = "user",
-                        label = T("Coalition"),
-                        multiple = False,
-                        fields = [],
-                        # Fields needed to load for Virtual Fields
-                        extra_fields = ["user_id"],
-                        virtual_fields = [("", "org_group_id")],
-                    ),
+                    # Not working currently
+                    #S3SQLInlineComponent(
+                    #    "user",
+                    #    name = "user",
+                    #    label = T("Coalition"),
+                    #    multiple = False,
+                    #    fields = [],
+                    #    # Fields needed to load for Virtual Fields
+                    #    extra_fields = ["user_id"],
+                    #    virtual_fields = [("", "org_group_id")],
+                    #),
                     S3SQLInlineComponent(
                         "image",
                         name = "image",
@@ -534,16 +566,18 @@ def customise_pr_person_controller(**attr):
 
             crud_form = S3SQLCustomForm(*s3_sql_custom_fields)
 
-            # Return to List view after create/update/delete (unless done via Modal)
-            url_next = URL(c="pr", f="person")
-
             s3db.configure(tablename,
-                           create_next = url_next,
+                           create_next = create_next,
+                           create_next_close = create_next_close,
                            crud_form = crud_form,
-                           delete_next = url_next,
+                           delete_next = r.url(method="summary", id=0),
+                           # Hide Open & Delete dataTable action buttons
+                           deletable = False,
+                           editable = False,
+                           icon = "person", # Used for Create Icon in Summary View
                            # Don't include a Create form in 'More' popups
                            #listadd = False if r.method=="datalist" else True,
-                           update_next = url_next,
+                           update_next = r.url(method="summary", id=0),
                            )
 
         return True
@@ -557,14 +591,13 @@ def customise_pr_person_controller(**attr):
             output = standard_postp(r, output)
 
         if r.interactive and isinstance(output, dict):
-            output["rheader"] = ""
             # All users just get "Open"
-            actions = [dict(label=str(T("Open")),
-                            _class="action-btn",
-                            url=URL(c="pr", f="person",
-                                    args=["[id]", "read"]))
-                       ]
-            s3.actions = actions
+            #actions = [dict(label=str(T("Open")),
+            #                _class="action-btn",
+            #                url=URL(c="pr", f="person",
+            #                        args=["[id]", "read"]))
+            #           ]
+            #s3.actions = actions
             if "form" in output:
                 output["form"].add_class("pr_person")
             elif "item" in output and hasattr(output["item"], "add_class"):
@@ -572,6 +605,9 @@ def customise_pr_person_controller(**attr):
 
         return output
     s3.postp = custom_postp
+
+    # Remove rheader
+    attr["rheader"] = None
 
     return attr
 
@@ -619,6 +655,28 @@ def customise_project_activity_controller(**attr):
         tablename = "project_activity"
         table = s3db[tablename]
 
+        s3.crud_strings[tablename].label_create = T("Add Activity")
+
+        from s3 import S3StringWidget
+        table.name.widget = S3StringWidget(placeholder=T("Text"))
+        table.comments.widget = S3StringWidget(placeholder=T("Comments"), textarea=True)
+        if r.method == "update":
+            # Normal Submit buttons
+            s3.crud.submit_button = T("Save & Close")
+            create_next = r.url(method="summary", id=0)
+            create_next_close = None
+        else:
+            s3.crud.submit_button = T("Save & Add Another")
+            s3.crud.custom_submit = (("save_close", T("Save & Close"), "button small secondary"),
+                                     #("cancel", T("Cancel"), "button small secondary cancel"),
+                                     )
+            create_next = r.url(method="create")
+            create_next_close = r.url(method="summary", id=0)
+        s3.cancel = A(T("Cancel"),
+                      _class="button small secondary cancel",
+                      _href=r.url(method="summary", id=0),
+                      )
+
         method = r.method
         representation = r.representation
         if method == "summary" or representation == "aadata":
@@ -635,6 +693,7 @@ def customise_project_activity_controller(**attr):
                            ]
 
             s3db.configure(tablename,
+                           icon = "activity", # Used for Create Icon in Summary View
                            list_fields = list_fields,
                            )
 
@@ -642,7 +701,6 @@ def customise_project_activity_controller(**attr):
         if r.interactive or representation == "json" or \
                             representation == "plain":
             # CRUD Strings / Represent
-            s3.crud_strings[tablename].title_update = T("Update Activities")
             table.date.label = T("Date")
             table.name.label = T("Activity Name")
             table.comments.label = T("Description")
@@ -708,7 +766,11 @@ def customise_project_activity_controller(**attr):
             )
 
             s3db.configure(tablename,
+                           create_next = create_next,
+                           create_next_close = create_next_close,
                            crud_form = crud_form,
+                           delete_next = r.url(method="summary", id=0),
+                           update_next = r.url(method="summary", id=0),
                            )
             
             if method in ("summary", "report"):
@@ -893,7 +955,7 @@ def customise_org_organisation_controller(**attr):
                            )
 
         elif method == "summary" or r.representation == "aadata":
-            
+
             # Data table configuration
             list_fields = ["id",
                            "name",
@@ -929,9 +991,25 @@ def customise_org_organisation_controller(**attr):
             from s3 import S3StringWidget
             table.name.widget = S3StringWidget(placeholder=T("Text"))
             table.phone.widget = S3StringWidget(placeholder=T("+1 800-555-1212"))
-            table.website.widget = S3StringWidget(placeholder=T("URL"))
-            s3db.pr_contact.value.widget = S3StringWidget(placeholder=T("username"))
+            table.website.widget = S3StringWidget(placeholder=T("URL"), prefix="http://")
+            s3db.pr_contact.value.widget = S3StringWidget(placeholder=T("username"), prefix="@")
             table.comments.widget = S3StringWidget(placeholder=T("Comments"), textarea=True)
+            if r.method == "update":
+                # Normal Submit buttons
+                s3.crud.submit_button = T("Save & Close")
+                create_next = r.url(method="summary", id=0)
+                create_next_close = None
+            else:
+                s3.crud.submit_button = T("Save & Add Another")
+                s3.crud.custom_submit = (("save_close", T("Save & Close"), "button small secondary"),
+                                         #("cancel", T("Cancel"), "button small secondary cancel"),
+                                         )
+                create_next = r.url(method="create")
+                create_next_close = r.url(method="summary", id=0)
+            s3.cancel = A(T("Cancel"),
+                          _class="button small secondary cancel",
+                          _href=r.url(method="summary", id=0),
+                          )
 
             if method in ("summary", "report"):
 
@@ -943,8 +1021,10 @@ def customise_org_organisation_controller(**attr):
                                                 "service_organisation.service_id",
                                                 "comments"
                                                 ],
-                                                label = T("Search"),
-                                               ),
+                                                label = "",
+                                                _class = "search_text",
+                                                _placeholder = T("Search"),
+                                                ),
                                   S3OptionsFilter("group_membership.group_id",
                                                   represent = "%(name)s",
                                                   header = True,
@@ -987,6 +1067,7 @@ def customise_org_organisation_controller(**attr):
                 s3db.configure(tablename,
                                filter_formstyle = filter_formstyle,
                                filter_widgets = filter_widgets,
+                               icon = "organization", # Used for Create Icon in Summary View
                                report_options = report_options,
                                # No Map for Organisations
                                #summary = [s for s in settings.ui.summary if s["name"] != "map"],
@@ -1070,7 +1151,6 @@ def customise_org_organisation_controller(**attr):
                 #                                             title=T("Add New Status"))
                 mtable.status_id.comment = T("Status of the Organization in the Coalition")
                 mtable.status_id.widget = S3MultiSelectWidget(multiple=False,
-                                                              # NB Has no permissions checks
                                                               create=dict(c="org",
                                                                           f="group_membership_status",
                                                                           label=str(T("Add New Status")),
@@ -1156,7 +1236,11 @@ def customise_org_organisation_controller(**attr):
                                             postprocess = org_organisation_postprocess)
 
                 s3db.configure(tablename,
+                               create_next = create_next,
+                               create_next_close = create_next_close,
                                crud_form = crud_form,
+                               delete_next = r.url(method="summary", id=0),
+                               update_next = r.url(method="summary", id=0),
                                )
 
         return True
@@ -1505,8 +1589,8 @@ def customise_org_facility_controller(**attr):
                                # Hide Open & Delete dataTable action buttons
                                editable = False,
                                deletable = False,
-                               filter_widgets = filter_widgets,
                                filter_formstyle = filter_formstyle,
+                               filter_widgets = filter_widgets,
                                report_options = report_options,
                                )
 
@@ -1593,246 +1677,171 @@ def customise_gis_config_controller(**attr):
 settings.customise_gis_config_controller = customise_gis_config_controller
 
 # -----------------------------------------------------------------------------
-# Site Activity Log
+# Points, Routes and Areas
 #
-class ActivityLogLayout(S3DataListLayout):
+def customise_gis_poi_controller(**attr):
 
-    item_class = ""
-
-    # -------------------------------------------------------------------------
-    def __init__(self):
-        """ Constructor """
-
-        super(ActivityLogLayout, self).__init__()
-
-        self.names = {}
-        self.authors = {}
-
-    # ---------------------------------------------------------------------
-    def prep(self, resource, records):
-
-        # Lookup "name" field for each record if table != pr_filter
-        names = {}
-        authors = {}
-        for record in records:
-            raw = record._row
-            tablename = raw["s3_audit.tablename"]
-            if tablename == "pr_filter":
-                continue
-            if tablename not in names:
-                names[tablename] = {}
-            names[tablename][raw["s3_audit.record_id"]] = ""
-            authors[raw["s3_audit.user_id"]] = (None, None)
-
-        db = current.db
-        s3db = current.s3db
-        for tablename, records in names.items():
-            table = s3db[tablename]
-            if "name" not in table.fields:
-                continue
-            query = table._id.belongs(records)
-            rows = db(query).select(table._id, table.name)
-            for row in rows:
-                names[tablename][row[table._id]] = row[table.name]
-
-        # Lookup avatars and person_id for each author_id
-        ptable = s3db.pr_person
-        ltable = db.pr_person_user
-        query = (ltable.user_id.belongs(authors.keys())) & \
-                (ltable.pe_id == ptable.pe_id)
-        rows = db(query).select(ltable.user_id, ptable.id)
-
-        for row in rows:
-            user_id = row[ltable.user_id]
-            avatar = s3_avatar_represent(user_id,
-                                         _class="media-object",
-                                         _style="width:50px;padding:5px;padding-top:0px;")
-            person_id = row[ptable.id]
-            if person_id:
-                person_url = URL(c="pr", f="person", args=[person_id])
-            else:
-                person_url = "#"
-            authors[user_id] = (avatar, person_url)
-
-        self.authors = authors
-        self.names = names
-        return
-
-    # ---------------------------------------------------------------------
-    def activity_label(self, tablename, method):
-        """
-            Get a label for the activity
-
-            @param tablename: the tablename
-            @param method: the method ("create" or "update")
-        """
-
-        activity = None
-        if tablename == "pr_filter":
-            if method == "create":
-                activity = T("Saved a Filter")
-            elif method == "update":
-                activity = T("Updated a Filter")
-        elif tablename == "gis_config":
-            if method == "create":
-                activity = T("Saved a Map")
-            elif method == "update":
-                activity = T("Updated a Map")
-        elif tablename == "gis_poi":
-            if method == "create":
-                # @ToDo: We need to differentiate between Points, Routes and Areas
-                activity = T("Added a Point")
-            elif method == "update":
-                activity = T("Updated a Point")
-        elif tablename == "org_facility":
-            if method == "create":
-                activity = T("Added a Place")
-            elif method == "update":
-                activity = T("Edited a Place")
-        elif tablename == "org_organisation":
-            if method == "create":
-                activity = T("Added an Organization")
-            elif method == "update":
-                activity = T("Edited an Organization")
-        elif tablename == "project_activity":
-            if method == "create":
-                activity = T("Added an Activity")
-            elif method == "update":
-                activity = T("Edited an Activity")
-        return activity
-
-    # ---------------------------------------------------------------------
-    def render_body(self, list_id, item_id, resource, rfields, record):
-        """
-            Render the card body
-
-            @param list_id: the HTML ID of the list
-            @param item_id: the HTML ID of the item
-            @param resource: the S3Resource to render
-            @param rfields: the S3ResourceFields to render
-            @param record: the record as dict
-        """
-
-        raw = record._row
-        author = record["s3_audit.user_id"]
-        timestmp = record["s3_audit.timestmp"]
-        author_id = raw["s3_audit.user_id"]
-        method = raw["s3_audit.method"]
-        tablename = raw["s3_audit.tablename"]
-        record_id = raw["s3_audit.record_id"]
-
-        T = current.T
-        db = current.db
-        s3db = current.s3db
-
-        if tablename == "pr_filter":
-            label = T("Saved Filters")
-            url = URL(c="default", f="index", args=["filters"])
-        elif tablename == "gis_config":
-            label = self.names[tablename][record_id]
-            url = URL(c="gis", f="index", vars={"config": record_id})
-        else:
-            label = self.names[tablename][record_id]
-            c, f = tablename.split("_", 1)
-            url = URL(c=c, f=f, args=[record_id, "read"])
-
-        body = P(self.activity_label(tablename, method),
-                 BR(),
-                 A(label, _href=url),
-                 )
-
-        avatar, person_url = self.authors[author_id]
-        author = A(author, _href=person_url)
-        avatar = A(avatar, _href=person_url, _class="pull-left")
-
-        # Render the item
-        item = DIV(avatar,
-                   DIV(H5(author,
-                          _class="media-heading",
-                          ),
-                       P(timestmp, _class="activity-timestmp"),
-                       body,
-                       _class="media-body",
-                       ),
-                   _class="media",
-                   )
-
-        return item
-
-# For access from custom controllers (e.g. homepage)
-current.response.s3.render_log = ActivityLogLayout()
-
-# -----------------------------------------------------------------------------
-def customise_s3_audit_controller(**attr):
-
-    from s3 import s3_auth_user_represent_name, FS, S3OptionsFilter, S3DateFilter
-    current.db.s3_audit.user_id.represent = s3_auth_user_represent_name
-
-    T = current.T
-    tablename = "s3_audit"
-    
+    # Custom PreP
     s3 = current.response.s3
-    s3.filter = (FS("~.method") != "delete")
-    s3.crud_strings[tablename] = {
-        "title_list": T("Activity Log"),
-    }
-    
-    USER = T("User")
-    filter_widgets = [S3OptionsFilter("user_id",
-                                      label = USER,
-                                      ),
-                      S3OptionsFilter("tablename"),
-                      S3OptionsFilter("method"),
-                      S3DateFilter("timestmp",
-                                   label = None,
-                                   hide_time = True,
-                                   input_labels = {"ge": "From", "le": "To"},
-                                   ),
-                      ]
+    standard_prep = s3.prep
+    def custom_prep(r):
+        # Call standard prep
+        if callable(standard_prep):
+            result = standard_prep(r)
+            if not result:
+                return False
 
-    report_fields = ["tablename", "method", (USER, "user_id")]
-    report_options = Storage(
-            rows = report_fields,
-            cols = report_fields,
-            fact = [(T("Number of Records"), "count(id)"),
-                    (T("Number of Tables"), "count(tablename)"),
-                    ],
-            defaults = Storage(rows = "tablename",
-                               cols = "method",
-                               fact = "count(id)",
-                               chart = "breakdown:rows",
-                               table = "collapse",
-                               totals = True,
-                               )
-                )
-    current.s3db.configure(tablename,
-                           filter_widgets = filter_widgets,
-                           filter_formstyle = filter_formstyle,
-                           insertable = False,
-                           list_fields = ["id",
-                                          (T("Date/Time"), "timestmp"),
-                                          (T("User"), "user_id"),
-                                          "method",
-                                          "tablename",
-                                          (T("Record ID"), "record_id"),
-                                          ],
-                           list_layout = s3.render_log,
-                           orderby = "s3_audit.timestmp desc",
-                           report_options = report_options,
-                           summary = [{"name": "table",
-                                       "label": "Table",
-                                       "widgets": [{"method": "datatable"}]
-                                       },
-                                      {"name": "charts",
-                                       "label": "Charts",
-                                       "widgets": [{"method": "report", "ajax_init": True}]
-                                       },
-                                      ],
+        if r.interactive:
+            s3db = current.s3db
+            tablename = "gis_poi"
+            table = s3db.gis_poi
+
+            if r.record:
+                gtable = s3db.gis_location
+                row = current.db(gtable.id == r.record.location_id).select(gtable.gis_feature_type,
+                                                                           limitby=(0, 1)
+                                                                           ).first()
+                try:
+                    feature_type = row.gis_feature_type
+                except:
+                    # No location?
+                    feature_type = 1
+            else:
+                feature_type = r.get_vars.get("~.location_id$gis_feature_type")
+                if feature_type:
+                    feature_type = int(feature_type)
+                else:
+                    feature_type = 1
+
+            if feature_type == 1:
+                # Point
+                icon = "point"
+                color_picker = False
+                points = True
+                lines = False
+                polygons = False
+                s3.crud_strings[tablename] = Storage(
+                    label_create = T("Add Point"),
+                    title_display = T("Point Details"),
+                    title_list = T("Points"),
+                    title_update = T("Update Point Details"),
+                    label_list_button = T("List Points"),
+                    label_delete_button = T("Delete Point"),
+                    msg_record_created = T("Point added"),
+                    msg_record_modified = T("Point details updated"),
+                    msg_record_deleted = T("Point deleted"),
+                    msg_list_empty = T("No Points currently registered"))
+            elif feature_type == 2:
+                # Route
+                icon = "route"
+                color_picker = True
+                points = False
+                lines = True
+                polygons = False
+                s3.crud_strings[tablename] = Storage(
+                    label_create = T("Add Route"),
+                    title_display = T("Route Details"),
+                    title_list = T("Routes"),
+                    title_update = T("Update Route Details"),
+                    label_list_button = T("List Routes"),
+                    label_delete_button = T("Delete Route"),
+                    msg_record_created = T("Route added"),
+                    msg_record_modified = T("Route details updated"),
+                    msg_record_deleted = T("Route deleted"),
+                    msg_list_empty = T("No Routes currently registered"))
+            elif feature_type == 3:
+                # Area
+                icon = "area"
+                color_picker = True
+                points = False
+                lines = False
+                polygons = True
+                s3.crud_strings[tablename] = Storage(
+                    label_create = T("Add Area"),
+                    title_display = T("Area Details"),
+                    title_list = T("Areas"),
+                    title_update = T("Update Area Details"),
+                    label_list_button = T("List Areas"),
+                    label_delete_button = T("Delete Area"),
+                    msg_record_created = T("Area added"),
+                    msg_record_modified = T("Area details updated"),
+                    msg_record_deleted = T("Area deleted"),
+                    msg_list_empty = T("No Areas currently registered"))
+
+            from s3 import IS_ADD_PERSON_WIDGET2, IS_LOCATION_SELECTOR2, \
+                           S3AddPersonWidget2, S3LocationSelectorWidget2, S3MultiSelectWidget, S3StringWidget, \
+                           S3SQLCustomForm, S3SQLInlineComponent
+            table.name.widget = S3StringWidget(placeholder=T("Text"))
+            table.comments.widget = S3StringWidget(placeholder=T("Description"), textarea=True)
+            table.poi_type_id.widget = S3MultiSelectWidget(multiple=False)
+            field = table.organisation_id
+            field.readable = field.writable = True
+            field.widget = S3MultiSelectWidget(multiple=False)
+            field = table.person_id
+            field.readable = field.writable = True
+            field.label = T("Contact Person")
+            field.requires = IS_ADD_PERSON_WIDGET2(allow_empty=True)
+            field.widget = S3AddPersonWidget2(controller="pr")
+            s3db.gis_poi_group.group_id.widget = S3MultiSelectWidget(multiple=False)
+            if r.repesentation != "popup":
+                field = table.location_id
+                field.label = "" # Gets replaced by widget
+                levels = ("L3",)
+                field.requires = IS_LOCATION_SELECTOR2(levels=levels)
+                field.widget = S3LocationSelectorWidget2(levels=levels,
+                                                         hide_lx=False,
+                                                         color_picker=color_picker,
+                                                         lines=lines,
+                                                         points=points,
+                                                         polygons=polygons,
+                                                         reverse_lx=True,
+                                                         show_address=True,
+                                                         show_postcode=True,
+                                                         )
+            if r.method == "update":
+                # Normal Submit buttons
+                s3.crud.submit_button = T("Save & Close")
+                create_next = r.url(method="summary", id=0)
+                create_next_close = None
+            else:
+                s3.crud.submit_button = T("Save & Add Another")
+                s3.crud.custom_submit = (("save_close", T("Save & Close"), "button small secondary"),
+                                         #("cancel", T("Cancel"), "button small secondary cancel"),
+                                         )
+                create_next = r.url(method="create")
+                create_next_close = r.url(method="summary", id=0)
+            s3.cancel = A(T("Cancel"),
+                          _class="button small secondary cancel",
+                          _href=r.url(method="summary", id=0),
+                          )
+
+            crud_form = S3SQLCustomForm("name",
+                                        "comments",
+                                        "organisation_id",
+                                        S3SQLInlineComponent(
+                                            "poi_group",
+                                            label = T("Coalition"),
+                                            fields = [("", "group_id")],
+                                            multiple = False,
+                                            ),
+                                        "person_id",
+                                        "location_id",
+                                        )
+
+            s3db.configure(tablename,
+                           create_next = create_next,
+                           create_next_close = create_next_close,
+                           crud_form = crud_form,
+                           icon = icon,
+                           delete_next = r.url(method="summary", id=0),
+                           update_next = r.url(method="summary", id=0),
                            )
+        return True
+    s3.prep = custom_prep
 
     return attr
 
-settings.customise_s3_audit_controller = customise_s3_audit_controller
+settings.customise_gis_poi_controller = customise_gis_poi_controller
 
 # =============================================================================
 class OrganisationProfileLayout(S3DataListLayout):
@@ -2030,6 +2039,12 @@ settings.modules = OrderedDict([
     )),
     ("project", Storage(
         name_nice = T("Projects"),
+        restricted = True,
+        module_type = None
+    )),
+    # Needed for Activity Beneficiaries
+    ("stats", Storage(
+        name_nice = "Statistics",
         restricted = True,
         module_type = None
     )),
