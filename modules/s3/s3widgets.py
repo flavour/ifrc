@@ -705,6 +705,8 @@ class S3AddPersonWidget2(FormWidget):
             date_of_birth = None
         if settings.get_pr_request_gender():
             gender = ptable.gender
+            if request.env.request_method == "POST":
+                gender.requires = IS_EMPTY_OR(gender.requires)
         else:
             gender = None
 
@@ -4859,6 +4861,7 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
                  multiple = True,
                  selectedList = 3,
                  noneSelectedText = "Select",
+                 columns = None,
                  create = None,
                  ):
         """
@@ -4878,6 +4881,7 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
                                  selected")
             @param noneSelectedText: text to show on the widget button when no option is
                                      selected (automatic l10n, no T() required)
+            @param columns: set the columns width class for Foundation forms
             @param create: options to create a new record {c: 'controller',
                                                            f: 'function',
                                                            label: 'label',
@@ -4894,6 +4898,7 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
         self.multiple = multiple
         self.selectedList = selectedList
         self.noneSelectedText = noneSelectedText
+        self.columns = columns
         self.create = create
 
     def __call__(self, field, value, **attr):
@@ -4922,8 +4927,12 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
                 # Base widget requires single value, so enforce that
                 # if necessary, and convert to string to match options
                 value = str(value[0] if type(value) is list else value)
-        widget = TAG[""](w.widget(field, value, **attr),
-                         requires = field.requires)
+        widget = w.widget(field, value, **attr)
+        options_len = len(widget)
+        if self.columns:
+            widget = DIV(widget,
+                         _class = "small-%s columns" % self.columns,
+                         )
 
         # Filter and header for multiselect options list
         filter_opt = self.filter
@@ -4933,7 +4942,7 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
             header_opt = False
         if filter_opt == "auto" or isinstance(filter_opt, (int, long)):
             max_options = 10 if filter_opt == "auto" else filter_opt
-            if len(widget[0]) > max_options:
+            if options_len > max_options:
                 filter_opt = True
             else:
                 filter_opt = False
@@ -5082,11 +5091,12 @@ class S3HierarchyWidget(FormWidget):
     """ Selector Widget for Hierarchies """
 
     def __init__(self,
-                 lookup=None,
-                 represent=None,
-                 multiple=True,
-                 leafonly=True,
-                 filter=None,
+                 lookup = None,
+                 represent = None,
+                 multiple = True,
+                 leafonly = True,
+                 filter = None,
+                 columns = None,
                  ):
         """
             Constructor
@@ -5099,14 +5109,15 @@ class S3HierarchyWidget(FormWidget):
             @param leafonly: True = only leaf nodes can be selected
                              False = any nodes to be selected independently
             @param filter: filter query for the lookup table
+            @param columns: set the columns width class for Foundation forms
         """
 
         self.lookup = lookup
         self.represent = represent
         self.filter = filter
-
         self.multiple = multiple
         self.leafonly = leafonly
+        self.columns = columns
 
     # -------------------------------------------------------------------------
     def __call__(self, field, value, **attr):
@@ -5162,6 +5173,10 @@ class S3HierarchyWidget(FormWidget):
                          _class = "s3-hierarchy-tree"),
                      **attr)
         widget.add_class("s3-hierarchy-widget")
+        if self.columns:
+            widget = DIV(widget,
+                         _class = "small-%s columns" % self.columns,
+                         )
 
         s3 = current.response.s3
         scripts = s3.scripts
@@ -5178,17 +5193,26 @@ class S3HierarchyWidget(FormWidget):
             if isinstance(v, (int, long)) or str(v).isdigit():
                 append(v)
 
+        # Custom theme
+        theme = current.deployment_settings.get_ui_hierarchy_theme()
+
         if s3.debug:
-            script = "%s/jquery.jstree.js" % script_dir
+            script = "%s/jstree.js" % script_dir
             if script not in scripts:
                 scripts.append(script)
             script = "%s/S3/s3.jquery.ui.hierarchicalopts.js" % script_dir
             if script not in scripts:
                 scripts.append(script)
+            style = "%s/jstree.css" % theme.get("css", "plugins")
+            if style not in s3.stylesheets:
+                s3.stylesheets.append(style)
         else:
             script = "%s/S3/s3.jstree.min.js" % script_dir
             if script not in scripts:
                 scripts.append(script)
+            style = "%s/jstree.min.css" % theme.get("css", "plugins")
+            if style not in s3.stylesheets:
+                s3.stylesheets.append(style)
 
         T = current.T
 
@@ -5196,17 +5220,18 @@ class S3HierarchyWidget(FormWidget):
                        "selectedText": str(T("# selected")),
                        "noneSelectedText": str(T("Select")),
                        "noOptionsText": str(T("No options available")),
-                       "multiple": self.multiple,
-                       "leafonly": leafonly,
                        }
-
-        # Custom theme
-        theme = current.deployment_settings.get_ui_hierarchy_theme()
-        if theme and hasattr(theme, "rsplit"):
-            folder, theme = ([None] + theme.rsplit("/", 1))[-2:]
-            if folder:
-                widget_opts["themesFolder"] = folder
-            widget_opts["theme"] = theme
+        # Only include non-default options
+        if not self.multiple:
+            widget_opts["multiple"] = False
+        if not leafonly:
+            widget_opts["leafonly"] = False
+        icons = theme.get("icons", False)
+        if icons:
+            widget_opts["icons"] = icons
+        stripes = theme.get("stripes", True)
+        if not stripes:
+            widget_opts["stripes"] = stripes
 
         script = '''$('#%(widget_id)s').hierarchicalopts(%(widget_opts)s)''' % \
                  {"widget_id": widget_id,
@@ -5751,14 +5776,14 @@ class S3SliderWidget(FormWidget):
 
         if isinstance(validator, IS_EMPTY_OR):
             validator = validator.other
-        
+
         self.min = validator.minimum
 
         # Max Value depends upon validator type
         if isinstance(validator, IS_INT_IN_RANGE):
             self.max = validator.maximum - 1
         elif isinstance(validator, IS_FLOAT_IN_RANGE):
-            self.max = validator.maximum 
+            self.max = validator.maximum
 
         if value is None:
             # JSONify
@@ -5791,10 +5816,12 @@ class S3StringWidget(StringWidget):
     """
 
     def __init__(self,
+                 columns = 10,
                  placeholder = None,
                  prefix = None,
                  textarea = False,
                  ):
+        self.cols = columns
         self.placeholder = placeholder
         self.prefix = prefix
         self.textarea = textarea
@@ -5819,15 +5846,22 @@ class S3StringWidget(StringWidget):
         if self.prefix:
             # NB These classes target Foundation Themes
             widget = TAG[""](DIV(SPAN(self.prefix,
-                                      _class="prefix"),
-                                 _class="small-1 columns"),
+                                      _class="prefix",
+                                      ),
+                                 _class="small-1 columns",
+                                 ),
                              DIV(widget,
-                                 _class="small-9 columns"),
+                                 _class="small-%s columns" % (self.cols - 1),
+                                 ),
+                             # Tell the formstyle not to wrap & collapse
+                             _class="columns collapse",
                              )
+        else:
+            widget = DIV(widget,
+                         _class="small-%s columns" % self.cols,
+                         )
 
-        return TAG[""](widget,
-                       requires = field.requires
-                       )
+        return widget
 
 # =============================================================================
 class S3TimeIntervalWidget(FormWidget):
@@ -6065,7 +6099,7 @@ class S3PasswordWidget(FormWidget):
                                                                      fieldname),
                             _id = "%s_%s_unmask" % (tablename, fieldname),
                             )
-        return DIV(password_input, 
+        return DIV(password_input,
                    password_unmask,
                    )
 
@@ -6295,24 +6329,24 @@ def search_ac(r, **attr):
 
 # =============================================================================
 class ICON(I):
-    """ 
+    """
         Helper class to render <i> tags for icons, mapping abstract
         icon names to theme-specific CSS classes. The standard icon
         set can be configured using settings.ui.icons
-        
+
         e.g. ICON("book"), gives:
             - font-awesome: <i class="icon icon-book">
             - foundation: <i class="fi-book">
-            
+
         Standard sets are defined below.
-            
+
         Additional icons (beyond the standard set) can be configured
         per deployment (settings.ui.custom_icons).
-        
+
         If <i class=""> is not suitable for the CSS, a custom HTML
         layout can be configured as settings.ui.icon_layout. See
         S3Config for more details.
-        
+
         @todo: apply in widgets/crud/profile+datalist layouts etc.
         @todo: better abstract names for the icons to indicate what they
                symbolize rather than what they depict, e.g. "sitemap" is
@@ -6321,7 +6355,7 @@ class ICON(I):
     """
 
     # -------------------------------------------------------------------------
-    # Standard icon sets, 
+    # Standard icon sets,
     # - "_base" can be used to define a common CSS class for all icons
     #
     icons = {
@@ -6464,16 +6498,16 @@ class ICON(I):
     }
 
     # -------------------------------------------------------------------------
-    def __init__(self, name, _class=None):
+    def __init__(self, name, **attr):
         """
             Constructor
 
             @param name: the abstract icon name
-            @param _class: additional HTML classes (optional)
+            @param attr: additional HTML attributes (optional)
         """
 
         self.name = name
-        super(ICON, self).__init__(" ", _class=_class)
+        super(ICON, self).__init__(" ", **attr)
 
     # -------------------------------------------------------------------------
     def xml(self):
@@ -6487,7 +6521,7 @@ class ICON(I):
             return layout(self)
 
         css_class = self.css_class(self.name)
-        
+
         if css_class:
             self.add_class(css_class)
 
@@ -6496,7 +6530,7 @@ class ICON(I):
     # -------------------------------------------------------------------------
     @classmethod
     def css_class(cls, name):
-        
+
         settings = current.deployment_settings
         fallback = "font-awesome"
 

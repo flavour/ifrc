@@ -49,7 +49,7 @@ class S3MainMenu(default.S3MainMenu):
         return [
             # In title_area
             #MM("Sahana"),
-            MM("Find")(
+            MM("Find", link=False)(
                 MM("People", c="pr", f="person", m="summary", always_display=True),
                 MM("Organizations", c="org", f="organisation", m="summary"),
                 MM("Activities", c="project", f="activity", m="summary",
@@ -64,7 +64,7 @@ class S3MainMenu(default.S3MainMenu):
                    vars={"~.location_id$gis_feature_type": 3},
                    always_display=True),
             ),
-            MM("Add")(
+            MM("Add", link=False)(
                 MM("Person", c="pr", f="person", args="create",
                    always_display=True),
                 MM("Organization", c="org", f="organisation", args="create"),
@@ -80,7 +80,7 @@ class S3MainMenu(default.S3MainMenu):
                    vars={"~.location_id$gis_feature_type": 3},
                    always_display=True),
             ),
-            MM("Share")(
+            MM("Share", link=False)(
                 MM("Maps", c="gis", f="config", always_display=True),
                 MM("Stories", c="cms", f="blog", always_display=True),
             ),
@@ -103,7 +103,7 @@ class S3MainMenu(default.S3MainMenu):
                "_next" in request.get_vars:
                 login_next = request.get_vars["_next"]
 
-            menu_auth = MM("Login", c="default", f="user", m="login",
+            menu_auth = MM("Log in", c="default", f="user", m="login",
                            _id="auth_menu_login",
                            vars=dict(_next=login_next), **attr)
         else:

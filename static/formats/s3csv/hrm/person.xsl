@@ -85,6 +85,12 @@
          Grade..........................optional.....person education grade
          Year...........................optional.....person education year
          Institute......................optional.....person education institute
+         Award Type.....................optional.....hrm_award.award_type_id
+         Award Date.....................optional.....hrm_award.date
+         Awarding Body..................optional.....hrm_award.awarding_body
+         Disciplinary Type..............optional.....hrm_disciplinary_action.disciplinary_type_id
+         Disciplinary Date..............optional.....hrm_disciplinary_action.date
+         Disciplinary Body..............optional.....hrm_disciplinary_action.disciplinary_body
          Volunteer Cluster Type.........optional.....volunteer_cluster cluster_type name
          Volunteer Cluster..............optional.....volunteer_cluster cluster name
          Volunteer Cluster Position.....optional.....volunteer_cluster cluster_position name
@@ -108,9 +114,11 @@
             - make updateable (don't use temporary UIDs)
 
     *********************************************************************** -->
-    <xsl:import href="salary.xsl"/>
-    <xsl:import href="insurance.xsl"/>
+    <xsl:import href="award.xsl"/>
     <xsl:import href="contract.xsl"/>
+    <xsl:import href="disciplinary.xsl"/>
+    <xsl:import href="insurance.xsl"/>
+    <xsl:import href="salary.xsl"/>
 
     <xsl:output method="xml"/>
     <xsl:include href="../../xml/commons.xsl"/>
@@ -192,6 +200,12 @@
 
     <xsl:key name="salarygrades" match="row"
              use="col[@field='Salary Grade']"/>
+
+    <xsl:key name="awardtypes" match="row"
+             use="col[@field='Award Type']"/>
+
+    <xsl:key name="disciplinarytypes" match="row"
+             use="col[@field='Disciplinary Type']"/>
 
     <!-- ****************************************************************** -->
     <xsl:template match="/">
@@ -284,6 +298,22 @@
                                                                        col[@field='Salary Grade'])[1])]">
                 <xsl:call-template name="SalaryGrade">
                     <xsl:with-param name="Field">Salary Grade</xsl:with-param>
+                </xsl:call-template>
+            </xsl:for-each>
+
+            <!-- Award Types -->
+            <xsl:for-each select="//row[generate-id(.)=generate-id(key('awardtypes',
+                                                                       col[@field='Award Type'])[1])]">
+                <xsl:call-template name="AwardType">
+                    <xsl:with-param name="Field">Award Type</xsl:with-param>
+                </xsl:call-template>
+            </xsl:for-each>
+
+            <!-- Disciplinary Action Types -->
+            <xsl:for-each select="//row[generate-id(.)=generate-id(key('disciplinarytypes',
+                                                                       col[@field='Disciplinary Type'])[1])]">
+                <xsl:call-template name="DisciplinaryActionType">
+                    <xsl:with-param name="Field">Disciplinary Type</xsl:with-param>
                 </xsl:call-template>
             </xsl:for-each>
 
@@ -695,6 +725,24 @@
             <xsl:call-template name="Competencies">
                 <xsl:with-param name="skill_list" select="col[@field='Skills']"/>
             </xsl:call-template>
+
+            <!-- Awards -->
+            <xsl:if test="col[@field='Award Type']/text() != ''">
+                <xsl:call-template name="Award">
+                    <xsl:with-param name="person_tuid">
+                        <xsl:value-of select="$person_tuid"/>
+                    </xsl:with-param>
+                </xsl:call-template>
+            </xsl:if>
+
+            <!-- Disciplinary Record -->
+            <xsl:if test="col[@field='Disciplinary Type']/text() != ''">
+                <xsl:call-template name="DisciplinaryAction">
+                    <xsl:with-param name="person_tuid">
+                        <xsl:value-of select="$person_tuid"/>
+                    </xsl:with-param>
+                </xsl:call-template>
+            </xsl:if>
 
             <!-- Job Roles that a deployable is credentialled for -->
             <xsl:call-template name="splitList">

@@ -7,7 +7,7 @@
 
          CSV fields:
          Name............................hrm_award.name
-         Organisation....................hrm_award.organisation
+         Organisation....................hrm_award.organisation_id
 
     *********************************************************************** -->
     <xsl:import href="../commons.xsl"/>

@@ -116,6 +116,10 @@ settings.ui.datatables_pagingType = "bootstrap"
 settings.ui.export_formats = ("xls", "xml")
 # Uncomment to change the label/class of FilterForm clear buttons
 settings.ui.filter_clear = "Clear"
+settings.ui.hierarchy_theme = dict(css = "../themes/CRMT2",
+                                   icons = True,
+                                   stripes = False,
+                                   )
 # Uncomment to use S3MultiSelectWidget on all dropdowns (currently the Auth Registration page & LocationSelectorWidget2 listen to this)
 settings.ui.multiselect_widget = True
 settings.ui.use_button_icons = True
@@ -1100,11 +1104,13 @@ def customise_org_organisation_controller(**attr):
                                     ),
                                S3SQLInlineComponentMultiSelectWidget(
                                     "sector",
+                                    columns = 4,
                                     label = T("Sectors"),
                                     field = "sector_id",
                                     ),
                                S3SQLInlineLink(
                                     "service",
+                                    columns = 4,
                                     label = T("Services"),
                                     field = "service_id",
                                     leafonly = False,

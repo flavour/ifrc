@@ -1016,6 +1016,11 @@ settings.customise_hrm_department_controller = customise_hrm_department_controll
 def customise_hrm_experience_controller(**attr):
 
     s3 = current.response.s3
+    
+    root_org = current.auth.root_org_name()
+    vnrc = False
+    if root_org == VNRC:
+        vnrc = True
 
     standard_prep = s3.prep
     def custom_prep(r):
@@ -1023,6 +1028,10 @@ def customise_hrm_experience_controller(**attr):
         if callable(standard_prep):
             if not standard_prep(r):
                 return False
+                
+        if vnrc:
+            department_id = r.table.department_id
+            department_id.readable = department_id.writable = True
 
         if r.controller == "deploy":
             # Popups in RDRT Member Profile
@@ -1762,12 +1771,36 @@ def customise_pr_person_controller(**attr):
                                        filterby = "type",
                                        filter_opts = (4,),
                                        )
+        elif component_name == "physical_description":
+            from gluon import DIV
+            dtable = r.component.table
+            dtable.medical_conditions.comment = DIV(_class="tooltip",
+                                                    _title="%s|%s" % (T("Medical Conditions"),
+                                                                      T("Chronic Illness, Disabilities, Mental/Psychological Condition etc.")))
         elif r.method == "cv" or component_name == "education":
             if vnrc:
+                etable = s3db.pr_education
                 # Don't enable Legacy Freetext field
                 # Hide the 'Name of Award' field
-                field = s3db.pr_education.award
+                field = etable.award
                 field.readable = field.writable = False
+                # Limit education-level dropdown to specific options
+                field = s3db.pr_education.level_id
+                levels = ("Vocational School/ College",
+                          "Graduate",
+                          "Post graduate (Master's)",
+                          "Post graduate (Doctor's)",
+                          )
+                from gluon import IS_EMPTY_OR
+                from s3 import IS_ONE_OF
+                field.requires = IS_EMPTY_OR(
+                                    IS_ONE_OF(current.db, "pr_education_level.id",
+                                              field.represent,
+                                              filterby = "name",
+                                              filter_opts = levels,
+                                              ))
+                # Disallow adding of new education levels
+                field.comment = None
             elif arcs:
                 # Don't enable Legacy Freetext field
                 pass
@@ -1839,11 +1872,46 @@ def customise_pr_person_controller(**attr):
 
                 if r.method == "record" and r.controller == "hrm":
                     # Custom config for method handler
+
+                    from s3 import FS
+
+                    # RC employment history
+                    org_type_name = "organisation_id$organisation_organisation_type.organisation_type_id$name"
+                    widget_filter = (FS(org_type_name) == "Red Cross / Red Crescent") & \
+                                    (FS("organisation") == None)
+                    org_experience = {"label": T("Red Cross Employment History"),
+                                      "label_create": T("Add Employment"),
+                                      "list_fields": ["start_date",
+                                                      "end_date",
+                                                      "organisation",
+                                                      "department_id",
+                                                      "job_title",
+                                                      "employment_type",
+                                                      ],
+                                      "filter": widget_filter,
+                                      }
+
+                    # Non-RC employment history
+                    widget_filter = FS("organisation") != None
+                    other_experience = {"label": T("Other Employments"),
+                                        "label_create": T("Add Employment"),
+                                        "list_fields": ["start_date",
+                                                        "end_date",
+                                                        "organisation",
+                                                        "job_title",
+                                                        ],
+                                        "filter": widget_filter,
+                                        }
+
                     s3db.set_method("pr", "person",     
                                     method = "record",
                                     action = s3db.hrm_Record(salary=True, 
                                                              awards=True,
+                                                             disciplinary_record=True,
+                                                             org_experience=org_experience,
+                                                             other_experience=other_experience,
                                                              ))
+
                     # Custom list_fields for hrm_salary (exclude monthly amount)
                     stable = s3db.hrm_salary
                     stable.salary_grade_id.label = T("Grade Code")
@@ -1861,6 +1929,14 @@ def customise_pr_person_controller(**attr):
                                                   "award_type_id",
                                                   ],
                                     orderby = "hrm_award.date desc"
+                                   )
+                    # Custom list_fields for hrm_disciplinary_action
+                    s3db.configure("hrm_disciplinary_action",
+                                   list_fields = ["date",
+                                                  "disciplinary_body",
+                                                  "disciplinary_type_id",
+                                                  ],
+                                    orderby = "hrm_disciplinary_action.date desc"
                                    )
                     # Custom form for hrm_human_resource
                     from s3 import S3SQLCustomForm, S3SQLInlineComponent
@@ -1950,6 +2026,7 @@ def customise_pr_person_controller(**attr):
             elif r.method == "cv" or component_name == "experience":
                 table = s3db.hrm_experience
                 # Use simple free-text variants
+                table.organisation_id.default = None # should not default in this case
                 table.organisation.readable = True
                 table.organisation.writable = True
                 table.job_title.readable = True
@@ -1971,6 +2048,16 @@ def customise_pr_person_controller(**attr):
                                               "end_date",
                                               ],
                                )
+            elif component_name == "salary":
+                stable = s3db.hrm_salary
+                stable.salary_grade_id.label = T("Grade Code")
+                field = stable.monthly_amount
+                field.readable = field.writable = False
+                
+            elif component_name == "competency":
+                ctable = s3db.hrm_competency
+                # Hide confirming organisation (defaults to VNRC)
+                ctable.organisation_id.readable = False
 
         return True
     s3.prep = custom_prep

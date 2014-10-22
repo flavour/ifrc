@@ -20,7 +20,7 @@ def index():
 # -----------------------------------------------------------------------------
 def disease():
     """ Disease Information Controller """
-    
+
     return s3_rest_controller(rheader = s3db.disease_rheader)
 
 # -----------------------------------------------------------------------------
@@ -41,9 +41,19 @@ def case():
                 field.default = diseases.first().id
                 field.writable = False
 
+        if r.component_name == "contact" or \
+           r.component_name == "exposure":
+            field = r.component.table.tracing_id
+            field.readable = field.writable = False
+            
+        if r.interactive:
+            field = r.table.person_id
+            field.requires = IS_ADD_PERSON_WIDGET2()
+            field.widget = S3AddPersonWidget2(controller="pr")
+
         return True
     s3.prep = prep
-    
+
     def postp(r, output):
         if isinstance(output, dict) and "buttons" in output:
             buttons = output["buttons"]
@@ -57,16 +67,16 @@ def case():
 # -----------------------------------------------------------------------------
 def tracing():
     """ Contact Tracing Controller """
-    
+
     def prep(r):
-        
+
         if r.id and r.component_name == "exposure":
-            
+
             ctable = r.component.table
             case_id = ctable.case_id
             case_id.default = r.id
             case_id.readable = case_id.writable = False
-            
+
             crud_strings = s3.crud_strings[r.component.tablename]
             crud_strings["label_create"] = T("Add Contact Person")
             crud_strings["label_delete_button"] = T("Delete Contact Person")
