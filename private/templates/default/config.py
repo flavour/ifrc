@@ -289,6 +289,8 @@ settings.L10n.decimal_separator = "."
 # Uncomment to show the Print control:
 # http://eden.sahanafoundation.org/wiki/UserGuidelines/Admin/MapPrinting
 #settings.gis.print_button = True
+# Uncomment to save a screenshot whenever a saved map is saved
+#settings.gis.config_screenshot = (820, 410)
 # Uncomment to hide the Save control, or set to "float"
 #settings.gis.save = False
 # Uncomment to hide the ScaleLine control
@@ -469,6 +471,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.pr.search_shows_hr_details = False
 # Uncomment to hide Emergency Contacts in Person Contacts page
 #settings.pr.show_emergency_contacts = False
+# Show separate Public and Private Contacts Tabs
+#settings.pr.contacts_tabs = ("public", "private")
 
 # -----------------------------------------------------------------------------
 # Organisations
@@ -550,6 +554,10 @@ settings.gis.geonames_username = "eden_test"
 #settings.hrm.org_dependent_job_titles = True
 # Uncomment to hide the Staff resource
 #settings.hrm.show_staff = False
+# Uncomment to have Staff use their Home Address as fallback if they have no Site defined
+#settings.hrm.location_staff = ("site_id", "person_id")
+# Uncomment to have Volunteers use their Site Address as fallback if they have no Home Address defined
+#settings.hrm.location_vol = ("person_id", "site_id")
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
 #settings.hrm.skill_types = True
 # Uncomment to disable Staff experience

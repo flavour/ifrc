@@ -17,18 +17,36 @@ from time import gmtime, strftime
 todays_date = strftime("%Y-%m-%d", gmtime())
 
 # Options which changed for other data sources
-SOURCE_URL = "https://rowca.egnyte.com/dd/mfIyWzxlh7" # Linked from https://data.hdx.rwlabs.org/dataset/rowca-ebola-cases
+SOURCE_URL = "http://data.hdx.rwlabs.org/storage/f/2014-10-29T16%3A10%3A13.512Z/data-ebola-public.xlsx" # Linked from https://data.hdx.rwlabs.org/dataset/rowca-ebola-cases Note timestamp changes daily so no auto-update possible :/
 #SOURCE_URL = "http://eden.sahanafoundation.org/downloads/Data%20Ebola%20(Public).xlsx" # For use when site is down (gives a 404 at times, perhaps when file is being updated)
 SOURCE_SHEET = "ROWCA Ebola All Sec Review"
 OUTPUT_CSV = "ebola_cases_%s.csv" % todays_date
 
-country_codes = {"Sierra Leone": "SL",
+country_codes = {"Guinea": "GN",
                  "Liberia": "LR",
-                 "Guinea": "GN",
+                 "Mali": "ML",
                  "Nigeria": "NG",
                  "Senegal": "SN",
+                 "Sierra Leone": "SL",
                  }
 
+location_names = {# GN
+                  "Boke": "Boké",
+                  "Dubreka": "Dubréka",
+                  "Gueckedou": "Guéckédou",
+                  "Kerouane": "Kérouané",
+                  "Nzerekore": "Nzérékoré",
+                  "Telimele": "Télimélé",
+                  # ML
+                  "Commune 2": "Commune II",
+                  "Commune 5": "Commune V",
+                  # SL
+                  "Freetown": "Urban",
+                  "Western Area": "Western",
+                  # SN
+                  "Dakar": "Parcelles Assainies", # specific to the 1 current case ;)
+                  "District Nord": "Ourossogui", # specific to the 1 current case ;)
+                  }
 # @ToDo:
 # - Allow filtering to just a single country
 # - Allow filtering to a range of dates (priority: since xxx to get a diff. NB This is just to save time, since the deduplicator should prevent dupes)
@@ -57,31 +75,17 @@ def lookup_loc(location, country):
     """
         Location Names need to match what we have already
     """
+    corrected = location_names.get(location)
+    if corrected:
+        return get_loc_from_db(corrected, country)
+
+    # LR
     if location[-6:] == "County":
         # If the location ends with "County", then strip it out and try again
         return get_loc_from_db(location[:-6].strip(), country)
-    if location == "Freetown":
-        return get_loc_from_db("Urban", country)
-    if location == "Western Area":
-        return get_loc_from_db("Western", country)
+    # SL
     if location.startswith("Western Area"):
         return get_loc_from_db(location[12:].strip(), country)
-    if location == "Dakar":
-        return get_loc_from_db("Parcelles Assainies", country)
-    if location == "District Nord":
-        return get_loc_from_db("Ourossogui", country)
-    if location == "Boke":
-        return get_loc_from_db("Boké", country)
-    if location == "Dubreka":
-        return get_loc_from_db("Dubréka", country)
-    if location == "Gueckedou":
-        return get_loc_from_db("Guéckédou", country)
-    if location == "Kerouane":
-        return get_loc_from_db("Kérouané", country)
-    if location == "Nzerekore":
-        return get_loc_from_db("Nzérékoré", country)
-    if location == "Telimele":
-        return get_loc_from_db("Télimélé", country)
 
     # Log location as being in error
     if location in rejected_loc:

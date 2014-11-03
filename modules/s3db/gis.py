@@ -94,7 +94,6 @@ class S3LocationModel(S3Model):
         NONE = messages["NONE"]
 
         # Shortcuts
-        add_components = self.add_components
         #define_table = self.define_table
 
         # ---------------------------------------------------------------------
@@ -386,27 +385,27 @@ class S3LocationModel(S3Model):
                         action = self.gis_search_ac)
 
         # Components
-        add_components(tablename,
-                       # Tags
-                       gis_location_tag = {"name": "tag",
-                                           "joinby": "location_id",
-                                           },
-                       # Names
-                       gis_location_name = {"name": "name",
-                                            "joinby": "location_id",
-                                            },
-                       # Alternate Names
-                       gis_location_name_alt = {"name": "name_alt",
+        self.add_components(tablename,
+                            # Tags
+                            gis_location_tag = {"name": "tag",
                                                 "joinby": "location_id",
                                                 },
-                       # Child Locations
-                       #gis_location = {"joinby": "parent",
-                       #                "multiple": False,
-                       #                },
-
-                       # Sites
-                       org_site = "location_id",
-                       )
+                            # Names
+                            gis_location_name = {"name": "name",
+                                                 "joinby": "location_id",
+                                                 },
+                            # Alternate Names
+                            gis_location_name_alt = {"name": "name_alt",
+                                                     "joinby": "location_id",
+                                                     },
+                            # Child Locations
+                            #gis_location = {"joinby": "parent",
+                            #                "multiple": False,
+                            #                },
+ 
+                            # Sites
+                            org_site = "location_id",
+                            )
 
         # ---------------------------------------------------------------------
         # Error
@@ -1629,6 +1628,7 @@ class S3GISConfigModel(S3Model):
 
         location_id = self.gis_location_id
 
+        settings = current.deployment_settings
         NONE = current.messages["NONE"]
 
         # Shortcuts
@@ -1808,13 +1808,20 @@ class S3GISConfigModel(S3Model):
         #        according to any active Event or Region config and any OU or
         #        Personal config found
 
-        pe_types = {1: "person",
-                    2: "group",
-                    4: "facility",
-                    6: "branch",
-                    7: "organisation",
+        org_group_label = settings.get_org_groups()
+        org_site_label = settings.get_org_site_label()
+        teams_label = settings.get_hrm_teams()
+
+        pe_types = {1: T("Person"),
+                    2: T(teams_label),
+                    4: T(org_site_label),
+                    7: T("Organization"),
                     9: "SITE_DEFAULT",
                     }
+        if settings.get_org_branches():
+            pe_types[6] = T("Branch")
+        if org_group_label:
+            pe_types[8] = T(org_group_label)
 
         tablename = "gis_config"
         define_table(tablename,
@@ -1907,6 +1914,27 @@ class S3GISConfigModel(S3Model):
                            writable = False,
                            ),
 
+                     Field("image", "upload", autodelete=False,
+                           custom_retrieve = self.gis_marker_retrieve,
+                           custom_retrieve_file_properties = self.gis_marker_retrieve_file_properties,
+                           label = T("Image"),
+                           represent = lambda filename: \
+                               (filename and [DIV(IMG(_src=URL(c="static",
+                                                               f="cache",
+                                                               args=["jpg",
+                                                                     filename]),
+                                                      _height=40))] or [""])[0],
+                           # upload folder needs to be visible to the download() function as well as the upload
+                           uploadfolder = os.path.join(current.request.folder,
+                                                       "static",
+                                                       "cache",
+                                                       "jpg"),
+                           # Enable in-templates as-required
+                           #readable = False,
+                           #writable = False,
+                           #widget = S3ImageCropWidget((820, 410)),
+                           ),
+
                      *s3_meta_fields())
 
         # Reusable field - used by Events & Scenarios
@@ -1937,6 +1965,10 @@ class S3GISConfigModel(S3Model):
                   create_next = URL(c="gis", f="config",
                                     args=["[id]", "layer_entity"]),
                   deduplicate = self.gis_config_deduplicate,
+                  # These are amended as-required in the controller
+                  list_fields = ["name",
+                                 "pe_id",
+                                 ],
                   onaccept = self.gis_config_onaccept,
                   ondelete = self.gis_config_ondelete,
                   onvalidation = self.gis_config_onvalidation,
@@ -1956,7 +1988,7 @@ class S3GISConfigModel(S3Model):
                        gis_style = "config_id",
                        )
 
-        if current.deployment_settings.get_security_map() and not \
+        if settings.get_security_map() and not \
            current.auth.s3_has_role("MapAdmin"):
             configure(tablename,
                       deletable = False,
@@ -2132,11 +2164,13 @@ class S3GISConfigModel(S3Model):
 
         """
 
-        if item.tablename == "gis_config" and \
-           "name" in item.data:
+        if item.tablename == "gis_config":
             # Match by name (all-lowercase)
-            table = item.table
             name = item.data.name
+            if not name:
+                return
+
+            table = item.table
             query = (table.name.lower() == name.lower())
             duplicate = current.db(query).select(table.id,
                                                  limitby=(0, 1)).first()
@@ -2209,7 +2243,7 @@ class S3GISConfigModel(S3Model):
         auth = current.auth
 
         form_vars = form.vars
-        id = form_vars.id
+        config_id = form_vars.id
         pe_id = form_vars.get("pe_id", None)
         if pe_id:
             user = auth.user
@@ -2220,14 +2254,14 @@ class S3GISConfigModel(S3Model):
                 # Ensure no other records for this PE are marked as default
                 table = db.gis_config
                 query = (table.pe_id == pe_id) & \
-                        (table.id != id)
+                        (table.id != config_id)
                 db(query).update(pe_default=False)
             # Add to GIS Menu
-            db.gis_menu.update_or_insert(config_id=id,
+            db.gis_menu.update_or_insert(config_id=config_id,
                                          pe_id=pe_id)
         else:
             config = current.response.s3.gis.config
-            if config and config.id == id:
+            if config and config.id == config_id:
                 # This is the currently active config, so clear our cache
                 config = None
 
@@ -2235,19 +2269,28 @@ class S3GISConfigModel(S3Model):
         # That makes Authenticated no longer an owner, so they only get whatever
         # is permitted by uacl (usually READ).
         if auth.override:
-            MAP_ADMIN = current.session.s3.system_roles.MAP_ADMIN
-            table = db.gis_config
-            query = (table.id == id)
-            db(query).update(owned_by_group = MAP_ADMIN)
+            db(db.gis_config.id == config_id).update(
+                owned_by_group = current.session.s3.system_roles.MAP_ADMIN)
 
         # Locations which are referenced by Map Configs should be owned by MapAdmin.
         # That makes Authenticated no longer an owner, so they only get whatever
         # is permitted by uacl (usually READ).
         if form_vars.region_location_id:
-            MAP_ADMIN = current.session.s3.system_roles.MAP_ADMIN
-            table = db.gis_location
-            query = (table.id == form_vars.region_location_id)
-            db(query).update(owned_by_group = MAP_ADMIN)
+            db(db.gis_location.id == form_vars.region_location_id).update(
+                owned_by_group = current.session.s3.system_roles.MAP_ADMIN)
+
+        if not form_vars.get("temp", None) and not auth.override:
+            settings = current.deployment_settings
+            screenshot = settings.get_gis_config_screenshot()
+            if screenshot is not None:
+                # Save a screenshot
+                width = screenshot[0]
+                height = screenshot[1]
+                filename = current.gis.get_screenshot(config_id,
+                                                      False,
+                                                      height,
+                                                      width)
+                db(db.gis_config.id == config_id).update(image=filename)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3046,21 +3089,6 @@ class S3FeatureLayerModel(S3Model):
                        super_entity = "gis_layer_entity",
                        )
 
-        # Components (already done at Super Entity level)
-        #self.add_components(tablename,
-        #                    # Configs
-        #                    gis_config = {"link": "gis_layer_config",
-        #                                  "pkey": "layer_id",
-        #                                  "joinby": "layer_id",
-        #                                  "key": "config_id",
-        #                                  "actuate": "hide",
-        #                                  "autocomplete": "name",
-        #                                  "autodelete": False,
-        #                                  },
-        #                    # Styles 
-        #                    gis_style = "layer_id",
-        #                    )
-
         # Pass names back to global scope (s3.*)
         return dict()
 
@@ -3148,12 +3176,10 @@ class S3MapModel(S3Model):
         db = current.db
         request = current.request
 
-        #location_id = self.gis_location_id
         marker_id = self.gis_marker_id
         projection_id = self.gis_projection_id
 
         # Shortcuts
-        #add_components = self.add_components
         configure = self.configure
         define_table = self.define_table
 
@@ -3272,19 +3298,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
-
         # ---------------------------------------------------------------------
         # Bing tiles
         #
@@ -3308,20 +3321,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
-
         # ---------------------------------------------------------------------
         # Coordinate grid
         #
@@ -3339,19 +3338,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
-
         # ---------------------------------------------------------------------
         # Empty (no baselayer, so can display just overlays)
         #
@@ -3368,19 +3354,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
 
         # ---------------------------------------------------------------------
         # GeoJSON
@@ -3408,21 +3381,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               # Styles
-        #               gis_style = "layer_id",
-        #               )
 
         # ---------------------------------------------------------------------
         # GeoRSS
@@ -3460,21 +3418,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               # Styles
-        #               gis_style = "layer_id",
-        #               )
-
         # ---------------------------------------------------------------------
         # Google tiles
         #
@@ -3499,19 +3442,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
 
         # ---------------------------------------------------------------------
         # GPX - GPS eXchange format
@@ -3558,19 +3488,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
-
         # ---------------------------------------------------------------------
         # JS
         # - raw JavaScript code for advanced users
@@ -3593,19 +3510,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
 
         # ---------------------------------------------------------------------
         # KML
@@ -3643,21 +3547,6 @@ class S3MapModel(S3Model):
                   super_entity="gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               # Styles
-        #               gis_style = "layer_id",
-        #               )
-
         # ---------------------------------------------------------------------
         # MGRS
         #
@@ -3680,19 +3569,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
 
         # ---------------------------------------------------------------------
         # OpenStreetMap tiles
@@ -3742,19 +3618,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
-
         # ---------------------------------------------------------------------
         # OpenWeatherMap
         #
@@ -3777,19 +3640,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
 
         # ---------------------------------------------------------------------
         # Shapefiles
@@ -3859,21 +3709,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               # Styles
-        #               gis_style = "layer_id",
-        #               )
-
         # ---------------------------------------------------------------------
         # TMS
         #
@@ -3918,19 +3753,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
 
         # ---------------------------------------------------------------------
         # WFS
@@ -4018,21 +3840,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               # Styles
-        #               gis_style = "layer_id",
-        #               )
 
         # ---------------------------------------------------------------------
         # WMS
@@ -4155,19 +3962,6 @@ class S3MapModel(S3Model):
                   super_entity = "gis_layer_entity",
                   )
 
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
-
         # ---------------------------------------------------------------------
         # XYZ
         # - e.g. used by OSM community for JOSM/Potlatch
@@ -4211,19 +4005,6 @@ class S3MapModel(S3Model):
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
-
-        # Components (already done at Super Entity level)
-        #add_components(tablename,
-        #               # Configs
-        #               gis_config = {"link": "gis_layer_config",
-        #                             "pkey": "layer_id",
-        #                             "joinby": "layer_id",
-        #                             "key": "config_id",
-        #                             "actuate": "hide",
-        #                             "autocomplete": "name",
-        #                             "autodelete": False,
-        #                             },
-        #               )
 
         # ---------------------------------------------------------------------
         # GIS Cache

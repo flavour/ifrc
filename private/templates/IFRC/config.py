@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
+import datetime
+
 try:
     # Python 2.7
     from collections import OrderedDict
 except:
     # Python 2.6
     from gluon.contrib.simplejson.ordered_dict import OrderedDict
-
-from datetime import timedelta
 
 from gluon import current
 from gluon.storage import Storage
@@ -1368,9 +1368,47 @@ def customise_inv_warehouse_resource(r, tablename):
 settings.customise_inv_warehouse_resource = customise_inv_warehouse_resource
 
 # -----------------------------------------------------------------------------
+def member_membership_paid(row):
+    """
+        Simplified variant of the original function in s3db/member.py,
+        with just "paid" and "unpaid" as possible values
+    """
+
+    if hasattr(row, "member_membership"):
+        row = row.member_membership
+    try:
+        start_date = row.start_date
+    except AttributeError:
+        start_date = None
+    try:
+        paid_date = row.membership_paid
+    except AttributeError:
+        paid_date = None
+    if start_date:
+        T = current.T
+        PAID = T("paid")
+        UNPAID = T("unpaid")
+        now = current.request.utcnow.date()
+        if not paid_date:
+            due = datetime.date(start_date.year + 1, start_date.month, start_date.day)
+        else:
+            due = datetime.date(paid_date.year, start_date.month, start_date.day)
+            if due < paid_date:
+                due = datetime.date(paid_date.year + 1, due.month, due.day)
+        result = PAID if now < due else UNPAID
+    else:
+        result = current.messages["NONE"]
+    return result
+
+# -----------------------------------------------------------------------------
 def customise_member_membership_controller(**attr):
 
     tablename = "member_membership"
+
+    root_org = current.auth.root_org_name()
+    vnrc = False
+    if root_org == VNRC:
+        vnrc = True
 
     # Default Filter
     from s3 import s3_set_default_filter
@@ -1414,6 +1452,20 @@ def customise_member_membership_controller(**attr):
             if widget.field == "organisation_id":
                 widget.opts.hidden = False
                 break
+
+        if vnrc:
+            table = r.table
+            from gluon import Field
+            table["paid"] = Field.Method("paid", member_membership_paid)
+            filter_options = {T("paid"): T("paid"), 
+                              T("unpaid"): T("unpaid"),
+                              }
+            filter_widgets = r.resource.get_config("filter_widgets")
+            if filter_widgets:
+                for filter_widget in filter_widgets:
+                    if filter_widget.field == "paid":
+                        filter_widget.opts.options = filter_options
+                        break
 
         return result
     s3.prep = custom_prep
@@ -1645,9 +1697,9 @@ def vol_active(person_id):
                                           orderby=htable.date)
     if programmes:
         # Ignore up to 3 months of records
-        three_months_prior = (now - timedelta(days=92))
+        three_months_prior = (now - datetime.timedelta(days=92))
         end = max(programmes.last().date, three_months_prior.date())
-        last_year = end - timedelta(days=365)
+        last_year = end - datetime.timedelta(days=365)
         # Is this the Volunteer's first year?
         if programmes.first().date > last_year:
             # Only start counting from their first month
@@ -1827,10 +1879,77 @@ def customise_pr_person_controller(**attr):
 
         elif vnrc:
             if not r.component:
+                from gluon import IS_EMPTY_OR, IS_IN_SET
+                from s3 import IS_ONE_OF
+                db = current.db
+                dtable = s3db.pr_person_details
+
                 # Use a free-text version of religion field
-                field = s3db.pr_person_details.religion_other
+                field = dtable.religion_other
                 field.label = T("Religion")
                 field.readable = field.writable = True
+
+                # Standard option for nationality
+                field = dtable.nationality
+                VN = "VN"
+                field.default = VN
+                vnrc_only = False
+                try:
+                    options = dict(field.requires.options())
+                except AttributeError:
+                    pass
+                else:
+                    opts = [VN]
+                    if r.record:
+                        # Get the nationality from the current record
+                        query = (r.table.id == r.id)
+                        left = dtable.on(dtable.person_id == r.id)
+                        row = db(query).select(dtable.nationality,
+                                               left = left,
+                                               limitby = (0, 1)).first()
+                        if row and row.nationality:
+                            opts.append(row.nationality)
+                        # Check wether this person is only VNRC-associated
+                        htable = s3db.hrm_human_resource
+                        otable = s3db.org_organisation
+                        query = (htable.person_id == r.id) & \
+                                (htable.deleted != True) & \
+                                (otable.id == htable.organisation_id) & \
+                                (otable.name != VNRC)
+                        row = db(query).select(htable.id, limitby=(0, 1)).first()
+                        if not row:
+                            vnrc_only = True
+                    opts = dict((k, options[k]) for k in opts if k in options)
+                    if vnrc_only:
+                        # Person is only associated with VNRC => enforce update,
+                        # and limit options to either current value or VN
+                        field.requires = IS_IN_SET(opts, zero=None)
+                    else:
+                        # Person is (also) associated with another org
+                        # => can't enforce update, so just limit options
+                        field.requires = IS_EMPTY_OR(IS_IN_SET(opts))
+
+                # Provinces of Viet Nam
+                ltable = s3db.gis_location
+                ptable = ltable.with_alias("gis_parent_location")
+                dbset = db((ltable.level == "L1") & \
+                           (ptable.name == "Viet Nam"))
+                left = ptable.on(ltable.parent == ptable.id)
+                vn_provinces = IS_EMPTY_OR(IS_ONE_OF(dbset, "gis_location.name",
+                                                     "%(name)s", 
+                                                     left=left,
+                                                     ))
+
+                # Place Of Birth
+                field = dtable.place_of_birth
+                field.readable = field.writable = True
+                field.requires = vn_provinces
+
+                # Home Town
+                field = dtable.hometown
+                field.readable = field.writable = True
+                field.requires = vn_provinces
+
                 # Also hide some other fields
                 from s3 import S3SQLCustomForm
                 crud_form = S3SQLCustomForm("first_name",
@@ -1843,6 +1962,8 @@ def customise_pr_person_controller(**attr):
                                             "gender",
                                             "person_details.marital_status",
                                             "person_details.nationality",
+                                            "person_details.place_of_birth",
+                                            "person_details.hometown",
                                             "person_details.religion_other",
                                             "person_details.mother_name",
                                             "person_details.father_name",

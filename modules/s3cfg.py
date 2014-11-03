@@ -795,6 +795,13 @@ class S3Config(Storage):
         """
         return self.gis.get("clear_layers", False)
 
+    def get_gis_config_screenshot(self):
+        """
+            Should GIS configs save a screenshot when saved?
+            - set the size if True: (width, height)
+        """
+        return self.gis.get("config_screenshot", None)
+
     def get_gis_countries(self):
         """
             Which country codes should be accessible to the location selector?
@@ -1023,8 +1030,11 @@ class S3Config(Storage):
     def get_gis_print(self):
         """
             Should the Map display a Print control?
+
+            NB Requires installation of additional components:
+               http://eden.sahanafoundation.org/wiki/UserGuidelines/Admin/MapPrinting
         """
-        return self.gis.get("print_button", False) # Change to True once ready for prime-time
+        return self.gis.get("print_button", False)
 
     #def get_gis_print_service(self):
     #    """
@@ -2075,6 +2085,32 @@ class S3Config(Storage):
         """
         return self.hrm.get("email_required", True)
 
+    def get_hrm_location_staff(self):
+        """
+            What to use to position Staff on the Map when not Tracking them
+            - valid options are:
+                "site_id" - Use the HR's Site Location
+                "person_id" - Use the HR's Person Location (i.e. Home Address)
+                ("person_id", "site_id") - Use the HR's Person Location if-available, fallback to the Site if-not
+                ("site_id","person_id") - Use the HR's Site Location if-available, fallback to the Person's Home Address if-not
+            NB This is read onaccept of editing Home Addresses & Assigning Staff to Sites so is not a fully-dynamic change
+            - onaccept is used for performance (avoiding joins)
+        """
+        return self.hrm.get("location_staff", "site_id")
+
+    def get_hrm_location_vol(self):
+        """
+            What to use to position Volunteers on the Map when not Tracking them
+            - valid options are:
+                "site_id" - Use the HR's Site Location
+                "person_id" - Use the HR's Person Location (i.e. Home Address)
+                ("person_id", "site_id") - Use the HR's Person Location if-available, fallback to the Site if-not
+                ("site_id","person_id") - Use the HR's Site Location if-available, fallback to the Person's Home Address if-not
+            NB This is read onaccept of editing Home Addresses & Assigning Volunteers to Sites so is not a fully-dynamic change
+            - onaccept is used for performance (avoiding joins)
+        """
+        return self.hrm.get("location_vol", "person_id")
+
     def get_hrm_org_dependent_job_titles(self):
         """
             If set to True then the Job Titles Catalog is Organisation-dependent (i.e. each root org sees a different Catalog)
@@ -2637,6 +2673,12 @@ class S3Config(Storage):
             Show emergency contacts as well as standard contacts in Person Contacts page
         """
         return self.pr.get("show_emergency_contacts", True)
+
+    def get_pr_contacts_tabs(self):
+        """
+            Which tabs to show for contacts: all, public &/or private
+        """
+        return self.pr.get("contacts_tabs", ("all",))
 
     # -------------------------------------------------------------------------
     # Proc

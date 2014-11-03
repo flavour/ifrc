@@ -44,7 +44,7 @@ settings.mail.approver = "ADMIN"
 # Restrict the Location Selector to just certain countries
 # NB This can also be over-ridden for specific contexts later
 # e.g. Activities filtered to those of parent Project
-settings.gis.countries = ("GN", "LR", "SL",)
+settings.gis.countries = ("GN", "LR", "ML", "NG", "SL", "SN")
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
 
@@ -195,15 +195,17 @@ def customise_stats_demographic_data_resource(r, tablename):
                       #                options = lambda: \
                       #                  stats_month_options("stats_demographic_data"),
                       #                ),
-                      # This is critical for the Map, but breaks aggregated Report data
-                      #S3OptionsFilter("location_id$level",
-                      #                label = T("Level"),
-                      #                multiple = False,
-                      #                # Not translateable
-                      #                #represent = "%(name)s",
-                      #                ),
-                      S3LocationFilter("location_id"),
                       ]
+    
+    if r.method != "timeplot":
+        # This is critical for the Map, but breaks aggregated Report data
+        filter_widgets.append(S3OptionsFilter("location_id$level",
+                                              label = T("Level"),
+                                              multiple = False,
+                                              # Not translateable
+                                              #represent = "%(name)s",
+                                              ))
+    filter_widgets.append(S3LocationFilter("location_id"))
 
     # Sum doesn't make sense for data which is already cumulative
     #report_options = s3db.get_config(tablename, "report_options")

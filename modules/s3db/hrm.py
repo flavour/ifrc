@@ -385,18 +385,18 @@ class S3HRModel(S3Model):
                      super_link("site_id", "org_site",
                                 comment = site_comment,
                                 default = default_site,
+                                instance_types = auth.org_site_types,
                                 #empty = False,
                                 label = settings.get_org_site_label(),
-                                instance_types = auth.org_site_types,
+                                ondelete = "SET NULL",
                                 orderby = "org_site.name",
-                                realms = realms,
                                 not_filterby = "obsolete",
                                 not_filter_opts = (True,),
                                 readable = True,
                                 writable = True,
+                                realms = realms,
                                 represent = self.org_site_represent,
                                 widget = site_widget,
-                                ondelete = "SET NULL",
                                 ),
                      self.pr_person_id(
                         comment = None,
@@ -426,7 +426,7 @@ class S3HRModel(S3Model):
                            represent = s3_yes_no_represent,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Essential Staff?"),
-                                                           T("If the person counts as essential staff when evacuating all non-essential staff.")))
+                                                           T("If the person counts as essential staff when evacuating all non-essential staff."))),
                            ),
                      # Contract
                      s3_date("start_date",
@@ -445,7 +445,7 @@ class S3HRModel(S3Model):
                                                 zero=None),
                            ),
                      # Base location + Site
-                     self.gis_location_id(label=T("Base Location"),
+                     self.gis_location_id(label =T("Base Location"),
                                           readable = False,
                                           writable = False,
                                           ),
@@ -604,54 +604,54 @@ class S3HRModel(S3Model):
                                       },
                                      ),
                         # Skills
-                        hrm_certification={"link": "pr_person",
-                                           "joinby": "id",
-                                           "key": "id",
-                                           "fkey": "person_id",
-                                           "pkey": "person_id",
-                                           },
-                        hrm_competency={"link": "pr_person",
-                                        "joinby": "id",
-                                        "key": "id",
-                                        "fkey": "person_id",
-                                        "pkey": "person_id",
-                                        },
-                        hrm_credential={"link": "pr_person",
-                                        "joinby": "id",
-                                        "key": "id",
-                                        "fkey": "person_id",
-                                        "pkey": "person_id",
-                                        },
-                        hrm_experience={"link": "pr_person",
-                                        "joinby": "id",
-                                        "key": "id",
-                                        "fkey": "person_id",
-                                        "pkey": "person_id",
-                                        },
-                        hrm_salary = "human_resource_id",
-                        hrm_insurance = "human_resource_id",
-                        hrm_contract = {"joinby": "human_resource_id",
-                                        "multiple": False,
-                                        },
-                        hrm_training={"link": "pr_person",
-                                      "joinby": "id",
-                                      "key": "id",
-                                      "fkey": "person_id",
-                                      "pkey": "person_id",
-                                      },
-                        # Organisation Groups
-                        org_group_person={"link": "pr_person",
+                        hrm_certification = {"link": "pr_person",
+                                             "joinby": "id",
+                                             "key": "id",
+                                             "fkey": "person_id",
+                                             "pkey": "person_id",
+                                             },
+                        hrm_competency = {"link": "pr_person",
                                           "joinby": "id",
                                           "key": "id",
                                           "fkey": "person_id",
                                           "pkey": "person_id",
                                           },
+                        hrm_credential = {"link": "pr_person",
+                                          "joinby": "id",
+                                          "key": "id",
+                                          "fkey": "person_id",
+                                          "pkey": "person_id",
+                                          },
+                        hrm_experience = {"link": "pr_person",
+                                          "joinby": "id",
+                                          "key": "id",
+                                          "fkey": "person_id",
+                                          "pkey": "person_id",
+                                          },
+                        hrm_salary = "human_resource_id",
+                        hrm_insurance = "human_resource_id",
+                        hrm_contract = {"joinby": "human_resource_id",
+                                        "multiple": False,
+                                        },
+                        hrm_training = {"link": "pr_person",
+                                        "joinby": "id",
+                                        "key": "id",
+                                        "fkey": "person_id",
+                                        "pkey": "person_id",
+                                        },
+                        # Organisation Groups
+                        org_group_person = {"link": "pr_person",
+                                            "joinby": "id",
+                                            "key": "id",
+                                            "fkey": "person_id",
+                                            "pkey": "person_id",
+                                            },
                         # Application for Deployment (RDRT)
-                        deploy_application="human_resource_id",
+                        deploy_application = "human_resource_id",
                         # Availability
-                        #hrm_availability="human_resource_id",
+                        #hrm_availability = "human_resource_id",
                         # Hours
-                        #hrm_hours="human_resource_id",
+                        #hrm_hours = "human_resource_id",
                         )
 
         # Optional Components
@@ -5043,18 +5043,18 @@ def hrm_human_resource_onaccept(form):
 
     if "vars" in form:
         # e.g. coming from staff/create
-        vars = form.vars
+        form_vars = form.vars
     elif "id" in form:
         # e.g. coming from user/create or from hrm_site_onaccept or req_onaccept
-        vars = form
+        form_vars = form
     elif hasattr(form, "vars"):
         # SQLFORM e.g. ?
-        vars = form.vars
+        form_vars = form.vars
     else:
         # e.g. Coming from s3_register callback
-        vars = form
+        form_vars = form
 
-    id = vars.id
+    id = form_vars.id
     if not id:
         return
 
@@ -5126,73 +5126,117 @@ def hrm_human_resource_onaccept(form):
     pr_tracker = tracker(ptable, person_id)
     pr_tracker.check_in(htable, id, timestmp = request.utcnow)
 
-    site_contact = record.site_contact
     if record.type == 1:
         # Staff
-        # Add/update the record in the link table
-        hstable = s3db.hrm_human_resource_site
-        query = (hstable.human_resource_id == id)
-        if site_id:
-            this = db(query).select(hstable.id,
-                                    limitby=(0, 1)).first()
-            if this:
-                db(query).update(site_id=site_id,
-                                 human_resource_id=id,
-                                 site_contact=site_contact)
-            else:
-                hstable.insert(site_id=site_id,
-                               human_resource_id=id,
-                               site_contact=site_contact)
-            # Update the location ID from the selected site
-            stable = db.org_site
-            query = (stable.site_id == site_id)
-            site = db(query).select(stable.location_id,
-                                    limitby=(0, 1)).first()
-            try:
-                data.location_id = location_id = site.location_id
-            except:
-                current.log.warning("Can't find site with site_id", site_id)
-            else:
-                # Set Base Location
-                hrm_tracker = tracker(htable, id)
-                hrm_tracker.set_base_location(location_id)
-        else:
-            db(query).delete()
-            data["location_id"] = None
-            # Unset Base Location
-            hrm_tracker = tracker(htable, id)
-            hrm_tracker.set_base_location(None)
+        vol = False
+        location_lookup = current.deployment_settings.get_hrm_location_staff()
     elif record.type == 2:
-        # Volunteer: synchronise the location ID with the Home Address
-        atable = s3db.pr_address
-        query = (atable.pe_id == ptable.pe_id) & \
-                (ptable.id == person_id) & \
-                (atable.type == 1) & \
-                (atable.deleted == False)
-        address = db(query).select(atable.location_id,
-                                   limitby=(0, 1)).first()
-        if address:
-            # Use Address to update HRM
-            data.location_id = location_id = address.location_id
+        # Volunteer
+        vol = True
+        location_lookup = current.deployment_settings.get_hrm_location_vol()
 
-        elif record.location_id:
-            location_id = record.location_id
-            # Add Address from newly-created HRM
-            query = (ptable.id == person_id)
-            pe = db(query).select(ptable.pe_id,
-                                  limitby=(0, 1)).first()
-            try:
-                record_id = atable.insert(type = 1,
-                                          pe_id = pe.pe_id,
-                                          location_id = location_id)
-            except:
-                current.log.warning("Can't find person with id", person_id)
+    # Determine how the HR is positioned
+    address = None
+    site_contact = record.site_contact
+    update_location_from_site = False
+    hstable = s3db.hrm_human_resource_site
+    query = (hstable.human_resource_id == id)
+    if site_id:
+        # Add/update the record in the link table
+        this = db(query).select(hstable.id,
+                                limitby=(0, 1)).first()
+        if this:
+            db(query).update(site_id=site_id,
+                             human_resource_id=id,
+                             site_contact=site_contact)
         else:
-            location_id = None
-        if location_id:
-            # Set Base Location
-            hrm_tracker = tracker(htable, id)
-            hrm_tracker.set_base_location(location_id)
+            hstable.insert(site_id=site_id,
+                           human_resource_id=id,
+                           site_contact=site_contact)
+        if location_lookup == "site_id" or location_lookup[0] == "site_id":
+            update_location_from_site = True
+        elif location_lookup[0] == "person_id":
+            # Update Location from Site only if the Person has no Home Address
+            atable = s3db.pr_address
+            query = (atable.pe_id == ptable.pe_id) & \
+                    (ptable.id == person_id) & \
+                    (atable.type == 1) & \
+                    (atable.deleted == False)
+            address = db(query).select(atable.location_id,
+                                       limitby=(0, 1)).first()
+            if not address:
+                update_location_from_site = True
+        else:
+            # location_lookup == "person_id"
+            # Set to the Home Address (if-present)
+            atable = s3db.pr_address
+            query = (atable.pe_id == ptable.pe_id) & \
+                    (ptable.id == person_id) & \
+                    (atable.type == 1) & \
+                    (atable.deleted == False)
+            address = db(query).select(atable.location_id,
+                                       limitby=(0, 1)).first()
+    else:
+        # Delete any links in the link table
+        db(query).delete()
+        if "person_id" in location_lookup:
+            # Set to the Home Address (if-present)
+            atable = s3db.pr_address
+            query = (atable.pe_id == ptable.pe_id) & \
+                    (ptable.id == person_id) & \
+                    (atable.type == 1) & \
+                    (atable.deleted == False)
+            address = db(query).select(atable.location_id,
+                                       limitby=(0, 1)).first()
+
+    if update_location_from_site:
+        stable = db.org_site
+        site = db(stable.site_id == site_id).select(stable.location_id,
+                                                    limitby=(0, 1)).first()
+        try:
+            data.location_id = location_id = site.location_id
+        except:
+            current.log.error("Can't find site with site_id", site_id)
+            data.location_id = location_id = None
+
+    elif address:
+        data.location_id = location_id = address.location_id
+
+    elif vol and record.location_id:
+        # Add Address from newly-created HRM
+        query = (ptable.id == person_id)
+        pe = db(query).select(ptable.pe_id,
+                              limitby=(0, 1)).first()
+        try:
+            record_id = atable.insert(type = 1,
+                                      pe_id = pe.pe_id,
+                                      location_id = location_id)
+        except:
+            current.log.error("Can't find person with id", person_id)
+
+    else:
+        data.location_id = location_id = None
+
+    if location_id:
+        # Set Base Location
+        hrm_tracker = tracker(htable, id)
+        hrm_tracker.set_base_location(location_id)
+    else:
+        # Unset Base Location
+        hrm_tracker = tracker(htable, id)
+        hrm_tracker.set_base_location(None)
+
+    # Ensure only one Facility Contact per Facility
+    if site_contact and site_id:
+        # Set all others in this Facility to not be the Site Contact
+        query  = (htable.site_id == site_id) & \
+                 (htable.site_contact == True) & \
+                 (htable.id != id)
+        # Prevent overwriting the person_id field!
+        htable.person_id.update = None
+        db(query).update(site_contact = False)
+
+    if vol:
         request_vars = request.vars
         programme_id = request_vars.get("programme_id", None)
         if programme_id:
@@ -5228,11 +5272,11 @@ def hrm_human_resource_onaccept(form):
     if data:
         record.update_record(**data)
 
-    if user and record.organisation_id:
+    if user and organisation_id:
         profile = dict()
         if not user.organisation_id:
             # Set the Organisation in the Profile, if not already set
-            profile["organisation_id"] = record.organisation_id
+            profile["organisation_id"] = organisation_id
             if not user.site_id:
                 # Set the Site in the Profile, if not already set
                 profile["site_id"] = site_id
@@ -5245,21 +5289,10 @@ def hrm_human_resource_onaccept(form):
                                     limitby=(0, 2))
             if len(rows) == 1:
                 # We can safely update
-                profile["organisation_id"] = record.organisation_id
-                profile["site_id"] = record.site_id
+                profile["organisation_id"] = organisation_id
+                profile["site_id"] = site_id
         if profile:
-            query = (utable.id == user.id)
-            db(query).update(**profile)
-
-    # Ensure only one Facility Contact per Facility
-    if site_contact and site_id:
-        # Set all others in this Facility to not be the Site Contact
-        query  = (htable.site_id == site_id) & \
-                 (htable.site_contact == True) & \
-                 (htable.id != id)
-        # Prevent overwriting the person_id field!
-        htable.person_id.update = None
-        db(query).update(site_contact = False)
+            db(utable.id == user.id).update(**profile)
 
 # =============================================================================
 def hrm_compose():
@@ -5269,18 +5302,18 @@ def hrm_compose():
 
     T = current.T
     s3db = current.s3db
-    vars = current.request.vars
+    req_vars = current.request.vars
 
-    if "human_resource.id" in vars:
+    if "human_resource.id" in req_vars:
         fieldname = "human_resource.id"
-        id = vars.get(fieldname)
+        id = req_vars.get(fieldname)
         table = s3db.pr_person
         htable = s3db.hrm_human_resource
         query = (htable.id == id) & \
                 (htable.person_id == table.id)
         title = T("Send a message to this person")
-    elif "group_id" in vars:
-        id = vars.group_id
+    elif "group_id" in req_vars:
+        id = req_vars.group_id
         fieldname = "group_id"
         table = s3db.pr_group
         query = (table.id == id)
@@ -5298,7 +5331,7 @@ def hrm_compose():
 
     pe_id = pe.pe_id
 
-    if "hrm_id" in vars:
+    if "hrm_id" in req_vars:
         # Get the individual's communications options & preference
         ctable = s3db.pr_contact
         contact = db(ctable.pe_id == pe_id).select(ctable.contact_method,
@@ -5569,7 +5602,7 @@ def hrm_training_organisation(row):
 
 # =============================================================================
 def hrm_rheader(r, tabs=[],
-                profile = False):
+                profile=False):
     """ Resource headers for component views """
 
     if r.representation != "html":
@@ -5604,6 +5637,7 @@ def hrm_rheader(r, tabs=[],
         experience_tab = None
         service_record = ""
         tbl = TABLE(TR(TH(name,
+                          # @ToDo: Move to CSS
                           _style="padding-top:15px")
                        ))
         experience_tab2 = None
@@ -5672,12 +5706,15 @@ def hrm_rheader(r, tabs=[],
                                                                         ).first()
                         if row and row.active:
                             active = TD(DIV(T("Yes"),
+                                            # @ToDo: Move to CSS
                                             _style="color:green"))
                         else:
                             active = TD(DIV(T("No"),
+                                            # @ToDo: Move to CSS
                                             _style="color:red"))
                     else:
                         active = TD(DIV(T("No"),
+                                        # @ToDo: Move to CSS
                                         _style="color:red"))
                     vol_active_tooltip = settings.get_hrm_vol_active_tooltip()
                     if vol_active_tooltip:
@@ -5721,6 +5758,7 @@ def hrm_rheader(r, tabs=[],
                                        _id = "service_record",
                                        _class = "action-btn"
                                       ),
+                                    # @ToDo: Move to CSS
                                     _style="margin-bottom:10px"
                                     )
                 if vol_experience == "both" and not use_cv:
@@ -5795,34 +5833,48 @@ def hrm_rheader(r, tabs=[],
                     id_tab,
                     description_tab,
                     (T("Address"), "address"),
-                    (T("Contacts"), "contacts"),
-                    education_tab,
-                    trainings_tab,
-                    certificates_tab,
-                    skills_tab,
-                    credentials_tab,
-                    experience_tab,
-                    experience_tab2,
-                    teams_tab,
-                    #(T("Assets"), "asset"),
-                   ]
+                    ]
+            contacts_tabs = settings.get_pr_contacts_tabs()
+            if "all" in contacts_tabs:
+                tabs.append((T("Contacts"), "contacts"))
+            if "public" in contacts_tabs:
+                tabs.append((T("Public Contacts"), "public_contacts"))
+            if "private" in contacts_tabs:
+                tabs.append((T("Private Contacts"), "private_contacts"))
+            tabs += [education_tab,
+                     trainings_tab,
+                     certificates_tab,
+                     skills_tab,
+                     credentials_tab,
+                     experience_tab,
+                     experience_tab2,
+                     teams_tab,
+                     #(T("Assets"), "asset"),
+                     ]
         elif current.session.s3.hrm.mode is not None:
             # Configure for personal mode
             tabs = [(T("Person Details"), None),
                     id_tab,
                     description_tab,
                     (T("Address"), "address"),
-                    (T("Contacts"), "contacts"),
-                    trainings_tab,
-                    certificates_tab,
-                    skills_tab,
-                    credentials_tab,
-                    experience_tab,
-                    experience_tab2,
-                    (T("Positions"), "human_resource"),
-                    teams_tab,
-                    (T("Assets"), "asset"),
                     ]
+            contacts_tabs = settings.get_pr_contacts_tabs()
+            if "all" in contacts_tabs:
+                tabs.append((T("Contacts"), "contacts"))
+            if "public" in contacts_tabs:
+                tabs.append((T("Public Contacts"), "public_contacts"))
+            if "private" in contacts_tabs:
+                tabs.append((T("Private Contacts"), "private_contacts"))
+            tabs += [trainings_tab,
+                     certificates_tab,
+                     skills_tab,
+                     credentials_tab,
+                     experience_tab,
+                     experience_tab2,
+                     (T("Positions"), "human_resource"),
+                     teams_tab,
+                     (T("Assets"), "asset"),
+                     ]
         else:
             # Configure for HR manager mode
             if group == "staff":
@@ -5839,19 +5891,26 @@ def hrm_rheader(r, tabs=[],
                     id_tab,
                     description_tab,
                     (T("Address"), "address"),
-                    (T("Contacts"), "contacts"),
-                    salary_tab,
-                    education_tab,
-                    trainings_tab,
-                    certificates_tab,
-                    skills_tab,
-                    credentials_tab,
-                    experience_tab,
-                    experience_tab2,
-                    awards_tab,
-                    teams_tab,
-                    (T("Assets"), "asset"),
                     ]
+            contacts_tabs = settings.get_pr_contacts_tabs()
+            if "all" in contacts_tabs:
+                tabs.append((T("Contacts"), "contacts"))
+            if "public" in contacts_tabs:
+                tabs.append((T("Public Contacts"), "public_contacts"))
+            if "private" in contacts_tabs:
+                tabs.append((T("Private Contacts"), "private_contacts"))
+            tabs += [salary_tab,
+                     education_tab,
+                     trainings_tab,
+                     certificates_tab,
+                     skills_tab,
+                     credentials_tab,
+                     experience_tab,
+                     experience_tab2,
+                     awards_tab,
+                     teams_tab,
+                     (T("Assets"), "asset"),
+                     ]
             # Add role manager tab if a user record exists
             user_id = current.auth.s3_get_user_id(record.id)
             if user_id:
@@ -5870,7 +5929,8 @@ def hrm_rheader(r, tabs=[],
     elif resourcename == "training_event":
         # Tabs
         tabs = [(T("Training Event Details"), None),
-                (T("Participants"), "participant")]
+                (T("Participants"), "participant"),
+                ]
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(TABLE(TR(TH("%s: " % table.course_id.label),
                                table.course_id.represent(record.course_id)),
@@ -5883,7 +5943,8 @@ def hrm_rheader(r, tabs=[],
 
     elif resourcename == "certificate":
         # Tabs
-        tabs = [(T("Certificate Details"), None)]
+        tabs = [(T("Certificate Details"), None),
+                ]
         if current.deployment_settings.get_hrm_use_skills():
             tabs.append((T("Skill Equivalence"), "certificate_skill"))
         rheader_tabs = s3_rheader_tabs(r, tabs)
@@ -5895,7 +5956,8 @@ def hrm_rheader(r, tabs=[],
     elif resourcename == "course":
         # Tabs
         tabs = [(T("Course Details"), None),
-                (T("Course Certificates"), "course_certificate")]
+                (T("Course Certificates"), "course_certificate"),
+                ]
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(TABLE(TR(TH("%s: " % table.name.label),
                                record.name),
@@ -5905,7 +5967,8 @@ def hrm_rheader(r, tabs=[],
     elif resourcename == "programme":
         # Tabs
         tabs = [(T("Program Details"), None),
-                (T("Volunteer Hours"), "person")]
+                (T("Volunteer Hours"), "person"),
+                ]
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(TABLE(TR(TH("%s: " % table.name.label),
                                record.name),
@@ -6720,10 +6783,20 @@ def hrm_person_controller(**attr):
     configure = s3db.configure
     set_method = s3db.set_method
 
-    # Custom Method for Contacts
-    set_method("pr", "person",
-               method = "contacts",
-               action = s3db.pr_contacts)
+    # Custom Method(s) for Contacts
+    contacts_tabs = settings.get_pr_contacts_tabs()
+    if "all" in contacts_tabs:
+        set_method("pr", "person",
+                   method = "contacts",
+                   action = s3db.pr_contacts)
+    if "public" in contacts_tabs:
+        set_method("pr", "person",
+                   method = "public_contacts",
+                   action = s3db.pr_contacts)
+    if "private" in contacts_tabs:
+        set_method("pr", "person",
+                   method = "private_contacts",
+                   action = s3db.pr_contacts)
 
     # Custom Method for CV
     set_method("pr", "person",
@@ -6741,9 +6814,10 @@ def hrm_person_controller(**attr):
         # Edits should always happen via the Asset Log
         # @ToDo: Allow this method too, if we can do so safely
         configure("asset_asset",
-                  insertable = False,
+                  deletable = False,
                   editable = False,
-                  deletable = False)
+                  insertable = False,
+                  )
 
     get_vars = current.request.get_vars
     group = get_vars.get("group", "staff")
@@ -6777,33 +6851,40 @@ def hrm_person_controller(**attr):
             title_update = T("Personal Profile"))
         # People can view their own HR data, but not edit it
         configure("hrm_human_resource",
-                  insertable = False,
+                  deletable = False,
                   editable = False,
-                  deletable = False)
+                  insertable = False,
+                  )
         configure("hrm_certification",
-                  insertable = True,
+                  deletable = True,
                   editable = True,
-                  deletable = True)
-        configure("hrm_credential",
-                  insertable = False,
-                  editable = False,
-                  deletable = False)
-        configure("hrm_competency",
-                  insertable = True,  # Can add unconfirmed
-                  editable = False,
-                  deletable = False)
-        configure("hrm_training",    # Can add but not provide grade
                   insertable = True,
+                  )
+        configure("hrm_credential",
+                  deletable = False,
                   editable = False,
-                  deletable = False)
+                  insertable = False,
+                  )
+        configure("hrm_competency",
+                  deletable = False,
+                  editable = False,
+                  insertable = True,  # Can add unconfirmed
+                  )
+        configure("hrm_training",    # Can add but not provide grade
+                  deletable = False,
+                  editable = False,
+                  insertable = True,
+                  )
         configure("hrm_experience",
-                  insertable = False,
+                  deletable = False,
                   editable = False,
-                  deletable = False)
+                  insertable = False,
+                  )
         configure("pr_group_membership",
-                  insertable = False,
+                  deletable = False,
                   editable = False,
-                  deletable = False)
+                  insertable = False,
+                  )
     else:
         # Configure for HR manager mode
         if settings.get_hrm_staff_label() == T("Contacts"):
@@ -6869,9 +6950,10 @@ def hrm_person_controller(**attr):
         # Plug-in role matrix for Admins/OrgAdmins
         S3PersonRoleManager.set_method(r, entity="pr_person")
 
+        method = r.method
         if r.representation == "s3json":
             current.xml.show_ids = True
-        elif r.interactive and r.method != "import":
+        elif r.interactive and method != "import":
             if not r.component:
                 table = r.table
                 table.pe_label.readable = table.pe_label.writable = False
@@ -6892,7 +6974,8 @@ def hrm_person_controller(**attr):
                 set_org_dependent_field("pr_person_details", "affiliations")
                 set_org_dependent_field("pr_person_details", "company")
             else:
-                if r.component_name == "physical_description":
+                component_name = r.component_name
+                if component_name == "physical_description":
                     # Hide all but those details that we want
                     # Lock all the fields
                     table = r.component.table
@@ -6904,7 +6987,7 @@ def hrm_person_controller(**attr):
                     table.medical_conditions.writable = table.medical_conditions.readable = True
                     table.other_details.writable = table.other_details.readable = True
 
-                elif r.component_name == "appraisal":
+                elif component_name == "appraisal":
                     mission_id = r.get_vars.get("mission_id", None)
                     if mission_id:
                         hatable = r.component.table
@@ -6927,7 +7010,7 @@ def hrm_person_controller(**attr):
                         if assignment:
                             hatable.job_title_id.default = assignment.job_title_id
 
-                elif r.component_name == "asset":
+                elif component_name == "asset":
                     # Edits should always happen via the Asset Log
                     # @ToDo: Allow this method too, if we can do so safely
                     configure("asset_asset",
@@ -6935,13 +7018,13 @@ def hrm_person_controller(**attr):
                               editable = False,
                               deletable = False)
 
-                elif r.component_name == "group_membership":
+                elif component_name == "group_membership":
                     hrm_configure_pr_group_membership()
 
-                elif r.component_name == "salary":
+                elif component_name == "salary":
                     hrm_configure_salary(r)
 
-            if r.method == "record" or r.component_name == "human_resource":
+            if method == "record" or r.component_name == "human_resource":
                 table = s3db.hrm_human_resource
                 table.person_id.writable = table.person_id.readable = False
                 table.site_id.readable = table.site_id.writable = True
@@ -6958,11 +7041,17 @@ def hrm_person_controller(**attr):
                                   s3db.org_site_represent,
                                   filterby="organisation_id",
                                   filter_opts=(session.s3.hrm.org,)))
+            elif method == "private_contacts":
+                # Flag to pass into s3db.pr_contacts()
+                s3.pr_contacts = 1
+            elif method == "public_contacts":
+                # Flag to pass into s3db.pr_contacts()
+                s3.pr_contacts = 2
 
             resource = r.resource
             if mode is not None:
                 resource.build_query(id=auth.s3_logged_in_person())
-            elif r.method not in ("deduplicate", "search_ac"):
+            elif method not in ("deduplicate", "search_ac"):
                 if not r.id and not hr_id:
                     # pre-action redirect => must retain prior errors
                     if response.error:
@@ -7013,16 +7102,16 @@ def hrm_person_controller(**attr):
     else:
         orgname = None
 
-    _attr = dict(csv_template="staff",
-                 csv_stylesheet=("hrm", "person.xsl"),
-                 csv_extra_fields=[dict(label="Type",
-                                        field=s3db.hrm_human_resource.type),
-                                  ],
+    _attr = dict(csv_stylesheet = ("hrm", "person.xsl"),
+                 csv_template = "staff",
+                 csv_extra_fields = [dict(label="Type",
+                                          field=s3db.hrm_human_resource.type),
+                                     ],
                  # Better in the native person controller (but this isn't always accessible):
-                 #deduplicate="",
-                 orgname=orgname,
-                 replace_option=T("Remove existing data before import"),
-                 rheader=hrm_rheader,
+                 #deduplicate = "",
+                 orgname = orgname,
+                 replace_option = T("Remove existing data before import"),
+                 rheader = hrm_rheader,
                  )
     _attr.update(attr)
 

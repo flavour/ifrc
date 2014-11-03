@@ -883,14 +883,21 @@ settings.pr.request_dob = False
 settings.pr.request_gender = False
 # Doesn't yet work (form fails to submit)
 #settings.pr.select_existing = False
-
 settings.pr.show_emergency_contacts = False
+# Only show Private Contacts Tab (Public is done via Basic Details tab)
+settings.pr.contacts_tabs = ("private",)
 
 # -----------------------------------------------------------------------------
 # Persons
 def customise_pr_person_controller(**attr):
+    """
+        Non-logged in users can access pr/person
+        Logged-in users access via hrm/person
+    """
 
+    s3db = current.s3db
     s3 = current.response.s3
+    AUTHENTICATED = current.auth.is_logged_in()
 
     # Custom prep
     standard_prep = s3.prep
@@ -900,8 +907,6 @@ def customise_pr_person_controller(**attr):
             result = standard_prep(r)
         else:
             result = True
-
-        s3db = current.s3db
 
         #if r.method == "validate":
         #    # Can't validate image without the file
@@ -940,6 +945,9 @@ def customise_pr_person_controller(**attr):
                 #image_field.widget = None
 
                 from s3 import S3SQLCustomForm, S3SQLInlineComponent
+                MOBILE = settings.get_ui_label_mobile_phone()
+                EMAIL = T("Email")
+
                 s3_sql_custom_fields = ["first_name",
                                         #"middle_name",
                                         "last_name",
@@ -949,6 +957,30 @@ def customise_pr_person_controller(**attr):
                                             label = "",
                                             multiple = False,
                                             fields = hr_fields,
+                                            ),
+                                        S3SQLInlineComponent(
+                                            "contact",
+                                            name = "email",
+                                            label = EMAIL,
+                                            #multiple = True,
+                                            fields = [("", "value")],
+                                            filterby = [dict(field = "contact_method",
+                                                             options = "EMAIL"),
+                                                        dict(field = "access",
+                                                             options = 2),
+                                                        ]
+                                            ),
+                                        S3SQLInlineComponent(
+                                            "contact",
+                                            name = "phone",
+                                            label = MOBILE,
+                                            #multiple = True,
+                                            fields = [("", "value")],
+                                            filterby = [dict(field = "contact_method",
+                                                             options = "SMS"),
+                                                        dict(field = "access",
+                                                             options = 2),
+                                                        ]
                                             ),
                                         #S3SQLInlineComponent(
                                         #    "image",
@@ -961,6 +993,26 @@ def customise_pr_person_controller(**attr):
                                         #                    )
                                         #    ),
                                         ]
+                if r.method != "update":
+                    other_contact_opts = current.msg.CONTACT_OPTS.keys()
+                    other_contact_opts.remove("EMAIL")
+                    other_contact_opts.remove("SMS")
+
+                    s3_sql_custom_fields.append(S3SQLInlineComponent("contact",
+                                                                     name = "contact",
+                                                                     label = T("Additional Public Contact Info"),
+                                                                     #multiple = True,
+                                                                     fields = [("", "contact_method"),
+                                                                               ("", "value"),
+                                                                               ],
+                                                                     filterby = [dict(field = "access",
+                                                                                      options = 2),
+                                                                                 dict(field = "contact_method",
+                                                                                      options = other_contact_opts),
+                                                                                 ]
+                                                                     ))
+
+                crud_form = S3SQLCustomForm(*s3_sql_custom_fields)
 
                 list_fields = [(current.messages.ORGANISATION, "human_resource.organisation_id"),
                                "first_name",
@@ -970,35 +1022,11 @@ def customise_pr_person_controller(**attr):
                                (T("Office"), "human_resource.site_id"),
                                ]
 
-                # Don't include Email/Phone for unauthenticated users
-                if current.auth.is_logged_in():
-                    MOBILE = settings.get_ui_label_mobile_phone()
-                    EMAIL = T("Email")
+                if AUTHENTICATED:
+                    # @ToDo: Filter these to Public to allow access to ANONYMOUS too
                     list_fields += [(MOBILE, "phone.value"),
                                     (EMAIL, "email.value"),
                                     ]
-                    s3_sql_custom_fields.insert(3,
-                                                S3SQLInlineComponent(
-                                                "contact",
-                                                name = "phone",
-                                                label = MOBILE,
-                                                multiple = False,
-                                                fields = [("", "value")],
-                                                filterby = dict(field = "contact_method",
-                                                                options = "SMS")),
-                                                )
-                    s3_sql_custom_fields.insert(3,
-                                                S3SQLInlineComponent(
-                                                "contact",
-                                                name = "email",
-                                                label = EMAIL,
-                                                multiple = False,
-                                                fields = [("", "value")],
-                                                filterby = dict(field = "contact_method",
-                                                                options = "EMAIL")),
-                                                )
-
-                crud_form = S3SQLCustomForm(*s3_sql_custom_fields)
 
                 s3db.configure(r.tablename,
                                crud_form = crud_form,
@@ -1007,7 +1035,6 @@ def customise_pr_person_controller(**attr):
 
             elif r.component_name == "group_membership":
                 s3db.pr_group_membership.group_head.label = T("Group Chairperson")
-
 
         return result
     s3.prep = custom_prep
@@ -1027,6 +1054,11 @@ def customise_pr_person_controller(**attr):
 
         return output
     s3.postp = custom_postp
+
+    if not AUTHENTICATED:
+        # Remove RHeader Tabs
+        tabs = None
+        attr["rheader"] = lambda r: s3db.pr_rheader(r, tabs=tabs)
 
     return attr
 
@@ -1048,20 +1080,24 @@ def chairperson(row):
         return current.messages["NONE"]
 
     db = current.db
-    mtable = current.s3db.pr_group_membership
+    mtable = db.pr_group_membership
     ptable = db.pr_person
     query = (mtable.group_id == group_id) & \
             (mtable.group_head == True) & \
             (mtable.person_id == ptable.id)
-    chair = db(query).select(ptable.first_name,
-                             ptable.middle_name,
-                             ptable.last_name,
-                             ptable.id,
-                             limitby=(0, 1)).first()
-    if chair:
+    chairs = db(query).select(ptable.first_name,
+                              ptable.middle_name,
+                              ptable.last_name,
+                              ptable.id)
+    if chairs:
         # Only used in list view so HTML is OK
-        return A(s3_fullname(chair),
-                 _href=URL(c="hrm", f="person", args=chair.id))
+        if current.auth.is_logged_in():
+            controller = "hrm"
+        else:
+            controller = "pr"
+        return ",".join([A(s3_fullname(chair),
+                           _href=URL(c=controller, f="person", args=chair.id)).xml()
+                         for chair in chairs])
     else:
         return current.messages["NONE"]
 
@@ -1442,6 +1478,7 @@ def customise_hrm_human_resource_controller(**attr):
                                filter_widgets = filter_widgets,
                                )
 
+                s3db.pr_contact.access.default = 2 # Primary contacts should be Public
                 field = r.table.site_id
                 # Don't assume that user is from same org/site as Contacts they create
                 field.default = None
