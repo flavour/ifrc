@@ -1764,14 +1764,14 @@ class S3OptionsFilter(S3FilterWidget):
             opt_list = [(opt_value, s3_unicode(opt_value))
                         for opt_value in opt_keys if opt_value]
 
-        none = opts["none"]
-
-        try:
-            opt_list.sort(key=lambda item: item[1])
-        except:
-            opt_list.sort(key=lambda item: s3_unicode(item[1]))
+        if opts.get("sort", True):
+            try:
+                opt_list.sort(key=lambda item: item[1])
+            except:
+                opt_list.sort(key=lambda item: s3_unicode(item[1]))
         options = []
         empty = False
+        none = opts["none"]
         for k, v in opt_list:
             if k is None:
                 if none:
@@ -1790,10 +1790,10 @@ class S3OptionsFilter(S3FilterWidget):
                 none = current.messages["NONE"]
             options.append((None, none))
             
-        if not opts.get("multiple"):
+        if not opts.get("multiple") and not self.values:
             # Browsers automatically select the first option in single-selects,
             # but that doesn't filter the data, so the first option must be
-            # empty:
+            # empty if we don't have a default:
             options.insert(0, ("", ""))
 
         # Sort the options
@@ -2384,34 +2384,58 @@ class S3FilterForm(object):
         filter_defaults = s3
         for level in ("filter_defaults", tablename):
             if level not in filter_defaults:
-                return None
+                filter_defaults = None
+                break
             filter_defaults = filter_defaults[level]
 
         # Which filter widgets do we need to apply defaults for?
         filter_widgets = resource.get_config("filter_widgets")
         for filter_widget in filter_widgets:
+
             # Do not apply defaults of hidden widgets because they are
             # not visible to the user:
             if filter_widget.opts.hidden:
                 continue
 
-            defaults = {}
+            has_default = False
+            if "default" in filter_widget.opts:
+                has_default = True
+            elif filter_defaults is None:
+                continue
+
+            defaults = set()
             variable = filter_widget.variable(resource, get_vars)
+            multiple = type(variable) is list
 
             # Do we have a corresponding value in get_vars?
-            if type(variable) is list:
+            if multiple:
                 for k in variable:
                     values = filter_widget._values(get_vars, k)
                     if values:
                         filter_widget.values[k] = values
                     else:
-                        defaults[k] = None
+                        defaults.add(k)
             else:
                 values = filter_widget._values(get_vars, variable)
                 if values:
                     filter_widget.values[variable] = values
                 else:
-                    defaults[variable] = None
+                    defaults.add(variable)
+
+            # Extract widget default
+            if has_default:
+                widget_default = filter_widget.opts["default"]
+                if not isinstance(widget_default, dict):
+                    if multiple:
+                        widget_default = dict((k, widget_default) 
+                                              for k in variable)
+                    else:
+                        widget_default = {variable: widget_default}
+                for k in widget_default:
+                    if k not in filter_widget.values:
+                        defaults.add(k)
+            else:
+                widget_default = {}
 
             default_filters = {}
             for variable in defaults:
@@ -2419,9 +2443,14 @@ class S3FilterForm(object):
                     selector, operator = variable.split("__", 1)
                 else:
                     selector, operator = variable, None
-                if selector not in filter_defaults:
+
+                if filter_defaults and selector in filter_defaults:
+                    applicable_defaults = filter_defaults[selector]
+                elif variable in widget_default:
+                    applicable_defaults = widget_default[variable]
+                else:
                     continue
-                applicable_defaults = filter_defaults[selector]
+
                 if callable(applicable_defaults):
                     applicable_defaults = applicable_defaults(selector,
                                                               tablename=tablename)
@@ -2434,18 +2463,15 @@ class S3FilterForm(object):
                     default = applicable_defaults
                 else:
                     continue
-                if not isinstance(default, (list, type(None))):
+                if default is None:
+                    # Ignore (return [None] to filter for None)
+                    continue
+                elif not isinstance(default, list):
                     default = [default]
                 filter_widget.values[variable] = [str(v) if v is None else v
                                                   for v in default]
                 default_filters[variable] = ",".join(s3_unicode(v)
                                                      for v in default)
-
-            # @todo: make sure the applied default options are available in
-            #        the filter widget - otherwise the user can not deselect
-            #        them! (critical) Maybe enforce this by adding the default
-            #        values to the available options in S3OptionsFilter and
-            #        S3LocationFilter?
 
             # Apply to resource
             queries = S3URLQuery.parse(resource, default_filters)

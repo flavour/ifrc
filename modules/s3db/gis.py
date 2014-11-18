@@ -2204,6 +2204,8 @@ class S3GISConfigModel(S3Model):
                         form_vars.pe_type = 2
                     elif pe_type == "org_office":
                         form_vars.pe_type = 4
+                    elif pe_type == "org_group":
+                        form_vars.pe_type = 8
                     elif pe_type == "org_organisation":
                         if current.deployment_settings.get_org_branches():
                             # Check if we're a branch
@@ -3018,6 +3020,7 @@ class S3FeatureLayerModel(S3Model):
                                 #              _title="%s|%s" % (T("Popup Fields"),
                                 #                                T("Used to build onHover Tooltip & 1st field also used in Cluster Popups to differentiate between records."))),
                                 ),
+                          # NB To use complex attributes, use the full-format, e.g. "~.location_id$gis_feature_type"
                           Field("attr_fields", "list:string",
                                 label = T("Attributes"),
                                 comment = DIV(_class="tooltip",

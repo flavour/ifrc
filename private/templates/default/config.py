@@ -210,7 +210,7 @@ settings.L10n.decimal_separator = "."
 # Restrict the Location Selector to just certain countries
 # NB This can also be over-ridden for specific contexts later
 # e.g. Activities filtered to those of parent Project
-#settings.gis.countries = ["US"]
+#settings.gis.countries = ("US",)
 # Uncomment to pass Addresses imported from CSV to a Geocoder to try and automate Lat/Lon
 #settings.gis.geocode_imported_addresses = "google"
 # Hide the Map-based selection tool in the Location Selector
@@ -366,6 +366,9 @@ settings.gis.geonames_username = "eden_test"
 #settings.ui.iframe_opens_full = True
 # Enable this to change the label for 'Attachments' tabs
 #settings.ui.label_attachments = "Attachments"
+# Uncomment to configure the LocationSelector labels for the Map button with Points
+#settings.label_locationselector_map_point_add = "Find on Map"
+#settings.label_locationselector_map_point_view = "Find on Map"
 # Enable this to change the label for 'Mobile Phone'
 #settings.ui.label_mobile_phone = "Cell Phone"
 # Enable this to change the label for 'Postcode'

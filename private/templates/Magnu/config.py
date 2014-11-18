@@ -14,15 +14,14 @@ T = current.T
 settings = current.deployment_settings
 
 """
-    Template settings
-
-    All settings which are to configure a specific template are located here
-
-    Deployers should ideally not need to edit any other files outside of their template folder
+    Template settings for a hosted environment to allow NGOs to share data
+    Prototype being developed for CAR (Central African Republic)
 """
 
-settings.base.system_name = T("Magnu")
-settings.base.system_name_short = T("Magnu")
+#settings.base.system_name = T("Magnu")
+#settings.base.system_name_short = T("Magnu")
+settings.base.system_name = T("Central African Republic")
+settings.base.system_name_short = T("CAR")
 
 # PrePopulate data
 settings.base.prepopulate = ("Magnu", "default/users")
@@ -235,6 +234,12 @@ settings.modules = OrderedDict([
         # The user-visible functionality of this module isn't normally required. Rather it's main purpose is to be accessed from other modules.
         module_type = None,
     )),
+    ("security", Storage(
+       name_nice = T("Security"),
+       #description = "Security Management System",
+       restricted = True,
+       module_type = 10,
+    )),
     ("supply", Storage(
         name_nice = T("Supply Chain Management"),
         #description = "Used within Inventory Management, Request Management and Asset Management",
@@ -295,12 +300,6 @@ settings.modules = OrderedDict([
         restricted = True,
         module_type = None,
     )),
-    #("security", Storage(
-    #   name_nice = T("Security"),
-    #   #description = "Security Management System",
-    #   restricted = True,
-    #   module_type = 10,
-    #)),
     ("water", Storage(
         name_nice = T("Water"),
         #description = "Flood Gauges show water levels in various parts of the country",

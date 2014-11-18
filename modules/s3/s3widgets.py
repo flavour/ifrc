@@ -2466,12 +2466,12 @@ class S3ImageCropWidget(FormWidget):
         T = current.T
 
         script_dir = "/%s/static/scripts" % current.request.application
-        
+
         s3 = current.response.s3
         debug = s3.debug
         scripts = s3.scripts
         settings = current.deployment_settings
-        
+
         if debug:
             script = "%s/jquery.color.js" % script_dir
             if script not in scripts:
@@ -2489,11 +2489,11 @@ class S3ImageCropWidget(FormWidget):
 
         s3.js_global.append('''
 i18n.invalid_image='%s'
-i18n.supported_image_formats='%s' 
+i18n.supported_image_formats='%s'
 i18n.upload_new_image='%s'
 i18n.upload_image='%s' ''' % (T("Please select a valid image!"),
                               T("Supported formats"),
-                              T("Upload different Image"),  
+                              T("Upload different Image"),
                               T("Upload Image")))
 
         stylesheets = s3.stylesheets
@@ -2526,13 +2526,13 @@ i18n.upload_image='%s' ''' % (T("Please select a valid image!"),
         else:
             # Images are not scaled and are uploaded as it is
             canvas.attributes["_width"] = 0
-        
+
         append(canvas)
-    
+
         btn_class = "imagecrop-btn button"
         if settings.ui.formstyle == "bootstrap":
             btn_class = "imagecrop-btn"
-                
+
         buttons = [ A(T("Enable Crop"),
                       _id="select-crop-btn",
                       _class=btn_class,
@@ -2563,7 +2563,7 @@ i18n.upload_image='%s' ''' % (T("Please select a valid image!"),
                 download_url = download_url()
 
             url = "%s/%s" % (download_url ,value)
-            # Add Image 
+            # Add Image
             crop_data_attr["_value"] = url
             append(FIELDSET(LEGEND(A(T("Upload different Image")),
                                    _id="upload-title"),
@@ -4398,6 +4398,10 @@ class S3LocationSelectorWidget2(FormWidget):
 
         # Lx Dropdowns
         ui_multiselect_widget = settings.get_ui_multiselect_widget()
+        if ui_multiselect_widget == "search":
+            ui_multiselect_search = True
+        else:
+            ui_multiselect_search = False
         Lx_rows = DIV()
         # 1st level is always hidden until populated
         hidden = True
@@ -4405,7 +4409,9 @@ class S3LocationSelectorWidget2(FormWidget):
         for level in levels:
             _id = "%s_%s" % (fieldname, level)
             lattr = {"_id" : _id}
-            if ui_multiselect_widget:
+            if ui_multiselect_search:
+                lattr["_class"] = "multiselect search"
+            elif ui_multiselect_widget:
                 lattr["_class"] = "multiselect"
             label = labels.get(level, level)
             noneSelectedText = T("Select %(location)s") % dict(location = label)
@@ -4622,11 +4628,9 @@ class S3LocationSelectorWidget2(FormWidget):
             global_append(script)
             script = '''i18n.select="%s"''' % T("Select")
             global_append(script)
-            #if ui_multiselect_widget:
-            #    script = '''i18n.allSelectedText="%s"''' % T("All selected")
-            #    global_append(script)
-            #    script = '''i18n.selectedText="%s"''' % T("# selected")
-            #    global_append(script)
+            if ui_multiselect_search:
+                script = '''i18n.search="%s"''' % T("Search")
+                global_append(script)
 
         # If we need to show the map since we have an existing lat/lon/wkt
         # then we need to launch the client-side JS as a callback to the MapJS loader
@@ -4787,11 +4791,24 @@ class S3LocationSelectorWidget2(FormWidget):
             icon_id = "%s_map_icon" % fieldname
             row_id = "%s_map_icon__row" % fieldname
             if use_wkt:
-                label = T("Draw on Map")
+                if wkt is not None:
+                    show_map_add = settings.get_ui_label_locationselector_map_polygon_add()
+                    show_map_view = label = settings.get_ui_label_locationselector_map_polygon_view()
+                else:
+                    show_map_add = label = settings.get_ui_label_locationselector_map_polygon_add()
+                    show_map_view = settings.get_ui_label_locationselector_map_polygon_view()
+            elif lat is not None or lon is not None:
+                show_map_add = settings.get_ui_label_locationselector_map_point_add()
+                show_map_view = label = settings.get_ui_label_locationselector_map_point_view()
             else:
-                label = T("Find on Map")
+                show_map_add = label = settings.get_ui_label_locationselector_map_point_add()
+                show_map_view = settings.get_ui_label_locationselector_map_point_view()
             if not location_selector_loaded:
-                global_append('''i18n.hide_map="%s"''' % T("Hide Map"))
+                global_append('''i18n.show_map_add="%s"
+i18n.show_map_view="%s"
+i18n.hide_map="%s"''' % (show_map_add,
+                         show_map_view,
+                         T("Hide Map")))
             _formstyle = settings.ui.formstyle
             if not _formstyle:
                 # Default: Foundation
@@ -5209,9 +5226,7 @@ class S3HierarchyWidget(FormWidget):
                      **attr)
         widget.add_class("s3-hierarchy-widget")
         if self.columns:
-            widget = DIV(widget,
-                         _class = "small-%s columns" % self.columns,
-                         )
+            widget.add_class("small-%s columns" % self.columns)
 
         s3 = current.response.s3
         scripts = s3.scripts
@@ -5235,7 +5250,7 @@ class S3HierarchyWidget(FormWidget):
             script = "%s/jstree.js" % script_dir
             if script not in scripts:
                 scripts.append(script)
-            script = "%s/S3/s3.jquery.ui.hierarchicalopts.js" % script_dir
+            script = "%s/S3/s3.ui.hierarchicalopts.js" % script_dir
             if script not in scripts:
                 scripts.append(script)
             style = "%s/jstree.css" % theme.get("css", "plugins")
@@ -5878,6 +5893,7 @@ class S3StringWidget(StringWidget):
         else:
             widget = INPUT(**attr)
 
+        cols = self.cols
         if self.prefix:
             # NB These classes target Foundation Themes
             widget = TAG[""](DIV(SPAN(self.prefix,
@@ -5891,9 +5907,9 @@ class S3StringWidget(StringWidget):
                              # Tell the formstyle not to wrap & collapse
                              _class="columns collapse",
                              )
-        else:
+        elif cols:
             widget = DIV(widget,
-                         _class="small-%s columns" % self.cols,
+                         _class="small-%s columns" % cols,
                          )
 
         return widget

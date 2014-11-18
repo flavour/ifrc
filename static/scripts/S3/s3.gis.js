@@ -1862,14 +1862,12 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
     // CoordinateGrid
     var addCoordinateGrid = function(map) {
         var CoordinateGrid = map.s3.options.CoordinateGrid;
-        map.addLayer(new OpenLayers.Layer.cdauth.CoordinateGrid(null, {
-            name: CoordinateGrid.name,
-            shortName: 'grid',
-            visibility: CoordinateGrid.visibility,
-            // This is used to Save State
-            s3_layer_id: CoordinateGrid.id,
-            s3_layer_type: 'coordinate'
-        }));
+        var graticule = new OpenLayers.Control.Graticule({
+            //labelFormat: 'dm',
+            layerName: CoordinateGrid.name,
+            visible: CoordinateGrid.visibility
+        });
+        map.addControl(graticule);
     };
 
     // DraftLayer
@@ -3548,6 +3546,24 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
                 }
                 if (undefined != attributes.url) {
                     contents += "<li><a href='javascript:S3.gis.loadClusterPopup(" + "\"" + map_id + "\", \"" + attributes.url + "\", \"" + popup_id + "\"" + ")'>" + name + "</a></li>";
+                } else if (undefined != layer.s3_url_format) {
+                    // Feature Layer or Feature Resource
+                    // Popup contents are pulled via AJAX
+                    _.templateSettings = {interpolate: /\{(.+?)\}/g};
+                    //var s3_url_format = layer.s3_url_format;
+                    var template = _.template(layer.s3_url_format);
+                    // Ensure we have all keys (we don't transmit empty attr)
+                    /* Only needed once we start getting non-id formats
+                    var defaults = {},
+                        key,
+                        keys = s3_popup_format.split('{');
+                    for (var j = 0; j < keys.length; j++) {
+                        key = keys[j].split('}')[0];
+                        defaults[key] = '';
+                    }
+                    _.defaults(attributes, defaults);*/
+                    popup_url = template(attributes);
+                    contents += "<li><a href='javascript:S3.gis.loadClusterPopup(" + "\"" + map_id + "\", \"" + popup_url + "\", \"" + popup_id + "\"" + ")'>" + name + "</a></li>";
                 } else {
                     // @ToDo: Provide a way to load non-URL based popups
                     contents += '<li>' + name + '</li>';
@@ -3639,13 +3655,13 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
                     popup_url = feature.attributes.url;
                     // Defaulted within addPopup()
                     //contents = i18n.gis_loading + "...<div class='throbber'></div>";
-                } else if (undefined != feature.layer.s3_url_format) {
+                } else if (undefined != layer.s3_url_format) {
                     // Feature Layer or Feature Resource
                     // Popup contents are pulled via AJAX
                     _.templateSettings = {interpolate: /\{(.+?)\}/g};
                     //var attributes = feature.attributes;
-                    //var s3_url_format = feature.layer.s3_url_format;
-                    var template = _.template(feature.layer.s3_url_format);
+                    //var s3_url_format = layer.s3_url_format;
+                    var template = _.template(layer.s3_url_format);
                     // Ensure we have all keys (we don't transmit empty attr)
                     /* Only needed once we start getting non-id formats
                     var defaults = {},
@@ -6202,10 +6218,10 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
 
         // @ToDo: Allow customisation of the Select Style
         if (opacity != 1) {
-            // Simply make opaque onSelect
+            // Simply make ~opaque onSelect
             var selectStyle = {
-                fillOpacity: 1,
-                graphicOpacity: 1
+                fillOpacity: 0.8,
+                graphicOpacity: 0.8
             };
         } else {
             // Change colour onSelect
@@ -6248,7 +6264,7 @@ OpenLayers.ProxyHost = S3.Ap.concat('/gis/proxy?url=');
                 if (undefined != elem.prop) {
                     prop = elem.prop;
                 } else {
-                    // Default (e.g. for Theme/Stats Layers)
+                    // Default (e.g. for Stats/Theme Layers)
                     prop = 'value';
                 }
                 if (undefined != elem.cat) {

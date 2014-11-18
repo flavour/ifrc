@@ -582,6 +582,7 @@ class S3IncidentModel(S3Model):
         #
         tablename = "event_incident"
         self.define_table(tablename,
+                          self.super_link("doc_id", "doc_entity"),
                           # Enable in template if-required
                           self.event_event_id(readable = False,
                                               writable = False,
@@ -678,6 +679,7 @@ class S3IncidentModel(S3Model):
                        list_layout = event_incident_list_layout,
                        # Most recent Incident first
                        orderby = "event_incident.zero_hour desc",
+                       super_entity = "doc_entity",
                        update_onaccept = self.incident_update_onaccept,
                        )
 
@@ -693,12 +695,20 @@ class S3IncidentModel(S3Model):
                                            "autodelete": False,
                                            },
                             event_human_resource = "incident_id",
-                            hrm_human_resource = {"link": "event_human_resource",
-                                                  "joinby": "incident_id",
-                                                  "key": "human_resource_id",
-                                                  "actuate": "hide",
-                                                  "autodelete": False,
-                                                  },
+                            hrm_human_resource = ({"link": "event_human_resource",
+                                                   "joinby": "incident_id",
+                                                   "key": "human_resource_id",
+                                                   "actuate": "hide",
+                                                   "autodelete": False,
+                                                   },
+                                                  {"name": "assign",
+                                                   "link": "event_human_resource",
+                                                   "joinby": "incident_id",
+                                                   "key": "human_resource_id",
+                                                   "actuate": "hide",
+                                                   "autodelete": False,
+                                                   },
+                                                  ),
                             event_organisation = "incident_id",
                             org_organisation = {"link": "event_organisation",
                                                 "joinby": "incident_id",
@@ -955,6 +965,11 @@ class S3IncidentReportModel(S3Model):
                           self.gis_location_id(),
                           self.pr_person_id(label = T("Reported By"),
                                             ),
+                          Field("closed", "boolean",
+                                default = False,
+                                label = T("Closed"),
+                                represent = s3_yes_no_represent,
+                                ),
                           s3_comments(),
                           *s3_meta_fields())
 

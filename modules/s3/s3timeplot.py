@@ -561,7 +561,7 @@ class S3TimePlotForm(S3ReportForm):
             script = "/%s/static/scripts/d3/nv.d3.js" % appname
             if script not in scripts:
                 scripts.append(script)
-            script = "/%s/static/scripts/S3/s3.jquery.ui.timeplot.js" % appname
+            script = "/%s/static/scripts/S3/s3.ui.timeplot.js" % appname
             if script not in scripts:
                 scripts.append(script)
         else:
@@ -793,9 +793,13 @@ class S3TimeSeries(object):
         rfield = rfields.get("event_start")
         if rfield:
             event_start = rfield.selector
+        else:
+            event_start = None
         rfield = rfields.get("event_end")
         if rfield:
             event_end = rfield.selector
+        else:
+            event_end = None
 
         # Rows
         rows = rfields.get("rows")

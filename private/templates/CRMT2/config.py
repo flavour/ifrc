@@ -11,7 +11,7 @@ from gluon import current
 from gluon.html import *
 from gluon.storage import Storage
 
-from s3 import s3_avatar_represent, S3DataListLayout
+from s3 import S3DataListLayout, s3_unicode, S3SQLSubFormLayout
 
 T = current.T
 settings = current.deployment_settings
@@ -32,8 +32,8 @@ settings.base.system_name_short = T("CRMT")
 # -----------------------------------------------------------------------------
 # Default timezone for users
 settings.L10n.utc_offset = "UTC -0800"
-# Uncomment these to use US-style dates in English (localisations can still convert to local format)
-settings.L10n.date_format = T("%m-%d-%Y")
+# Uncomment these to use US-style dates
+settings.L10n.date_format = "%m-%d-%Y"
 # Start week on Sunday
 settings.L10n.firstDOW = 0
 # Number formats (defaults to ISO 31-0)
@@ -121,13 +121,16 @@ settings.ui.hierarchy_theme = dict(css = "../themes/CRMT2",
                                    stripes = False,
                                    )
 # Uncomment to use S3MultiSelectWidget on all dropdowns (currently the Auth Registration page & LocationSelectorWidget2 listen to this)
-settings.ui.multiselect_widget = True
+settings.ui.multiselect_widget = "search"
 settings.ui.use_button_icons = True
 # Uncomment to disable responsive behavior of datatables
 # - Disabled until tested
 settings.ui.datatables_responsive = False
 # Uncomment to modify the label of the Permalink
 settings.ui.label_permalink = "Permalink"
+# Uncomment to configure the LocationSelector labels for the Map button with Points
+settings.label_locationselector_map_point_add = "Find on Map"
+settings.label_locationselector_map_point_view = "Find on Map"
 
 # Set Map to fill the container
 #settings.gis.map_width = 1178
@@ -187,7 +190,7 @@ settings.search.filter_manager = False
 # -----------------------------------------------------------------------------
 # Filter forms - style for Summary pages
 def filter_formstyle(row_id, label, widget, comment, hidden=False):
-    return DIV(label, widget, comment, 
+    return DIV(label, widget, comment,
                _id=row_id,
                _class="large-3 columns")
 
@@ -452,7 +455,7 @@ def customise_pr_person_controller(**attr):
             #represent = S3Represent(lookup="org_site")
             #site_field.represent = represent
             if widgets:
-                from s3 import IS_ONE_OF, S3MultiSelectWidget
+                from s3 import IS_ONE_OF, S3MultiSelectWidget, S3StringWidget
                 from s3layouts import S3AddResourceLink
                 htable.organisation_id.widget = S3MultiSelectWidget(multiple=False)
                 #site_field.widget = S3MultiSelectWidget(multiple=False)
@@ -464,7 +467,6 @@ def customise_pr_person_controller(**attr):
                 #                                       label=T("Add New Place"),
                 #                                       title=T("Place"),
                 #                                       tooltip=T("If you don't see the Place in the list, you can add a new one by clicking link 'Add New Place'."))
-                from s3 import S3StringWidget
                 table = s3db[tablename]
                 table.first_name.widget = S3StringWidget(placeholder=T("Text"))
                 table.last_name.widget = S3StringWidget(placeholder=T("Text"))
@@ -522,6 +524,7 @@ def customise_pr_person_controller(**attr):
                     S3SQLInlineComponent(
                         "human_resource",
                         name = "human_resource",
+                        columns = (4,),
                         label = "",
                         multiple = False,
                         fields = hr_fields,
@@ -540,6 +543,7 @@ def customise_pr_person_controller(**attr):
                     S3SQLInlineComponent(
                         "image",
                         name = "image",
+                        columns = (4,),
                         label = T("Photo"),
                         multiple = False,
                         fields = [("", "image")],
@@ -549,25 +553,34 @@ def customise_pr_person_controller(**attr):
                         ),
                     S3SQLInlineComponent("contact",
                         name = "email",
+                        columns = (4,),
                         label = T("Email"),
                         multiple = False,
-                        fields = [("", "value")],
+                        #fields = [("", "value")],
+                        fields = [("", "value", S3StringWidget(columns=0,
+                                                               placeholder=T("username@domain")))],
                         filterby = dict(field = "contact_method",
                                         options = "EMAIL"),
                         ),
                     S3SQLInlineComponent("contact",
                         name = "phone",
+                        columns = (4,),
                         label = settings.get_ui_label_mobile_phone(),
                         multiple = False,
-                        fields = [("", "value")],
+                        #fields = [("", "value")],
+                        fields = [("", "value", S3StringWidget(columns=0,
+                                                               placeholder=T("+1 800-555-1212")))],
                         filterby = dict(field = "contact_method",
                                         options = "SMS"),
                         ),
                     S3SQLInlineComponent("contact",
                         name = "home",
+                        columns = (4,),
                         label = T("Home Phone"),
                         multiple = False,
-                        fields = [("", "value")],
+                        #fields = [("", "value")],
+                        fields = [("", "value", S3StringWidget(columns=0,
+                                                               placeholder=T("+1 800-555-1212")))],
                         filterby = dict(field = "contact_method",
                                         options = "HOME_PHONE"),
                         ),
@@ -731,25 +744,29 @@ def customise_project_activity_controller(**attr):
                 "name",
                 S3SQLInlineComponent(
                     "activity_activity_type",
-                    label = T("Activity Type"),
+                    columns = (4,),
                     fields = [("", "activity_type_id")],
+                    label = T("Activity Type"),
                     multiple = False,
                 ),
                 S3SQLInlineComponent(
                     "activity_group",
-                    label = T("Coalition"),
+                    columns = (4,),
                     fields = [("", "group_id")],
+                    label = T("Coalition"),
                     multiple = False,
                 ),
                 "location_id",
                 "person_id",
                 S3SQLInlineComponent(
                     "activity_organisation",
+                    columns = (4,),
                     label = T("Participating Organizations"),
                     fields = [("", "organisation_id")],
                 ),
                 S3SQLInlineComponent(
                     "beneficiary",
+                    columns = (4,),
                     label = T("Number of People Reached"),
                     link = False,
                     multiple = False,
@@ -760,12 +777,13 @@ def customise_project_activity_controller(**attr):
                 ),
                 S3SQLInlineComponent(
                     "document",
+                    columns = (4,),
                     name = "file",
                     label = T("Files"),
                     fields = [("", "file"),
                               ],
                     comment =  DIV(_class="tooltip",
-                                   _title="%s|%s" % 
+                                   _title="%s|%s" %
                                           (T("Files"),
                                            T("Upload Photos, Promotional Material, Documents or Reports related to the Activity")
                                            )
@@ -781,7 +799,7 @@ def customise_project_activity_controller(**attr):
                            delete_next = r.url(method="summary", id=0),
                            update_next = r.url(method="summary", id=0),
                            )
-            
+
             if method in ("summary", "report"):
                 from s3 import S3OptionsFilter, S3DateFilter
                 filter_widgets = [S3OptionsFilter("activity_group.group_id",
@@ -926,7 +944,7 @@ def customise_org_organisation_controller(**attr):
     standard_prep = s3.prep
 
     def custom_prep(r):
-        
+
         # Call standard prep
         if callable(standard_prep):
             result = standard_prep(r)
@@ -979,14 +997,14 @@ def customise_org_organisation_controller(**attr):
                            ]
 
             s3db.configure(tablename,
-                           list_fields = list_fields,
                            # Hide Open & Delete dataTable action buttons
                            deletable = False,
                            editable = False,
+                           list_fields = list_fields,
                            )
 
         if (r.interactive or r.representation == "json") and not r.component:
-            
+
             # CRUD Strings / Represent
             s3.crud_strings[tablename].update(
                 label_create = T("Add Organization"),
@@ -1023,7 +1041,7 @@ def customise_org_organisation_controller(**attr):
             if method in ("summary", "report"):
 
                 # Filter form
-                from s3 import S3OptionsFilter, S3TextFilter, S3HierarchyFilter
+                from s3 import S3Represent, S3OptionsFilter, S3TextFilter, S3HierarchyFilter
                 filter_widgets = [S3TextFilter(["name",
                                                 "group_membership.group_id",
                                                 "sector_organisation.sector_id",
@@ -1045,6 +1063,10 @@ def customise_org_organisation_controller(**attr):
                                   S3HierarchyFilter("service_organisation.service_id",
                                                     label = T("Service"),
                                                     header = True,
+                                                    represent = S3Represent(lookup="org_service",
+                                                                            # Disable the Hierarchy here as ugly
+                                                                            #hierarchy = True,
+                                                                            translate = True),
                                                     ),
                                   #S3HierarchyFilter("organisation_organisation_type.organisation_type_id",
                                   #                  label = T("Type of Organization"),
@@ -1084,7 +1106,7 @@ def customise_org_organisation_controller(**attr):
 
             # Custom CRUD Form
             if not current.auth.is_logged_in():
-                
+
                 # Anonymous user creating Org: Keep Simple
                 from s3 import S3SQLCustomForm
                 crud_form = S3SQLCustomForm("name",
@@ -1097,11 +1119,13 @@ def customise_org_organisation_controller(**attr):
 
             elif method in ("read", "create", "update", "summary", "import", "profile"):
 
-                from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget, S3SQLInlineLink
+                from s3 import S3Represent, S3SQLCustomForm, S3SQLInlineComponent, \
+                               S3SQLInlineComponentMultiSelectWidget, S3SQLInlineLink
                 form_fields = ["name",
                                "logo",
                                S3SQLInlineComponent(
                                     "group_membership",
+                                    columns = (3, 3),
                                     label = T("Coalition"),
                                     fields = [("", "group_id"),
                                               ("", "status_id"),
@@ -1124,7 +1148,7 @@ def customise_org_organisation_controller(**attr):
                                #S3SQLInlineComponent(
                                #     "resource",
                                #     label = T("Organization's Resources"),
-                               #     fields = ["parameter_id", 
+                               #     fields = ["parameter_id",
                                #               "value",
                                #               "comments",
                                #               ],
@@ -1134,12 +1158,13 @@ def customise_org_organisation_controller(**attr):
                                S3SQLInlineComponent(
                                     "contact",
                                     name = "twitter",
-                                    label = T("Twitter"),
-                                    multiple = False,
+                                    columns = (10,),
                                     fields = [("", "value")],
                                     filterby = dict(field = "contact_method",
                                                     options = "TWITTER"
-                                                    )
+                                                    ),
+                                    label = T("Twitter"),
+                                    multiple = False,
                                     ),
                                "comments",
                                ]
@@ -1151,6 +1176,11 @@ def customise_org_organisation_controller(**attr):
 
                 # Organisation's Resources
                 #s3db.org_resource.parameter_id.widget = S3MultiSelectWidget(multiple=False)
+
+                # Services show hierarchy in dataTables represent
+                s3db.org_service_organisation.service_id.represent = S3Represent(lookup="org_service",
+                                                                                 hierarchy = True,
+                                                                                 translate = True)
 
                 # Coalition Memberships
                 mtable = s3db.org_group_membership
@@ -1197,7 +1227,7 @@ def customise_org_organisation_controller(**attr):
                                                              show_address=True,
                                                              show_postcode=True,
                                                              )
-                
+
                 # Human resource (currently only in read because S3AddPersonWidget
                 # not working inside inline component => consider HRAutoComplete
                 # with AddResourceLink instead?)
@@ -1276,7 +1306,7 @@ def customise_org_organisation_controller(**attr):
     #                                        )
     #    return output
     #s3.postp = custom_postp
-    
+
     # Remove rheader
     attr["rheader"] = None
 
@@ -1647,19 +1677,48 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
     record_id = record["cms_post.id"]
 
     raw = record._row
-    series = record["cms_post.series_id"]
-    series_id = raw["cms_post.series_id"]
     title = record["cms_post.title"]
     body = record["cms_post.body"]
+    comments = raw["cms_post.comments"] or ""
+    #if comments:
+    #    # Format them, if-formatted
+    #    comments = record["cms_post.comments"]
     author = record["cms_post.created_by"]
-    coalition = record["auth_user.org_group_id"]
+    coalition = raw["auth_user.org_group_id"] or ""
+    if coalition:
+        # Use Represent
+        coalition = record["auth_user.org_group_id"]
     date = record["cms_post.created_on"]
     image = raw["doc_image.file"] or ""
     if image:
-        image = IMG(_src="/%s/default/download/%s" % (current.request.application, image))
+        image = IMG(_src="/%s/default/download/%s" % \
+                        (current.request.application, image))
+    tag_ids = raw["cms_tag_post.tag_id"]
+    if tag_ids:
+        tags = record["cms_tag_post.tag_id"]
+        if isinstance(tag_ids, (tuple, list)):
+            tags = tags.xml().split(", ")
+        else:
+            tag_ids = (tag_ids,)
+            tags = (tags,)
+        _tags = []
+        index = 0
+        for tag_id in tag_ids:
+            _tags.append(A(tags[index],
+                           _href=URL(c="cms", f="post",
+                                     args="datalist",
+                                     vars={"tag_post.tag_id__belongs": tag_id}),
+                           ).xml())
+            index += 1
+        tags = H6(XML(s3_unicode(T("More about %(tags)s") % dict(tags=" | ".join(_tags)))))
+    else:
+        tags = ""
 
     item = TAG.article(H2(A(title,
-                            _href=URL(c="cms", f="page", args=record_id),
+                            _href=URL(c="cms", f="post",
+                                      args=[record_id], #"datalist",
+                                      #vars={"~.id": record_id},
+                                      ),
                             ),
                           ),
                        H6(author,
@@ -1669,26 +1728,29 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
                           date,
                           ),
                        image,
-                       body,
-                       H6(T("More about %(type)s") % \
-        dict(type=A(series,
-                    _href=URL(c="cms", f="post",
-                              args="datalist",
-                              vars={"~.series_id": series_id}),
-                    ),
-             )
-                          ),
+                       P(body),
+                       P(comments),
+                       tags,
                        )
 
-    return item
+    return DIV(item,
+               HR(),
+               )
 
 def customise_cms_post_controller(**attr):
 
     s3 = current.response.s3
 
-    if "datalist" in current.request.args:
-        from s3 import FS
-        s3.filter = (FS("cms_post.series_id") != None)
+    get_vars = current.request.get_vars
+    mod = get_vars.get("module")
+    if not mod:
+        layer = get_vars.get("layer_id")
+        if not layer:
+            from s3 import FS
+            # Hide Posts linked to Modules and Maps
+            s3.filter = (FS("post_module.module") == None) & (FS("post_layer.layer_id") == None)
+            # Only show Blog Posts
+            #s3.filter = (FS("cms_post.series_id$name") == "Blog")
 
     # Custom PreP
     standard_prep = s3.prep
@@ -1700,44 +1762,122 @@ def customise_cms_post_controller(**attr):
                 return False
 
         s3db = current.s3db
-        table = s3db.cms_post
+        tablename = "cms_post"
+        table = s3db[tablename]
 
-        from s3 import S3ImageCropWidget
-        s3db.doc_image.file.widget = S3ImageCropWidget((400, 240))
+        # Look up the Blog series
+        #stable = s3db.cms_series
+        #try:
+        #    blog = current.db(stable.name == "Blog").select(stable.id,
+        #                                                    limitby=(0, 1),
+        #                                                    cache = s3db.cache,
+        #                                                    ).first().series_id
+        #except:
+        #    # Prepop not run - e.g. just testing Theme
+        #    pass
+        #else:
+        #    table.series_id.default = blog
 
-        if r.method == "datalist":
-            # Tweak DataList options
-            s3.dl_no_header = True
-            list_fields = ["series_id",
-                           "title",
-                           "body",
-                           "date",
-                           "created_on",
-                           "created_by",
-                           "created_by$org_group_id",
-                           "image.file",
-                           ]
+        s3.crud_strings[tablename] = Storage(
+            label_create = T("Add Story"),
+            title_display = T("Story Details"),
+            title_list = T("Stories"),
+            title_update = T("Update Story Details"),
+            label_list_button = T("List Stories"),
+            label_delete_button = T("Delete Story"),
+            msg_record_created = T("Story added"),
+            msg_record_modified = T("Story details updated"),
+            msg_record_deleted = T("Story deleted"),
+            msg_list_empty = T("No Stories currently registered"))
 
-            from s3 import S3DateTime, s3_auth_user_represent_name
-            table.created_by.represent = s3_auth_user_represent_name
-            table.created_on.represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+        # Custom Form
+        from gluon import IS_NOT_EMPTY
+        from s3 import S3ImageCropWidget, S3StringWidget, S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink
+        # Not yet working Inline
+        #s3db.doc_image.file.widget = S3ImageCropWidget((400, 240))
+        s3db.doc_image.file.widget = None
+        s3db.doc_image.file.requires = None
+        table.title.requires = IS_NOT_EMPTY()
+        table.body.label = T("Challenges")
+        table.body.widget = S3StringWidget(placeholder=T("In building your community's resilience, what particular challenges did you face? (Up to 200 words)"),
+                                           textarea=True)
+        table.comments.label = T("Lessons")
+        table.comments.widget = S3StringWidget(placeholder=T("What strategies, tactics, or lessons did you learn? (Up to 200 words)"),
+                                               textarea=True)
+        crud_form = S3SQLCustomForm("title",
+                                    S3SQLInlineLink("tag",
+                                                    cols = 4,
+                                                    label = T("Topic(s)"),
+                                                    field = "tag_id",
+                                                    translate = True,
+                                                    ),
+                                    "body",
+                                    "comments",
+                                    S3SQLInlineComponent(
+                                            "image",
+                                            #name = "image",
+                                            columns = (4,),
+                                            fields = [("", "file"),
+                                                      #"comments",
+                                                      ],
+                                            ),
+                                            label = T("Add an Image"),
+                                            multiple = False,
+                                    )
+        s3.cancel = A(T("Cancel"),
+                      _class="button small secondary cancel",
+                      _href=r.url(method="datalist", id=0),
+                      )
 
-            from s3 import S3OptionsFilter
-            filter_widgets = [
-                S3OptionsFilter("series_id",
-                                label = "",
-                                cols = 1,
-                                multiple = False,
-                                )
-                ]
-            s3db.configure("cms_post",
-                           filter_widgets = filter_widgets,
-                           list_fields = list_fields,
-                           list_layout = cms_post_list_layout,
-                           )
+        # Tweak DataList options
+        s3.dl_no_header = True
+        list_fields = ("title",
+                       "body",
+                       "comments",
+                       "date",
+                       "created_on",
+                       "created_by",
+                       "created_by$org_group_id",
+                       "image.file",
+                       "tag_post.tag_id",
+                       )
+
+        settings.L10n.date_format = "%B %d, %Y"
+        from s3 import S3DateTime, s3_auth_user_represent_name
+        table.created_by.represent = s3_auth_user_represent_name
+        table.created_on.represent = lambda dt: S3DateTime.date_represent(dt, utc=True)
+
+        from s3 import S3OptionsFilter
+        filter_widgets = (
+            S3OptionsFilter("tag_post.tag_id",
+                            label = "",
+                            cols = 1,
+                            multiple = False,
+                            ),
+            )
+
+        # Filter Widgets should override any URL filters
+        # (this allows overriding the single-page filter)
+        s3.js_global.append('''S3.search.stripFilters=1''')
+
+        s3db.configure(tablename,
+                       crud_form = crud_form,
+                       delete_next = r.url(method="datalist", id=0),
+                       filter_clear = False,
+                       filter_widgets = filter_widgets,
+                       list_fields = list_fields,
+                       list_layout = cms_post_list_layout,
+                       )
 
         return True
-    s3.prep = custom_prep
+    if mod or layer:
+        # Resource or Map layer
+        pass
+    else:
+        # Story
+        s3.prep = custom_prep
+
+    attr["rheader"] = None
 
     return attr
 
@@ -1826,7 +1966,6 @@ def customise_gis_config_controller(**attr):
         auth = current.auth
         coalition = auth.user.org_group_id
 
-        from s3 import S3OptionsFilter
         if coalition:
             db = current.db
             utable = db.auth_user
@@ -1837,35 +1976,45 @@ def customise_gis_config_controller(**attr):
                     (utable.org_group_id == coalition)
             rows = db(query).select(ltable.pe_id,
                                     distinct = True)
-        else:
-            rows = None
+            if rows:
+                coalition_pe_ids = ",".join([str(row.pe_id) for row in rows] + \
+                                            [str(coalition)])
+            else:
+                coalition_pe_ids = str(coalition)
 
-        if rows:
-            coalition_pe_ids = ",".join([str(row.pe_id) for row in rows])
+
+        from s3 import S3OptionsFilter
+        if coalition:
             filter_widgets = [
                 S3OptionsFilter("pe_id",
                                 label = "",
-                                options = {"*": T("All"),
-                                           coalition_pe_ids: T("My Coalition's Maps"),
-                                           auth.user.pe_id: T("My Maps"),
-                                           },
+                                options = OrderedDict([(auth.user.pe_id, T("Your Maps")),
+                                                       (coalition_pe_ids, T("Your Coalition's Maps")),
+                                                       ("*", T("All Maps")),
+                                                       ]),
                                 cols = 3,
                                 multiple = False,
+                                # Not working
+                                sort = False,
                                 )
                 ]
         else:
             filter_widgets = [
                 S3OptionsFilter("pe_id",
                                 label = "",
-                                options = {"*": T("All"),
-                                           auth.user.pe_id: T("My Maps"),
-                                           },
+                                options = OrderedDict([(auth.user.pe_id, T("Your Maps")),
+                                                       ("*", T("All Maps")),
+                                                       ]),
                                 cols = 2,
                                 multiple = False,
+                                # Not working
+                                sort = False,
                                 )
                 ]
-            
+
         s3db.configure("gis_config",
+                       filter_clear = False,
+                       filter_formstyle = filter_formstyle,
                        filter_widgets = filter_widgets,
                        )
 
@@ -2020,6 +2169,7 @@ def customise_gis_poi_controller(**attr):
                                         "organisation_id",
                                         S3SQLInlineComponent(
                                             "poi_group",
+                                            columns = (4,),
                                             label = T("Coalition"),
                                             fields = [("", "group_id")],
                                             multiple = False,
@@ -2042,6 +2192,245 @@ def customise_gis_poi_controller(**attr):
     return attr
 
 settings.customise_gis_poi_controller = customise_gis_poi_controller
+
+# =============================================================================
+class CRMTSubFormLayout(S3SQLSubFormLayout):
+    """ Custom Layout for S3SQLInlineComponent """
+
+    # -------------------------------------------------------------------------
+    def subform(self,
+                data,
+                item_rows,
+                action_rows,
+                empty=False,
+                readonly=False):
+        """
+            Outer container for the subform
+
+            @param data: the data dict (as returned from extract())
+            @param item_rows: the item rows
+            @param action_rows: the (hidden) action rows
+            @param empty: no data in this component
+            @param readonly: render read-only
+        """
+
+        if empty:
+            subform = current.T("No entries currently available")
+        else:
+            subform = DIV(_class="embeddedComponent")
+            headers = self.headers(data, readonly=readonly)
+            if headers:
+                subform.append(headers)
+            subform.append(DIV(item_rows, _class="inline-items"))
+            if action_rows:
+                subform.append(DIV(action_rows, _class="inline-edit"))
+        return subform
+
+    # -------------------------------------------------------------------------
+    def readonly(self, resource, data):
+        """
+            Render this component read-only (table-style)
+
+            @param resource: the S3Resource
+            @param data: the data dict (as returned from extract())
+        """
+
+        audit = current.audit
+        prefix, name = resource.prefix, resource.name
+
+        xml_decode = current.xml.xml_decode
+
+        items = data["data"]
+        fields = data["fields"]
+
+        item_rows = []
+
+        columns = self.columns
+        for item in items:
+            if "_id" in item:
+                record_id = item["_id"]
+            else:
+                continue
+            audit("read", prefix, name,
+                  record=record_id, representation="html")
+            # Render a read-row
+            row = DIV(_class="read-row row")
+            for i, f in enumerate(fields):
+                # Determine column width
+                if columns and len(columns) > i:
+                    width = columns[i]
+                else:
+                    width = 1
+                column_class = "small-%s columns" % width
+                # Last column?
+                if i == len(fields) - 1:
+                    column_class = "%s end" % column_class
+                # Add the column to the row
+                text = xml_decode(item[f["name"]]["text"])
+                row.append(DIV(XML(xml_decode(text)),
+                               _class=column_class,
+                               ))
+            # Append the row
+            item_rows.append(row)
+
+        return self.subform(data, item_rows, [], empty=False, readonly=True)
+
+    # -------------------------------------------------------------------------
+    def headers(self, data, readonly=False):
+        """
+            Render the header row with field labels
+
+            @param data: the input field data as Python object
+            @param readonly: whether the form is read-only
+            @param attributes: HTML attributes for the header row
+        """
+
+        fields = data["fields"]
+
+        # Don't render a header row if there are no labels
+        render_header = False
+        header_row = DIV(_class="label-row row")
+
+        happend = header_row.append
+        numfields = len(fields)
+        columns = self.columns
+        for i, f in enumerate(fields):
+            label = f["label"]
+            if label:
+                render_header = True
+            # Determine column width
+            if columns and len(columns) > i:
+                width = columns[i]
+            else:
+                width = 1
+            column_class = "small-%s columns" % width
+            # Last column?
+            if i == len(fields) - 1:
+                column_class = "%s end" % column_class
+            label = DIV(LABEL(label), _class=column_class)
+            happend(label)
+
+        if render_header:
+            return DIV(header_row)
+        else:
+            return None
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def actions(subform,
+                formname,
+                index,
+                item = None,
+                readonly=True,
+                editable=True,
+                deletable=True):
+        """
+            Render subform row actions into the row
+
+            @param subform: the subform row
+            @param formname: the form name
+            @param index: the row index
+            @param item: the row data
+            @param readonly: this is a read-row
+            @param editable: this row is editable
+            @param deletable: this row is deletable
+        """
+
+        T = current.T
+        action_id = "%s-%s" % (formname, index)
+
+        # Action button helper
+        def action(title, name, throbber=False):
+            btn = DIV(_id="%s-%s" % (name, action_id),
+                      _class="inline-%s" % name)
+            if throbber:
+                return DIV(btn,
+                        DIV(_class="inline-throbber hide",
+                            _id="throbber-%s" % action_id))
+            else:
+                return DIV(btn)
+
+        # Render the action icons for this row
+        action_col = DIV(_class="inline-actions small-1 columns end")
+        append = action_col.append
+        if readonly:
+            if editable:
+                append(action(T("Edit this entry"), "edt"))
+            if deletable:
+                append(action(T("Remove this entry"), "rmv"))
+        else:
+            if index != "none" or item:
+                append(action(T("Update this entry"), "rdy", throbber=True))
+                append(action(T("Cancel editing"), "cnc"))
+            else:
+                append(action(T("Add this entry"), "add", throbber=True))
+        subform.append(action_col)
+
+    # -------------------------------------------------------------------------
+    def rowstyle(self, form, fields, *args, **kwargs):
+        """
+            Formstyle for subform rows
+        """
+
+        def render_col(col_id, label, widget, comment, width=None, end=False):
+
+            # Render column
+            if comment:
+                col = DIV(DIV(widget, comment), _id=col_id)
+            else:
+                col = DIV(widget, _id=col_id)
+            # Add CSS class for column width
+            if width:
+                column_class = "small-%s columns" % width
+                if end:
+                    column_class = "%s end" % column_class
+                col.add_class(column_class)
+            return col
+
+        if args:
+            col_id = form
+            label = fields
+            widget, comment = args
+            return render_col(col_id, label, widget, comment)
+        else:
+            # Parent is always a row
+            parent = DIV(_class="row")
+            columns = self.columns
+            row_actions = self.row_actions
+            for i, (col_id, label, widget, comment) in enumerate(fields):
+                # Determine column width
+                if columns and len(columns) > i:
+                    width = columns[i]
+                else:
+                    width = 1
+                # Last column?
+                end = not row_actions and i == len(fields) - 1
+                # Render and append column
+                parent.append(render_col(col_id,
+                                         label,
+                                         widget,
+                                         comment,
+                                         width=width,
+                                         end=end,
+                                         ))
+            return parent
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def inject_script():
+        """ Inject custom JS to render new read-rows """
+
+        appname = current.request.application
+        scripts = current.response.s3.scripts
+
+        # @todo: support minified script in non-debug mode
+        script = "/%s/static/themes/CRMT2/js/inlinecomponent.layout.js" % appname
+        if script not in scripts:
+            scripts.append(script)
+        return
+
+# Configure this layout for this template
+settings.ui.inline_component_layout = CRMTSubFormLayout
 
 # =============================================================================
 class OrganisationProfileLayout(S3DataListLayout):
@@ -2070,7 +2459,7 @@ class OrganisationProfileLayout(S3DataListLayout):
         tablename = resource.tablename
         if tablename == "org_facility":
             icon_class = "icon-globe"
-            title = record["org_facility.location_id"] 
+            title = record["org_facility.location_id"]
         else:
             icon_class = "icon"
             title = ""
@@ -2126,7 +2515,7 @@ class OrganisationProfileLayout(S3DataListLayout):
         crud_string = S3Method.crud_string
 
         toolbox = DIV(_class="edit-bar fright")
-        
+
         if update_url and \
            has_permission("update", table,
                           record_id=record_id, c="org", f="facility"):
@@ -2148,7 +2537,7 @@ class OrganisationProfileLayout(S3DataListLayout):
                     _class="dl-item-delete",
                     _title=crud_string(tablename, "label_delete_button"))
             toolbox.append(btn)
-            
+
         return toolbox
 
 # =============================================================================

@@ -393,7 +393,6 @@ def dojs(dogis = False, warnings = True):
 
     if dogis:
         sourceDirectoryOpenLayers = "../gis/openlayers/lib"
-        sourceDirectoryOpenLayersExten = "../gis"
         sourceDirectoryMGRS = "../gis"
         sourceDirectoryGeoExt = "../gis/GeoExt/lib"
         sourceDirectoryGxp = "../gis/gxp"
@@ -449,8 +448,7 @@ def dojs(dogis = False, warnings = True):
             #                                           mergedOpenLayersExten))
 
         # OpenLayers extensions
-        for filename in ["cdauth",
-                         "OWM.OpenLayers",
+        for filename in ["OWM.OpenLayers",
                          ]:
             inputFilename = os.path.join("..", "gis", "%s.js" % filename)
             outputFilename = "%s.min.js" % filename

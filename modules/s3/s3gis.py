@@ -266,7 +266,7 @@ class GIS(object):
         messages.lat_empty = "Invalid: Latitude can't be empty if Longitude specified!"
         messages.unknown_parent = "Invalid: %(parent_id)s is not a known Location"
         self.DEFAULT_SYMBOL = "White Dot"
-        self.hierarchy_level_keys = ["L0", "L1", "L2", "L3", "L4", "L5"]
+        self.hierarchy_level_keys = ("L0", "L1", "L2", "L3", "L4", "L5")
         self.hierarchy_levels = {}
         self.max_allowed_level_num = 4
 
@@ -749,6 +749,7 @@ class GIS(object):
                         shape = wkt_loads(row.wkt)
                         ok = test.intersects(shape)
                         if ok:
+                            print "Level: %s, id: %s" % (row.level, row.id)
                             results[row.level] = row.id
         return results
 
@@ -1345,29 +1346,44 @@ class GIS(object):
 
         # If no id supplied, extend the site config with any personal or OU configs
         if not rows and not row:
-            # Read personalised config, if available.
             auth = current.auth
             if auth.is_logged_in():
+                # Read personalised config, if available.
                 user = auth.user
                 pe_id = user.pe_id
-                # OU configs
-                # List of roles to check (in order)
-                roles = ("Staff", "Volunteer")
-                role_paths = s3db.pr_get_role_paths(pe_id, roles=roles)
-                # Unordered list of PEs
-                pes = ()
-                for role in roles:
-                    if role in role_paths:
-                        # @ToDo: Allow selection of which OU a person's config should inherit from for disambiguation
-                        # - store in s3db.gis_config?
-                        # - needs a method in gis_config_form_setup() to populate the dropdown from the OUs (in this person's Path for this person's,  would have to be a dynamic lookup for Admins)
-                        pes = role_paths[role].nodes()
-                        # Staff don't check Volunteer's OUs
-                        break
-                if current.deployment_settings.get_auth_registration_requests_organisation_group() and \
-                   user.org_group_id:
-                    # Add the user account's Org Group the list
-                    # (Will take lower-priority than Site/Org)
+                # Also look for OU configs
+                pes = []
+                if user.organisation_id:
+                    # Add the user account's Org to the list
+                    # (Will take lower-priority than Personal)
+                    otable = s3db.org_organisation
+                    org = db(otable.id == user.organisation_id).select(otable.pe_id,
+                                                                       limitby=(0, 1)
+                                                                       ).first()
+                    try:
+                        pes.append(org.pe_id)
+                    except:
+                        current.log.warning("Unable to find Org %s" % user.organisation_id)
+                    if current.deployment_settings.get_org_branches():
+                        # Also look for Parent Orgs
+                        ancestors = s3db.pr_get_ancestors(org.pe_id)
+                        pes += ancestors
+
+                if user.site_id:
+                    # Add the user account's Site to the list
+                    # (Will take lower-priority than Org/Personal)
+                    stable = s3db.org_site
+                    site = db(stable.site_id == user.site_id).select(stable.pe_id,
+                                                                     limitby=(0, 1)
+                                                                     ).first()
+                    try:
+                        pes.append(site.pe_id)
+                    except:
+                        current.log.warning("Unable to find Site %s" % user.site_id)
+
+                if user.org_group_id:
+                    # Add the user account's Org Group to the list
+                    # (Will take lower-priority than Site/Org/Personal)
                     ogtable = s3db.org_group
                     ogroup = db(ogtable.id == user.org_group_id).select(ogtable.pe_id,
                                                                         limitby=(0, 1)
@@ -1381,19 +1397,19 @@ class GIS(object):
                 query = (ctable.uuid == "SITE_DEFAULT") | \
                         ((ctable.pe_id == pe_id) & \
                          (ctable.pe_default != False))
-                len_pes = len(pes)
-                if len_pes == 1:
+                if len(pes) == 1:
                     query |= (ctable.pe_id == pes[0])
-                elif len_pes:
+                else:
                     query |= (ctable.pe_id.belongs(pes))
-                # Personal may well not be complete, so Left Join
+                # Personal/OU may well not be complete, so Left Join
                 left = (ptable.on(ptable.id == ctable.projection_id),
                         stable.on((stable.config_id == ctable.id) & \
                                   (stable.layer_id == None)),
                         mtable.on(mtable.id == stable.marker_id),
                         )
                 # Order by pe_type (defined in gis_config)
-                # @ToDo: Do this purely from the hierarchy
+                # @ToDo: Sort orgs from the hierarchy?
+                # (Currently we just have branch > non-branch in pe_type)
                 rows = db(query).select(*fields,
                                         left=left,
                                         orderby=ctable.pe_type)
@@ -7690,10 +7706,6 @@ class LayerCoordinate(Layer):
     def as_dict(self, options=None):
         sublayers = self.sublayers
         if sublayers:
-            if current.response.s3.debug:
-                self.scripts.append("gis/cdauth.js")
-            else:
-                self.scripts.append("gis/cdauth.min.js")
             sublayer = sublayers[0]
             name_safe = re.sub("'", "", sublayer.name)
             ldict = dict(name = name_safe,
@@ -8006,7 +8018,7 @@ class LayerGoogle(Layer):
                 if sublayer.type == "earth":
                     ldict["Earth"] = str(T("Switch to 3D"))
                     #{"modules":[{"name":"earth","version":"1"}]}
-                    script = "http://www.google.com/jsapi?key=" + apikey + "&autoload=%7B%22modules%22%3A%5B%7B%22name%22%3A%22earth%22%2C%22version%22%3A%221%22%7D%5D%7D"
+                    script = "//www.google.com/jsapi?key=" + apikey + "&autoload=%7B%22modules%22%3A%5B%7B%22name%22%3A%22earth%22%2C%22version%22%3A%221%22%7D%5D%7D"
                     if script not in s3_scripts:
                         s3_scripts.append(script)
                     # Dynamic Loading not supported: https://developers.google.com/loader/#Dynamic
@@ -8047,12 +8059,12 @@ class LayerGoogle(Layer):
                 # Need to use v2 API
                 # This should be able to be fixed in OpenLayers now since Google have fixed in v3 API:
                 # http://code.google.com/p/gmaps-api-issues/issues/detail?id=2349#c47
-                script = "http://maps.google.com/maps?file=api&v=2&key=%s" % apikey
+                script = "//maps.google.com/maps?file=api&v=2&key=%s" % apikey
                 if script not in s3_scripts:
                     s3_scripts.append(script)
             else:
                 # v3 API (3.16 is frozen, 3.17 release & 3.18 is nightly)
-                script = "http://maps.google.com/maps/api/js?v=3.17&sensor=false"
+                script = "//maps.google.com/maps/api/js?v=3.17&sensor=false"
                 if script not in s3_scripts:
                     s3_scripts.append(script)
                 if "StreetviewButton" in ldict:
