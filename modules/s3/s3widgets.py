@@ -70,6 +70,7 @@ __all__ = ("S3ACLWidget",
            "S3StringWidget",
            "S3TimeIntervalWidget",
            #"S3UploadWidget",
+           "S3FixedOptionsWidget",
            "CheckboxesWidgetS3",
            "s3_comments_widget",
            "s3_richtext_widget",
@@ -4992,7 +4993,8 @@ class S3MultiSelectWidget(MultipleOptionsWidget):
         if not multiple_opt and header_opt is True:
             # Select All / Unselect All doesn't make sense if multiple == False
             header_opt = False
-        if filter_opt == "auto" or isinstance(filter_opt, (int, long)):
+        if not isinstance(filter_opt, bool) and \
+           (filter_opt == "auto" or isinstance(filter_opt, (int, long))):
             max_options = 10 if filter_opt == "auto" else filter_opt
             if options_len > max_options:
                 filter_opt = True
@@ -5871,7 +5873,16 @@ class S3StringWidget(StringWidget):
                  prefix = None,
                  textarea = False,
                  ):
-        self.cols = columns
+        """
+            Constructor
+
+            @param columns: number of grid columns to span (Foundation-themes)
+            @param placeholder: placeholder text for the input field
+            @param prefix: text for prefix button (Foundation-themes)
+            @param textarea: render as textarea rather than string input
+        """
+
+        self.columns = columns
         self.placeholder = placeholder
         self.prefix = prefix
         self.textarea = textarea
@@ -5882,7 +5893,11 @@ class S3StringWidget(StringWidget):
             _type = "text",
             value = (value != None and str(value)) or "",
             )
-        attr = StringWidget._attributes(field, default, **attributes)
+
+        if self.textarea:
+            attr = TextWidget._attributes(field, default, **attributes)
+        else:
+            attr = StringWidget._attributes(field, default, **attributes)
 
         placeholder = self.placeholder
         if placeholder:
@@ -5893,23 +5908,21 @@ class S3StringWidget(StringWidget):
         else:
             widget = INPUT(**attr)
 
-        cols = self.cols
-        if self.prefix:
-            # NB These classes target Foundation Themes
-            widget = TAG[""](DIV(SPAN(self.prefix,
-                                      _class="prefix",
-                                      ),
-                                 _class="small-1 columns",
-                                 ),
-                             DIV(widget,
-                                 _class="small-%s columns" % (self.cols - 1),
-                                 ),
-                             # Tell the formstyle not to wrap & collapse
-                             _class="columns collapse",
-                             )
-        elif cols:
+        # NB These classes target Foundation Themes
+        prefix = self.prefix
+        if prefix:
+            widget = DIV(DIV(SPAN(prefix, _class="prefix"),
+                             _class="small-1 columns",
+                             ),
+                         DIV(widget,
+                             _class="small-11 columns",
+                             ),
+                         _class="row collapse",
+                        )
+        columns = self.columns
+        if columns:
             widget = DIV(widget,
-                         _class="small-%s columns" % cols,
+                         _class="small-%s columns" % columns,
                          )
 
         return widget
@@ -6034,6 +6047,67 @@ class S3UploadWidget(UploadWidget):
                           A(UploadWidget.GENERIC_DESCRIPTION, _href = url),
                           "]", br, image)
         return inp
+
+# =============================================================================
+class S3FixedOptionsWidget(OptionsWidget):
+    """ Non-introspective options widget """
+
+    def __init__(self, options, translate=False, sort=True, empty=True):
+        """
+            Constructor
+
+            @param options: the options for the widget, either as iterable of
+                            tuples (value, representation) or as dict
+                            {value:representation}, or as iterable of strings
+                            if value is the same as representation
+            @param translate: automatically translate the representation
+            @param sort: alpha-sort options (by representation)
+            @param empty: add an empty-option (to select none of the options)
+        """
+
+        self.options = options
+        self.translate = translate
+        self.sort = sort
+        self.empty = empty
+
+    def __call__(self, field, value, **attributes):
+
+        default = dict(value=value)
+        attr = self._attributes(field, default, **attributes)
+
+        options = self.options
+
+        if isinstance(options, dict):
+            options = options.items()
+
+        opts = []
+        translate = self.translate
+        T = current.T
+        has_none = False
+        for option in options:
+            if isinstance(option, tuple):
+                k, v = option
+            else:
+                k, v = option, option
+            if v is None:
+                v = current.messages["NONE"]
+            elif translate:
+                v = T(v)
+            if k in (None, ""):
+                k = ""
+                has_none = True
+            opts.append((k, v))
+
+        sort = self.sort
+        if callable(sort):
+            opts = sorted(opts, key=sort)
+        elif sort:
+            opts = sorted(opts, key=lambda item: item[1])
+        if self.empty and not has_none:
+            opts.insert(0, ("", current.messages["NONE"]))
+
+        opts = [OPTION(v, _value=k) for (k, v) in opts]
+        return SELECT(*opts, **attr)
 
 # =============================================================================
 class CheckboxesWidgetS3(OptionsWidget):

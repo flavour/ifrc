@@ -1019,7 +1019,6 @@ def customise_org_organisation_controller(**attr):
             table.name.widget = S3StringWidget(placeholder=T("Text"))
             table.phone.widget = S3StringWidget(placeholder=T("+1 800-555-1212"))
             table.website.widget = S3StringWidget(placeholder=T("URL"), prefix="http://")
-            s3db.pr_contact.value.widget = S3StringWidget(placeholder=T("username"), prefix="@")
             table.comments.widget = S3StringWidget(placeholder=T("Comments"), textarea=True)
             if r.method == "update":
                 # Normal Submit buttons
@@ -1125,13 +1124,13 @@ def customise_org_organisation_controller(**attr):
                                "logo",
                                S3SQLInlineComponent(
                                     "group_membership",
-                                    columns = (3, 3),
+                                    columns = (4, 3),
                                     label = T("Coalition"),
                                     fields = [("", "group_id"),
                                               ("", "status_id"),
                                               ],
                                     ),
-                               S3SQLInlineComponentMultiSelectWidget(
+                               S3SQLInlineLink(
                                     "sector",
                                     columns = 4,
                                     label = T("Sectors"),
@@ -1159,7 +1158,11 @@ def customise_org_organisation_controller(**attr):
                                     "contact",
                                     name = "twitter",
                                     columns = (10,),
-                                    fields = [("", "value")],
+                                    fields = [("", "value", 
+                                               S3StringWidget(columns=0,
+                                                              prefix="@",
+                                                              placeholder=T("username"))),
+                                              ],
                                     filterby = dict(field = "contact_method",
                                                     options = "TWITTER"
                                                     ),
@@ -1317,9 +1320,60 @@ settings.customise_org_organisation_controller = customise_org_organisation_cont
 # -----------------------------------------------------------------------------
 # Coalitions (org_group)
 #
+def org_group_dashboard(r, **attr):
+    """
+        Custom Method for a Coalition Dashboard page
+    """
+
+    contacts_widget = dict(label = "Recent Contacts",
+                           #label_create = "Add Contact",
+                           type = "datalist",
+                           tablename = "hrm_human_resource",
+                           context = "org_group",
+                           )
+    org_width = dict(type = "datalist",
+                   tablename = "org_organisation",
+                   context = "org_group",
+                   list_fields = ["name",
+                                  ],
+                   #list_layout = coalition_org_layout,
+                   )
+    activities_widget = dict(label = "Latest Activities",
+                             #label_create = "Add Activity",
+                             type = "datalist",
+                             tablename = "project_activity",
+                             context = "org_group",
+                             list_fields = ["name",
+                                            "location_id",
+                                            ],
+                             #list_layout = coalition_activity_layout,
+                             )
+    from s3 import FS, S3CustomController
+    summary_widget = dict(type = "summary",
+                          context = "org_group",
+                          resources = [("People", "hrm_human_resource"),
+                                       ("Organizations", "org_organisation"),
+                                       ("Activities", "project_activity"),
+                                       ("Points", "gis_poi", FS("gis_location.gis_feature_type") == 1),
+                                       ("Routes", "gis_poi", FS("gis_location.gis_feature_type") == 2),
+                                       ("Areas", "gis_poi", FS("gis_location.gis_feature_type") == 3),
+                                       ],
+                          #layout = coalition_summary_layout,
+                          )
+
+    title = T("%s Coalition") % r.record.name
+
+    S3CustomController()._view("CRMT2", "dashboard.htm")
+    return dict(title=title)
+
 def customise_org_group_controller(**attr):
 
+    s3db = current.s3db
     s3 = current.response.s3
+
+    s3db.set_method("org", "group",
+                    method = "dashboard",
+                    action = org_group_dashboard)
 
     # Custom prep
     standard_prep = s3.prep
@@ -1332,7 +1386,7 @@ def customise_org_group_controller(**attr):
 
         if r.interactive:
             from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2
-            table = current.s3db.org_group
+            table = s3db.org_group
             table.name.label = T("Coalition Name")
             field = table.location_id
             field.label = "" # Gets replaced by widget
@@ -1539,6 +1593,7 @@ def customise_org_facility_controller(**attr):
             crud_form = S3SQLCustomForm("name",
                                         S3SQLInlineLink(
                                             "facility_type",
+                                            columns = 4,
                                             label = T("Type of Place"),
                                             field = "facility_type_id",
                                             widget = "hierarchy",
@@ -1546,6 +1601,7 @@ def customise_org_facility_controller(**attr):
                                         "organisation_id",
                                         S3SQLInlineComponent(
                                             "site_org_group",
+                                            columns = (4,),
                                             label = T("Coalition"),
                                             fields = [("", "group_id")],
                                             multiple = False,
@@ -1566,6 +1622,7 @@ def customise_org_facility_controller(**attr):
                                         "email",
                                         S3SQLInlineComponent(
                                             "document",
+                                            columns = (4,),
                                             name = "file",
                                             label = T("Files"),
                                             fields = [("", "file"),
