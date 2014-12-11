@@ -20,8 +20,8 @@ settings = current.deployment_settings
 
 #settings.base.system_name = T("Magnu")
 #settings.base.system_name_short = T("Magnu")
-settings.base.system_name = T("Central African Republic")
-settings.base.system_name_short = T("CAR")
+settings.base.system_name = T("Sahana")
+settings.base.system_name_short = T("Sahana")
 
 # PrePopulate data
 settings.base.prepopulate = ("Magnu", "default/users")
@@ -49,15 +49,20 @@ settings.mail.approver = "ADMIN"
 settings.gis.countries = ("CF",) # Initially, will change
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
+# Uncomment to Disable the Postcode selector in the LocationSelector
+settings.gis.postcode_selector = False # @ToDo: Vary by country (include in the gis_config!)
+# Uncomment to show the Print control:
+# http://eden.sahanafoundation.org/wiki/UserGuidelines/Admin/MapPrinting
+settings.gis.print_button = True
 
 # L10n settings
 # Languages used in the deployment (used for Language Toolbar & GIS Locations)
 # http://www.loc.gov/standards/iso639-2/php/code_list.php
-#settings.L10n.languages = OrderedDict([
+settings.L10n.languages = OrderedDict([
 #    ("ar", "العربية"),
 #    ("bs", "Bosanski"),
-#    ("en", "English"),
-#    ("fr", "Français"),
+    ("en", "English"),
+    ("fr", "Français"),
 #    ("de", "Deutsch"),
 #    ("el", "ελληνικά"),
 #    ("es", "Español"),
@@ -77,7 +82,7 @@ settings.gis.legend = "float"
 #    ("vi", "Tiếng Việt"),
 #    ("zh-cn", "中文 (简体)"),
 #    ("zh-tw", "中文 (繁體)"),
-#])
+])
 # Default language for Language Toolbar (& GIS Locations in future)
 #settings.L10n.default_language = "en"
 # Uncomment to Hide the language toolbar
@@ -90,6 +95,8 @@ settings.L10n.utc_offset = "UTC +0100"
 #settings.L10n.decimal_separator = "."
 # Thousands separator for numbers (defaults to space)
 #settings.L10n.thousands_separator = ","
+# Uncomment this to Translate Organisation Names/Acronyms
+settings.L10n.translate_org_organisation = True
 
 # Security Policy
 # http://eden.sahanafoundation.org/wiki/S3AAA#System-widePolicy
@@ -145,6 +152,26 @@ settings.gis.poi_create_resources = \
 #    }
 #]
 
+settings.org.groups = "Coalition / Consortium"
+# @ToDo: Once we go global
+# Enable the use of Organisation Branches
+#settings.org.branches = True
+# Show branches as tree rather than as table
+#settings.org.branches_tree_view = True
+
+# Uncomment this to allow multiple site contacts per site (e.g. if needing a separate contact per sector)
+settings.hrm.site_contact_unique = False
+
+# -----------------------------------------------------------------------------
+def customise_org_organisation_resource(r, tablename):
+
+    s3db = current.s3db
+    table = s3db[tablename]
+    list_fields = s3db.get_config(tablename, "list_fields")
+    list_fields.insert(2, (T("French Name"), "name.name_l10n"))
+    list_fields.insert(4, (T("French Acronym"), "name.acronym_l10n"))
+
+settings.customise_org_organisation_resource = customise_org_organisation_resource
 
 # -----------------------------------------------------------------------------
 # Comment/uncomment modules here to disable/enable them

@@ -1185,7 +1185,7 @@ def cms_customise_post_fields():
     field.label = ""
     field.represent = s3db.gis_LocationRepresent(sep=" | ")
     # Required
-    field.requires = IS_LOCATION_SELECTOR2()
+    field.requires = IS_LOCATION()
 
     list_fields = ["series_id",
                    "location_id",
@@ -1205,7 +1205,9 @@ def cms_customise_post_fields():
     if org_group_field:
         lappend(org_group_field)
 
-    lappend("document.file")
+    if settings.get_cms_show_attachments():
+        lappend("document.file")
+
     if settings.get_cms_show_links():
         lappend("document.url")
 

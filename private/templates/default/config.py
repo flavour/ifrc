@@ -83,6 +83,8 @@ settings.base.guided_tour = True
 #settings.auth.registration_requests_site = True
 # Uncomment this to allow Admin to see Organisations in User Admin even if the Registration doesn't request this
 #settings.auth.admin_sees_organisation = True
+# Uncomment to hide the UTC Offset in Registration/Profile
+#settings.auth.show_utc_offset = False
 # Uncomment to set the default role UUIDs assigned to newly-registered users
 # This is a dictionary of lists, where the key is the realm that the list of roles applies to
 # The key 0 implies not realm restricted
@@ -185,6 +187,8 @@ settings.L10n.decimal_separator = "."
 #settings.L10n.translate_gis_location = True
 # Uncomment this for Alternate Location Names
 #settings.L10n.name_alt_gis_location = True
+# Uncomment this to Translate Organisation Names/Acronyms
+#settings.L10n.translate_org_organisation = True
 
 # Finance settings
 #settings.fin.currencies = {
@@ -316,6 +320,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.msg.parser = "mytemplatefolder"
 # Uncomment to turn off enforcement of E.123 international phone number notation
 #settings.msg.require_international_phone_numbers = False
+# Uncomment to make basestation codes unique
+#settings.msg.basestation_code_unique = True
 
 # Use 'soft' deletes
 #settings.security.archive_not_delete = False
@@ -357,6 +363,8 @@ settings.gis.geonames_username = "eden_test"
 # restricted to MapAdmins.
 # Uncomment to disable that LatLons are within boundaries of their parent
 #settings.gis.check_within_parent_boundaries = False
+# Uncomment to Disable the Postcode selector in the LocationSelector
+#settings.gis.postcode_selector = False
 
 # Enable this for a UN-style deployment
 #settings.ui.cluster = True
@@ -422,6 +430,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.cms.richtext = True
 # Uncomment to show Events in Newsfeed
 #settings.cms.show_events = True
+# Uncomment to hide Attachments in Newsfeed
+#settings.cms.show_attachments = False
 # Uncomment to show Links in Newsfeed
 #settings.cms.show_links = True
 # Uncomment to show Tags in Newsfeed
@@ -561,6 +571,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.hrm.location_staff = ("site_id", "person_id")
 # Uncomment to have Volunteers use their Site Address as fallback if they have no Home Address defined
 #settings.hrm.location_vol = ("person_id", "site_id")
+# Uncomment this to allow multiple site contacts per site (e.g. if needing a separate contact per sector)
+#settings.hrm.site_contact_unique = False
 # Uncomment to allow hierarchical categories of Skills, which each need their own set of competency levels.
 #settings.hrm.skill_types = True
 # Uncomment to disable Staff experience
@@ -614,6 +626,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.inv.stock_count = True
 # Use the term 'Order' instead of 'Shipment'
 #settings.inv.shipment_name = "order"
+# Uncomment to validate for Unique Warehouse Codes
+#settings.inv.warehouse_code_unique = True
 # Uncomment to not track pack values
 #settings.inv.track_pack_values = False
 #settings.inv.show_mode_of_transport = True
@@ -748,6 +762,8 @@ settings.gis.geonames_username = "eden_test"
 #settings.project.activities = True
 # Uncomment this to use Activity Types for Activities & Projects
 #settings.project.activity_types = True
+# Uncomment this to filter dates in Activities
+#settings.project.activity_filter_year = True
 # Uncomment this to use Codes for projects
 #settings.project.codes = True
 # Uncomment this to call project locations 'Communities'

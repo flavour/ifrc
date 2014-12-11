@@ -151,12 +151,12 @@
         },
 
         // Layout -------------------------------------------------------------
-        
+
         /**
          * The default layout-dependend functions
          */
         _layout: {
-            
+
             /**
             * Render a read-row (default row layout)
             *
@@ -205,7 +205,7 @@
 
             /**
              * Append a new read-row to the inline component
-             * 
+             *
              * @param {string} formname - the formname
              * @param {jQuery} row - the row to append
              */
@@ -360,13 +360,35 @@
          */
         _collectData: function(data, rowindex) {
 
-            var formname = this.formname;
+            var formname = this.formname,
+                rows = data['data'],
+                row = {},
+                original = null;
+
+            var formRow;
+            if (rowindex == 'none') {
+                formRow = $('#add-row-' + formname);
+            } else {
+                formRow = $('#edit-row-' + formname);
+                var originalIndex = formRow.data('rowindex');
+                if (typeof originalIndex != 'undefined') {
+                    original = rows[originalIndex];
+                }
+            }
+            if (formRow.length) {
+                // Trigger client-side validation:
+                // Widgets in this formRow can bind handlers to the validate-event
+                // which can stop the data collection (and thus prevent both server-side
+                // validation and subform submission) by calling event.preventDefault().
+                var event = new $.Event('validate');
+                formRow.triggerHandler(event);
+                if (event.isDefaultPrevented()) {
+                    return null;
+                }
+            }
 
             // Retain the original record ID
-            var rows = data['data'];
-            var original = rows[rowindex];
-            var row = {};
-            if (typeof original != 'undefined') {
+            if (original !== null) {
                 var record_id = original['_id'];
                 if (typeof record_id != 'undefined') {
                     row['_id'] = record_id;
@@ -682,6 +704,8 @@
                             input.multiselect('refresh');
                         } else if (input.hasClass('groupedopts-widget') && input.groupedopts('instance')) {
                             input.groupedopts('refresh');
+                        } else if (input.hasClass('location-selector') && input.locationselector('instance')) {
+                            input.locationselector('refresh');
                         } else {
                             // Populate text in autocompletes
                             element = '#dummy_sub_' + formname + '_' + formname + '_i_' + fieldname + '_edit_0';
@@ -701,7 +725,7 @@
                     .removeClass('hide');
 
             // Trigger the dropdown change event
-            $('#edit-row-' + formname + ' select').change();
+            $('#edit-row-' + formname + ' select:not(".lx-select")').change();
 
             // Disable the add-row while editing
             this._disableAddRow();
@@ -765,6 +789,10 @@
             // Collect the values from the add-row
             var data = this._deserialize();
             var row_data = this._collectData(data, 'none');
+            if (null === row_data) {
+                // Data collection failed (e.g. client-side validation error)
+                return false;
+            }
 
             // If this is an empty required=true row in a multiple=true with existing rows, then don't validate
             var add_required = $('#add-row-' + formname).hasClass('required'),
@@ -849,6 +877,8 @@
                                 f.multiselect('refresh');
                             } else if (f.hasClass('groupedopts-widget') && f.groupedopts('instance')) {
                                 f.groupedopts('refresh');
+                            } else if (f.hasClass('location-selector') && f.locationselector('instance')) {
+                                f.locationselector('refresh');
                             }
                         }
                         default_value = $('#dummy_sub_' + formname + '_' + formname + '_i_' + field + '_edit_default').val();
@@ -909,6 +939,10 @@
             // Collect the values from the edit-row
             var data = this._deserialize();
             var row_data = this._collectData(data, '0');
+            if (null === row_data) {
+                // Data collection failed (e.g. client-side validation error)
+                return false;
+            }
 
             if (row_data['_delete']) {
 

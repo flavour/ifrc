@@ -1952,14 +1952,6 @@ $.filterOptionsS3({
         # Configuration
         js_global = []
         js_append = js_global.append
-        if request.cookies.has_key("registered"):
-            # If we have already registered on this site from this PC then the login form is default
-            # .password:last
-            js_append('''S3.password_position=2''')
-        else:
-            # If we haven't already registered on this site from this PC then the registration form is default
-            # .password:first
-            js_append('''S3.password_position=1''')
 
         if settings.get_auth_registration_mobile_phone_mandatory():
             js_append('''S3.auth_registration_mobile_phone_mandatory=1''')
@@ -2336,6 +2328,9 @@ $.filterOptionsS3({
 
         # Add to user Person Registry and Email/Mobile to pr_contact
         person_id = self.s3_link_to_person(user, organisation_id)
+
+        if user.org_group_id:
+            self.s3_link_to_org_group(user, person_id)
 
         utable = self.settings.table_user
 
@@ -2723,6 +2718,49 @@ $.filterOptionsS3({
                               organisation_id=organisation_id)
 
         return organisation_id
+
+    # -------------------------------------------------------------------------
+    def s3_link_to_org_group(self, user, person_id):
+        """
+            Link a user account to an organisation group
+
+            @param user: the user account record
+            @param person_id: the person record ID associated with this user
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        org_group_id = user.get("org_group_id")
+        if not org_group_id or not person_id:
+            return None
+
+        # Default status to "Member"
+        stable = s3db.org_group_person_status
+        query = (stable.name.lower() == "member") & \
+                (stable.deleted != True)
+        row = db(query).select(stable.id, limitby=(0, 1)).first()
+        if row:
+            status_id = row.id
+        else:
+            status_id = None
+
+        # Check if link exists
+        ltable = s3db.org_group_person
+        query = (ltable.person_id == person_id) & \
+                (ltable.org_group_id == org_group_id) & \
+                (ltable.deleted != True)
+        row = db(query).select(ltable.id, limitby=(0, 1)).first()
+        if not row:
+            # Make sure person record and org_group record exist
+            ptable = s3db.pr_person
+            gtable = s3db.org_group
+            if ptable[person_id] and gtable[org_group_id]:
+                ltable.insert(person_id=person_id,
+                              org_group_id=org_group_id,
+                              status_id=status_id,
+                              )
+        return org_group_id
 
     # -------------------------------------------------------------------------
     def s3_link_to_human_resource(self,
@@ -7129,7 +7167,7 @@ class S3RoleManager(S3Method):
                 # Pointless attempt
                 r.error(400, T("ADMIN Permissions can not be changed."),
                         next = r.url(method="", id=0))
-            
+
             # Form helpers ----------------------------------------------------
             mandatory = lambda l: DIV(l, XML("&nbsp;"),
                                       SPAN("*", _class="req"))
@@ -7149,7 +7187,7 @@ class S3RoleManager(S3Method):
                                                    vars=dict(_next=r.url())),
                                        _class = "delete-btn") or using_default
             new_acl = SPAN(T("new ACL"), _class="new-acl")
-            
+
             form = FORM()
 
             # Role form -------------------------------------------------------
@@ -7421,8 +7459,8 @@ class S3RoleManager(S3Method):
             else:
                 cancel = URL(c="admin", f="role",
                              vars=request.get_vars)
-            action_row = DIV(INPUT(_type="submit", 
-                                   _value=T("Save"), 
+            action_row = DIV(INPUT(_type="submit",
+                                   _value=T("Save"),
                                    _class="small primary button",
                                    ),
                              A(CANCEL,
@@ -8230,9 +8268,9 @@ class S3EntityRoleManager(S3Method):
     # -------------------------------------------------------------------------
     @classmethod
     def set_method(cls, r, entity=None, record_id=None):
-        """ 
-            Plug-in OrgAdmin Role Managers when appropriate 
-            
+        """
+            Plug-in OrgAdmin Role Managers when appropriate
+
             @param r: the S3Request
             @param entity: override target entity (default: r.tablename)
             @param record_id: specify target record ID (only for OU's)

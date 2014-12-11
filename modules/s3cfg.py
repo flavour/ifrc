@@ -457,25 +457,26 @@ class S3Config(Storage):
         """
         T = current.T
         return self.auth.get("role_modules", OrderedDict([
-            ("staff", "Staff"),
-            ("vol", "Volunteers"),
-            ("member", "Members"),
-            ("inv", "Warehouses"),
-            ("asset", "Assets"),
-            ("project", "Projects"),
-            ("survey", "Assessments"),
-            ("irs", "Incidents")
+            ("staff", T("Staff")),
+            ("vol", T("Volunteers")),
+            ("member", T("Members")),
+            ("inv", T("Warehouses")),
+            ("asset", T("Assets")),
+            ("project", T("Projects")),
+            ("survey", T("Assessments")),
+            ("irs", T("Incidents"))
         ]))
 
     def get_auth_access_levels(self):
         """
             Access levels for the Role Manager UI
         """
+        T = current.T
         return self.auth.get("access_levels", OrderedDict([
-            ("reader", "Reader"),
-            ("data_entry", "Data Entry"),
-            ("editor", "Editor"),
-            ("super", "Super Editor")
+            ("reader", T("Reader")),
+            ("data_entry", T("Data Entry")),
+            ("editor", T("Editor")),
+            ("super", T("Super Editor"))
         ]))
 
     def get_auth_set_presence_on_login(self):
@@ -923,6 +924,14 @@ class S3Config(Storage):
         " Display a Map-based tool to select Locations "
         return self.gis.get("map_selector", True)
 
+    def get_gis_map_selector_height(self):
+        """ Height of the map selector map """
+        return self.gis.get("map_selector_height", 340)
+
+    def get_gis_map_selector_width(self):
+        """ Width of the map selector map """
+        return self.gis.get("map_selector_width", 480)
+
     def get_gis_marker_max_height(self):
         return self.gis.get("marker_max_height", 35)
 
@@ -1260,6 +1269,13 @@ class S3Config(Storage):
             Whether to use Alternate Location names
         """
         return self.L10n.get("name_alt_gis_location", False)
+
+    def get_L10n_translate_org_organisation(self):
+        """
+            Whether to translate Organisation names/acronyms
+        """
+        return self.L10n.get("translate_org_organisation", False)
+
     def get_L10n_pootle_url(self):
         """ URL for Pootle server """
         return self.L10n.get("pootle_url", "http://pootle.sahanafoundation.org/")
@@ -1318,6 +1334,18 @@ class S3Config(Storage):
             return setting
         elif setting in self.FORMSTYLE:
             return self.FORMSTYLE[setting]
+        else:
+            return setting
+
+    def get_ui_report_formstyle(self):
+        """ Get the current report form style """
+
+        setting = self.ui.get("report_formstyle", None)
+        formstyles = self.FORMSTYLE
+        if callable(setting):
+            return setting
+        elif setting in formstyles:
+            return formstyles[setting]
         else:
             return setting
 
@@ -1526,7 +1554,7 @@ class S3Config(Storage):
     def get_ui_multiselect_widget(self):
         """
             Whether all dropdowns should use the S3MultiSelectWidget
-            - currently respected by Auth Registration & S3LocationSelectorWidget2
+            - currently respected by Auth Registration & S3LocationSelector
 
             Options:
                 False (default): No widget
@@ -1674,6 +1702,12 @@ class S3Config(Storage):
             to retry forever.
         """
         return self.msg.get("max_send_retries", 9)
+
+    def get_msg_basestation_code_unique(self):
+        """
+            Validate for Unique Basestations Codes
+        """
+        return self.msg.get("basestation_code_unique", False)
 
     # -------------------------------------------------------------------------
     # Mail settings
@@ -1995,6 +2029,12 @@ class S3Config(Storage):
         """
         return self.cms.get("show_events", False)
 
+    def get_cms_show_attachments(self):
+        """
+            Whether to show Attachments (such as Sources) in News Feed
+        """
+        return self.cms.get("show_attachments", True)
+
     def get_cms_show_links(self):
         """
             Whether to show Links (such as Sources) in News Feed
@@ -2203,6 +2243,13 @@ class S3Config(Storage):
             - needs a separate setting as vol requires hrm, but we may only wish to show Volunteers
         """
         return self.hrm.get("show_staff", True)
+
+    def get_hrm_site_contact_unique(self):
+        """
+            Whether there can be multiple site contacts per site
+            - disable this if needing a separate contact per sector
+        """
+        return self.hrm.get("site_contact_unique", True)
 
     def get_hrm_skill_types(self):
         """
@@ -2454,6 +2501,12 @@ class S3Config(Storage):
 
     def get_inv_recv_shortname(self):
         return self.inv.get("recv_shortname", "GRN")
+
+    def get_inv_warehouse_code_unique(self):
+        """
+            Validate for Unique Warehouse Codes
+        """
+        return self.inv.get("warehouse_code_unique", False)
 
     # -------------------------------------------------------------------------
     # IRS
@@ -2776,6 +2829,12 @@ class S3Config(Storage):
             Use Activity Types in Activities & Projects
         """
         return self.project.get("activity_types", False)
+
+    def get_project_activity_filter_year(self):
+        """
+            Filter according to Year in Activities
+        """
+        return self.project.get("activity_filter_year", False)
 
     def get_project_codes(self):
         """

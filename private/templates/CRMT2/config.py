@@ -11,7 +11,7 @@ from gluon import current
 from gluon.html import *
 from gluon.storage import Storage
 
-from s3 import S3DataListLayout, s3_unicode, S3SQLSubFormLayout
+from s3 import ICON, S3DataListLayout, s3_unicode, S3SQLSubFormLayout
 
 T = current.T
 settings = current.deployment_settings
@@ -65,6 +65,8 @@ settings.auth.registration_requests_site = False
 settings.auth.registration_requests_home_phone = True
 # Uncomment this to request the Mobile Phone when a user registers
 settings.auth.registration_requests_mobile_phone = True
+# Uncomment to hide the UTC Offset in Registration/Profile
+settings.auth.show_utc_offset = False
 
 settings.auth.registration_link_user_to = {"staff": T("Staff")}
 settings.auth.registration_link_user_to_default = "staff"
@@ -89,6 +91,7 @@ settings.auth.person_realm_human_resource_site_then_org = False
 # Theme (folder to use for views/layout.html)
 settings.base.theme = "CRMT2"
 settings.ui.formstyle = "foundation_2col"
+#settings.ui.report_formstyle = "foundation_inline"
 settings.ui.hide_report_options = False
 settings.ui.read_label = "" # replaced with icon
 #settings.ui.update_label = "Update"
@@ -242,7 +245,7 @@ settings.gis.layers_label = "Map Layers"
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
 # Mouse Position: 'normal', 'mgrs' or None
-settings.gis.mouse_position = None
+#settings.gis.mouse_position = None
 # Uncomment to hide the Overview map (doesn't work with Google Maps)
 settings.gis.overview = False
 # Uncomment to hide the permalink control (we have our own saved maps functionality)
@@ -347,30 +350,6 @@ settings.project.sectors = False
 # -----------------------------------------------------------------------------
 # People
 #
-def user_coalition(row):
-    """
-        The Coalition of the user
-        - required since Inline Component uses the link table
-    """
-
-    if hasattr(row, "pr_person_user"):
-        row = row.pr_person_user
-    try:
-        user_id = row.user_id
-    except:
-        # not available
-        return current.messages["NONE"]
-
-    db = current.db
-    table = db.auth_user
-    row = db(table.id == user_id).select(table.org_group_id,
-                                         limitby=(0, 1)
-                                         ).first()
-    if row:
-        return current.s3db.org_group_represent(row.org_group_id)
-    else:
-        return current.messages["NONE"]
-
 def customise_pr_person_controller(**attr):
 
     s3 = current.response.s3
@@ -387,28 +366,26 @@ def customise_pr_person_controller(**attr):
         s3db = current.s3db
         tablename = "pr_person"
 
-        if r.method == "validate":
+        method = r.method
+        if method == "validate":
             # Can't validate image without the file
             image_field = s3db.pr_image.image
             image_field.requires = None
 
         elif r.interactive or r.representation == "aadata":
             # Modify list_fields
-            db = current.db
-            field = db.auth_user.org_group_id
-            field.readable = True
-            field.represent = s3db.org_group_represent
+
             list_fields = [(current.messages.ORGANISATION, "human_resource.organisation_id"),
-                           (T("Coalition"), "user.org_group_id"),
+                           (T("Coalition"), "group_person.org_group_id"),
                            "first_name",
                            #"middle_name",
                            "last_name",
                            #(T("Job Title"), "human_resource.job_title_id"),
                            (T("Place"), "human_resource.site_id"),
                            ]
-            is_logged_in = current.auth.is_logged_in()
+
             # Don't include Email/Phone for unauthenticated users
-            if is_logged_in:
+            if current.auth.is_logged_in():
                 # Custom filtered component for list_fields/CRUD form
                 s3db.add_components("pr_pentity",
                                     pr_contact = ({"name": "home",
@@ -421,6 +398,7 @@ def customise_pr_person_controller(**attr):
                                     (settings.get_ui_label_mobile_phone(), "phone.value"),
                                     (T("Home Phone"), "home.value"),
                                     ))
+
             s3db.configure(tablename,
                            list_fields = list_fields,
                            )
@@ -442,7 +420,8 @@ def customise_pr_person_controller(**attr):
 
             # Custom Form (Read/Create/Update)
             from s3 import S3Represent, S3SQLCustomForm, S3SQLInlineComponent, S3StringWidget
-            if r.method in ("create", "update"):
+
+            if method in ("create", "update") or not method and r.record:
                 # Custom Widgets/Validators
                 widgets = True
             else:
@@ -450,14 +429,18 @@ def customise_pr_person_controller(**attr):
 
             htable = s3db.hrm_human_resource
             htable.organisation_id.widget = None
+
             #site_field = htable.site_id
             #site_field.label = T("Place")
             #represent = S3Represent(lookup="org_site")
             #site_field.represent = represent
+
             if widgets:
                 from s3 import IS_ONE_OF, S3MultiSelectWidget
                 from s3layouts import S3AddResourceLink
+
                 htable.organisation_id.widget = S3MultiSelectWidget(multiple=False)
+
                 #site_field.widget = S3MultiSelectWidget(multiple=False)
                 #site_field.requires = IS_ONE_OF(db, "org_site.site_id",
                 #                                represent,
@@ -467,10 +450,12 @@ def customise_pr_person_controller(**attr):
                 #                                       label=T("Add New Place"),
                 #                                       title=T("Place"),
                 #                                       tooltip=T("If you don't see the Place in the list, you can add a new one by clicking link 'Add New Place'."))
+
                 table = s3db[tablename]
                 table.first_name.widget = S3StringWidget(placeholder=T("Text"))
                 table.last_name.widget = S3StringWidget(placeholder=T("Text"))
-                if r.method == "update":
+
+                if method == "update":
                     # Normal Submit buttons
                     s3.crud.submit_button = T("Save & Close")
                     create_next = r.url(method="summary", id=0)
@@ -512,11 +497,6 @@ def customise_pr_person_controller(**attr):
             #        field.readable = field.writable = False
             #        hr_fields.remove("organisation_id")
 
-            # S3SQLInlineComponent uses the link table, so cannot access org_group_id
-            # => use a readonly virtual field instead
-            from gluon import Field
-            s3db.pr_person_user.org_group_id = Field.Method("org_group_id", user_coalition)
-
             s3_sql_custom_fields = [
                     "first_name",
                     #"middle_name",
@@ -529,17 +509,14 @@ def customise_pr_person_controller(**attr):
                         multiple = False,
                         fields = hr_fields,
                     ),
-                    # Not working currently
-                    #S3SQLInlineComponent(
-                    #    "user",
-                    #    name = "user",
-                    #    label = T("Coalition"),
-                    #    multiple = False,
-                    #    fields = [],
-                    #    # Fields needed to load for Virtual Fields
-                    #    extra_fields = ["user_id"],
-                    #    virtual_fields = [("", "org_group_id")],
-                    #),
+                    S3SQLInlineComponent(
+                        "group_person",
+                        columns = (4, 3),
+                        label = T("Coalition"),
+                        fields = [("", "org_group_id"),
+                                  ("", "status_id"),
+                                  ],
+                    ),
                     S3SQLInlineComponent(
                         "image",
                         name = "image",
@@ -556,7 +533,6 @@ def customise_pr_person_controller(**attr):
                         columns = (4,),
                         label = T("Email"),
                         multiple = False,
-                        #fields = [("", "value")],
                         fields = [("", "value", S3StringWidget(columns=0,
                                                                placeholder=T("username@domain")))],
                         filterby = dict(field = "contact_method",
@@ -567,7 +543,6 @@ def customise_pr_person_controller(**attr):
                         columns = (4,),
                         label = settings.get_ui_label_mobile_phone(),
                         multiple = False,
-                        #fields = [("", "value")],
                         fields = [("", "value", S3StringWidget(columns=0,
                                                                placeholder=T("+1 800-555-1212")))],
                         filterby = dict(field = "contact_method",
@@ -578,7 +553,6 @@ def customise_pr_person_controller(**attr):
                         columns = (4,),
                         label = T("Home Phone"),
                         multiple = False,
-                        #fields = [("", "value")],
                         fields = [("", "value", S3StringWidget(columns=0,
                                                                placeholder=T("+1 800-555-1212")))],
                         filterby = dict(field = "contact_method",
@@ -588,17 +562,33 @@ def customise_pr_person_controller(**attr):
 
             crud_form = S3SQLCustomForm(*s3_sql_custom_fields)
 
+            if not r.record:
+                # Hide Open & Delete dataTable action buttons
+                deletable = editable = False
+
+                # Add filter widget for Coalition
+                from s3 import S3OptionsFilter
+                resource = r.resource
+                filter_widgets = resource.get_config("filter_widgets")
+                if not filter_widgets:
+                    filter_widgets = []
+                filter_widgets.append(
+                    S3OptionsFilter("group_person.org_group_id"))
+                resource.configure(filter_widgets=filter_widgets)
+            else:
+                # ...but allow edit/delete from single-record views
+                deletable = editable = True
+
             s3db.configure(tablename,
                            create_next = create_next,
                            create_next_close = create_next_close,
                            crud_form = crud_form,
                            delete_next = r.url(method="summary", id=0),
-                           # Hide Open & Delete dataTable action buttons
-                           deletable = False,
-                           editable = False,
+                           deletable = deletable,
+                           editable = editable,
                            icon = "person", # Used for Create Icon in Summary View
                            # Don't include a Create form in 'More' popups
-                           #listadd = False if r.method=="datalist" else True,
+                           #listadd = False if method=="datalist" else True,
                            update_next = r.url(method="summary", id=0),
                            )
 
@@ -850,7 +840,7 @@ def customise_project_activity_controller(**attr):
 
             if method in ("create", "update"):
                 # Custom Widgets/Validators
-                from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2, S3MultiSelectWidget
+                from s3 import IS_LOCATION, S3LocationSelector, S3MultiSelectWidget
 
                 s3db.project_activity_activity_type.activity_type_id.widget = S3MultiSelectWidget(multiple=False)
                 field = s3db.project_activity_group.group_id
@@ -861,13 +851,13 @@ def customise_project_activity_controller(**attr):
                 field = table.location_id
                 field.label = "" # Gets replaced by widget
                 levels = ("L3",)
-                field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-                field.widget = S3LocationSelectorWidget2(levels=levels,
-                                                         hide_lx=False,
-                                                         reverse_lx=True,
-                                                         show_address=True,
-                                                         show_postcode=True,
-                                                         )
+                field.requires = IS_LOCATION()
+                field.widget = S3LocationSelector(levels=levels,
+                                                  hide_lx=False,
+                                                  reverse_lx=True,
+                                                  show_address=True,
+                                                  show_postcode=True,
+                                                  )
 
         return True
     s3.prep = custom_prep
@@ -989,7 +979,7 @@ def customise_org_organisation_controller(**attr):
             list_fields = ["id",
                            "name",
                            (T("Coalition"), "group_membership.group_id"),
-                           (T("Location(s)"), "facility.location_id"),
+                           (T("Organization's Addresses"), "facility.location_id"),
                            #"facility.location_id$addr_postcode",
                            (T("Sectors"), "sector_organisation.sector_id"),
                            (T("Services"), "service_organisation.service_id"),
@@ -1162,7 +1152,7 @@ def customise_org_organisation_controller(**attr):
                                     "contact",
                                     name = "twitter",
                                     columns = (10,),
-                                    fields = [("", "value", 
+                                    fields = [("", "value",
                                                S3StringWidget(columns=0,
                                                               prefix="@",
                                                               placeholder=T("username"))),
@@ -1213,10 +1203,10 @@ def customise_org_organisation_controller(**attr):
                     form_fields.insert(-1,
                                        # Not fully ready yet
                                        S3SQLInlineComponent("facility",
-                                                #label = T("Address"),
-                                                label = T("Location(s)"),
+                                                label = T("Organization's Addresses"),
                                                 fields = [("", "location_id"),
                                                         ],
+                                                columns = (10,),
                                                 # @ToDo: Fix
                                                 multiple = False,
                                        ))
@@ -1226,15 +1216,15 @@ def customise_org_organisation_controller(**attr):
                     field = ftable.location_id
                     field.label = T("Address")
                     field.represent = s3db.gis_LocationRepresent(address_only=True)
-                    from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2
+                    from s3 import IS_LOCATION, S3LocationSelector
                     levels = ("L3",)
-                    field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-                    field.widget = S3LocationSelectorWidget2(levels=levels,
-                                                             hide_lx=False,
-                                                             reverse_lx=True,
-                                                             show_address=True,
-                                                             show_postcode=True,
-                                                             )
+                    field.requires = IS_LOCATION()
+                    field.widget = S3LocationSelector(levels=levels,
+                                                      hide_lx=False,
+                                                      reverse_lx=True,
+                                                      show_address=True,
+                                                      show_postcode=True,
+                                                      )
 
                 # Human resource (currently only in read because S3AddPersonWidget
                 # not working inside inline component => consider HRAutoComplete
@@ -1347,7 +1337,9 @@ def org_group_dashboard(r, **attr):
     auth = current.auth
     ctable = s3db.gis_config
     query = (ctable.pe_id.belongs((org_group_id, auth.s3_user_pe_id(auth.user.id)))) & \
-            (ctable.deleted == False)
+            (ctable.deleted == False) & \
+            (ctable.temp == False) & \
+            (ctable.image != None)
     rows = db(query).select(ctable.id,
                             ctable.name,
                             ctable.image,
@@ -1381,14 +1373,16 @@ $(document).ready(function(){
 
     htable = s3db.hrm_human_resource
     otable = s3db.org_organisation
-    query &= (htable.person_id == ptable.id) & \
-             (htable.organisation_id == otable.id)
+    left = [htable.on(htable.person_id == ptable.id),
+            otable.on(htable.organisation_id == otable.id),
+            ]
     rows = db(query).select(ptable.id,
                             ptable.first_name,
                             ptable.middle_name,
                             ptable.last_name,
                             ptable.created_on,
                             otable.name,
+                            left = left,
                             limitby = (0, 5),
                             orderby = ~ptable.created_on
                             )
@@ -1400,11 +1394,12 @@ $(document).ready(function(){
                                        org = row["org_organisation.name"],
                                        ))
     output["recent_contacts"] = recent_contacts
-    
+
     # Latest Activities
     atable = s3db.project_activity
     ltable = s3db.project_activity_group
     query = (atable.deleted == False) & \
+            (ltable.activity_id == atable.id) & \
             (ltable.group_id == org_group_id)
     output["total_activities"] = db(query).count()
 
@@ -1488,17 +1483,17 @@ def customise_org_group_controller(**attr):
                 return False
 
         if r.interactive:
-            from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2
+            from s3 import IS_LOCATION, S3LocationSelector
             table = s3db.org_group
             table.name.label = T("Coalition Name")
             field = table.location_id
             field.label = "" # Gets replaced by widget
             levels = ("L2",)
-            field.requires = IS_LOCATION_SELECTOR2(levels = levels)
-            field.widget = S3LocationSelectorWidget2(levels = levels,
-                                                     points = False,
-                                                     polygons = True,
-                                                     )
+            field.requires = IS_LOCATION()
+            field.widget = S3LocationSelector(levels = levels,
+                                              points = False,
+                                              polygons = True,
+                                              )
 
         return True
     s3.prep = custom_prep
@@ -1673,7 +1668,7 @@ def customise_org_facility_controller(**attr):
             from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink
             if method in ("create", "update", "summary", "import"):
                 # Custom Widgets/Validators
-                from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2, S3MultiSelectWidget
+                from s3 import IS_LOCATION, S3LocationSelector, S3MultiSelectWidget
 
                 # Allow free-text in Phone
                 table.phone1.requires = None
@@ -1681,13 +1676,13 @@ def customise_org_facility_controller(**attr):
                 field = table.location_id
                 field.label = "" # Gets replaced by widget
                 levels = ("L3",)
-                field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-                field.widget = S3LocationSelectorWidget2(levels=levels,
-                                                         hide_lx=False,
-                                                         reverse_lx=True,
-                                                         show_address=True,
-                                                         show_postcode=True,
-                                                         )
+                field.requires = IS_LOCATION()
+                field.widget = S3LocationSelector(levels=levels,
+                                                  hide_lx=False,
+                                                  reverse_lx=True,
+                                                  show_address=True,
+                                                  show_postcode=True,
+                                                  )
 
                 table.organisation_id.widget = S3MultiSelectWidget(multiple=False)
                 s3db.org_site_org_group.group_id.widget = S3MultiSelectWidget(multiple=False)
@@ -2200,11 +2195,46 @@ def customise_gis_poi_controller(**attr):
             if not result:
                 return False
 
+        resource = r.resource
+        if r.interactive or r.representation == "aadata":
+
+            from s3 import S3TextFilter, S3OptionsFilter
+            filter_widgets = [S3TextFilter(("name", "comments"),
+                                           label = T("Search"),
+                                           ),
+                              S3OptionsFilter("poi_type_id",
+                                              ),
+                              S3OptionsFilter("poi_group.group_id",
+                                              ),
+                              S3OptionsFilter("organisation_id",
+                                              ),
+                              S3OptionsFilter("location_id$L3",
+                                              ),
+                              ]
+
+            list_fields = ["name",
+                           "poi_type_id",
+                           "comments",
+                           "poi_group.group_id",
+                           "organisation_id",
+                           "person_id",
+                           ]
+
+            resource.configure(list_fields = list_fields,
+                               filter_widgets = filter_widgets,
+                               )
+            if r.method == "summary":
+                # Hide Open & Delete dataTable action buttons
+                resource.configure(deletable = False,
+                                   editable = False,
+                                   )
+
         if r.interactive:
             s3db = current.s3db
             tablename = "gis_poi"
             table = s3db.gis_poi
 
+            table.location_id.represent = s3db.gis_LocationRepresent(address_only=True)
             if r.record:
                 gtable = s3db.gis_location
                 row = current.db(gtable.id == r.record.location_id).select(gtable.gis_feature_type,
@@ -2229,6 +2259,7 @@ def customise_gis_poi_controller(**attr):
                 points = True
                 lines = False
                 polygons = False
+                table.name.label = T("Point Name")
                 s3.crud_strings[tablename] = Storage(
                     label_create = T("Add Point"),
                     title_display = T("Point Details"),
@@ -2247,6 +2278,7 @@ def customise_gis_poi_controller(**attr):
                 points = False
                 lines = True
                 polygons = False
+                table.name.label = T("Route Name")
                 s3.crud_strings[tablename] = Storage(
                     label_create = T("Add Route"),
                     title_display = T("Route Details"),
@@ -2265,6 +2297,7 @@ def customise_gis_poi_controller(**attr):
                 points = False
                 lines = False
                 polygons = True
+                table.name.label = T("Area Name")
                 s3.crud_strings[tablename] = Storage(
                     label_create = T("Add Area"),
                     title_display = T("Area Details"),
@@ -2277,8 +2310,8 @@ def customise_gis_poi_controller(**attr):
                     msg_record_deleted = T("Area deleted"),
                     msg_list_empty = T("No Areas currently registered"))
 
-            from s3 import IS_ADD_PERSON_WIDGET2, IS_LOCATION_SELECTOR2, \
-                           S3AddPersonWidget2, S3LocationSelectorWidget2, S3MultiSelectWidget, S3StringWidget, \
+            from s3 import IS_ADD_PERSON_WIDGET2, IS_LOCATION, \
+                           S3AddPersonWidget2, S3LocationSelector, S3MultiSelectWidget, S3StringWidget, \
                            S3SQLCustomForm, S3SQLInlineComponent
             table.name.widget = S3StringWidget(placeholder=T("Text"))
             table.comments.widget = S3StringWidget(placeholder=T("Description"), textarea=True)
@@ -2299,17 +2332,20 @@ def customise_gis_poi_controller(**attr):
                 field = table.location_id
                 field.label = "" # Gets replaced by widget
                 levels = ("L3",)
-                field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-                field.widget = S3LocationSelectorWidget2(levels=levels,
-                                                         hide_lx=False,
-                                                         color_picker=color_picker,
-                                                         lines=lines,
-                                                         points=points,
-                                                         polygons=polygons,
-                                                         reverse_lx=True,
-                                                         show_address=True,
-                                                         show_postcode=True,
-                                                         )
+                field.requires = IS_LOCATION()
+                field.widget = S3LocationSelector(levels=levels,
+                                                  hide_lx=False,
+                                                  color_picker=color_picker,
+                                                  lines=lines,
+                                                  points=points,
+                                                  polygons=polygons,
+                                                  feature_required=True,
+                                                  reverse_lx=True,
+                                                  show_address=True,
+                                                  show_postcode=True,
+                                                  # TEMP
+                                                  catalog_layers=True,
+                                                  )
             if r.method == "update":
                 # Normal Submit buttons
                 s3.crud.submit_button = T("Save & Close")
@@ -2328,6 +2364,7 @@ def customise_gis_poi_controller(**attr):
                           )
 
             crud_form = S3SQLCustomForm("name",
+                                        "poi_type_id",
                                         "comments",
                                         "organisation_id",
                                         S3SQLInlineComponent(
@@ -2349,13 +2386,26 @@ def customise_gis_poi_controller(**attr):
                            icon = icon,
                            update_next = r.url(method="summary", id=0),
                            )
+
         return True
     s3.prep = custom_prep
+
+    # Override standard postp (...which would otherwise alter s3.actions)
+    s3.postp = None
+
+    # Remove bulk actions added in standard controller
+    del attr["dtargs"]
 
     return attr
 
 settings.customise_gis_poi_controller = customise_gis_poi_controller
 
+# Enable when required ;)
+#def customise_gis_location_resource(r, tablename):
+#    current.s3db.configure(tablename,
+#                           update_next = r.url(method="update"),
+#                           )
+#settings.customise_gis_location_resource = customise_gis_location_resource
 # =============================================================================
 class CRMTSubFormLayout(S3SQLSubFormLayout):
     """ Custom Layout for S3SQLInlineComponent """
@@ -2621,13 +2671,13 @@ class OrganisationProfileLayout(S3DataListLayout):
 
         tablename = resource.tablename
         if tablename == "org_facility":
-            icon_class = "icon-globe"
+            icon = ICON("globe")
             title = record["org_facility.location_id"]
         else:
-            icon_class = "icon"
+            icon = None
             title = ""
 
-        return DIV(I(_class=icon_class),
+        return DIV(icon,
                    SPAN(" %s" % title, _class="card-title"),
                    toolbox,
                    _class="card-header",
@@ -2682,21 +2732,21 @@ class OrganisationProfileLayout(S3DataListLayout):
         if update_url and \
            has_permission("update", table,
                           record_id=record_id, c="org", f="facility"):
-            btn = A(I(" ", _class="icon icon-edit"),
+            btn = A(ICON("edit"),
                     _href=update_url,
                     _class="s3_modal",
                     _title=crud_string(tablename, "title_update"))
             toolbox.append(btn)
 
         elif open_url:
-            btn = A(I(" ", _class="icon icon-file-alt"),
+            btn = A(ICON("file-alt"),
                     _href=open_url,
                     _title=crud_string(tablename, "title_display"))
             toolbox.append(btn)
 
         if has_permission("delete", table,
                           record_id=record_id, c="org", f="facility"):
-            btn = A(I(" ", _class="icon icon-trash"),
+            btn = A(ICON("delete"),
                     _class="dl-item-delete",
                     _title=crud_string(tablename, "label_delete_button"))
             toolbox.append(btn)

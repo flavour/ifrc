@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 
 """
     GIS Controllers
@@ -87,20 +86,25 @@ def map_viewing_client():
     print_mode = get_vars.get("print", None)
     if print_mode:
         collapsed = True
+        mouse_position = False
+        print_mode = True
         toolbar = False
-        save = False
         zoomcontrol = False
     else:
         collapsed = False
+        mouse_position = None # Use deployment_settings
+        print_mode = False
         toolbar = True
-        save = settings.get_gis_save()
         zoomcontrol = None
 
+    save = settings.get_gis_save()
     map = define_map(window = True,
                      toolbar = toolbar,
                      collapsed = collapsed,
                      closable = False,
                      maximizable = False,
+                     mouse_position = mouse_position,
+                     print_mode = print_mode,
                      save = save,
                      zoomcontrol = zoomcontrol,
                      )
@@ -116,6 +120,8 @@ def define_map(height = None,
                closable = True,
                collapsed = False,
                maximizable = True,
+               mouse_position = None,
+               print_mode = False,
                save = False,
                zoomcontrol = None,
                ):
@@ -251,6 +257,8 @@ def define_map(height = None,
                        catalogue_layers = True,
                        feature_resources = feature_resources,
                        legend = legend,
+                       mouse_position = mouse_position,
+                       print_mode = print_mode,
                        save = save,
                        search = search,
                        toolbar = toolbar,
@@ -575,7 +583,7 @@ def location():
 # -----------------------------------------------------------------------------
 def ldata():
     """
-        Return JSON of location hierarchy suitable for use by S3LocationSelectorWidget2
+        Return JSON of location hierarchy suitable for use by S3LocationSelector
         '/eden/gis/ldata/' + id
 
         n = {id : {'n' : name,
@@ -701,7 +709,7 @@ def ldata():
 # -----------------------------------------------------------------------------
 def hdata():
     """
-        Return JSON of hierarchy labels suitable for use by S3LocationSelectorWidget2
+        Return JSON of hierarchy labels suitable for use by S3LocationSelector
         '/eden/gis/hdata/' + l0_id
 
         n = {l0_id : {1 : l1_name,
@@ -3092,7 +3100,7 @@ def geocode():
     else:
         # Lx: Lookup Bounds in our own database
         # @ToDo
-        # Not needed by S3LocationSelectorWidget2 as it downloads bounds with options
+        # Not needed by S3LocationSelector as it downloads bounds with options
         results = "NotImplementedError"
 
     results = json.dumps(results, separators=SEPARATORS)
@@ -3702,8 +3710,35 @@ def screenshot():
 
     config_id = request.args(0) or 1
 
-    filename = gis.get_screenshot(config_id)
-    redirect(URL(c="static", f="cache",
-                 args=["jpg", filename]))
+    # If passed a size, set the Pixels for 300ppi
+    size = get_vars.get("size")
+    if size == "Letter":
+        height = 2550 # 612 for 72ppi
+        width = 3300  # 792 for 72ppi
+    elif size == "A4":
+        height = 2480 # 595 for 72ppi
+        width = 3508  # 842 for 72ppi
+    elif size == "A3":
+        height = 3508 # 842 for 72ppi
+        width = 4962  # 1191 for 72ppi
+    elif size == "A2":
+        height = 4962 # 1191 for 72ppi
+        width = 7017  # 1684 for 72ppi
+    elif size == "A1":
+        height = 7017 # 1684 for 72ppi
+        width =  9933 # 2384 for 72ppi
+    elif size == "A0":
+        height = 9933 # 2384 for 72ppi
+        width =  14061 # 3375 for 72ppi
+    else:
+        height = get_vars.get("height")
+        width = get_vars.get("width")
+
+    filename = gis.get_screenshot(config_id, height=height, width=width)
+    if filename:
+        redirect(URL(c="static", f="cache",
+                     args=["jpg", filename]))
+    else:
+        raise HTTP(500, "Screenshot not taken")
 
 # END =========================================================================

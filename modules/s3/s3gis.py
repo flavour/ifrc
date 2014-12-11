@@ -507,7 +507,7 @@ class GIS(object):
     def geocode(address, postcode=None, Lx_ids=None, geocoder="google"):
         """
             Geocode an Address
-            - used by S3LocationSelectorWidget2
+            - used by S3LocationSelector
                       settings.get_gis_geocode_imported_addresses
 
             @param address: street address
@@ -689,7 +689,7 @@ class GIS(object):
     def geocode_r(lat, lon):
         """
             Geocode an Address
-            - used by S3LocationSelectorWidget2
+            - used by S3LocationSelector
                       settings.get_gis_geocode_imported_addresses
 
             @param address: street address
@@ -749,7 +749,7 @@ class GIS(object):
                         shape = wkt_loads(row.wkt)
                         ok = test.intersects(shape)
                         if ok:
-                            print "Level: %s, id: %s" % (row.level, row.id)
+                            #print "Level: %s, id: %s" % (row.level, row.id)
                             results[row.level] = row.id
         return results
 
@@ -2535,7 +2535,7 @@ class GIS(object):
                 rows = db(query).select(stable.record_id,
                                         stable.style)
                 for row in rows:
-                    styles[row.record_id] = row.style
+                    styles[row.record_id] = json.dumps(row.style, separators=SEPARATORS)
 
                 styles[tablename] = styles
 
@@ -2768,8 +2768,6 @@ class GIS(object):
             @requires:
                 PhantomJS http://phantomjs.org
                 Selenium https://pypi.python.org/pypi/selenium
-
-            @ToDo: print.css
         """
 
         # @ToDo: allow selection of map_id
@@ -2802,7 +2800,8 @@ class GIS(object):
         os.chdir(cachepath)
 
         #driver = webdriver.PhantomJS()
-        driver = WebDriver()
+        # Disable Proxy for Win32 Network Latency issue
+        driver = WebDriver(service_args=["--proxy-type=none"])
 
         # Change back for other parts
         os.chdir(cwd)
@@ -2838,6 +2837,7 @@ class GIS(object):
         driver.get(url)
 
         # Wait for map to load (including it's layers)
+        # Alternative approach: https://raw.githubusercontent.com/ariya/phantomjs/master/examples/waitfor.js
         def map_loaded(driver):
             test = '''return S3.gis.maps['%s'].s3.loaded''' % map_id
             try:
@@ -2846,10 +2846,11 @@ class GIS(object):
                 return False
 
         try:
-            WebDriverWait(driver, 10).until(map_loaded)
+            # Wait for up to 100s (large screenshots take a long time for layers to load)
+            WebDriverWait(driver, 100).until(map_loaded)
         except TimeoutException, e:
             driver.quit()
-            current.log.error(e)
+            current.log.error("Timeout: %s" % e)
             return None
 
         # Save the Output
@@ -2869,7 +2870,7 @@ class GIS(object):
         #                        "width": width,
         #                        "height": height
         #                        }
-        #driver.page.render(filename, {"format": "jpeg", "quality": "90"})
+        #driver.page.render(filename, {"format": "jpeg", "quality": "100"})
 
         script = '''
 var page = this;
@@ -2878,7 +2879,7 @@ page.clipRect = {top: 10,
                  width: %(width)s,
                  height: %(height)s
                  };
-page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
+page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     dict(width = width,
                          height = height,
                          filename = filename,
@@ -2887,7 +2888,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
             result = driver.execute_phantomjs(script)
         except WebDriverException, e:
             driver.quit()
-            current.log.error(e)
+            current.log.error("WebDriver crashed: %s" % e)
             return None
 
         driver.quit()
@@ -3639,7 +3640,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
         current.log.debug("Unzipping %s" % layerName)
         import zipfile
         myfile = zipfile.ZipFile(fp)
-        for ext in ["dbf", "prj", "sbn", "sbx", "shp", "shx"]:
+        for ext in ("dbf", "prj", "sbn", "sbx", "shp", "shx"):
             fileName = "%s.%s" % (layerName, ext)
             file = myfile.read(fileName)
             f = open(fileName, "w")
@@ -3844,7 +3845,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
         # Unzip it
         current.log.debug("Unzipping %s" % layerName)
         myfile = zipfile.ZipFile(fp)
-        for ext in ["dbf", "prj", "sbn", "sbx", "shp", "shx"]:
+        for ext in ("dbf", "prj", "sbn", "sbx", "shp", "shx"):
             fileName = "%s.%s" % (layerName, ext)
             file = myfile.read(fileName)
             f = open(fileName, "w")
@@ -4177,7 +4178,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
         current.log.debug("Unzipping %s" % layerName)
         import zipfile
         myfile = zipfile.ZipFile(fp)
-        for ext in ["dbf", "prj", "sbn", "sbx", "shp", "shx"]:
+        for ext in ("dbf", "prj", "sbn", "sbx", "shp", "shx"):
             fileName = "%s.%s" % (layerName, ext)
             file = myfile.read(fileName)
             f = open(fileName, "w")
@@ -6019,6 +6020,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
                  clear_layers = None,
                  nav = None,
                  print_control = None,
+                 print_mode = False,
                  save = False,
                  search = False,
                  mouse_position = None,
@@ -6101,7 +6103,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
             @param legend: True: Show the GeoExt Legend panel, False: No Panel, "float": New floating Legend Panel
             @param toolbar: Show the Icon Toolbar of Controls
             @param area: Show the Area tool on the Toolbar
-            @param color_picker: Show the Color Picker tool on the Toolbar (used for S3LocationSelectorWidget2...pick up in postprocess)
+            @param color_picker: Show the Color Picker tool on the Toolbar (used for S3LocationSelector...pick up in postprocess)
                                  If a style is provided then this is used as the default style
             @param nav: Show the Navigation controls on the Toolbar
             @param save: Show the Save tool on the Toolbar
@@ -6155,6 +6157,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '90'});''' % \
                    clear_layers = clear_layers,
                    nav = nav,
                    print_control = print_control,
+                   print_mode = print_mode,
                    save = save,
                    search = search,
                    mouse_position = mouse_position,
@@ -6207,14 +6210,19 @@ class MAP(DIV):
         for c in components:
             self._setnode(c)
 
-        # Other DIV settings
-        self.attributes = {"_class": "map_wrapper",
+        # Adapt CSS to size of Map
+        _class = "map_wrapper"
+        if opts.get("window"):
+            _class = "%s fullscreen" % _class
+        if opts.get("print_mode"):
+            _class = "%s print" % _class
+        self.attributes = {"_class": _class,
                            "_id": map_id,
                            }
         self.parent = None
 
         # Show Color Picker?
-        if opts.get("color_picker", False):
+        if opts.get("color_picker"):
             # Can't be done in _setup() as usually run from xml() and hence we've already passed this part of the layout.html
             s3 = current.response.s3
             if s3.debug:
@@ -6489,7 +6497,7 @@ class MAP(DIV):
                     #i18n["gis_search_no_internet"] = T("Geonames.org search requires Internet connectivity!")
 
             # Show NAV controls?
-            # e.g. removed within S3LocationSelectorWidget[2]
+            # e.g. removed within S3LocationSelector[Widget]
             nav = opts.get("nav", None)
             if nav is None:
                 nav = settings.get_gis_nav_controls()
@@ -6534,10 +6542,12 @@ class MAP(DIV):
                 #                  "subTitle": string        # subTitle for the Printed Map (optional)
                 #                  }
                 options["print"] = True
-                i18n["gis_print"] = T("Take a screenshot of the map which can be printed")
+                i18n["gis_print"] = T("Print")
+                i18n["gis_paper_size"] = T("Paper Size")
+                i18n["gis_print_tip"] = T("Take a screenshot of the map which can be printed")
 
             # Show Save control?
-            # e.g. removed within S3LocationSelectorWidget[2]
+            # e.g. removed within S3LocationSelector[Widget]
             if opts.get("save") is True and auth.s3_logged_in():
                 options["save"] = True
                 i18n["gis_save"] = T("Save: Default Lat, Lon & Zoom for the Viewport")
@@ -6564,7 +6574,7 @@ class MAP(DIV):
                 opts["save"] = "float"
 
         # Show Save control?
-        # e.g. removed within S3LocationSelectorWidget[2]
+        # e.g. removed within S3LocationSelector[Widget]
         if opts.get("save") == "float" and auth.s3_logged_in():
             permit = auth.s3_has_permission
             if permit("create", ctable):
@@ -7223,7 +7233,7 @@ def addFeatureResources(feature_resources):
                                    ftable.trackable,
                                    ftable.use_site,
                                    # @ToDo: Deprecate Legacy
-                                   ftable.popup_fields, 
+                                   ftable.popup_fields,
                                    # @ToDo: Deprecate Legacy
                                    ftable.popup_label,
                                    ftable.cluster_attribute,
@@ -7888,6 +7898,18 @@ class LayerGeoJSON(Layer):
                 output["style"] = self.style
             else:
                 self.marker.add_attributes_to_output(output)
+
+            popup_format = self.popup_format
+            if popup_format:
+                if "T(" in popup_format:
+                    # i18n
+                    T = current.T
+                    items = regex_translate.findall(popup_format)
+                    for item in items:
+                        titem = str(T(item[1:-1]))
+                        popup_format = popup_format.replace("T(%s)" % item,
+                                                            titem)
+                output["popup_format"] = popup_format
 
             return output
 
@@ -8844,7 +8866,7 @@ class Style(object):
     # -------------------------------------------------------------------------
     def as_dict(self):
         """
-            
+
         """
 
         # Not JSON-serializable
@@ -9321,7 +9343,7 @@ class S3ImportPOI(S3Method):
             resources_list = settings.get_gis_poi_export_resources()
             uploadpath = os.path.join(request.folder,"uploads/")
             from s3utils import s3_yes_no_represent
- 
+
             fields = [Field("text1", # Dummy Field to add text inside the Form
                             label = "",
                             default = T("Can read PoIs either from an OpenStreetMap file (.osm) or mirror."),
@@ -9353,7 +9375,7 @@ class S3ImportPOI(S3Method):
                             requires = IS_IN_SET(resources_list, multiple=True),
                             default = resources_list,
                             widget = SQLFORM.widgets.checkboxes.widget)
-                      ] 
+                      ]
 
             if not r.id:
                 from s3validators import IS_LOCATION
@@ -9375,11 +9397,11 @@ class S3ImportPOI(S3Method):
                                    separator = "",
                                    table_name = "import_poi" # Dummy table name
                                    )
- 
+
             response.view = "create.html"
             output = dict(title=title,
                           form=form)
-            
+
             if form.accepts(request.vars, current.session):
                 form_vars = form.vars
                 if form_vars.file != "":

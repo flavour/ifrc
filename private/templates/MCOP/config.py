@@ -72,6 +72,16 @@ settings.ui.multiselect_widget = "search"
 # @ToDo: Investigate
 settings.ui.use_button_icons = True
 
+# Custom icon classes
+settings.ui.custom_icons = {
+    "alert": "icon-alert",
+    "building": "icon-building",
+    "contact": "icon-contact",
+    "incident": "icon-incident",
+    "resource": "icon-wrench",
+    "tasks": "icon-tasks",
+}
+
 # Uncomment to show a default cancel button in standalone create/update forms
 settings.ui.default_cancel_button = True
 
@@ -125,7 +135,7 @@ levels = ("L1", "L2", "L3")
 # Uncomment to pass Addresses imported from CSV to a Geocoder to try and automate Lat/Lon
 #settings.gis.geocode_imported_addresses = "google"
 
-# Until we add support to LocationSelector2 to set dropdowns from LatLons
+# Until we add support to S3LocationSelector to set dropdowns from LatLons
 settings.gis.check_within_parent_boundaries = False
 # GeoNames username
 settings.gis.geonames_username = "mcop"
@@ -292,14 +302,14 @@ def customise_cms_post_resource(r, tablename):
         msg_list_empty = T("No Alerts currently registered"))
 
     # CRUD Form
-    from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2
-    table.location_id.requires = IS_LOCATION_SELECTOR2(levels=levels)
-    table.location_id.widget = S3LocationSelectorWidget2(levels=levels,
-                                                         show_address=True,
-                                                         show_map=True,
-                                                         points = True,
-                                                         polygons = True,
-                                                         )
+    from s3 import IS_LOCATION, S3LocationSelector
+    table.location_id.requires = IS_LOCATION()
+    table.location_id.widget = S3LocationSelector(levels=levels,
+                                                  show_address=True,
+                                                  show_map=True,
+                                                  points = True,
+                                                  polygons = True,
+                                                  )
     # Don't add new Locations here
     table.location_id.comment = None
 
@@ -532,7 +542,7 @@ def customise_event_incident_resource(r, tablename):
                    update_next = url_next,
                    )
 
-    if r.method == "profile":
+    if r.method == "profile" and r.tablename == "event_incident":
         # Customise tables used by widgets
         customise_project_task_resource(r, "project_task")
 
@@ -553,7 +563,7 @@ def customise_event_incident_resource(r, tablename):
                              context = "incident",
                              # Only show Active Alerts
                              filter = FS("expired") == False,
-                             icon = "icon-alert",
+                             icon = "alert",
                              colspan = 1,
                              layer = "Alerts",
                              #list_layout = s3db.cms_post_list_layout,
@@ -564,7 +574,7 @@ def customise_event_incident_resource(r, tablename):
                                 tablename = "event_resource",
                                 context = "incident",
                                 #filter = FS("status").belongs(event_resource_active_statuses),
-                                icon = "icon-wrench",
+                                icon = "resource",
                                 colspan = 1,
                                 #list_layout = s3db.event_resource_list_layout,
                                 )
@@ -575,7 +585,7 @@ def customise_event_incident_resource(r, tablename):
                             context = "incident",
                             # Only show Active Tasks
                             filter = FS("status").belongs(s3db.project_task_active_statuses),
-                            icon = "icon-tasks",
+                            icon = "tasks",
                             colspan = 1,
                             #list_layout = s3db.project_task_list_layout,
                             )
@@ -687,12 +697,13 @@ def customise_org_facility_resource(r, tablename):
         msg_record_deleted = T("Facility deleted"),
         msg_list_empty = T("No Facilities currently registered"))
 
-    from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2
+    from s3 import IS_LOCATION, S3LocationSelector
     location_id_field = table.location_id
-    location_id_field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-    location_id_field.widget = S3LocationSelectorWidget2(levels=levels,
-                                                         show_address=True,
-                                                         show_map=True)
+    location_id_field.requires = IS_LOCATION()
+    location_id_field.widget = S3LocationSelector(levels=levels,
+                                                  show_address=True,
+                                                  show_map=True,
+                                                  )
     # Don't add new Locations here
     location_id_field.comment = None
 
@@ -843,7 +854,7 @@ def customise_org_organisation_resource(r, tablename):
                                    context = "organisation",
                                    create_controller = "pr",
                                    create_function = "person",
-                                   icon = "icon-contact",
+                                   icon = "contact",
                                    show_on_map = False, # Since they will show within Offices
                                    list_layout = render_contacts,
                                    )
@@ -859,7 +870,7 @@ def customise_org_organisation_resource(r, tablename):
                                      type = "datalist",
                                      tablename = "org_facility",
                                      context = "organisation",
-                                     icon = "icon-building",
+                                     icon = "building",
                                      layer = "Facilities",
                                      # provided by Catalogue Layer
                                      #marker = "office",
@@ -870,19 +881,19 @@ def customise_org_organisation_resource(r, tablename):
                                     type = "datalist",
                                     tablename = "org_resource",
                                     context = "organisation",
-                                    icon = "icon-resource",
+                                    icon = "resource",
                                     show_on_map = False, # No Marker yet & only show at L1-level anyway
                                     #list_layout = s3db.org_resource_list_layout,
                                     )
-            projects_widget = dict(label = "Incidents",
-                                   label_create = "Create Incident",
-                                   type = "datalist",
-                                   tablename = "event_incident",
-                                   context = "organisation",
-                                   icon = "icon-incident",
-                                   show_on_map = False, # No Marker yet & only show at L1-level anyway
-                                   #list_layout = s3db.event_incident_list_layout,
-                                   )
+            incidents_widget = dict(label = "Incidents",
+                                    label_create = "Create Incident",
+                                    type = "datalist",
+                                    tablename = "event_incident",
+                                    context = "organisation",
+                                    icon = "incident",
+                                    show_on_map = False, # No Marker yet & only show at L1-level anyway
+                                    #list_layout = s3db.event_incident_list_layout,
+                                    )
             record = r.record
             title = "%s : %s" % (s3.crud_strings["org_organisation"].title_list, record.name)
             if record.logo:
@@ -904,7 +915,7 @@ def customise_org_organisation_resource(r, tablename):
                                               #map_widget,
                                               facilities_widget,
                                               resources_widget,
-                                              projects_widget,
+                                              incidents_widget,
                                               #activities_widget,
                                               #reports_widget,
                                               #assessments_widget,
@@ -973,11 +984,12 @@ def customise_org_resource_resource(r, tablename):
             location_field.default = location_id
             # We still want to be able to specify a precise location
             #location_field.readable = location_field.writable = False
-        from s3 import IS_LOCATION_SELECTOR2, S3LocationSelectorWidget2
-        location_field.requires = IS_LOCATION_SELECTOR2(levels=levels)
-        location_field.widget = S3LocationSelectorWidget2(levels=levels,
-                                                          show_address=True,
-                                                          show_map=True)
+        from s3 import IS_LOCATION, S3LocationSelector
+        location_field.requires = IS_LOCATION()
+        location_field.widget = S3LocationSelector(levels=levels,
+                                                   show_address=True,
+                                                   show_map=True,
+                                                   )
 
         # Don't add new Locations here
         location_field.comment = None
