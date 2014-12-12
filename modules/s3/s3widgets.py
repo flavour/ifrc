@@ -4104,6 +4104,9 @@ class S3LocationSelector(S3Selector):
         * Should support multiple on a page
     """
 
+    keys = ("L0", "L1", "L2", "L3", "L4", "L5", 
+            "address", "postcode", "lat", "lon", "wkt", "specific", "id")
+
     def __init__(self,
                  levels = None,
                  hide_lx = True,
@@ -4111,16 +4114,18 @@ class S3LocationSelector(S3Selector):
                  show_address = False,
                  show_postcode = False,
                  show_latlon = False,
+                 latlon_mode = "decimal",
+                 latlon_mode_toggle = True,
                  show_map = True,
                  feature_required = False,
-                 labels = True,
-                 placeholders = False,
                  lines = False,
                  points = True,
                  polygons = False,
                  color_picker = False,
                  catalog_layers = False,
                  min_bbox = None,
+                 labels = True,
+                 placeholders = False,
                  error_message = None,
                  represent = None):
         """
@@ -4135,10 +4140,10 @@ class S3LocationSelector(S3Selector):
             @param show_address: show a field for street address
             @param show_postcode: show a field for postcode
             @param show_latlon: show fields for manual Lat/Lon input
+            @param latlon_mode: (initial) lat/lon input mode ("decimal" or "dms")
+            @param latlon_mode_toggle: allow user to toggle lat/lon input mode
             @param show_map: show a map to select specific points
             @param feature_required: map feature is required
-            @param labels: show labels on inputs
-            @param placeholders: show placeholder text in inputs
             @param lines: use a line draw tool
             @param points: use a point draw tool
             @param polygons: use a polygon draw tool
@@ -4147,6 +4152,8 @@ class S3LocationSelector(S3Selector):
             @param catalog_layers: display catalogue layers or just the default base layer
             @param min_bbox: minimum BBOX in map selector, used to determine automatic
                              zoom level for single-point locations
+            @param labels: show labels on inputs
+            @param placeholders: show placeholder text in inputs
             @param error_message: default error message for server-side validation
             @param represent: an S3Represent instance that can represent non-DB rows
         """
@@ -4156,11 +4163,17 @@ class S3LocationSelector(S3Selector):
 
         self.hide_lx = hide_lx
         self.reverse_lx = reverse_lx
+
         self.show_address = show_address
         self.show_postcode = show_postcode
+
+        # @todo: latlon_toggle_mode should default to a deployment setting
         self.show_latlon = show_latlon
-        self.labels = labels
-        self.placeholders = placeholders
+        self.latlon_mode = latlon_mode
+        if show_latlon:
+            self.latlon_mode_toggle = latlon_mode_toggle
+        else:
+            self.latlon_mode_toggle = False
 
         if feature_required:
             show_map = True
@@ -4173,7 +4186,6 @@ class S3LocationSelector(S3Selector):
             self.feature_required = required
         else:
             self.feature_required = None
-
         self.show_map = show_map
         
         self.lines = lines
@@ -4184,6 +4196,9 @@ class S3LocationSelector(S3Selector):
         self.catalog_layers = catalog_layers
 
         self.min_bbox = min_bbox
+
+        self.labels = labels
+        self.placeholders = placeholders
 
         self.error_message = error_message
         self._represent = represent
@@ -4386,6 +4401,27 @@ class S3LocationSelector(S3Selector):
                                      )
         components.update(lx_rows)
 
+        # Lat/Lon Input Mode Toggle
+        if self.latlon_mode_toggle:
+            latlon_labels = {"decimal": T("Use decimal"),
+                             "dms": T("Use deg, min, sec"),
+                             }
+            if self.latlon_mode == "dms":
+                latlon_label = latlon_labels["decimal"]
+            else:
+                latlon_label = latlon_labels["dms"]
+            toggle_id = fieldname + "_latlon_toggle"
+            components["latlon_toggle"] = ("",
+                                           A(latlon_label,
+                                             _id=toggle_id,
+                                             _class="action-lnk",
+                                             ),
+                                           toggle_id,
+                                           False,
+                                           )
+        else:
+            latlon_labels = None
+
         # Already loaded? (to prevent duplicate JS injection)
         location_selector_loaded = s3.gis.location_selector_loaded
 
@@ -4395,6 +4431,17 @@ class S3LocationSelector(S3Selector):
             global_append('''i18n.select="%s"''' % T("Select"))
             if multiselect == "search":
                 global_append('''i18n.search="%s"''' % T("Search"))
+            if latlon_labels:
+                global_append('''i18n.latlon_mode='''
+                              '''{decimal:"%(decimal)s",dms:"%(dms)s"}''' % 
+                              latlon_labels)
+                global_append('''i18n.latlon_error='''
+                              '''{lat:"%s",lon:"%s",min:"%s",sec:"%s"}''' % 
+                              (T("Latitude must be -90..90"),
+                               T("Longitude must be -180..180"),
+                               T("Minutes must be 0..59"),
+                               T("Seconds must be 0..59"),
+                               ))
 
         # If we need to show the map since we have an existing lat/lon/wkt
         # then we need to launch the client-side JS as a callback to the
@@ -4412,6 +4459,8 @@ class S3LocationSelector(S3Selector):
                    "labels": labels_compact,
                    "showLabels": self.labels,
                    "featureRequired": self.feature_required,
+                   "latlonMode": self.latlon_mode,
+                   "latlonModeToggle": self.latlon_mode_toggle,
                    }
         if self.min_bbox:
             options["minBBOX"] = self.min_bbox
@@ -4795,7 +4844,7 @@ class S3LocationSelector(S3Selector):
                     selectors.append(formrow)
 
         inputs = TAG[""]()
-        for name in ("address", "postcode", "lat", "lon"):
+        for name in ("address", "postcode", "lat", "lon", "latlon_toggle"):
             if name in components:
                 label, widget, input_id, hidden = components[name]
                 formrow = formstyle("%s__row" % input_id,
@@ -5253,7 +5302,8 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         path_ok = True
         if level:
             # Lx location
-            specific = None
+            values["level"] = level
+            values["specific"] = None
 
             if len(path) != (int(level[1:]) + 1):
                 # We don't have a full path
@@ -5261,7 +5311,8 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
 
         else:
             # Specific location
-            specific = record.id
+            values["parent"] = record.parent
+            values["specific"] = specific
 
             if len(path) < (len(levels) + 1):
                 # We don't have a full path
@@ -5298,13 +5349,6 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                 address = record.addr_street
             if postcode is None:
                 postcode = record.addr_postcode
-
-        # Parent/Level
-        values["level"] = level
-        values["parent"] = record.parent
-
-        # Specific location
-        values["specific"] = specific
 
         # Path
         if path_ok:
@@ -5347,6 +5391,10 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
             @return: string representation for the values dict
         """
 
+        if not values or not any(values.get(key) for key in self.keys):
+            # No data
+            return current.messages["NONE"]
+
         lat = value.get("lat")
         lon = value.get("lon")
         wkt = value.get("wkt")
@@ -5368,6 +5416,8 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         elif address or postcode or lat or lon or wkt:
             specific = True
             record_id = value.get("id")
+        else:
+            record_id = None
         if not record_id:
             record_id = 0
         record.id = record_id
@@ -5376,13 +5426,13 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
 
         # Construct the path (must have a path to prevent update_location_tree)
         path = [str(record_id)]
-        level = 0
+        level = None
         append = None
         for l in xrange(5, -1, -1):
             lx = value.get("L%s" % l)
             if lx:
                 if not specific and l < 5:
-                    level = l + 1
+                    level = l
                 lx_ids[l] = lx
                 if append is None:
                     append = path.append
@@ -5392,11 +5442,11 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         record.path = "/".join(path)
 
         # Determine the Lx level
-        if specific:
+        if specific or level is None:
             record.level = None
         else:
             record.level = "L%s" % level
-
+            
         # Get the Lx names
         s3db = current.s3db
         ltable = s3db.gis_location
@@ -5412,7 +5462,11 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                     lx_name = lx_names.get(lx_ids[l])["name"]
                 else:
                     lx_name = None
-                record["L%s" % l] = lx_name if lx_name else ""
+                if not lx_name:
+                    lx_name = ""
+                record["L%s" % l] = lx_name
+                if level == l:
+                    record["name"] = lx_name
 
         # Call standard location represent
         represent = self._represent
@@ -5428,20 +5482,23 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         return s3_unicode(text)
 
     # -------------------------------------------------------------------------
-    def validate(self, value):
+    def validate(self, value, requires=None):
         """
             Parse and validate the input value, but don't create or update
             any location data
 
             @param value: the value from the form
+            @param requires: the field validator
             @returns: tuple (values, error) with values being the parsed
                       value dict, and error any validation errors
         """
 
         values = self.parse(value)
 
-        if not values or not any(values.values()):
+        if not values or not any(values.get(key) for key in self.keys):
             # No data
+            if requires and not isinstance(requires, IS_EMPTY_OR):
+                return values, current.T("Location data required")
             return values, None
 
         table = current.s3db.gis_location
