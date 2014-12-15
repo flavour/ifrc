@@ -721,6 +721,9 @@ class S3AddPersonWidget2(FormWidget):
             dtable = s3db.pr_person_details
             occupation = dtable.occupation
             emailRequired = settings.get_hrm_email_required()
+        elif controller == "patient":
+            emailRequired = settings.get_hrm_email_required()
+            occupation = None
         elif hrm:
             controller = "hrm"
             emailRequired = settings.get_hrm_email_required()
@@ -5391,7 +5394,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
             @return: string representation for the values dict
         """
 
-        if not values or not any(values.get(key) for key in self.keys):
+        if not value or not any(value.get(key) for key in self.keys):
             # No data
             return current.messages["NONE"]
 
