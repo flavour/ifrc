@@ -47,6 +47,8 @@ settings.mail.approver = "ADMIN"
 # NB This can also be over-ridden for specific contexts later
 # e.g. Activities filtered to those of parent Project
 settings.gis.countries = ("CF",) # Initially, will change
+# Show LatLon boxes in the Location Selector
+settings.gis.latlon_selector = True
 # Uncomment to display the Map Legend as a floating DIV
 settings.gis.legend = "float"
 # Uncomment to Disable the Postcode selector in the LocationSelector
@@ -158,6 +160,7 @@ settings.org.groups = "Coalition / Consortium"
 #settings.org.branches = True
 # Show branches as tree rather than as table
 #settings.org.branches_tree_view = True
+#settings.org.autocomplete = True
 
 # Uncomment this to allow multiple site contacts per site (e.g. if needing a separate contact per sector)
 settings.hrm.site_contact_unique = False

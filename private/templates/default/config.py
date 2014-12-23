@@ -219,8 +219,8 @@ settings.L10n.decimal_separator = "."
 #settings.gis.geocode_imported_addresses = "google"
 # Hide the Map-based selection tool in the Location Selector
 #settings.gis.map_selector = False
-# Hide LatLon boxes in the Location Selector
-#settings.gis.latlon_selector = False
+# Show LatLon boxes in the Location Selector
+#settings.gis.latlon_selector = True
 # Use Building Names as a separate field in Street Addresses?
 #settings.gis.building_name = False
 # Use a non-default fillColor for Clustered points
@@ -417,6 +417,11 @@ settings.gis.geonames_username = "eden_test"
 #settings.ui.datatables_responsive = False
 # Uncomment to modify the label of the Permalink
 #settings.ui.label_permalink = "Permalink"
+
+# -----------------------------------------------------------------------------
+# Asset
+# Uncomment to have a specific asset type for Telephones
+#settings.asset.telephones = True
 
 # -----------------------------------------------------------------------------
 # CMS
@@ -707,9 +712,9 @@ settings.gis.geonames_username = "eden_test"
 #settings.req.req_form_name = "Request Issue Form"
 #settings.req.req_shortname = "RIS"
 # Restrict the type of requests that can be made, valid values in the
-# list are ["Stock", "People", "Other"]. If this is commented out then
+# list are ("Stock", "People", "Other"). If this is commented out then
 # all types will be valid.
-#settings.req.req_type = ["Stock"]
+#settings.req.req_type = ("Stock",)
 # Uncomment to enable Summary 'Site Needs' tab for Offices/Facilities
 #settings.req.summary = True
 # Uncomment to restrict adding new commits to Completed commits

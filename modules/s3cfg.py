@@ -93,6 +93,7 @@ class S3Config(Storage):
                     }
 
     def __init__(self):
+        self.asset = Storage()
         self.auth = Storage()
         self.auth.email_domains = []
         self.base = Storage()
@@ -864,7 +865,7 @@ class S3Config(Storage):
         """
             Display Lat/Lon form fields when selecting Locations
         """
-        return self.gis.get("latlon_selector", True)
+        return self.gis.get("latlon_selector", False)
 
     def get_gis_layer_metadata(self):
         """
@@ -1868,6 +1869,15 @@ class S3Config(Storage):
 
     # =========================================================================
     # Modules
+
+    # -------------------------------------------------------------------------
+    # Asset: Asset Management
+    #
+    def get_asset_telephones(self):
+        """
+            Whether Assets should include a specific type for Telephones
+        """
+        return self.asset.get("telephones", False)
 
     # -------------------------------------------------------------------------
     # CAP: Common Alerting Protocol

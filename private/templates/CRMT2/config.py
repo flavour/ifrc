@@ -488,6 +488,7 @@ def customise_pr_person_controller(**attr):
                          #"job_title_id",
                          #"site_id",
                          ]
+            s3db.hrm_human_resource.organisation_id.label = ""
             #if widgets:
             #    # Context from a Profile page?"
             #    organisation_id = current.request.get_vars.get("(organisation)", None)
@@ -505,7 +506,7 @@ def customise_pr_person_controller(**attr):
                         "human_resource",
                         name = "human_resource",
                         columns = (4,),
-                        label = "",
+                        label = T("Organization"),
                         multiple = False,
                         fields = hr_fields,
                     ),
@@ -1207,8 +1208,7 @@ def customise_org_organisation_controller(**attr):
                                                 fields = [("", "location_id"),
                                                         ],
                                                 columns = (10,),
-                                                # @ToDo: Fix
-                                                multiple = False,
+                                                multiple = True,
                                        ))
 
                     ftable = s3db.org_facility
@@ -1334,9 +1334,12 @@ def org_group_dashboard(r, **attr):
                   )
 
     # Maps
-    auth = current.auth
+    pe_ids = set([record.pe_id])
+    user = current.auth.user
+    if user:
+        pe_ids.add(user.pe_id)
     ctable = s3db.gis_config
-    query = (ctable.pe_id.belongs((org_group_id, auth.s3_user_pe_id(auth.user.id)))) & \
+    query = (ctable.pe_id.belongs(pe_ids)) & \
             (ctable.deleted == False) & \
             (ctable.temp == False) & \
             (ctable.image != None)
@@ -1367,33 +1370,44 @@ $(document).ready(function(){
     s3.jquery_ready.append(script)
 
     # Recent Contacts
-    # @ToDo: Filter to just this Coalition
     ptable = s3db.pr_person
-    query = (ptable.deleted == False)
-    output["total_contacts"] = db(query).count()
-
     htable = s3db.hrm_human_resource
     otable = s3db.org_organisation
-    left = [htable.on(htable.person_id == ptable.id),
-            otable.on(htable.organisation_id == otable.id),
+    ltable = s3db.org_group_person
+
+    left = [htable.on((htable.person_id == ptable.id) & \
+                      (htable.deleted == False) & \
+                      (htable.status == 1)),
+            otable.on(otable.id == htable.organisation_id),
+            ltable.on((ltable.person_id == ptable.id) & \
+                      (ltable.deleted == False)),
             ]
-    rows = db(query).select(ptable.id,
-                            ptable.first_name,
-                            ptable.middle_name,
-                            ptable.last_name,
-                            ptable.created_on,
-                            otable.name,
-                            left = left,
-                            limitby = (0, 5),
-                            orderby = ~ptable.created_on
-                            )
+
+    query = (ltable.org_group_id == org_group_id) & \
+            (ptable.deleted == False)
+
+    cnt = ptable.id.count()
+    row = db(query).select(cnt, left=left).first()
+
+    total = output["total_contacts"] = row[cnt]
     recent_contacts = []
-    for row in rows:
-        person = row["pr_person"]
-        recent_contacts.append(Storage(id = person.id,
-                                       name = s3_fullname(person),
-                                       org = row["org_organisation.name"],
-                                       ))
+    if total:
+        rows = db(query).select(ptable.id,
+                                ptable.first_name,
+                                ptable.middle_name,
+                                ptable.last_name,
+                                ptable.created_on,
+                                otable.name,
+                                left = left,
+                                limitby = (0, 5),
+                                orderby = ~ptable.created_on
+                                )
+        for row in rows:
+            person = row["pr_person"]
+            recent_contacts.append(Storage(id = person.id,
+                                           name = s3_fullname(person),
+                                           org = row["org_organisation.name"],
+                                           ))
     output["recent_contacts"] = recent_contacts
 
     # Latest Activities
@@ -1433,33 +1447,58 @@ $(document).ready(function(){
 
     # Partner Organizations
     ltable = s3db.org_group_membership
+    join = ltable.on((ltable.organisation_id == otable.id) & \
+                     (ltable.deleted == False))
     query = (otable.deleted == False) & \
             (ltable.group_id == org_group_id)
-    output["total_orgs"] = db(query).count()
 
-    rows = db(query).select(otable.id,
-                            otable.name,
-                            limitby = (0, 5),
-                            )
+    cnt = otable.id.count()
+    row = db(query).select(cnt, join=join).first()
+
+    total = output["total_orgs"] = row[cnt] if row else 0
     partner_orgs = []
-    for row in rows:
-        partner_orgs.append(Storage(id = row["org_organisation.id"],
-                                    name = row["org_organisation.name"],
-                                    ))
+    if total:
+        rows = db(query).select(otable.id,
+                                otable.name,
+                                join = join,
+                                limitby = (0, 5),
+                                )
+        for row in rows:
+            partner_orgs.append(Storage(id = row["org_organisation.id"],
+                                        name = row["org_organisation.name"],
+                                        ))
+
     output["partner_orgs"] = partner_orgs
 
-    # PoIs
+    # PoIs (grouped by feature type)
+    feature_type_keys = {1: "total_points",
+                         2: "total_routes",
+                         3: "total_areas",
+                         }
+    for k in feature_type_keys.values():
+        output[k] = 0
+            
     ptable = s3db.gis_poi
     ltable = s3db.gis_poi_group
-    query = (ptable.deleted == False) & \
-            (ltable.group_id == org_group_id) & \
-            (ptable.location_id == gtable.id)
-    q = query & (gtable.gis_feature_type == 1)
-    output["total_points"] = db(q).count()
-    q = query & (gtable.gis_feature_type == 2)
-    output["total_routes"] = db(q).count()
-    q = query & (gtable.gis_feature_type == 3)
-    output["total_areas"] = db(q).count()
+
+    join = [ltable.on((ltable.poi_id == ptable.id) & 
+                      (ltable.deleted == False)),
+            gtable.on(ptable.location_id == gtable.id),
+            ]
+    query = (ltable.group_id == org_group_id) & \
+            (ptable.deleted == False)
+
+    cnt = ptable.id.count()
+    feature_type = gtable.gis_feature_type
+    rows = db(query).select(cnt, 
+                            feature_type, 
+                            join = join, 
+                            groupby = feature_type,
+                            )
+    for row in rows:
+        key = feature_type_keys.get(row[feature_type])
+        if key is not None:
+            output[key] = row[cnt]
 
     S3CustomController()._view("CRMT2", "dashboard.html")
 
@@ -2378,6 +2417,18 @@ def customise_gis_poi_controller(**attr):
                                         "person_id",
                                         "location_id",
                                         )
+
+            # Patch the style
+            script = \
+'''var s=$('#gis_poi_poi_type_id__row .small-10') 
+var c=s.html()
+s.html('<div class="row"><div class="small-4 end columns"></div></div>')
+$('#gis_poi_poi_type_id__row .small-10 .small-4').html(c)
+s=$('#gis_poi_organisation_id__row .small-10') 
+c=s.html()
+s.html('<div class="row"><div class="small-4 end columns"></div></div>')
+$('#gis_poi_organisation_id__row .small-10 .small-4').html(c)'''
+            s3.jquery_ready.append(script)
 
             s3db.configure(tablename,
                            create_next = create_next,

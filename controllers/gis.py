@@ -1240,8 +1240,7 @@ def config():
                             form_vars = Storage(config_id = config_id,
                                                 layer_id = layer_id,
                                                 )
-                            form_vars.style = json.dumps(layer["style"],
-                                                         separators=SEPARATORS)
+                            form_vars.style = layer["style"]
                             # Update or Insert?
                             stable = s3db.gis_style
                             query = (stable.config_id == config_id) & \
@@ -3732,7 +3731,15 @@ def screenshot():
         width =  14061 # 3375 for 72ppi
     else:
         height = get_vars.get("height")
+        try:
+            height = int(height)
+        except (ValueError, TypeError):
+            height = 2480
         width = get_vars.get("width")
+        try:
+            width = int(width)
+        except (ValueError, TypeError):
+            width = 3508
 
     filename = gis.get_screenshot(config_id, height=height, width=width)
     if filename:

@@ -717,17 +717,22 @@ class S3AddPersonWidget2(FormWidget):
         if controller == "hrm":
             emailRequired = settings.get_hrm_email_required()
             occupation = None
+
         elif controller == "vol":
             dtable = s3db.pr_person_details
             occupation = dtable.occupation
             emailRequired = settings.get_hrm_email_required()
+
         elif controller == "patient":
+            controller = "pr"
             emailRequired = settings.get_hrm_email_required()
             occupation = None
+
         elif hrm:
             controller = "hrm"
             emailRequired = settings.get_hrm_email_required()
             occupation = None
+
         else:
             controller = "pr"
             emailRequired = False
@@ -2961,7 +2966,6 @@ class S3LocationDropdownWidget(FormWidget):
 class S3LocationLatLonWidget(FormWidget):
     """
         Renders a Lat & Lon input for a Location
-
     """
 
     def __init__(self, empty=False):
@@ -4020,7 +4024,14 @@ class S3Selector(FormWidget):
         else:
             _class = classes
 
-        defaults = dict(requires = self.postprocess,
+        requires = self.postprocess
+
+        fieldname = str(field).replace(".", "_")
+        if fieldname.startswith("sub_"):
+            from s3forms import SKIP_POST_VALIDATION
+            requires = SKIP_POST_VALIDATION(requires)
+
+        defaults = dict(requires = requires,
                         _type = "hidden",
                         _class = _class,
                         )
@@ -4116,7 +4127,7 @@ class S3LocationSelector(S3Selector):
                  reverse_lx = False,
                  show_address = False,
                  show_postcode = False,
-                 show_latlon = False,
+                 show_latlon = None,
                  latlon_mode = "decimal",
                  latlon_mode_toggle = True,
                  show_map = True,
@@ -4170,10 +4181,12 @@ class S3LocationSelector(S3Selector):
         self.show_address = show_address
         self.show_postcode = show_postcode
 
-        # @todo: latlon_toggle_mode should default to a deployment setting
+        if show_latlon is None:
+            show_latlon = current.deployment_settings.get_gis_latlon_selector()
         self.show_latlon = show_latlon
         self.latlon_mode = latlon_mode
         if show_latlon:
+            # @todo: latlon_toggle_mode should default to a deployment setting
             self.latlon_mode_toggle = latlon_mode_toggle
         else:
             self.latlon_mode_toggle = False
@@ -4439,11 +4452,12 @@ class S3LocationSelector(S3Selector):
                               '''{decimal:"%(decimal)s",dms:"%(dms)s"}''' % 
                               latlon_labels)
                 global_append('''i18n.latlon_error='''
-                              '''{lat:"%s",lon:"%s",min:"%s",sec:"%s"}''' % 
+                              '''{lat:"%s",lon:"%s",min:"%s",sec:"%s",format:"%s"}''' % 
                               (T("Latitude must be -90..90"),
                                T("Longitude must be -180..180"),
                                T("Minutes must be 0..59"),
                                T("Seconds must be 0..59"),
+                               T("Unrecognized format"),
                                ))
 
         # If we need to show the map since we have an existing lat/lon/wkt
@@ -4972,6 +4986,8 @@ class S3LocationSelector(S3Selector):
             _placeholder = label
         else:
             _placeholder = None
+        if isinstance(value, unicode):
+            value = value.encode("utf-8")
         widget = INPUT(_name=name,
                        _id=input_id,
                        _class=_class,
