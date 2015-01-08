@@ -2,7 +2,7 @@
 
 """ Sahana Eden Project Model
 
-    @copyright: 2011-2014 (c) Sahana Software Foundation
+    @copyright: 2011-2015 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -51,6 +51,7 @@ __all__ = ("S3ProjectModel",
            "S3ProjectTaskIReportModel",
            "project_ActivityRepresent",
            "project_activity_year_options",
+           "project_ckeditor",
            "project_rheader",
            "project_task_controller",
            "project_theme_help_fields",
@@ -62,7 +63,7 @@ __all__ = ("S3ProjectModel",
            "project_project_filters",
            "project_project_list_layout",
            "project_task_list_layout",
-           "project_ckeditor",
+           "project_TaskRepresent",
            )
 
 import datetime

@@ -2,7 +2,7 @@
 
 """ Sahana Eden Supply Model
 
-    @copyright: 2009-2014 (c) Sahana Software Foundation
+    @copyright: 2009-2015 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -224,6 +224,7 @@ class S3SupplyModel(S3Model):
         # Item Category
         #
         asset = settings.has_module("asset")
+        telephone = settings.get_asset_telephones()
         vehicle = settings.has_module("vehicle")
 
         item_category_represent = supply_ItemCategoryRepresent()
@@ -242,8 +243,8 @@ class S3SupplyModel(S3Model):
                      Field("parent_item_category_id",
                            "reference supply_item_category",
                            label = T("Parent"),
-                           represent = parent_represent,
                            ondelete = "RESTRICT",
+                           represent = parent_represent,
                            ),
                      Field("code", length=16,
                            label = T("Code"),
@@ -253,18 +254,25 @@ class S3SupplyModel(S3Model):
                            label = T("Name"),
                            ),
                      Field("can_be_asset", "boolean",
-                           default=True,
-                           readable=asset,
-                           writable=asset,
+                           default = True,
+                           label = T("Items in Category can be Assets"),
                            represent = s3_yes_no_represent,
-                           label=T("Items in Category can be Assets"),
+                           readable = asset,
+                           writable = asset,
+                           ),
+                     Field("is_telephone", "boolean",
+                           default = False,
+                           label = T("Items in Category are Telephones"),
+                           represent = s3_yes_no_represent,
+                           readable = telephone,
+                           writable = telephone,
                            ),
                      Field("is_vehicle", "boolean",
-                           default=False,
-                           readable=vehicle,
-                           writable=vehicle,
+                           default = False,
+                           label = T("Items in Category are Vehicles"),
                            represent = s3_yes_no_represent,
-                           label=T("Items in Category are Vehicles"),
+                           readable = vehicle,
+                           writable = vehicle,
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -345,12 +353,12 @@ $.filterOptionsS3({
                            label = T("Name"),
                            ),
                      Field("code", length=16,
-                           represent = lambda v: v or NONE,
                            label = T("Code"),
+                           represent = lambda v: v or NONE,
                            ),
                      Field("um", length=128, notnull=True,
+                           default = "piece",
                            label = T("Unit of Measure"),
-                           default = "piece"
                            ),
                      brand_id(),
                      Field("kit", "boolean",
@@ -360,37 +368,37 @@ $.filterOptionsS3({
                                        (opt and [T("Yes")] or [NONE])[0],
                            ),
                      Field("model", length=128,
-                           represent = lambda v: v or NONE,
                            label = T("Model/Type"),
+                           represent = lambda v: v or NONE,
                            ),
                      Field("year", "integer",
+                           label = T("Year of Manufacture"),
                            represent = lambda v: v or NONE,
-                           label = T("Year of Manufacture")
                            ),
                      Field("weight", "double",
                            label = T("Weight (kg)"),
                            represent = lambda v: \
-                                       float_represent(v, precision=2)
+                                       float_represent(v, precision=2),
                            ),
                      Field("length", "double",
                            label = T("Length (m)"),
                            represent = lambda v: \
-                                       float_represent(v, precision=2)
+                                       float_represent(v, precision=2),
                            ),
                      Field("width", "double",
                            label = T("Width (m)"),
                            represent = lambda v: \
-                                       float_represent(v, precision=2)
+                                       float_represent(v, precision=2),
                            ),
                      Field("height", "double",
                            label = T("Height (m)"),
                            represent = lambda v: \
-                                       float_represent(v, precision=2)
+                                       float_represent(v, precision=2),
                            ),
                      Field("volume", "double",
                            label = T("Volume (m3)"),
                            represent = lambda v: \
-                                       float_represent(v, precision=2)
+                                       float_represent(v, precision=2),
                            ),
                      # These comments do *not* pull through to an Inventory's Items or a Request's Items
                      s3_comments(),
@@ -546,7 +554,6 @@ $.filterOptionsS3({
                      *s3_meta_fields())
 
         # CRUD strings
-        ADD_ITEM = T("Add Item to Catalog")
         crud_strings[tablename] = Storage(
             label_create = T("Create Catalog Item"),
             title_display = T("Item Catalog Details"),
@@ -577,26 +584,26 @@ $.filterOptionsS3({
                           "item_id$model",
                           "item_id$comments"
                          ],
-                         label=T("Search"),
-                         comment= T("Search for an item by its code, name, model and/or comment."),
+                         label = T("Search"),
+                         comment = T("Search for an item by its code, name, model and/or comment."),
                         ),
             S3OptionsFilter("catalog_id",
-                            label=T("Catalog"),
-                            comment=T("Search for an item by catalog."),
+                            label = T("Catalog"),
+                            comment = T("Search for an item by catalog."),
                             #represent ="%(name)s",
                             cols = 3,
                             hidden = True,
                            ),
             S3OptionsFilter("item_category_id",
-                            label=T("Category"),
-                            comment=T("Search for an item by category."),
+                            label = T("Category"),
+                            comment = T("Search for an item by category."),
                             represent = item_category_represent_nocodes,
                             cols = 3,
                             hidden = True,
                            ),
             S3OptionsFilter("item_id$brand_id",
-                            label=T("Brand"),
-                            comment=T("Search for an item by brand."),
+                            label = T("Brand"),
+                            comment = T("Search for an item by brand."),
                             #represent ="%(name)s",
                             cols = 3,
                             hidden = True,
@@ -617,15 +624,15 @@ $.filterOptionsS3({
         define_table(tablename,
                      supply_item_id(empty=False),
                      Field("name", length=128,
-                           default = T("piece"),
                            notnull=True, # Ideally this would reference another table for normalising Pack names
+                           default = T("piece"),
                            label = T("Name"),
                            ),
                      Field("quantity", "double", notnull=True,
                            default = 1,
                            label = T("Quantity"),
                            represent = lambda v: \
-                           float_represent(v, precision=2)
+                                       float_represent(v, precision=2),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -707,7 +714,7 @@ $.filterOptionsS3({
                      Field("quantity", "double",
                            label = T("Quantity"),
                            represent = lambda v: \
-                            float_represent(v, precision=2)
+                                       float_represent(v, precision=2),
                            ),
                      item_pack_id(),
                      s3_comments(),
@@ -726,12 +733,12 @@ $.filterOptionsS3({
                            default = 1,
                            label = T("Quantity"),
                            represent = lambda v: \
-                            float_represent(v, precision=2),
+                                       float_represent(v, precision=2),
                            comment = DIV(_class = "tooltip",
                                          _title = "%s|%s" %
                                                   (T("Quantity"),
                                                    T("The number of Units of Measure of the Alternative Items which is equal to One Unit of Measure of the Item")
-                                                  )
+                                                   )
                                          ),
                            ),
                      supply_item_id("alt_item_id", notnull=True),
@@ -792,24 +799,24 @@ $.filterOptionsS3({
 
         # Filter Widgets
         filter_widgets = [
-            S3TextFilter(name="item_entity_search_text",
-                         label=T("Search"),
-                         comment=T("Search for an item by text."),
-                         field=["item_id$name",
-                                #"item_id$item_category_id$name",
-                                #"site_id$name"
-                                ]
+            S3TextFilter(name = "item_entity_search_text",
+                         label = T("Search"),
+                         comment = T("Search for an item by text."),
+                         field = ["item_id$name",
+                                  #"item_id$item_category_id$name",
+                                  #"site_id$name"
+                                  ]
                          ),
             S3OptionsFilter("item_id$item_category_id",
-                            label=T("Code Share"),
-                            comment=T("If none are selected, then all are searched."),
-                            #represent ="%(name)s",
+                            label = T("Code Share"),
+                            comment = T("If none are selected, then all are searched."),
+                            #represent = "%(name)s",
                             cols = 2,
-                           ),
+                            ),
             #S3OptionsFilter("country",
-            #                label=current.messages.COUNTRY,
-            #                comment=T("If none are selected, then all are searched."),
-            #                #represent ="%(name)s",
+            #                label = current.messages.COUNTRY,
+            #                comment = T("If none are selected, then all are searched."),
+            #                #represent = "%(name)s",
             #                cols = 2,
             #               ),
         ]
@@ -946,8 +953,8 @@ $.filterOptionsS3({
         if code:
             # Same Code => definitely duplicate
             table = item.table
-            query = (table.deleted != True)
-            query = query & (table.code.lower() == code.lower())
+            query = (table.deleted != True) & \
+                    (table.code.lower() == code.lower())
             duplicate = current.db(query).select(table.id,
                                                  limitby=(0, 1)).first()
             if duplicate:
@@ -964,14 +971,13 @@ $.filterOptionsS3({
                 # Try to extract UM from Name
                 name, um = item_um_from_name(name)
             table = item.table
-            query = (table.deleted != True)
-            if name:
-                query = query & (table.name.lower() == name.lower())
+            query = (table.deleted != True) & \
+                    (table.name.lower() == name.lower())
             if um:
-                query = query & (table.um.lower() == um.lower())
+                query &= (table.um.lower() == um.lower())
             catalog_id = data.get("catalog_id")
             if catalog_id:
-                query = query & (table.catalog_id == catalog_id)
+                query &= (table.catalog_id == catalog_id)
 
             duplicate = current.db(query).select(table.id,
                                                  limitby=(0, 1)).first()
@@ -994,16 +1000,16 @@ $.filterOptionsS3({
         query = (table.deleted != True)
         name = data.get("name")
         if name:
-            query = query & (table.name.lower() == name.lower())
+            query &= (table.name.lower() == name.lower())
         code = data.get("code")
         if code:
-            query = query & (table.code.lower() == code.lower())
+            query &= (table.code.lower() == code.lower())
         catalog_id = data.get("catalog_id")
         if catalog_id:
-            query = query & (table.catalog_id == catalog_id)
+            query &= (table.catalog_id == catalog_id)
         parent_category_id = data.get("parent_category_id")
         if parent_category_id:
-            query = query & (table.parent_category_id == parent_category_id)
+            query &= (table.parent_category_id == parent_category_id)
         duplicate = current.db(query).select(table.id,
                                              limitby=(0, 1)).first()
         if duplicate:
@@ -1025,13 +1031,13 @@ $.filterOptionsS3({
         query = (table.deleted != True)
         item_id = data.get("item_id")
         if item_id:
-            query = query & (table.item_id == item_id)
+            query &= (table.item_id == item_id)
         catalog_id = data.get("catalog_id")
         if catalog_id:
-            query = query & (table.catalog_id == catalog_id)
+            query &= (table.catalog_id == catalog_id)
         item_category_id = data.get("item_category_id")
         if item_category_id:
-            query = query & (table.item_category_id == item_category_id)
+            query &= (table.item_category_id == item_category_id)
         duplicate = current.db(query).select(table.id,
                                              limitby=(0, 1)).first()
         if duplicate:
@@ -1053,13 +1059,13 @@ $.filterOptionsS3({
         query = (table.deleted != True)
         name = data.get("name")
         if name:
-            query = query & (table.name.lower() == name.lower())
+            query &= (table.name.lower() == name.lower())
         item_id = data.get("item_id")
         if item_id:
-            query = query & (table.item_id == item_id)
+            query &= (table.item_id == item_id)
         quantity = data.get("quantity")
         if quantity:
-            query = query & (table.quantity == quantity)
+            query &= (table.quantity == quantity)
         duplicate = current.db(query).select(table.id,
                                              limitby=(0, 1)).first()
         if duplicate:

@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2014 (c) Sahana Software Foundation
+    @copyright: 2009-2015 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -140,14 +140,78 @@ class S3Config(Storage):
         """
         return self.base.get("template", "default")
 
+    def get_template_location(self):
+
+        return self.base.get("template_location", "modules")
+
     def exec_template(self, path):
         """
-            Execute the template
+            Legacy function, retained for backwards-compatibility with
+            existing 000_config.py instances => modern 000_config.py
+            should just call settings.import_template()
+
+            @todo: deprecate
         """
-        from gluon.fileutils import read_file
-        from gluon.restricted import restricted
-        code = read_file(path)
-        restricted(code, layer=path)
+        self.import_template()
+
+    def import_template(self, config="config"):
+        """
+            Import and invoke the template config (new module pattern)
+
+            @param config: name of the config-module
+
+            @todo: rewrite all config.py's with module pattern
+            @todo: remove fallback when migration complete (+giving some
+                   time for downstream projects to adapt)
+        """
+
+        name = self.get_template()
+        package = "templates.%s" % name
+
+        template = None
+        try:
+            # Import the template
+            template = getattr(__import__(package, fromlist=[config]), config)
+        except ImportError:
+            # Legacy template in "private"?
+            self.execute_template(name)
+        else:
+            template.config(self)
+            # Store location in response.s3 for compiled views
+            current.response.s3.template_location = "modules"
+        return template
+
+    def execute_template(self, name):
+        """
+            Fallback for legacy templates - execute config.py
+        """
+
+        import os
+
+        location = "private"
+        path = os.path.join(current.request.folder,
+                            location,
+                            "templates",
+                            name,
+                            "config.py")
+
+        if os.path.exists(path):
+            # Old-style config.py => deprecation warning (S3Log not available yet)
+            import sys
+            print >> sys.stderr, "%s/config.py: script pattern deprecated." % name
+            # Remember the non-standard location
+            # (need to be in response.s3 for compiled views)
+            current.response.s3.template_location = self.base.template_location = location
+            # Execute config.py
+            from gluon.fileutils import read_file
+            from gluon.restricted import restricted
+            code = read_file(path)
+            restricted(code, layer=path)
+        else:
+            # Nonexistent template
+            # => could be ignored here, but would crash later anyway,
+            #    so exit early with a clear error message
+            raise RuntimeError("Template not found: %s" % name)
 
     # -------------------------------------------------------------------------
     # Theme
@@ -1126,6 +1190,14 @@ class S3Config(Storage):
             - if-desired, set to the Key of a Key/Value pair (e.g. "PCode")
         """
         return self.gis.get("lookup_code", False)
+
+    def get_gis_popup_location_link(self):
+        """
+            Whether a Pop-up Window should open on clicking
+            Location represent links
+            - Default: Map opens in a div
+        """
+        return self.gis.get("popup_location_link", False)
 
     # -------------------------------------------------------------------------
     # L10N Settings

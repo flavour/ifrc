@@ -2,7 +2,7 @@
 
 """ S3 SQL Forms
 
-    @copyright: 2012-14 (c) Sahana Software Foundation
+    @copyright: 2012-15 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1902,7 +1902,7 @@ class S3SQLSubFormLayout(object):
         #appname = current.request.application
         #scripts = current.response.s3.scripts
 
-        #script = "/%s/static/themes/CRMT2/js/inlinecomponent.layout.js" % appname
+        #script = "/%s/static/themes/CRMT/js/inlinecomponent.layout.js" % appname
         #if script not in scripts:
             #scripts.append(script)
 
