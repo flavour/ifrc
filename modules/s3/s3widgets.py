@@ -1248,13 +1248,27 @@ class S3DateWidget(FormWidget):
 
     def __init__(self,
                  format = None,
-                 past=1440,     # how many months into the past the date can be set to
-                 future=1440    # how many months into the future the date can be set to
+                 past=1440,
+                 future=1440,
+                 start_field = None,
+                 default_interval = None,
                  ):
+
+        """
+            Constructor
+
+            @param format: format of date
+            @param past: how many months into the past the date can be set to
+            @param future: how many months into the future the date can be set to
+            @param start_field: "selector" for start date field
+            @paran default_interval: x months from start date
+        """
 
         self.format = format
         self.past = past
         self.future = future
+        self.start_field = start_field
+        self.default_interval = default_interval
 
     def __call__(self, field, value, **attributes):
 
@@ -1336,6 +1350,10 @@ class S3DateWidget(FormWidget):
         else:
             maxDate = "+0"
 
+        # Set auto updation of end_date based on start_date if start_field attr are set
+        start_field = self.start_field
+        default_interval = self.default_interval
+
         script = \
 '''$('#%(selector)s').datepicker('option',{yearRange:'c-100:c+100',
  dateFormat:'%(format)s',
@@ -1349,6 +1367,41 @@ class S3DateWidget(FormWidget):
 
         if script not in jquery_ready: # Prevents loading twice when form has errors
             jquery_ready.append(script)
+
+        if start_field and default_interval:
+
+            T = current.T
+
+            # Setting i18n for labels
+            i18n = '''
+i18n.interval="%(interval_label)s"
+i18n.btn_1_label="%(btn_first_label)s"
+i18n.btn_2_label="%(btn_second_label)s"
+i18n.btn_3_label="%(btn_third_label)s"
+i18n.btn_4_label="%(btn_fourth_label)s"
+i18n.btn_clear="%(btn_clear)s"
+''' % dict(interval_label = T("Interval"),
+           btn_first_label = T("+6 MO"),
+           btn_second_label = T("+1 YR"),
+           btn_third_label = T("+2 YR"),
+           btn_fourth_label = T("+5 YR"),
+           btn_clear = T("Clear"),
+           )
+
+            s3.js_global.append(i18n)
+
+            script = '''
+$('#%(end_selector)s').end_date_interval({
+start_date_selector:"#%(start_selector)s",
+interval:%(interval)d
+})
+''' % dict(end_selector = selector,
+           start_selector = start_field,
+           interval = default_interval,
+           )
+
+            if script not in jquery_ready:
+                jquery_ready.append(script)
 
         return TAG[""](widget, requires = field.requires)
 
@@ -2156,9 +2209,13 @@ class S3GroupedOptionsWidget(FormWidget):
 
         # Sort letters
         import locale
-        all_letters.sort(locale.strcoll)
-        first_letter = min(u"A", all_letters[0])
-        last_letter = max(u"Z", all_letters[-1])
+        if all_letters:
+            all_letters.sort(locale.strcoll)
+            first_letter = min(u"A", all_letters[0])
+            last_letter = max(u"Z", all_letters[-1])
+        else:
+            # No point with grouping if we don't have any labels
+            size = 0
 
         size = self.size
         cols = self.cols
@@ -2235,7 +2292,10 @@ class S3GroupedOptionsWidget(FormWidget):
 
         # Sort the group items
         if sort:
-            group_items = sorted(group["items"], key=lambda i: i[1].upper()[0])
+            group_items = sorted(group["items"],
+                                 key = lambda i: i[1].upper()[0] \
+                                       if i[1] else None,
+                                 )
         else:
             group_items = group["items"]
 
@@ -4198,6 +4258,7 @@ class S3LocationSelector(S3Selector):
                  latlon_mode = "decimal",
                  latlon_mode_toggle = True,
                  show_map = True,
+                 open_map_on_load = False,
                  feature_required = False,
                  lines = False,
                  points = True,
@@ -4224,6 +4285,7 @@ class S3LocationSelector(S3Selector):
             @param latlon_mode: (initial) lat/lon input mode ("decimal" or "dms")
             @param latlon_mode_toggle: allow user to toggle lat/lon input mode
             @param show_map: show a map to select specific points
+            @param open_map_on_load: show map on load
             @param feature_required: map feature is required
             @param lines: use a line draw tool
             @param points: use a point draw tool
@@ -4270,6 +4332,7 @@ class S3LocationSelector(S3Selector):
         else:
             self.feature_required = None
         self.show_map = show_map
+        self.open_map_on_load = show_map and open_map_on_load
 
         self.lines = lines
         self.points = points
@@ -4413,7 +4476,9 @@ class S3LocationSelector(S3Selector):
                 break
 
         # Field name for ID construction
-        fieldname = str(field).replace(".", "_")
+        fieldname = attributes.get("_name")
+        if not fieldname:
+            fieldname = str(field).replace(".", "_")
 
         # Load initial Hierarchy Labels (for Lx dropdowns)
         labels, labels_compact = self._labels(levels,
@@ -4548,6 +4613,8 @@ class S3LocationSelector(S3Selector):
                    }
         if self.min_bbox:
             options["minBBOX"] = self.min_bbox
+        if self.open_map_on_load:
+            options["openMapOnLoad"] = True
         script = '''$('#%s').locationselector(%s)''' % \
                  (fieldname, json.dumps(options, separators=SEPARATORS))
 
@@ -4836,13 +4903,33 @@ class S3LocationSelector(S3Selector):
             location_dict["d"] = dict(id=lx, b=bounds)
             location_dict[lx] = dict(b=bounds, l=int(lowest_lx[1:]))
         else:
-
-            default_bounds = [config.lon_min,
-                              config.lat_min,
-                              config.lon_max,
-                              config.lat_max
+            fallback = None
+            default_location = config.default_location_id
+            if default_location:
+                query = (gtable.id == default_location)
+                record = db(query).select(gtable.level,
+                                          gtable.lat_min,
+                                          gtable.lon_min,
+                                          gtable.lat_max,
+                                          gtable.lon_max,
+                                          cache=s3db.cache,
+                                          limitby=(0, 1)).first()
+                if record and record.level:
+                    bounds = [record.lon_min,
+                              record.lat_min,
+                              record.lon_max,
+                              record.lat_max,
                               ]
-            location_dict["d"] = dict(b=default_bounds)
+                    if any(bounds):
+                        fallback = {"id": default_location, "b": bounds}
+            if fallback is None:
+                fallback = {"b": [config.lon_min,
+                                  config.lat_min,
+                                  config.lon_max,
+                                  config.lat_max,
+                                  ]
+                            }
+            location_dict["d"] = fallback
 
         if translate:
             for location in locations:
@@ -5517,8 +5604,10 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         for l in xrange(5, -1, -1):
             lx = value.get("L%s" % l)
             if lx:
-                if not specific and l < 5:
+                if not level and not specific and l < 5:
                     level = l
+                elif level and not record.parent:
+                    record.parent = lx
                 lx_ids[l] = lx
                 if append is None:
                     append = path.append
@@ -6500,7 +6589,9 @@ class S3PersonAutocompleteWidget(FormWidget):
                  post_process = "",
                  hideerror = False,
                  delay = 450,     # milliseconds
-                 min_length = 2): # Increase this for large deployments
+                 min_length = 2,  # Increase this for large deployments
+                 ajax_filter = "",
+                 ):
 
         self.post_process = post_process
         self.delay = delay
@@ -6508,6 +6599,7 @@ class S3PersonAutocompleteWidget(FormWidget):
         self.c = controller
         self.f = function
         self.hideerror = hideerror
+        self.ajax_filter = ajax_filter
 
     def __call__(self, field, value, **attributes):
 
@@ -6549,17 +6641,22 @@ class S3PersonAutocompleteWidget(FormWidget):
         post_process = self.post_process
         delay = self.delay
         min_length = self.min_length
+
+        if self.ajax_filter:
+            options = ''',"%(ajax_filter)s"''' % \
+                dict(ajax_filter = self.ajax_filter)
+
         if min_length != 2:
-            options = ''',"%(postprocess)s",%(delay)s,%(min_length)s''' % \
+            options += ''',"%(postprocess)s",%(delay)s,%(min_length)s''' % \
                 dict(postprocess = post_process,
                      delay = delay,
                      min_length = min_length)
         elif delay != 450:
-            options = ''',"%(postprocess)s",%(delay)s''' % \
+            options += ''',"%(postprocess)s",%(delay)s''' % \
                 dict(postprocess = post_process,
                      delay = delay)
         elif post_process:
-            options = ''',"%(postprocess)s"''' % \
+            options += ''',"%(postprocess)s"''' % \
                 dict(postprocess = post_process)
 
         script = '''%s%s)''' % (script, options)

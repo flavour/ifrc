@@ -549,6 +549,8 @@ def config(settings):
             After DB I/O for Project Member
             - Subscribe User to Task updates
         """
+        if task_id is None:
+            task_id = str(form.vars.task_id)
         sub = TaskSubscriptions()
         sub.add_task_subscription(task_id)
 
@@ -844,10 +846,18 @@ def config(settings):
                                                                fields = [("", "project_id")],
                                                                multiple = False,
                                                                ))
+            
             crud_form = S3SQLCustomForm(*crud_fields)
-
+            get_config = s3db.get_config
+            list_fields = get_config(tablename, "list_fields")
+            filter_widgets = get_config(tablename, "filter_widgets")
+            # Remove 'Assigned to' field
+            list_fields.remove("pe_id")
+            custom_filter_widgets = [widget for widget in filter_widgets \
+                                                if "pe_id" not in widget.field ]
             s3db.configure(tablename,
                            crud_form = crud_form,
+                           filter_widgets = custom_filter_widgets,
                            )
 
     settings.customise_project_task_resource = customise_project_task_resource
@@ -1383,6 +1393,8 @@ class TaskSubscriptions(object):
                           label=current.T("Updates"))
                      ]
         self.rfilter = "comment.task_id__belongs"
+        # Remove comments created by the user
+        self.exclude = ["comment.created_by__ne", str(current.auth.user.id)] 
         # Get current subscription settings resp. from defaults
         self.subscription = self.get_subscription()
         subscription = self.subscription
@@ -1413,7 +1425,7 @@ class TaskSubscriptions(object):
         else:
             ids = ",".join(ids)
 
-        sfilter = [[rfilter, ids]]
+        sfilter = [[rfilter, ids], self.exclude]
         subscription["filters"] = json.dumps(sfilter)
 
         return self.update_subscription()
@@ -1434,7 +1446,7 @@ class TaskSubscriptions(object):
         else:
             ids = task_id
 
-        sfilter = [[rfilter, ids]]
+        sfilter = [[rfilter, ids], self.exclude]
         subscription["filters"] = json.dumps(sfilter)
         return self.update_subscription()
 

@@ -31,6 +31,7 @@ __all__ = ("S3HRModel",
            "S3HRSiteModel",
            "S3HRSalaryModel",
            "S3HRInsuranceModel",
+           #"S3HRJobModel",
            "S3HRContractModel",
            "S3HRSkillModel",
            "S3HRAppraisalModel",
@@ -449,10 +450,17 @@ class S3HRModel(S3Model):
                                           readable = False,
                                           writable = False,
                                           ),
+                     Field("org_contact", "boolean",
+                           label = T("Organization Contact"),
+                           represent = s3_yes_no_represent,
+                           readable = False,
+                           writable = False,
+                           ),
                      Field("site_contact", "boolean",
                            label = T("Facility Contact"),
-                           represent = lambda opt: \
-                            (T("No"), T("Yes"))[opt == True],
+                           represent = s3_yes_no_represent,
+                           #represent = lambda opt: \
+                            #(T("No"), T("Yes"))[opt == True],
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -2393,7 +2401,9 @@ class S3HRSkillModel(S3Model):
                              label = T("Date Received")
                              ),
                      s3_date("end_date",
-                             # @ToDo: Automation based on deployment_settings, e.g.: date received + 6/12 months
+                             # @ToDo: Change implicit default to explicit default with interval of 12 months
+                             start_field = "hrm_credential_start_date",
+                             default_interval = 12,
                              label = T("Expiry Date")
                              ),
                      *s3_meta_fields())
@@ -5580,8 +5590,7 @@ def hrm_training_organisation(row):
     return current.messages["NONE"]
 
 # =============================================================================
-def hrm_rheader(r, tabs=[],
-                profile=False):
+def hrm_rheader(r, tabs=[], profile=False):
     """ Resource headers for component views """
 
     if r.representation != "html":
@@ -5772,6 +5781,11 @@ def hrm_rheader(r, tabs=[],
         else:
             id_tab = None
 
+        if settings.get_hrm_use_address():
+            address_tab = (T("Address"), "address")
+        else:
+            address_tab = None
+
         if settings.get_hrm_salary():
             salary_tab = (T("Salary"), "salary")
         else:
@@ -5811,7 +5825,7 @@ def hrm_rheader(r, tabs=[],
                     (T("Staff/Volunteer Record"), record_method),
                     id_tab,
                     description_tab,
-                    (T("Address"), "address"),
+                    address_tab,
                     ]
             contacts_tabs = settings.get_pr_contacts_tabs()
             if "all" in contacts_tabs:
@@ -5835,7 +5849,7 @@ def hrm_rheader(r, tabs=[],
             tabs = [(T("Person Details"), None),
                     id_tab,
                     description_tab,
-                    (T("Address"), "address"),
+                    address_tab,
                     ]
             contacts_tabs = settings.get_pr_contacts_tabs()
             if "all" in contacts_tabs:
@@ -5869,7 +5883,7 @@ def hrm_rheader(r, tabs=[],
                     (hr_record, record_method),
                     id_tab,
                     description_tab,
-                    (T("Address"), "address"),
+                    address_tab,
                     ]
             contacts_tabs = settings.get_pr_contacts_tabs()
             if "all" in contacts_tabs:

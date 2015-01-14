@@ -38,6 +38,7 @@ __all__ = ("S3OrganisationModel",
            "S3OrganisationSectorModel",
            "S3OrganisationServiceModel",
            "S3OrganisationSummaryModel",
+           "S3OrganisationTagModel",
            "S3OrganisationTeamModel",
            "S3OrganisationTypeTagModel",
            "S3SiteModel",
@@ -383,23 +384,23 @@ class S3OrganisationModel(S3Model):
                      #Field("archived", "boolean", default=False),
                      *s3_meta_fields())
 
-        form_fields = [ "name",
-                        "acronym",
-                        S3SQLInlineLink(
+        form_fields = ["name",
+                       "acronym",
+                       S3SQLInlineLink(
                             "organisation_type",
                             field = "organisation_type_id",
                             label = T("Type"),
                             multiple = multiple_organisation_types,
                             widget = type_widget,
-                        ),
-                        "region_id",
-                        "country",
-                        "phone",
-                        "website",
-                        "year",
-                        "logo",
-                        "comments",
-                        ]
+                       ),
+                       "region_id",
+                       "country",
+                       "phone",
+                       "website",
+                       "year",
+                       "logo",
+                       "comments",
+                       ]
 
         if settings.get_org_summary():
             # Include Summary fields in form
@@ -407,8 +408,8 @@ class S3OrganisationModel(S3Model):
             form_fields.insert(position + 1, "summary.national_staff")
             form_fields.insert(position + 2, "summary.international_staff")
 
-        crud_form = S3SQLCustomForm(*form_fields
-                                    )
+        crud_form = S3SQLCustomForm(*form_fields)
+
         # CRUD strings
         ADD_ORGANIZATION = T("Create Organization")
         crud_strings[tablename] = Storage(
@@ -560,6 +561,10 @@ class S3OrganisationModel(S3Model):
                        org_organisation_name = {"name": "name",
                                                 "joinby": "organisation_id",
                                                 },
+                       # Tags
+                       org_organisation_tag = {"name": "tag",
+                                               "joinby": "organisation_id",
+                                               },
                        # Sites
                        org_site = "organisation_id",
                        # Facilities
@@ -1687,8 +1692,8 @@ class S3OrganisationLocationModel(S3Model):
         self.define_table(tablename,
                           self.org_organisation_id(),
                           self.gis_location_id(
-                            requires = IS_LOCATION(),
                             #represent = self.gis_LocationRepresent(sep=", "),
+                            requires = IS_LOCATION(),
                             widget = S3LocationAutocompleteWidget()
                           ),
                           *s3_meta_fields()
@@ -2395,6 +2400,73 @@ class S3OrganisationSummaryModel(S3Model):
         return dict()
 
 # =============================================================================
+class S3OrganisationTagModel(S3Model):
+    """
+        Organisation Tags
+    """
+
+    names = ("org_organisation_tag",)
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Organisation Tags
+        # - Key-Value extensions
+        # - can be used to provide conversions to external systems, such as:
+        #   * HXL
+        # - can be a Triple Store for Semantic Web support
+        # - can be used to add custom fields
+        #
+        tablename = "org_organisation_tag"
+        self.define_table(tablename,
+                          self.org_organisation_id(),
+                          # key is a reserved word in MySQL
+                          Field("tag",
+                                label = T("Key"),
+                                ),
+                          Field("value",
+                                label = T("Value"),
+                                ),
+                          s3_comments(),
+                          *s3_meta_fields())
+
+        self.configure(tablename,
+                       deduplicate = self.org_organisation_tag_deduplicate,
+                       )
+
+        # Pass names back to global scope (s3.*)
+        return dict()
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def org_organisation_tag_deduplicate(item):
+        """
+           If the record is a duplicate then it will set the item method
+           to update
+
+           @param item: the S3ImportItem
+        """
+
+        data = item.data
+        tag = data.get("tag", None)
+        organisation_id = data.get("organisation_id", None)
+
+        if not tag or not organisation_id:
+            return
+
+        table = item.table
+        query = (table.tag.lower() == tag.lower()) & \
+                (table.organisation_id == organisation_id)
+
+        duplicate = current.db(query).select(table.id,
+                                             limitby=(0, 1)).first()
+        if duplicate:
+            item.id = duplicate.id
+            item.method = item.METHOD.UPDATE
+
+# =============================================================================
 class S3OrganisationTeamModel(S3Model):
     """
         Link table between Organisations & Teams
@@ -2467,9 +2539,6 @@ class S3OrganisationTypeTagModel(S3Model):
         T = current.T
 
         # ---------------------------------------------------------------------
-        # Local Names
-        #
-        # ---------------------------------------------------------------------
         # Organisation Type Tags
         # - Key-Value extensions
         # - can be used to provide conversions to external systems, such as:
@@ -2489,8 +2558,39 @@ class S3OrganisationTypeTagModel(S3Model):
                           s3_comments(),
                           *s3_meta_fields())
 
+        self.configure(tablename,
+                       deduplicate = self.org_organisation_type_tag_deduplicate,
+                       )
+
         # Pass names back to global scope (s3.*)
         return dict()
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def org_organisation_type_tag_deduplicate(item):
+        """
+           If the record is a duplicate then it will set the item method
+           to update
+
+           @param item: the S3ImportItem
+        """
+
+        data = item.data
+        tag = data.get("tag", None)
+        organisation_type_id = data.get("organisation_type_id", None)
+
+        if not tag or not organisation_type_id:
+            return
+
+        table = item.table
+        query = (table.tag.lower() == tag.lower()) & \
+                (table.organisation_type_id == organisation_type_id)
+
+        duplicate = current.db(query).select(table.id,
+                                             limitby=(0, 1)).first()
+        if duplicate:
+            item.id = duplicate.id
+            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3SiteModel(S3Model):
@@ -3217,6 +3317,11 @@ class S3FacilityModel(S3Model):
                            readable = False,
                            writable = False,
                            ),
+                     Field("main_facility", "boolean",
+                           default = False,
+                           readable = False,
+                           writable = False,
+                           ),
                      Field.Method("inv", org_site_has_inv),
                      Field.Method("assets", org_site_has_assets),
                      Field.Method("reqs", org_site_top_req_priority),
@@ -3261,13 +3366,13 @@ class S3FacilityModel(S3Model):
 
         if hierarchical_facility_types:
             type_filter = S3HierarchyFilter("site_facility_type.facility_type_id",
-                                            label = T("Type"),
+                                            #label = T("Type"),
                                             )
         else:
             type_filter = S3OptionsFilter("site_facility_type.facility_type_id",
                                           # @ToDo: Introspect need for header based on # records
                                           #header = True,
-                                          label = T("Type"),
+                                          #label = T("Type"),
                                           # Doesn't support translation
                                           #represent = "%(name)s",
                                           )
@@ -3282,13 +3387,14 @@ class S3FacilityModel(S3Model):
             S3OptionsFilter("organisation_id",
                             # @ToDo: Introspect need for header based on # records
                             #header = True,
-                            label = T("Organization"),
-                            represent = "%(name)s",
+                            #label = T("Organization"),
+                            # Doesn't support l10n
+                            #represent = "%(name)s",
                             ),
             S3LocationFilter("location_id",
                              # @ToDo: Display by default in Summary Views but not others?
                              #hidden = True,
-                             label = T("Location"),
+                             #label = T("Location"),
                              levels = levels,
                              ),
             ]
@@ -3437,21 +3543,6 @@ class S3FacilityModel(S3Model):
                                       "address",
                                       ),
                   report_options = report_options,
-                  summary = [{"name": "table",
-                              "label": "Table",
-                              "widgets": [{"method": "datatable"}]
-                              },
-                             {"name": "report",
-                              "label": "Report",
-                              "widgets": [{"method": "report",
-                                           "ajax_init": True}]
-                              },
-                             {"name": "map",
-                              "label": "Map",
-                              "widgets": [{"method": "map",
-                                           "ajax_init": True}],
-                              },
-                             ],
                   super_entity = ("doc_entity", "org_site", "pr_pentity"),
                   update_realm = True,
                   )
@@ -3493,6 +3584,26 @@ class S3FacilityModel(S3Model):
         """
             Update Affiliation, record ownership and component ownership
         """
+
+        form_vars = form.vars
+
+        if "main_facility" in form_vars and form_vars.main_facility:
+            # Should be only one main facility per organisation
+            record_id = form_vars.id
+            if record_id:
+                db = current.db
+                table = current.s3db.org_facility
+                organisation_id = form_vars.organisation_id
+                if not organisation_id:
+                    query = table.id == record_id
+                    row = db(query).select(table.organisation_id,
+                                           limitby=(0, 1)).first()
+                    if row:
+                        organisation_id = row.organisation_id
+                if organisation_id:
+                    query = (table.id != record_id) & \
+                            (table.organisation_id == organisation_id)
+                    db(query).update(main_facility = False)
 
         org_update_affiliations("org_facility", form.vars)
 
@@ -3972,7 +4083,8 @@ class S3OfficeModel(S3Model):
             org_filter = S3OptionsFilter("organisation_id",
                                          label = ORGANISATION,
                                          comment = comment,
-                                         represent = "%(name)s",
+                                         # Doesn't support l10n
+                                         #represent = "%(name)s",
                                          #hidden = True,
                                          )
 

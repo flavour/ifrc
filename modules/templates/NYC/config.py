@@ -8,10 +8,10 @@ except:
     from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
 from gluon import current
-from gluon.html import A, URL
+from gluon.html import A, URL, TR, TD
 from gluon.storage import Storage
 
-from s3 import s3_fullname
+from s3 import s3_fullname, S3SQLInlineLink, S3SQLSubFormLayout
 
 def config(settings):
     """
@@ -30,9 +30,6 @@ def config(settings):
 
     # Theme (folder to use for views/layout.html)
     settings.base.theme = "NYC"
-    settings.ui.formstyle_row = "bootstrap"
-    settings.ui.formstyle = "bootstrap"
-    settings.ui.filter_formstyle = "table_inline"
 
     settings.msg.parser = "NYC"
 
@@ -53,8 +50,11 @@ def config(settings):
     settings.L10n.default_country_code = 1
     # Enable this to change the label for 'Mobile Phone'
     settings.ui.label_mobile_phone = "Cell Phone"
+    # Uncomment to Disable the Postcode selector in the LocationSelector
+    # - using L4 instead
+    settings.gis.postcode_selector = False
     # Enable this to change the label for 'Postcode'
-    settings.ui.label_postcode = "ZIP Code"
+    #settings.ui.label_postcode = "ZIP Code"
     # Uncomment to disable responsive behavior of datatables
     # - Disabled until tested
     settings.ui.datatables_responsive = False
@@ -112,6 +112,8 @@ def config(settings):
     #settings.gis.check_within_parent_boundaries = False
     # GeoNames username
     settings.gis.geonames_username = "eden_nyc"
+    # Uncomment to modify the Simplify Tolerance
+    settings.gis.simplify_tolerance = 0.001
 
     # Uncomment to show created_by/modified_by using Names not Emails
     settings.ui.auth_user_represent = "name"
@@ -120,7 +122,7 @@ def config(settings):
     settings.auth.record_approval = True
     settings.auth.record_approval_required_for = ("org_organisation",)
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Audit
     def audit_write(method, tablename, form, record, representation):
         if not current.auth.user:
@@ -139,7 +141,7 @@ def config(settings):
 
     settings.security.audit_write = audit_write
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # CMS
     # Uncomment to use Bookmarks in Newsfeed
     settings.cms.bookmarks = True
@@ -162,7 +164,7 @@ def config(settings):
     # Uncomment to show post Titles in Newsfeed
     settings.cms.show_titles = True
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Inventory Management
     # Uncomment to customise the label for Facilities in Inventory Management
     settings.inv.facility_label = "Facility"
@@ -189,7 +191,7 @@ def config(settings):
             #4: T("Surplus")
        }
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Organisations
     #
     # Enable the use of Organisation Groups
@@ -222,7 +224,7 @@ def config(settings):
     # Uncomment to hide inv & req tabs from Sites
     #settings.org.site_inv_req_tabs = True
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def facility_marker_fn(record):
         """
             Function to decide which Marker to use for Facilities Map
@@ -284,7 +286,7 @@ def config(settings):
                                                         ).first()
         return marker
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def org_facility_onvalidation(form):
         """
             Default the name to the Street Address
@@ -301,7 +303,41 @@ def config(settings):
             # We need a default
             form_vars.name = current.db.org_facility.location_id.represent(form_vars.location_id)
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    def customise_org_facility_resource(r, tablename):
+
+        from s3 import S3LocationFilter, S3OptionsFilter, S3TextFilter
+
+        filter_widgets = [
+            S3TextFilter(["name"],
+                         label = T("Name"),
+                         ),
+            S3OptionsFilter("site_facility_type.facility_type_id",
+                            ),
+            S3OptionsFilter("organisation_id",
+                            ),
+            S3LocationFilter("location_id",
+                             levels = ("L2", "L4"),
+                             ),
+            S3OptionsFilter("site_org_group.group_id",
+                            represent = "%(name)s",
+                            ),
+            ]
+
+        s3db = current.s3db
+
+        s3db.configure(tablename,
+                       filter_widgets = filter_widgets,
+                       )
+
+        field = s3db.org_facility.main_facility
+        field.readable = field.writable = True
+        crud_form = s3db.get_config(tablename, "crud_form")
+        crud_form.insert(-2, "main_facility")
+
+    settings.customise_org_facility_resource = customise_org_facility_resource
+
+    # -------------------------------------------------------------------------
     def customise_org_facility_controller(**attr):
 
         s3db = current.s3db
@@ -331,17 +367,15 @@ def config(settings):
                 table = s3db[tablename]
 
                 if not r.component and r.method in (None, "create", "update"):
-                    from s3 import IS_LOCATION, S3LocationSelector, S3MultiSelectWidget
+                    from s3 import S3LocationSelector, S3MultiSelectWidget
                     field = table.location_id
                     if r.method in ("create", "update"):
                         field.label = "" # Gets replaced by widget
-                    levels = ("L2", "L3")
-                    field.requires = IS_LOCATION()
+                    levels = ("L2", "L3", "L4")
                     field.widget = S3LocationSelector(levels=levels,
-                                                      hide_lx=False,
-                                                      reverse_lx=True,
                                                       show_address=True,
-                                                      show_postcode=True,
+                                                      # Using L4 instead
+                                                      show_postcode=False,
                                                       )
                     table.organisation_id.widget = S3MultiSelectWidget(multiple=False)
 
@@ -374,11 +408,11 @@ def config(settings):
 
     settings.customise_org_facility_controller = customise_org_facility_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_org_organisation_resource(r, tablename):
 
         from gluon.html import DIV, INPUT
-        from s3 import S3MultiSelectWidget, S3SQLCustomForm, S3SQLInlineLink, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
+        from s3 import s3_comments_widget, S3LocationSelector, S3MultiSelectWidget, S3SQLCustomForm, S3SQLInlineLink, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
 
         s3db = current.s3db
 
@@ -434,6 +468,11 @@ def config(settings):
                 # Create form: Default
                 rss_import = None
 
+        s3db.org_organisation_location.location_id.widget = S3LocationSelector(levels=("L2", "L3", "L4"),
+                                                                               show_map=False,
+                                                                               labels=False,
+                                                                               )
+        s3db.org_organisation_tag.value.widget = s3_comments_widget
         mtable = s3db.org_group_membership
         mtable.group_id.widget = S3MultiSelectWidget(multiple=False)
         mtable.status_id.widget = S3MultiSelectWidget(multiple=False,
@@ -464,6 +503,15 @@ def config(settings):
                 #widget = "hierarchy",
             ),
             S3SQLInlineComponent(
+                "tag",
+                label = T("Service Description"),
+                multiple = False,
+                fields = [("", "value")],
+                filterby = dict(field = "tag",
+                                options = "service_description"
+                                )
+            ),
+            S3SQLInlineComponent(
                 "group_membership",
                 label = T("Network"),
                 fields = [("", "group_id"),
@@ -471,43 +519,25 @@ def config(settings):
                           ],
                 ),
             S3SQLInlineComponent(
-                "address",
-                label = T("Address"),
-                multiple = False,
-                # This is just Text - put into the Comments box for now
-                # Ultimately should go into location_id$addr_street
-                fields = [("", "comments")],
-            ),
-            S3SQLInlineComponentMultiSelectWidget(
-                "location",
-                label = T("Neighborhoods Served"),
-                field = "location_id",
-                filterby = dict(field = "level",
-                                options = "L4"
-                                ),
-                # @ToDo: GroupedCheckbox Widget or Hierarchical MultiSelectWidget
-                #cols = 5,
-            ),
-            "phone",
+                "organisation_location",
+                label = T("Areas Served"),
+                fields = [("", "location_id"),
+                          ],
+                ),
             S3SQLInlineComponent(
-                "contact",
-                name = "phone2",
-                label = T("Phone2"),
+                "facility",
+                label = T("Main Facility"),
+                fields = ["name",
+                          "phone1",
+                          "phone2",
+                          "email",
+                          "location_id",
+                          ],
+                layout = FacilitySubFormLayout,
+                filterby = {"field": "main_facility",
+                            "options": True,
+                           },
                 multiple = False,
-                fields = [("", "value")],
-                filterby = dict(field = "contact_method",
-                                options = "WORK_PHONE"
-                                )
-            ),
-            S3SQLInlineComponent(
-                "contact",
-                name = "email",
-                label = T("Email"),
-                multiple = False,
-                fields = [("", "value")],
-                filterby = dict(field = "contact_method",
-                                options = "EMAIL"
-                                )
             ),
             "website",
             S3SQLInlineComponent(
@@ -571,9 +601,7 @@ def config(settings):
             postprocess = pr_contact_postprocess,
         )
 
-        from s3 import S3LocationFilter, S3OptionsFilter, S3TextFilter
-        # activate hierarchical org_service:
-        #from s3 import S3LocationFilter, S3OptionsFilter, S3TextFilter, S3HierarchyFilter
+        from s3 import S3LocationFilter, S3OptionsFilter, S3TextFilter#, S3HierarchyFilter
         filter_widgets = [
             S3TextFilter(["name", "acronym"],
                          label = T("Name"),
@@ -584,24 +612,25 @@ def config(settings):
                             represent = "%(name)s",
                             #hidden = True,
                             ),
+            S3LocationFilter("org_facility.location_id",
+                             label = T("Location"),
+                             levels = ("L2", "L4"),
+                             #hidden = True,
+                             ),
             S3LocationFilter("organisation_location.location_id",
-                             label = T("Neighborhood"),
-                             levels = ("L3", "L4"),
+                             label = T("Areas Served"),
+                             levels = ("L2", "L4"),
                              #hidden = True,
                              ),
             S3OptionsFilter("service_organisation.service_id",
                             #label = T("Service"),
                             #hidden = True,
                             ),
-            # activate hierarchical org_service:
+            # for hierarchical org_service:
             #S3HierarchyFilter("service_organisation.service_id",
             #                  #label = T("Service"),
             #                  #hidden = True,
             #                  ),
-            S3OptionsFilter("organisation_organisation_type.organisation_type_id",
-                            label = T("Type"),
-                            #hidden = True,
-                            ),
             ]
 
         list_fields = ["name",
@@ -610,7 +639,6 @@ def config(settings):
                        "phone",
                        (T("Email"), "email.value"),
                        "website"
-                       #(T("Neighborhoods Served"), "location.name"),
                        ]
 
         s3db.configure("org_organisation",
@@ -621,7 +649,7 @@ def config(settings):
 
     settings.customise_org_organisation_resource = customise_org_organisation_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_org_organisation_controller(**attr):
 
         s3db = current.s3db
@@ -637,25 +665,30 @@ def config(settings):
                 result = True
 
             if r.interactive:
-                if r.component_name == "facility":
+                if r.component_name == "facility" or not r.component:
                     if r.method in (None, "create", "update"):
-                        from s3 import IS_LOCATION, S3LocationSelector
+                        from s3 import S3LocationSelector
                         table = s3db.org_facility
                         field = table.location_id
                         if r.method in ("create", "update"):
                             field.label = "" # Gets replaced by widget
-                        levels = ("L2", "L3")
-                        field.requires = IS_LOCATION()
+                        levels = ("L2", "L3", "L4")
                         field.widget = S3LocationSelector(levels=levels,
-                                                          hide_lx=False,
-                                                          reverse_lx=True,
                                                           show_address=True,
-                                                          show_postcode=True,
+                                                          # Using L4 instead
+                                                          show_postcode=False,
                                                           )
                 elif r.component_name == "human_resource":
                     # Don't assume that user is from same org/site as Contacts they create
                     r.component.table.site_id.default = None
-
+                    # Put organisation contacts on top of the list
+                    s3db.configure("hrm_human_resource",
+                                   orderby = ("hrm_human_resource.org_contact desc",
+                                              "pr_person.first_name asc",
+                                              "pr_person.middle_name asc",
+                                              "pr_person.last_name asc",
+                                              ),
+                                   )
             return result
         s3.prep = custom_prep
 
@@ -672,8 +705,8 @@ def config(settings):
                     tabs = [(T("Basic Details"), None),
                             (T("Contacts"), "human_resource"),
                             (T("Facilities"), "facility"),
-                            (T("Projects"), "project"),
-                            (T("Assets"), "asset"),
+                            #(T("Projects"), "project"),
+                            #(T("Assets"), "asset"),
                             ]
                     output["rheader"] = s3db.org_rheader(r, tabs=tabs)
             return output
@@ -683,7 +716,7 @@ def config(settings):
 
     settings.customise_org_organisation_controller = customise_org_organisation_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_org_group_controller(**attr):
 
         s3db = current.s3db
@@ -717,14 +750,13 @@ def config(settings):
                     from s3 import S3SQLCustomForm, S3SQLInlineComponent
                     if r.method != "read":
                         from gluon.validators import IS_EMPTY_OR
-                        from s3 import IS_LOCATION, S3LocationSelector
+                        from s3 import S3LocationSelector
                         field = table.location_id
                         field.label = "" # Gets replaced by widget
-                        #field.requires = IS_LOCATION()
-                        #field.requires = IS_EMPTY_OR(IS_LOCATION()) # That's the default!
                         field.widget = S3LocationSelector(levels = ("L2",),
                                                           points = True,
                                                           polygons = True,
+                                                          open_map_on_load = True,
                                                           )
                         # Default location to Manhattan
                         db = current.db
@@ -876,7 +908,7 @@ def config(settings):
 
     settings.customise_org_group_controller = customise_org_group_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Persons
     # Uncomment to hide fields in S3AddPersonWidget
     settings.pr.request_dob = False
@@ -887,7 +919,9 @@ def config(settings):
     # Only show Private Contacts Tab (Public is done via Basic Details tab)
     settings.pr.contacts_tabs = ("private",)
 
-    # -----------------------------------------------------------------------------
+    POC = T("Org PoC")
+
+    # -------------------------------------------------------------------------
     # Persons
     def customise_pr_person_controller(**attr):
         """
@@ -917,21 +951,26 @@ def config(settings):
 
                 if not r.component:
                     hr_fields = ["organisation_id",
+                                 "org_contact",
                                  "job_title_id",
                                  "site_id",
                                  ]
+                    htable = s3db.hrm_human_resource
+                    field = htable.org_contact
+                    field.readable = field.writable = True
+                    field.label = POC
                     if r.method in ("create", "update"):
                         get_vars = r.get_vars
                         # Context from a Profile page?"
                         organisation_id = get_vars.get("(organisation)", None)
                         if organisation_id:
-                            field = s3db.hrm_human_resource.organisation_id
+                            field = htable.organisation_id
                             field.default = organisation_id
                             field.readable = field.writable = False
                             hr_fields.remove("organisation_id")
                         site_id = get_vars.get("(site)", None)
                         if site_id:
-                            field = s3db.hrm_human_resource.site_id
+                            field = htable.site_id
                             field.default = site_id
                             field.readable = field.writable = False
                             hr_fields.remove("site_id")
@@ -948,6 +987,14 @@ def config(settings):
                     MOBILE = settings.get_ui_label_mobile_phone()
                     EMAIL = T("Email")
 
+                    # We need a group-component for pr_person here to embed
+                    # group links in the custom form
+                    s3db.add_components("pr_person",
+                                        pr_group = {"name": "group",
+                                                    "link": "pr_group_membership",
+                                                    "joinby": "person_id",
+                                                    "key": "group_id",
+                                                    })
                     s3_sql_custom_fields = ["first_name",
                                             #"middle_name",
                                             "last_name",
@@ -972,6 +1019,18 @@ def config(settings):
                                                 ),
                                             S3SQLInlineComponent(
                                                 "contact",
+                                                name = "work_phone",
+                                                label = T("Work Phone"),
+                                                #multiple = True,
+                                                fields = [("", "value")],
+                                                filterby = [dict(field = "contact_method",
+                                                                 options = "WORK_PHONE"),
+                                                            dict(field = "access",
+                                                                 options = 2),
+                                                            ]
+                                                ),
+                                            S3SQLInlineComponent(
+                                                "contact",
                                                 name = "phone",
                                                 label = MOBILE,
                                                 #multiple = True,
@@ -982,6 +1041,12 @@ def config(settings):
                                                                  options = 2),
                                                             ]
                                                 ),
+                                            S3SQLInlineLink(
+                                                "group",
+                                                label = T("Groups"),
+                                                field = "group_id",
+                                                multiple = True,
+                                            ),
                                             #S3SQLInlineComponent(
                                             #    "image",
                                             #    name = "image",
@@ -1064,7 +1129,7 @@ def config(settings):
 
     settings.customise_pr_person_controller = customise_pr_person_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Groups
     def chairperson(row):
         """
@@ -1101,7 +1166,7 @@ def config(settings):
         else:
             return current.messages["NONE"]
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_pr_group_controller(**attr):
 
         s3 = current.response.s3
@@ -1140,7 +1205,7 @@ def config(settings):
                               "comments",
                               "group_team.org_group_id$name",
                               ],
-                             label = T("Search"),
+                             label = T("Name"),
                              comment = T("You can search by by group name, description or comments and by network name. You may use % as wildcard. Press 'Search' without input to list all."),
                              #_class = "filter-search",
                              ),
@@ -1183,7 +1248,7 @@ def config(settings):
 
     settings.customise_pr_group_controller = customise_pr_group_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_pr_group_resource(r, tablename):
         """
             Customise pr_group resource (in group & org_group controllers)
@@ -1223,172 +1288,7 @@ def config(settings):
 
     settings.customise_pr_group_resource = customise_pr_group_resource
 
-    # -----------------------------------------------------------------------------
-    def pr_contact_postprocess(form):
-        """
-            Import Organisation/Network RSS Feeds
-        """
-
-        s3db = current.s3db
-        form_vars = form.vars
-
-        rss_url = form_vars.rsscontact_i_value_edit_0 or \
-                  form_vars.rsscontact_i_value_edit_none
-        if not rss_url:
-            if form.record:
-                # Update form
-                old_rss = form.record.sub_rsscontact
-                import json
-                data = old_rss = json.loads(old_rss)["data"]
-                if data:
-                    # RSS feed is being deleted, so we should disable it
-                    old_rss = data[0]["value"]["value"]
-                    table = s3db.msg_rss_channel
-                    old = current.db(table.url == old_rss).select(table.channel_id,
-                                                                  table.enabled,
-                                                                  limitby = (0, 1)
-                                                                  ).first()
-                    if old and old.enabled:
-                        s3db.msg_channel_disable("msg_rss_channel", old.channel_id)
-                    return
-            else:
-                # Nothing to do :)
-                return
-
-        # Check if we already have a channel for this Contact
-        db = current.db
-        name = form_vars.name
-        table = s3db.msg_rss_channel
-        name_exists = db(table.name == name).select(table.id,
-                                                    table.channel_id,
-                                                    table.enabled,
-                                                    table.url,
-                                                    limitby = (0, 1)
-                                                    ).first()
-
-        no_import = current.request.post_vars.get("rss_no_import", None)
-
-        if name_exists:
-            if name_exists.url == rss_url:
-                # No change to either Contact Name or URL
-                if no_import:
-                    if name_exists.enabled:
-                        # Disable channel (& associated parsers)
-                        s3db.msg_channel_disable("msg_rss_channel",
-                                                 name_exists.channel_id)
-                    return
-                elif name_exists.enabled:
-                    # Nothing to do :)
-                    return
-                else:
-                    # Enable channel (& associated parsers)
-                    s3db.msg_channel_enable("msg_rss_channel",
-                                            name_exists.channel_id)
-                    return
-
-            # Check if we already have a channel for this URL
-            url_exists = db(table.url == rss_url).select(table.id,
-                                                         table.channel_id,
-                                                         table.enabled,
-                                                         limitby = (0, 1)
-                                                         ).first()
-            if url_exists:
-                # We have 2 feeds: 1 for the Contact & 1 for the URL
-                # Disable the old Contact one and link the URL one to this Contact
-                # and ensure active or not as appropriate
-                # Name field is unique so rename old one
-                name_exists.update_record(name="%s (Old)" % name)
-                if name_exists.enabled:
-                    # Disable channel (& associated parsers)
-                    s3db.msg_channel_disable("msg_rss_channel",
-                                             name_exists.channel_id)
-                url_exists.update_record(name=name)
-                if no_import:
-                    if url_exists.enabled:
-                        # Disable channel (& associated parsers)
-                        s3db.msg_channel_disable("msg_rss_channel",
-                                                 url_exists.channel_id)
-                    return
-                elif url_exists.enabled:
-                    # Nothing to do :)
-                    return
-                else:
-                    # Enable channel (& associated parsers)
-                    s3db.msg_channel_enable("msg_rss_channel",
-                                            url_exists.channel_id)
-                    return
-            else:
-                # Update the URL
-                name_exists.update_record(url=rss_url)
-                if no_import:
-                    if name_exists.enabled:
-                        # Disable channel (& associated parsers)
-                        s3db.msg_channel_disable("msg_rss_channel",
-                                                 name_exists.channel_id)
-                    return
-                elif name_exists.enabled:
-                    # Nothing to do :)
-                    return
-                else:
-                    # Enable channel (& associated parsers)
-                    s3db.msg_channel_enable("msg_rss_channel",
-                                            name_exists.channel_id)
-                    return
-        else:
-            # Check if we already have a channel for this URL
-            url_exists = db(table.url == rss_url).select(table.id,
-                                                         table.channel_id,
-                                                         table.enabled,
-                                                         limitby = (0, 1)
-                                                         ).first()
-            if url_exists:
-                # Either Contact has changed Name or this feed is associated with
-                # another Contact
-                # - update Feed name
-                url_exists.update_record(name=name)
-                if no_import:
-                    if url_exists.enabled:
-                        # Disable channel (& associated parsers)
-                        s3db.msg_channel_disable("msg_rss_channel",
-                                                 url_exists.channel_id)
-                    return
-                elif url_exists.enabled:
-                    # Nothing to do :)
-                    return
-                else:
-                    # Enable channel (& associated parsers)
-                    s3db.msg_channel_enable("msg_rss_channel",
-                                            url_exists.channel_id)
-                    return
-            elif no_import:
-                # Nothing to do :)
-                return
-            #else:
-            #    # Create a new Feed
-            #    pass
-
-        # Add RSS Channel
-        _id = table.insert(name=name, enabled=True, url=rss_url)
-        record = dict(id=_id)
-        s3db.update_super(table, record)
-
-        # Enable
-        channel_id = record["channel_id"]
-        s3db.msg_channel_enable("msg_rss_channel", channel_id)
-
-        # Setup Parser
-        table = s3db.msg_parser
-        _id = table.insert(channel_id=channel_id,
-                           function_name="parse_rss",
-                           enabled=True)
-        s3db.msg_parser_enable(_id)
-
-        # Check Now
-        async = current.s3task.async
-        async("msg_poll", args=["msg_rss_channel", channel_id])
-        async("msg_parse", args=[channel_id, "parse_rss"])
-
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Human Resource Management
     # Uncomment to chage the label for 'Staff'
     settings.hrm.staff_label = "Contacts"
@@ -1417,8 +1317,26 @@ def config(settings):
     # Custom label for Organisations in HR module
     #settings.hrm.organisation_label = "National Society / Branch"
     settings.hrm.organisation_label = "Organization"
+    # Uncomment to disable the use of HR ID Tab
+    settings.hrm.use_id = False
+    # Uncomment to disable the use of HR Address Tab
+    settings.hrm.use_address = False
 
-    # -----------------------------------------------------------------------------
+    hrm_human_resource_list_fields = [
+        "id",
+        "person_id",
+        "job_title_id",
+        "organisation_id",
+        "org_contact",
+        (T("Network"), "group_person.group_id"),
+        (T("Groups"), "person_id$group_membership.group_id"),
+        "site_id",
+        #"site_contact",
+        (T("Email"), "email.value"),
+        (settings.get_ui_label_mobile_phone(), "phone.value"),
+    ]
+
+    # -------------------------------------------------------------------------
     def customise_hrm_human_resource_controller(**attr):
 
         s3 = current.response.s3
@@ -1431,6 +1349,9 @@ def config(settings):
                 result = standard_prep(r)
             else:
                 result = True
+
+            # Would be overridden by standard_prep, so re-apply
+            r.resource.configure(list_fields = hrm_human_resource_list_fields)
 
             if r.interactive or r.representation == "aadata":
                 if not r.component:
@@ -1445,37 +1366,42 @@ def config(settings):
                         S3OptionsFilter("organisation_id",
                                         filter = True,
                                         header = "",
-                                        hidden = True,
+                                        #hidden = True,
                                         ),
-                        S3OptionsFilter("group_person.group_id",
+                        S3OptionsFilter("org_contact",
+                                        label = T("Organization Contacts"),
+                                        cols = 1,
+                                        size = None,
+                                        options = {True: ""}),
+                        S3OptionsFilter("group_membership.group_id$org_group_team.org_group_id",
                                         label = T("Network"),
                                         #filter = True,
                                         #header = "",
-                                        hidden = True,
+                                        #hidden = True,
                                         ),
                         S3LocationFilter("location_id",
                                          label = T("Location"),
-                                         levels = ("L1", "L2", "L3", "L4"),
-                                         hidden = True,
+                                         levels = ("L2", "L4"),
+                                         #hidden = True,
                                          ),
-                        S3OptionsFilter("site_id",
-                                        hidden = True,
-                                        ),
-                        S3OptionsFilter("training.course_id",
-                                        label = T("Training"),
-                                        hidden = True,
-                                        ),
                         S3OptionsFilter("group_membership.group_id",
-                                        label = T("Team"),
+                                        label = T("Group"),
                                         filter = True,
                                         header = "",
-                                        hidden = True,
+                                        #hidden = True,
                                         ),
                         ]
 
                     s3db = current.s3db
                     s3db.configure("hrm_human_resource",
                                    filter_widgets = filter_widgets,
+                                   # Put organisation contacts first
+                                   orderby = ("org_organisation.name asc",
+                                              "hrm_human_resource.org_contact desc",
+                                              "pr_person.first_name asc",
+                                              "pr_person.middle_name asc",
+                                              "pr_person.last_name asc",
+                                              ),
                                    )
 
                     s3db.pr_contact.access.default = 2 # Primary contacts should be Public
@@ -1501,49 +1427,50 @@ def config(settings):
 
     settings.customise_hrm_human_resource_controller = customise_hrm_human_resource_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_human_resource_resource(r, tablename):
         """
-            Customise hrm_human_resource resource (in facility, human_resource, organisation & person controllers)
+            Customise hrm_human_resource resource (in facility,
+            human_resource, organisation & person controllers)
                 - runs after controller customisation
                 - but runs before prep
         """
 
         s3db = current.s3db
+        # We need a group-component for pr_person here to embed
+        # group links in the contact form
+        s3db.add_components("pr_person",
+                            pr_group = {"name": "group",
+                                        "link": "pr_group_membership",
+                                        "joinby": "person_id",
+                                        "key": "group_id",
+                                        })
+        field = s3db.hrm_human_resource.org_contact
+        field.readable = field.writable = True
+        field.label = POC
+
         from s3 import S3SQLCustomForm, S3SQLInlineComponent
         crud_form = S3SQLCustomForm("person_id",
                                     "organisation_id",
+                                    "org_contact",
                                     "site_id",
-                                    S3SQLInlineComponent(
-                                        "group_person",
-                                        label = T("Network"),
-                                        link = False,
-                                        fields = [("", "group_id")],
-                                        multiple = False,
-                                        ),
+                                    # Custom inline component
+                                    S3SQLHRPersonLink("group",
+                                                      label = T("Groups"),
+                                                      field = "group_id",
+                                                      multiple=True,
+                                                      ),
                                     "job_title_id",
                                     "start_date",
                                     )
-        list_fields = ["id",
-                       "person_id",
-                       "job_title_id",
-                       "organisation_id",
-                       (T("Network"), "group_person.group_id"),
-                       (T("Groups"), "person_id$group_membership.group_id"),
-                       "site_id",
-                       #"site_contact",
-                       (T("Email"), "email.value"),
-                       (settings.get_ui_label_mobile_phone(), "phone.value"),
-                       ]
-
         s3db.configure("hrm_human_resource",
                        crud_form = crud_form,
-                       list_fields = list_fields,
+                       list_fields = hrm_human_resource_list_fields,
                        )
 
     settings.customise_hrm_human_resource_resource = customise_hrm_human_resource_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_job_title_controller(**attr):
 
         s3 = current.response.s3
@@ -1569,7 +1496,7 @@ def config(settings):
 
     settings.customise_hrm_job_title_controller = customise_hrm_job_title_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Projects
     # Use codes for projects (called 'blurb' in NYC)
     settings.project.codes = True
@@ -1690,7 +1617,7 @@ def config(settings):
                     #                ),
                     S3LocationFilter("location.location_id",
                                      label = T("Location"),
-                                     levels = ("L1", "L2", "L3", "L4"),
+                                     levels = ("L2", "L4"),
                                      #hidden = True,
                                      ),
                     # @ToDo: Widget to handle Start & End in 1!
@@ -1728,7 +1655,7 @@ def config(settings):
 
     settings.customise_project_project_controller = customise_project_project_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Requests Management
     settings.req.req_type = ["People", "Stock"]#, "Summary"]
     settings.req.prompt_match = False
@@ -1841,7 +1768,7 @@ def config(settings):
                                  url=url,
                                  )
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_req_req_resource(r, tablename):
 
         from s3layouts import S3AddResourceLink
@@ -1866,7 +1793,7 @@ def config(settings):
 
     settings.customise_req_req_resource = customise_req_req_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Comment/uncomment modules here to disable/enable them
     settings.modules = OrderedDict([
         # Core modules which shouldn't be disabled
@@ -1960,30 +1887,30 @@ def config(settings):
                 # The user-visible functionality of this module isn't normally required. Rather it's main purpose is to be accessed from other modules.
                 module_type = None,
             )),
-        ("supply", Storage(
-                name_nice = T("Supply Chain Management"),
-                #description = "Used within Inventory Management, Request Management and Asset Management",
-                restricted = True,
-                module_type = None, # Not displayed
-            )),
-        ("inv", Storage(
-                name_nice = T("Inventory"),
-                #description = "Receiving and Sending Items",
-                restricted = True,
-                module_type = 10
-            )),
+        #("supply", Storage(
+        #        name_nice = T("Supply Chain Management"),
+        #        #description = "Used within Inventory Management, Request Management and Asset Management",
+        #        restricted = True,
+        #        module_type = None, # Not displayed
+        #    )),
+        #("inv", Storage(
+        #        name_nice = T("Inventory"),
+        #        #description = "Receiving and Sending Items",
+        #        restricted = True,
+        #        module_type = 10
+        #    )),
         #("proc", Storage(
         #        name_nice = T("Procurement"),
         #        #description = "Ordering & Purchasing of Goods & Services",
         #        restricted = True,
         #        module_type = 10
         #    )),
-        ("asset", Storage(
-                name_nice = T("Assets"),
-                #description = "Recording and Assigning Assets",
-                restricted = True,
-                module_type = 10,
-            )),
+        #("asset", Storage(
+        #        name_nice = T("Assets"),
+        #        #description = "Recording and Assigning Assets",
+        #        restricted = True,
+        #        module_type = 10,
+        #    )),
         # Vehicle depends on Assets
         #("vehicle", Storage(
         #        name_nice = T("Vehicles"),
@@ -1991,36 +1918,36 @@ def config(settings):
         #        restricted = True,
         #        module_type = 10,
         #    )),
-        ("req", Storage(
-                name_nice = T("Requests"),
-                #description = "Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested.",
-                restricted = True,
-                module_type = 1,
-            )),
-        ("project", Storage(
-                name_nice = T("Projects"),
-                #description = "Tracking of Projects, Activities and Tasks",
-                restricted = True,
-                module_type = 10
-            )),
-        ("assess", Storage(
-                name_nice = T("Assessments"),
-                #description = "Rapid Assessments & Flexible Impact Assessments",
-                restricted = True,
-                module_type = 5,
-            )),
-        ("event", Storage(
-                name_nice = T("Events"),
-                #description = "Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities).",
-                restricted = True,
-                module_type = 10,
-            )),
-        ("survey", Storage(
-                name_nice = T("Surveys"),
-                #description = "Create, enter, and manage surveys.",
-                restricted = True,
-                module_type = 5,
-            )),
+        #("req", Storage(
+        #        name_nice = T("Requests"),
+        #        #description = "Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested.",
+        #        restricted = True,
+        #        module_type = 1,
+        #    )),
+        #("project", Storage(
+        #        name_nice = T("Projects"),
+        #        #description = "Tracking of Projects, Activities and Tasks",
+        #        restricted = True,
+        #        module_type = 10
+        #    )),
+        #("assess", Storage(
+        #        name_nice = T("Assessments"),
+        #        #description = "Rapid Assessments & Flexible Impact Assessments",
+        #        restricted = True,
+        #        module_type = 5,
+        #    )),
+        #("event", Storage(
+        #        name_nice = T("Events"),
+        #        #description = "Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities).",
+        #        restricted = True,
+        #        module_type = 10,
+        #    )),
+        #("survey", Storage(
+        #        name_nice = T("Surveys"),
+        #        #description = "Create, enter, and manage surveys.",
+        #        restricted = True,
+        #        module_type = 5,
+        #    )),
         #("cr", Storage(
         #        name_nice = T("Shelters"),
         #        #description = "Tracks the location, capacity and breakdown of victims in Shelters",
@@ -2054,5 +1981,313 @@ def config(settings):
         #        module_type = 10,
         #    )),
     ])
+
+# -----------------------------------------------------------------------------
+# Functions & Classes which are importable by other Templates
+# -----------------------------------------------------------------------------
+def pr_contact_postprocess(form):
+    """
+        Import Organisation/Network RSS Feeds
+    """
+
+    s3db = current.s3db
+    form_vars = form.vars
+
+    rss_url = form_vars.rsscontact_i_value_edit_0 or \
+              form_vars.rsscontact_i_value_edit_none
+    if not rss_url:
+        if form.record:
+            # Update form
+            old_rss = form.record.sub_rsscontact
+            import json
+            data = old_rss = json.loads(old_rss)["data"]
+            if data:
+                # RSS feed is being deleted, so we should disable it
+                old_rss = data[0]["value"]["value"]
+                table = s3db.msg_rss_channel
+                old = current.db(table.url == old_rss).select(table.channel_id,
+                                                              table.enabled,
+                                                              limitby = (0, 1)
+                                                              ).first()
+                if old and old.enabled:
+                    s3db.msg_channel_disable("msg_rss_channel", old.channel_id)
+                return
+        else:
+            # Nothing to do :)
+            return
+
+    # Check if we already have a channel for this Contact
+    db = current.db
+    name = form_vars.name
+    table = s3db.msg_rss_channel
+    name_exists = db(table.name == name).select(table.id,
+                                                table.channel_id,
+                                                table.enabled,
+                                                table.url,
+                                                limitby = (0, 1)
+                                                ).first()
+
+    no_import = current.request.post_vars.get("rss_no_import", None)
+
+    if name_exists:
+        if name_exists.url == rss_url:
+            # No change to either Contact Name or URL
+            if no_import:
+                if name_exists.enabled:
+                    # Disable channel (& associated parsers)
+                    s3db.msg_channel_disable("msg_rss_channel",
+                                             name_exists.channel_id)
+                return
+            elif name_exists.enabled:
+                # Nothing to do :)
+                return
+            else:
+                # Enable channel (& associated parsers)
+                s3db.msg_channel_enable("msg_rss_channel",
+                                        name_exists.channel_id)
+                return
+
+        # Check if we already have a channel for this URL
+        url_exists = db(table.url == rss_url).select(table.id,
+                                                     table.channel_id,
+                                                     table.enabled,
+                                                     limitby = (0, 1)
+                                                     ).first()
+        if url_exists:
+            # We have 2 feeds: 1 for the Contact & 1 for the URL
+            # Disable the old Contact one and link the URL one to this Contact
+            # and ensure active or not as appropriate
+            # Name field is unique so rename old one
+            name_exists.update_record(name="%s (Old)" % name)
+            if name_exists.enabled:
+                # Disable channel (& associated parsers)
+                s3db.msg_channel_disable("msg_rss_channel",
+                                         name_exists.channel_id)
+            url_exists.update_record(name=name)
+            if no_import:
+                if url_exists.enabled:
+                    # Disable channel (& associated parsers)
+                    s3db.msg_channel_disable("msg_rss_channel",
+                                             url_exists.channel_id)
+                return
+            elif url_exists.enabled:
+                # Nothing to do :)
+                return
+            else:
+                # Enable channel (& associated parsers)
+                s3db.msg_channel_enable("msg_rss_channel",
+                                        url_exists.channel_id)
+                return
+        else:
+            # Update the URL
+            name_exists.update_record(url=rss_url)
+            if no_import:
+                if name_exists.enabled:
+                    # Disable channel (& associated parsers)
+                    s3db.msg_channel_disable("msg_rss_channel",
+                                             name_exists.channel_id)
+                return
+            elif name_exists.enabled:
+                # Nothing to do :)
+                return
+            else:
+                # Enable channel (& associated parsers)
+                s3db.msg_channel_enable("msg_rss_channel",
+                                        name_exists.channel_id)
+                return
+    else:
+        # Check if we already have a channel for this URL
+        url_exists = db(table.url == rss_url).select(table.id,
+                                                     table.channel_id,
+                                                     table.enabled,
+                                                     limitby = (0, 1)
+                                                     ).first()
+        if url_exists:
+            # Either Contact has changed Name or this feed is associated with
+            # another Contact
+            # - update Feed name
+            url_exists.update_record(name=name)
+            if no_import:
+                if url_exists.enabled:
+                    # Disable channel (& associated parsers)
+                    s3db.msg_channel_disable("msg_rss_channel",
+                                             url_exists.channel_id)
+                return
+            elif url_exists.enabled:
+                # Nothing to do :)
+                return
+            else:
+                # Enable channel (& associated parsers)
+                s3db.msg_channel_enable("msg_rss_channel",
+                                        url_exists.channel_id)
+                return
+        elif no_import:
+            # Nothing to do :)
+            return
+        #else:
+        #    # Create a new Feed
+        #    pass
+
+    # Add RSS Channel
+    _id = table.insert(name=name, enabled=True, url=rss_url)
+    record = dict(id=_id)
+    s3db.update_super(table, record)
+
+    # Enable
+    channel_id = record["channel_id"]
+    s3db.msg_channel_enable("msg_rss_channel", channel_id)
+
+    # Setup Parser
+    table = s3db.msg_parser
+    _id = table.insert(channel_id=channel_id,
+                       function_name="parse_rss",
+                       enabled=True)
+    s3db.msg_parser_enable(_id)
+
+    # Check Now
+    async = current.s3task.async
+    async("msg_poll", args=["msg_rss_channel", channel_id])
+    async("msg_parse", args=[channel_id, "parse_rss"])
+
+# =============================================================================
+class S3SQLHRPersonLink(S3SQLInlineLink):
+    """
+        Special inline link variant to allow pr_person links to be
+        added inside an hrm_human_resource form.
+    """
+
+    # -------------------------------------------------------------------------
+    def resolve(self, resource):
+        """
+            Override superclass method to resolve against the pr_person
+            resource instead of the master resource (=hrm_human_resource)
+
+            @param resource: the resource
+            @return: a tuple (self, None, Field instance)
+        """
+
+        selector = self.selector
+
+        person_resource = current.s3db.resource("pr_person",
+                                                components=[selector])
+        return super(S3SQLHRPersonLink, self).resolve(person_resource)
+
+    # -------------------------------------------------------------------------
+    def extract(self, resource, record_id):
+        """
+            Override superclass method to map the master record to the
+            corresponding pr_person record (only required when called
+            from the form handler)
+
+            @param resource: the resource the record belongs to
+            @param record_id: the record ID
+            @return: the value for the input field that corresponds
+                      to the specified record.
+        """
+
+        if resource.tablename == "hrm_human_resource":
+            # Call by form handler
+            s3db = current.s3db
+            table = resource.table
+            query = (table._id == record_id)
+            master = current.db(query).select(table.person_id,
+                                              limitby=(0, 1)).first()
+            if not master:
+                raise KeyError("Record not found")
+            record_id = master.person_id
+            resource = s3db.resource("pr_person",
+                                     components=[self.selector],
+                                     id = record_id)
+
+        return super(S3SQLHRPersonLink, self).extract(resource,
+                                                      record_id,
+                                                      )
+
+    # -------------------------------------------------------------------------
+    def accept(self, form, master_id=None, format=None):
+        """
+            Override superclass method to use the person_id in
+            the master record instead of the master_id.
+
+            @param form: the master form
+            @param master_id: the ID of the master record in the form
+            @param format: the data format extension (for audit)
+        """
+
+        s3db = current.s3db
+
+        # Get the person_id corresponding to the master_id
+        htable = s3db.hrm_human_resource
+        query = (htable._id == master_id)
+        master = current.db(query).select(htable.person_id,
+                                          limitby=(0, 1)).first()
+        if not master:
+            return False
+        person_id = master.person_id
+
+        return super(S3SQLHRPersonLink, self).accept(form,
+                                                     master_id = person_id,
+                                                     format = format,
+                                                     )
+
+# =============================================================================
+class FacilitySubFormLayout(S3SQLSubFormLayout):
+    """
+        Custom layout for facility inline-component in org/organisation
+
+        - allows embedding of multiple fields besides the location selector
+        - renders an vertical layout for edit-rows
+        - standard horizontal layout for read-rows
+        - hiding header row if there are no visible read-rows
+    """
+
+    # -------------------------------------------------------------------------
+    def headers(self, data, readonly=False):
+        """
+            Header-row layout: same as default, but non-static (i.e. hiding
+            if there are no visible read-rows, because edit-rows have their
+            own labels)
+        """
+
+        headers = super(FacilitySubFormLayout, self).headers
+
+        header_row = headers(data, readonly = readonly)
+        element = header_row.element('tr');
+        if hasattr(element, "remove_class"):
+            element.remove_class("static")
+        return header_row
+
+    # -------------------------------------------------------------------------
+    def rowstyle_read(self, form, fields, *args, **kwargs):
+        """
+            Formstyle for subform read-rows, same as standard
+            horizontal layout.
+        """
+
+        rowstyle = super(FacilitySubFormLayout, self).rowstyle
+        return rowstyle(form, fields, *args, **kwargs)
+
+    # -------------------------------------------------------------------------
+    def rowstyle(self, form, fields, *args, **kwargs):
+        """
+            Formstyle for subform edit-rows, using a vertical
+            formstyle because multiple fields combined with
+            location-selector are too complex for horizontal
+            layout.
+        """
+
+        # Use standard foundation formstyle
+        from s3theme import formstyle_foundation as formstyle
+        if args:
+            col_id = form
+            label = fields
+            widget, comment = args
+            hidden = kwargs.get("hidden", False)
+            return formstyle(col_id, label, widget, comment, hidden)
+        else:
+            parent = TD(_colspan = len(fields))
+            for col_id, label, widget, comment in fields:
+                parent.append(formstyle(col_id, label, widget, comment))
+            return TR(parent)
 
 # END =========================================================================
