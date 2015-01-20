@@ -1372,14 +1372,9 @@ class GIS(object):
                 if user.site_id:
                     # Add the user account's Site to the list
                     # (Will take lower-priority than Org/Personal)
-                    stable = s3db.org_site
-                    site = db(stable.site_id == user.site_id).select(stable.pe_id,
-                                                                     limitby=(0, 1)
-                                                                     ).first()
-                    try:
-                        pes.append(site.pe_id)
-                    except:
-                        current.log.warning("Unable to find Site %s" % user.site_id)
+                    site_pe_id = s3db.pr_get_pe_id("org_site", user.site_id)
+                    if site_pe_id:
+                        pes.append(site_pe_id)
 
                 if user.org_group_id:
                     # Add the user account's Org Group to the list
@@ -2252,6 +2247,9 @@ class GIS(object):
         """
             Returns the locations for an XML export
             - used by GIS.get_location_data() and S3PivotTable.geojson()
+
+            @ToDo: Support multiple locations for a single resource
+                   (e.g. a Project wworking in multiple Communities)
         """
 
         db = current.db
@@ -2643,6 +2641,8 @@ class GIS(object):
                 #if custom:
                 #    # Add geoJSONs
                 #elif join:
+                # @ToDo: Support records with multiple locations
+                #        (e.g. an Org with multiple Facs)
                 if join:
                     for row in rows:
                         _location = row["gis_location"]

@@ -597,6 +597,23 @@ def config(settings):
                                 options = "FACEBOOK"
                                 )
             ),
+            S3SQLInlineComponent(
+                "facility",
+                name = "other_facilities",
+                label = T("Other Facilities"),
+                fields = ["name",
+                          "phone1",
+                          "phone2",
+                          "email",
+                          "location_id",
+                          ],
+                layout = FacilitySubFormLayout,
+                filterby = {"field": "main_facility",
+                            "options": False,
+                           },
+                multiple = True,
+                explicit_add = T("Add Facility"),
+            ),
             "comments",
             postprocess = pr_contact_postprocess,
         )
@@ -664,9 +681,9 @@ def config(settings):
             else:
                 result = True
 
-            if r.interactive:
+            if r.interactive or r.representation == "json":
                 if r.component_name == "facility" or not r.component:
-                    if r.method in (None, "create", "update"):
+                    if r.method in (None, "create", "update", "validate"):
                         from s3 import S3LocationSelector
                         table = s3db.org_facility
                         field = table.location_id
@@ -995,6 +1012,20 @@ def config(settings):
                                                     "joinby": "person_id",
                                                     "key": "group_id",
                                                     })
+                    if current.auth.s3_logged_in():
+                        contact_fields = [("", "value"),
+                                          ("", "access"),
+                                          ]
+                        contact_filter = []
+                        field = s3db.pr_contact.access
+                        field.readable = field.writable = True
+                        field.default = 2 # public
+                    else:
+                        contact_fields = [("", "value"),
+                                          ]
+                        contact_filter = [{"field": "access",
+                                           "options": 2,
+                                           }]
                     s3_sql_custom_fields = ["first_name",
                                             #"middle_name",
                                             "last_name",
@@ -1010,36 +1041,33 @@ def config(settings):
                                                 name = "email",
                                                 label = EMAIL,
                                                 #multiple = True,
-                                                fields = [("", "value")],
-                                                filterby = [dict(field = "contact_method",
-                                                                 options = "EMAIL"),
-                                                            dict(field = "access",
-                                                                 options = 2),
-                                                            ]
+                                                fields = contact_fields,
+                                                filterby = [{"field": "contact_method",
+                                                             "options": "EMAIL",
+                                                             },
+                                                            ] + contact_filter,
                                                 ),
                                             S3SQLInlineComponent(
                                                 "contact",
                                                 name = "work_phone",
                                                 label = T("Work Phone"),
                                                 #multiple = True,
-                                                fields = [("", "value")],
-                                                filterby = [dict(field = "contact_method",
-                                                                 options = "WORK_PHONE"),
-                                                            dict(field = "access",
-                                                                 options = 2),
-                                                            ]
+                                                fields = contact_fields,
+                                                filterby = [{"field": "contact_method",
+                                                             "options": "WORK_PHONE",
+                                                             },
+                                                            ] + contact_filter,
                                                 ),
                                             S3SQLInlineComponent(
                                                 "contact",
                                                 name = "phone",
                                                 label = MOBILE,
                                                 #multiple = True,
-                                                fields = [("", "value")],
-                                                filterby = [dict(field = "contact_method",
-                                                                 options = "SMS"),
-                                                            dict(field = "access",
-                                                                 options = 2),
-                                                            ]
+                                                fields = contact_fields,
+                                                filterby = [{"field": "contact_method",
+                                                             "options": "SMS",
+                                                             },
+                                                            ] + contact_filter,
                                                 ),
                                             S3SQLInlineLink(
                                                 "group",
@@ -1058,24 +1086,6 @@ def config(settings):
                                             #                    )
                                             #    ),
                                             ]
-                    if r.method != "update":
-                        other_contact_opts = current.msg.CONTACT_OPTS.keys()
-                        other_contact_opts.remove("EMAIL")
-                        other_contact_opts.remove("SMS")
-
-                        s3_sql_custom_fields.append(S3SQLInlineComponent("contact",
-                                                                         name = "contact",
-                                                                         label = T("Additional Public Contact Info"),
-                                                                         #multiple = True,
-                                                                         fields = [("", "contact_method"),
-                                                                                   ("", "value"),
-                                                                                   ],
-                                                                         filterby = [dict(field = "access",
-                                                                                          options = 2),
-                                                                                     dict(field = "contact_method",
-                                                                                          options = other_contact_opts),
-                                                                                     ]
-                                                                         ))
 
                     crud_form = S3SQLCustomForm(*s3_sql_custom_fields)
 
