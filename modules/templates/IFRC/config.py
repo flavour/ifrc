@@ -163,10 +163,9 @@ def config(settings):
             ltable = db.org_organisation_organisation_type
             query = (ltable.organisation_id == row.id) & \
                     (ltable.organisation_type_id == ottable.id)
-            row = db(query).select(ottable.name,
-                                   limitby=(0, 1)
-                                   ).first()
-            if row and row.name != "Red Cross / Red Crescent":
+            otype = db(query).select(ottable.name,
+                                     limitby=(0, 1)).first()
+            if otype and otype.name != "Red Cross / Red Crescent":
                 use_user_organisation = True
 
         # Groups are owned by the user's organisation
@@ -2093,6 +2092,7 @@ def config(settings):
                     return False
 
             component_name = r.component_name
+            method = r.method
             if component_name == "appraisal":
                 atable = r.component.table
                 atable.organisation_id.readable = atable.organisation_id.writable = False
@@ -2118,7 +2118,7 @@ def config(settings):
                 dtable.medical_conditions.comment = DIV(_class="tooltip",
                                                         _title="%s|%s" % (T("Medical Conditions"),
                                                                           T("Chronic Illness, Disabilities, Mental/Psychological Condition etc.")))
-            elif r.method == "cv" or component_name == "education":
+            elif method == "cv" or component_name == "education":
                 if vnrc:
                     etable = s3db.pr_education
                     # Don't enable Legacy Freetext field
@@ -2152,13 +2152,13 @@ def config(settings):
                     field.label = T("Other Level")
                     field.comment = T("Use main dropdown whenever possible")
 
-            elif r.method =="record" or component_name == "human_resource":
+            elif method =="record" or component_name == "human_resource":
                 # Organisation needs to be an NS/Branch
                 ns_only("hrm_human_resource",
                         required = True,
                         branches = True,
                         )
-                if r.method == "record":
+                if method == "record":
                     # Use default form (legacy)
                     s3db.clear_config("hrm_human_resource", "crud_form")
 
@@ -2279,7 +2279,7 @@ def config(settings):
                     s3db.configure("pr_person",
                                    crud_form = S3SQLCustomForm(*crud_fields),
                                    )
-                if r.method == "record" or component_name == "human_resource":
+                if method == "record" or component_name == "human_resource":
                     # Hide job_title_id in programme hours
                     field = s3db.hrm_programme_hours.job_title_id
                     field.readable = field.writable = False
@@ -2295,7 +2295,7 @@ def config(settings):
                         field = htable[fname]
                         field.readable = field.writable = False
 
-                    if r.method == "record" and controller == "hrm":
+                    if method == "record" and controller == "hrm":
                         # Custom config for method handler
 
                         from s3 import FS
@@ -2404,7 +2404,7 @@ def config(settings):
                     settings.gis.latlon_selector = False
                     settings.gis.map_selector = False
 
-                elif r.method == "contacts":
+                elif method == "contacts":
                     table = s3db.pr_contact_emergency
                     table.address.readable = table.address.writable = True
 
@@ -2441,14 +2441,15 @@ def config(settings):
                     field = s3db.hrm_programme_hours.job_title_id
                     field.readable = field.writable = False
 
-                elif component_name == "physical_description":
+                elif component_name == "physical_description" or \
+                     method == "import":
                     # Add the less-specific blood types (as that's all the data currently available in some cases)
                     field = s3db.pr_physical_description.blood_type
                     from gluon.validators import IS_EMPTY_OR, IS_IN_SET
                     blood_type_opts = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "A", "B", "AB", "O")
                     field.requires = IS_EMPTY_OR(IS_IN_SET(blood_type_opts))
 
-                elif r.method == "cv" or component_name == "experience":
+                elif method == "cv" or component_name == "experience":
                     table = s3db.hrm_experience
                     # Use simple free-text variants
                     table.organisation_id.default = None # should not default in this case
@@ -2473,7 +2474,7 @@ def config(settings):
                                                   "end_date",
                                                   ],
                                    )
-                    if r.method == "cv":
+                    if method == "cv":
                         # Customize CV
                         s3db.set_method("pr", "person",
                                         method = "cv",
