@@ -3710,7 +3710,7 @@ class S3Resource(object):
 
                 try:
                     rfield = rfields[iSortCol]
-                except KeyError:
+                except IndexError:
                     # iSortCol specifies a non-existent column, i.e.
                     # iSortCol_x>=numcols => ignore
                     columns.append(Storage(field=None))
@@ -3886,12 +3886,19 @@ class S3Resource(object):
             list_fields = [f.name for f in self.readable_fields()]
 
         pkey = _pkey = self._id.name
+        if self.parent and not self.link and \
+           not current.response.s3.component_show_key:
+            fkey = self.fkey
+        else:
+            fkey = None
         fields = []
         append = fields.append
         selectors = set()
         seen = selectors.add
         for f in list_fields:
-            selector = f if type(f) is not tuple else f[1]
+            selector = f[1] if type(f) is tuple else f
+            if fkey and selector == fkey:
+                continue
             if selector == _pkey and not id_column:
                 pkey = f
             elif selector not in selectors:

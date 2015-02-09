@@ -1231,6 +1231,88 @@ def config(settings):
     settings.customise_hrm_experience_controller = customise_hrm_experience_controller
 
     # -----------------------------------------------------------------------------
+    def rdrt_member_profile_header(r):
+        """ Custom profile header to allow update of RDRT roster status """
+
+        record = r.record
+        if not record:
+            return ""
+
+        person_id = record.person_id
+        from s3 import s3_fullname, s3_avatar_represent
+        name = s3_fullname(person_id)
+
+        table = r.table
+
+        # Organisation
+        comments = table.organisation_id.represent(record.organisation_id)
+
+        # Add job title if present
+        job_title_id = record.job_title_id
+        if job_title_id:
+            comments = (SPAN("%s, " % \
+                             s3_unicode(table.job_title_id.represent(job_title_id))),
+                             comments)
+
+        from gluon.html import A, DIV, H2, LABEL, P, SPAN
+
+        # Determine the current roster membership status (active/inactive)
+        atable = current.s3db.deploy_application
+        status = atable.active
+        query = atable.human_resource_id == r.id
+        row = current.db(query).select(atable.id,
+                                       atable.active,
+                                       limitby=(0, 1)).first()
+        if row:
+            active = 1 if row.active else 0
+            status_id = row.id
+            roster_status = status.represent(row.active)
+        else:
+            active = None
+            status_id = None
+            roster_status = current.messages.UNKNOWN_OPT
+
+        if status_id and \
+           current.auth.s3_has_permission("update",
+                                          "deploy_application",
+                                          record_id=status_id):
+            # Make inline-editable
+            roster_status = A(roster_status,
+                              data = {"status": active},
+                              _id = "rdrt-roster-status",
+                              _title = T("Click to edit"),
+                              )
+            s3 = current.response.s3
+            script = "/%s/static/themes/IFRC/js/rdrt.js" % r.application
+            if script not in s3.scripts:
+                s3.scripts.append(script)
+            script = '''$.rdrtStatus('%(url)s','%(active)s','%(inactive)s','%(submit)s')'''
+            from gluon import URL
+            options = {"url": URL(c="deploy", f="application",
+                                  args=["%s.s3json" % status_id]),
+                       "active": status.represent(True),
+                       "inactive": status.represent(False),
+                       "submit": T("Save"),
+                       }
+            s3.jquery_ready.append(script % options)
+        else:
+            # Read-only
+            roster_status = SPAN(roster_status)
+
+        # Render profile header
+        return DIV(A(s3_avatar_represent(person_id,
+                                         tablename="pr_person",
+                                         _class="media-object",
+                                         ),
+                     _class="pull-left",
+                     ),
+                   H2(name),
+                   P(comments),
+                   DIV(LABEL(status.label + ": "), roster_status),
+                   _class="profile-header",
+                   )
+
+    # -----------------------------------------------------------------------------
     def customise_hrm_human_resource_controller(**attr):
 
         controller = current.request.controller
@@ -1243,9 +1325,12 @@ def config(settings):
 
         arcs = False
         vnrc = False
+        root_org = current.auth.root_org_name()
+        if root_org == VNRC:
+            settings.pr.name_format = "%(last_name)s %(middle_name)s %(first_name)s"
+
         if controller == "vol":
             # Special cases for different NS
-            root_org = current.auth.root_org_name()
             if root_org == ARCS:
                 arcs = True
                 settings.L10n.mandatory_lastname = False
@@ -1256,7 +1341,6 @@ def config(settings):
                 settings.hrm.vol_active = vol_active
             elif root_org == VNRC:
                 vnrc = True
-                settings.pr.name_format = "%(last_name)s %(middle_name)s %(first_name)s"
                 # @ToDo: Make this use the same lookup as in ns_only to check if user can see HRs from multiple NS
                 settings.org.regions = False
         #elif vnrc:
@@ -1341,14 +1425,27 @@ def config(settings):
                                             ):
                         append_widget(widget)
 
-                # Add gender-filter
                 from s3 import S3OptionsFilter
+
+                # Add gender-filter
                 gender_opts = dict(s3db.pr_gender_opts)
                 del gender_opts[1]
                 append_widget(S3OptionsFilter("person_id$gender",
                                               options = gender_opts,
                                               cols = 2,
                                               hidden = True,
+                                              ))
+                # Add Roster status filter
+                append_widget(S3OptionsFilter("application.active",
+                                              cols = 2,
+                                              default = True,
+                                              # Don't hide otherwise default
+                                              # doesn't apply:
+                                              #hidden = False,
+                                              label = T("Status"),
+                                              options = {"True": T("active"),
+                                                         "False": T("inactive"),
+                                                         },
                                               ))
 
                 # Custom list fields for RDRT
@@ -1362,6 +1459,7 @@ def config(settings):
                                "type",
                                "job_title_id",
                                # @todo: Education?
+                               (T("Status"), "application.active"),
                                (T("Email"), "email.value"),
                                (phone_label, "phone.value"),
                                (T("Address"), "person_id$address.location_id"),
@@ -1378,6 +1476,7 @@ def config(settings):
                 resource.configure(filter_widgets = filters,
                                    list_fields = list_fields,
                                    profile_widgets = widgets,
+                                   profile_header = rdrt_member_profile_header,
                                    )
             return True
         s3.prep = custom_prep
@@ -1580,11 +1679,21 @@ def config(settings):
     def member_membership_paid(row):
         """
             Simplified variant of the original function in s3db/member.py,
-            with just "paid" and "unpaid" as possible values
+            with just "paid"/"unpaid"/"exempted" as possible values
         """
+
+        T = current.T
 
         if hasattr(row, "member_membership"):
             row = row.member_membership
+
+        try:
+            exempted = row.fee_exemption
+        except AttributeError:
+            exempted = False
+        if exempted:
+            return T("exempted")
+
         try:
             start_date = row.start_date
         except AttributeError:
@@ -1594,17 +1703,18 @@ def config(settings):
         except AttributeError:
             paid_date = None
         if start_date:
-            T = current.T
-            PAID = T("paid")
-            UNPAID = T("unpaid")
             now = current.request.utcnow.date()
             if not paid_date:
-                due = datetime.date(start_date.year + 1, start_date.month, start_date.day)
+                due = datetime.date(start_date.year + 1,
+                                    start_date.month,
+                                    start_date.day)
             else:
-                due = datetime.date(paid_date.year, start_date.month, start_date.day)
+                due = datetime.date(paid_date.year,
+                                    start_date.month,
+                                    start_date.day)
                 if due < paid_date:
                     due = datetime.date(paid_date.year + 1, due.month, due.day)
-            result = PAID if now < due else UNPAID
+            result = T("paid") if now < due else T("unpaid")
         else:
             result = current.messages["NONE"]
         return result
@@ -1681,6 +1791,7 @@ def config(settings):
                 table["paid"] = Field.Method("paid", member_membership_paid)
                 filter_options = {T("paid"): T("paid"),
                                   T("unpaid"): T("unpaid"),
+                                  T("exempted"): T("exempted"),
                                   }
                 filter_widgets = r.resource.get_config("filter_widgets")
                 if filter_widgets:
@@ -2491,6 +2602,36 @@ def config(settings):
                     # Hide confirming organisation (defaults to VNRC)
                     ctable.organisation_id.readable = False
 
+                elif component_name == "membership":
+                    field = s3db.member_membership.fee_exemption
+                    field.readable = field.writable = True
+                    PROGRAMMES = T("Programmes")
+                    from s3 import S3SQLCustomForm, S3SQLInlineLink
+                    crud_form = S3SQLCustomForm("organisation_id",
+                                                "code",
+                                                "membership_type_id",
+                                                "start_date",
+                                                "end_date",
+                                                "membership_fee",
+                                                "membership_paid",
+                                                "fee_exemption",
+                                                S3SQLInlineLink("programme",
+                                                                field="programme_id",
+                                                                label=PROGRAMMES,
+                                                                ),
+                                                )
+                    list_fields = ["organisation_id",
+                                   "membership_type_id",
+                                   "start_date",
+                                   (T("Paid"), "paid"),
+                                   (T("Email"), "email.value"),
+                                   (T("Phone"), "phone.value"),
+                                   (PROGRAMMES, "membership_programme.programme_id"),
+                                   ]
+                    s3db.configure("member_membership",
+                                   crud_form = crud_form,
+                                   list_fields = list_fields,
+                                   )
             return True
         s3.prep = custom_prep
 
