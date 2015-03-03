@@ -2567,13 +2567,14 @@ class S3PersonImageModel(S3Model):
                                               _title="%s|%s" % (T("URL"),
                                                                 T("The URL of the image file. If you don't upload an image file, then you must specify its location here.")))),
                           Field("type", "integer",
-                                requires = IS_IN_SET(pr_image_type_opts,
-                                                     zero=None),
                                 default = 1,
                                 label = T("Image Type"),
                                 represent = lambda opt: \
                                             pr_image_type_opts.get(opt,
-                                               current.messages.UNKNOWN_OPT)),
+                                               current.messages.UNKNOWN_OPT),
+                                requires = IS_IN_SET(pr_image_type_opts,
+                                                     zero=None),
+                                ),
                           s3_comments("description",
                                       label=T("Description"),
                                       comment = DIV(_class="tooltip",
@@ -3166,6 +3167,9 @@ class S3PersonDetailsModel(S3Model):
                                 writable = False,
                                 ),
                           pr_marital_status(),
+                          Field("number_children", "integer",
+                                label = T("Number of Children"),
+                                ),
                           Field("religion", length=128,
                                 label = T("Religion"),
                                 represent = lambda opt: \
@@ -3183,9 +3187,6 @@ class S3PersonDetailsModel(S3Model):
                                 ),
                           Field("mother_name",
                                 label = T("Name of Mother"),
-                                ),
-                          Field("number_children", "integer",
-                                label = T("Number of Children"),
                                 ),
                           Field("occupation", length=128, # Mayon Compatibility
                                 label = T("Profession"),
@@ -5065,12 +5066,13 @@ class pr_Contacts(S3Method):
 
         # Retrieve the rows
         fields = ["id",
+                  "priority",
                   "contact_description",
                   "value",
                   "contact_method",
                   "comments",
                   ]
-        rows = resource.select(fields).rows
+        rows = resource.select(fields, orderby="pr_contact.priority").rows
 
         # Group by contact method and sort by priority
         from itertools import groupby
@@ -5107,6 +5109,16 @@ class pr_Contacts(S3Method):
             # Individual Rows
             for contact in contacts:
 
+                priority = contact["pr_contact.priority"]
+                if priority:
+                    priority_title = "%s - %s" % (T("Priority"), inline_edit_hint)
+                    priority_field = SPAN(priority,
+                                          _class = "pr-contact-priority",
+                                          _title = priority_title,
+                                          )
+                else:
+                    priority_field = ""
+
                 contact_id = contact["pr_contact.id"]
                 value = contact["pr_contact.value"]
                 description = contact["pr_contact.contact_description"] or ""
@@ -5118,26 +5130,34 @@ class pr_Contacts(S3Method):
                 if description:
                     title = TAG[""](SPAN(description,
                                          _title = inline_edit_hint,
-                                         _class = "pr-contact-description"),
+                                         _class = "pr-contact-description",
+                                         ),
                                     ", ",
                                     title,
                                     )
+
                 comments = contact["pr_contact.comments"] or ""
 
                 actions = action_buttons(table, contact_id)
-                form.append(DIV(DIV(DIV(title,
-                                        _class="pr-contact-title",
-                                        ),
-                                    DIV(SPAN(comments,
-                                             _title = inline_edit_hint,
-                                             _class = "pr-contact-comments"),
-                                        _class = "pr-contact-subtitle",
+                form.append(DIV(DIV(priority_field,
+                                    DIV(DIV(title,
+                                            _class="pr-contact-title",
+                                            ),
+                                        DIV(SPAN(comments,
+                                                 _title = inline_edit_hint,
+                                                 _class = "pr-contact-comments",
+                                                 ),
+                                            _class = "pr-contact-subtitle",
+                                            ),
+                                        _class = "pr-contact-details",
                                         ),
                                     _class = "pr-contact-data medium-9 columns",
                                     ),
+
                                 actions,
                                 data = {
                                     "id": contact_id,
+                                    "priority": priority,
                                     "value": value,
                                     "description": description,
                                     "comments": comments,

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+## -*- coding: utf-8 -*-
 
 """ S3XML Toolkit
 
@@ -1494,8 +1494,8 @@ class S3XML(S3Codec):
             if field_type in ("id", "blob"):
                 continue
             elif field_type == "upload":
-                download_url = child.get(ATTRIBUTE["url"], None)
-                filename = child.get(ATTRIBUTE["filename"], None)
+                download_url = child.get(ATTRIBUTE["url"])
+                filename = child.get(ATTRIBUTE["filename"])
                 upload = None
                 if filename and filename in files:
                     # We already have the file cached
@@ -1515,17 +1515,23 @@ class S3XML(S3Codec):
                         # continue
                 elif download_url:
                     # Download file from Internet
-                    if not filename:
+                    if not isinstance(download_url, str):
                         try:
-                            filename = download_url.split("?")[0]
-                        except:
-                            # Fake filename as fallback
-                            filename = "upload.bin"
+                            download_url = download_url.encode("utf-8")
+                        except UnicodeEncodeError:
+                            continue
+                    if not filename:
+                        filename = download_url.split("?")[0] or "upload.bin"
                     try:
                         upload = urllib2.urlopen(download_url)
                     except IOError:
                         continue
                 if upload:
+                    if not isinstance(filename, str):
+                        try:
+                            filename = filename.encode("utf-8")
+                        except UnicodeEncodeError:
+                            continue
                     field = table[f]
                     value = field.store(upload, filename)
                 elif download_url != "local":

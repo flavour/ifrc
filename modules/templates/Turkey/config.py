@@ -26,7 +26,7 @@ def config(settings):
     #settings.base.system_name_short = T("Sahana")
 
     # PrePopulate data
-    settings.base.prepopulate = ("Turkey", "default/users")
+    settings.base.prepopulate = ("Turkey", "default/users", "Turkey/Demo")
 
     # Theme (folder to use for views/layout.html)
     #settings.base.theme = "Turkey"
@@ -316,12 +316,12 @@ def config(settings):
             module_type = 5,
         )),
         # Vehicle depends on Assets
-        #("vehicle", Storage(
-        #    name_nice = T("Vehicles"),
-        #    #description = "Manage Vehicles",
-        #    restricted = True,
-        #    module_type = 10,
-        #)),
+        ("vehicle", Storage(
+            name_nice = T("Vehicles"),
+            #description = "Manage Vehicles",
+            restricted = True,
+            module_type = 10,
+        )),
         ("req", Storage(
             name_nice = T("Requests"),
             #description = "Manage requests for supplies, assets, staff or other resources. Matches against Inventories where supplies are requested.",
@@ -357,6 +357,11 @@ def config(settings):
             #description = "Activate Events (e.g. from Scenario templates) for allocation of appropriate Resources (Human, Assets & Facilities).",
             restricted = True,
             module_type = 10,
+        )),
+        ("tr", Storage(
+           name_nice = "Turkish Extensions",
+           restricted = True,
+           module_type = None,
         )),
         ("transport", Storage(
            name_nice = T("Transport"),

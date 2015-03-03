@@ -729,7 +729,8 @@ class S3HRModel(S3Model):
         if group == "volunteer":
             # This gets copied to hrm_human_resource.location_id onaccept, faster to lookup without joins
             #location_context = "person_id$address.location_id" # When not using S3Track()
-            crud_fields.extend(("details.availability",
+            crud_fields.extend(("details.volunteer_type",
+                                "details.availability",
                                 "details.card",
                                 "volunteer_cluster.vol_cluster_type_id",
                                 "volunteer_cluster.vol_cluster_id",
@@ -2539,9 +2540,11 @@ class S3HRSkillModel(S3Model):
                                      ),
                      s3_datetime("start_date",
                                  label = T("Start Date"),
+                                 min = datetime.datetime(2000, 1, 1),
                                  ),
                      s3_datetime("end_date",
                                  label = T("End Date"),
+                                 min = datetime.datetime(2000, 1, 1),
                                  ),
                      Field("hours", "integer",
                            label = T("Hours"),
@@ -7508,6 +7511,8 @@ class hrm_Record(S3Method):
             @param r: the S3Request
             @param attr: controller arguments
         """
+
+        r.customise_resource("hrm_human_resource")
 
         if r.name == "person" and r.id and not r.component and \
            r.representation in ("html", "aadata"):

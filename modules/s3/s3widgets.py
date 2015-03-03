@@ -1618,10 +1618,17 @@ class S3DateTimeWidget(FormWidget):
 
         separator = settings.get_L10n_datetime_separator()
 
+        # Year range
+        pyears, fyears = 10, 10
+        if "min" in opts or "past" in opts:
+            pyears = abs(earliest.year - now.year)
+        if "max" in opts or "future" in opts:
+            fyears = abs(latest.year - now.year)
+        year_range = "%s:%s" % (opts.get("min_year", "-%s" % pyears),
+                                opts.get("max_year", "+%s" % fyears))
+
         # Other options
         firstDOW = settings.get_L10n_firstDOW()
-        year_range = "%s:%s" % (opts.get("min_year", "-10"),
-                                opts.get("max_year", "+10"))
 
         # Boolean options
         getopt = lambda opt, default: opts.get(opt, default) and "true" or "false"
@@ -7663,6 +7670,8 @@ class ICON(I):
             "certificate": "icon-certificate",
             "comment-alt": "icon-comment-alt",
             "delete": "icon-trash",
+            "deploy": "icon-plus",
+            "deployed": "icon-ok",
             "down": "icon-caret-down",
             "edit": "icon-edit",
             "exclamation": "icon-exclamation",
@@ -7679,6 +7688,7 @@ class ICON(I):
             "mail": "icon-envelope-alt",
             "map-marker": "icon-map-marker",
             "offer": "icon-truck",
+            "sent": "icon-ok",
             "other": "icon-circle",
             "paper-clip": "icon-paper-clip",
             "phone": "icon-phone",
@@ -7699,7 +7709,9 @@ class ICON(I):
             "trash": "icon-trash",
             "truck": "icon-truck",
             "twitter": "icon-twitter",
+            "unsent": "icon-remove",
             "up": "icon-caret-up",
+            "upload": "icon-upload-alt",
             "user": "icon-user",
             "wrench": "icon-wrench",
             "zoomin": "icon-zoomin",
@@ -7721,6 +7733,8 @@ class ICON(I):
             #"certificate": "fa-certificate",
             #"comment-alt": "fa-comment-o",
             #"delete": "fa-trash",
+            #"deploy": "fa-plus",
+            #"deployed": "fa-check",
             #"down": "fa-caret-down",
             #"edit": "fa-edit",
             #"exclamation": "fa-exclamation",
@@ -7746,6 +7760,7 @@ class ICON(I):
             #"remove": "fa-remove",
             #"request": "fa-flag",
             #"rss": "fa-rss",
+            #"sent": "fa-check",
             #"sitemap": "fa-sitemap",
             #"skype": "fa-skype",
             #"star": "fa-star",
@@ -7757,7 +7772,9 @@ class ICON(I):
             #"trash": "fa-trash",
             #"truck": "fa-truck",
             #"twitter": "fa-twitter",
+            #"unsent": "fa-times",
             #"up": "fa-caret-up",
+            #"upload": "fa-upload",
             #"user": "fa-user",
             #"wrench": "fa-wrench",
             #"zoomin": "fa-zoomin",
@@ -7776,6 +7793,8 @@ class ICON(I):
             "certificate": "fi-burst",
             "comment-alt": "fi-comment",
             "delete": "fi-trash",
+            "deploy": "fi-plus",
+            "deployed": "fi-check",
             "edit": "fi-page-edit",
             "exclamation": "fi-alert",
             "facebook": "fi-social-facebook",
@@ -7800,6 +7819,7 @@ class ICON(I):
             "remove": "fi-x",
             "request": "fi-flag",
             "rss": "fi-rss",
+            "sent": "fi-check",
             "skype": "fi-social-skype",
             "star": "fi-star",
             "table": "fi-list-thumbnails",
@@ -7809,6 +7829,8 @@ class ICON(I):
             "time": "fi-clock",
             "trash": "fi-trash",
             "twitter": "fi-social-twitter",
+            "unsent": "fi-x",
+            "upload": "fi-upload",
             "user": "fi-torso",
             "wrench": "fi-wrench",
             "zoomin": "fi-zoom-in",
