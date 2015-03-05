@@ -729,15 +729,32 @@ def config(settings):
             return {}
 
     # -----------------------------------------------------------------------------
-    def hide_third_gender():
+    # Org-dependent model-options:
+    # NB these are callables because they must be set before the tables get
+    #    defined (i.e. before any customise_* callback), but only after the
+    #    user is logged in (i.e. after config.py). Will be called only once.
+    #    Pattern is per-setting (=rather than having a bulk org_settings()
+    #    wrapper), so that they remain individually overridable in 000_config.py
+    #
+    def hide_third_gender(default):
         """ Whether to hide the third person gender """
 
         root_org = current.auth.root_org_name()
         if root_org == NRCS:
             return False
-        return True
+        return default
 
     settings.pr.hide_third_gender = hide_third_gender
+
+    def training_instructors(default):
+        """ Whether to track internal/external training instructors """
+
+        root_org = current.auth.root_org_name()
+        if root_org == NRCS:
+            return "both"
+        return default
+
+    settings.hrm.training_instructors = training_instructors
 
     # -------------------------------------------------------------------------
     def customise_asset_asset_controller(**attr):
@@ -1790,6 +1807,14 @@ def config(settings):
             settings.hrm.vol_active = True
         elif root_org in (CVTL, PMI, PRC):
             settings.hrm.vol_active = vol_active
+        elif root_org == NRCS:
+            # Don't allow creating of Persons here
+            from gluon import DIV
+            T = current.T
+            current.s3db.hrm_training.person_id.comment = \
+                DIV(_class="tooltip",
+                    _title="%s|%s" % (T("Participant"),
+                                      T("Type the first few characters of one of the Participant's names.")))
         elif root_org == VNRC:
             settings.pr.name_format = "%(last_name)s %(middle_name)s %(first_name)s"
             # Remove link to download Template
