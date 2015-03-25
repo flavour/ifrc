@@ -1328,7 +1328,7 @@ class S3Config(Storage):
                            )
 
     def get_L10n_utc_offset(self):
-        return self.L10n.get("utc_offset", "UTC +0000")
+        return self.L10n.get("utc_offset", "+0000")
 
     def get_L10n_firstDOW(self):
         return self.L10n.get("firstDOW", 1)
@@ -2510,9 +2510,11 @@ class S3Config(Storage):
 
     def get_hrm_use_code(self):
         """
-            Whether Human Resources should use Staff/Volunteer IDs
+            Whether Human Resources should use Staff/Volunteer IDs,
+            either True or False, or "staff" to use code for staff
+            only
         """
-        return self.hrm.get("use_code", False)
+        return self.__lazy(self.hrm, "use_code", default=False)
 
     def get_hrm_use_credentials(self):
         """
@@ -3052,6 +3054,12 @@ class S3Config(Storage):
             Use Hazards in 3W Projects
         """
         return self.project.get("hazards", False)
+
+    def get_project_indicators(self):
+        """
+            Use Indicators in Projects
+        """
+        return self.project.get("indicators", False)
 
     #def get_project_locations_from_countries(self):
     #    """

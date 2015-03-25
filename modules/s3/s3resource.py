@@ -1364,6 +1364,11 @@ class S3Resource(object):
                     append(f)
                     continue
 
+                # Must include the fkey if component
+                if self.parent and not self.link and f == self.fkey:
+                    append(f)
+                    continue
+
                 # Must include all super-keys
                 ktablename = s3_get_foreign_key(table[f], m2m=False)[0]
                 if ktablename:
@@ -3828,15 +3833,14 @@ class S3Resource(object):
                     vappend = values.append
                     for row in rows:
                         v = row[colname]
-                        if v:
-                            vappend(v)
+                        vappend(v if v else [None])
                     values = set(chain.from_iterable(values))
 
                     include, exclude = af.values(rfield)
                     fdict = {}
                     if include:
                         for v in values:
-                            vstr = s3_unicode(v)
+                            vstr = s3_unicode(v) if v is not None else v
                             if vstr in include and vstr not in exclude:
                                 fdict[v] = None
                     else:
@@ -4074,6 +4078,8 @@ class S3AxisFilter(object):
             value = self.r
             if isinstance(value, (list, tuple)):
                 value = [s3_unicode(v) for v in value]
+                if not value:
+                    value = [None]
             else:
                 value = [s3_unicode(value)]
             if op == "CONTAINS":

@@ -1492,6 +1492,23 @@ class S3OptionsMenu(object):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def po():
+        """ PO / Population Outreach """
+
+        return M(c="po")(
+                    M("Households", f="household", m="summary")(
+                        M("Create", m="create"),
+                    ),
+                    M("Areas", f="area")(
+                        M("Create", m="create"),
+                    ),
+                    M("Referral Agencies", f="organisation")(
+                        M("Create", m="create"),
+                    ),
+                )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def pr():
         """ PR / Person Registry """
 
@@ -1534,6 +1551,7 @@ class S3OptionsMenu(object):
         else:
             IMPORT = "Import Project Locations"
         hazards = lambda i: settings.get_project_hazards()
+        indicators = lambda i: settings.get_project_indicators()
         sectors = lambda i: settings.get_project_sectors()
         stats = lambda i: settings.has_module("stats")
         themes = lambda i: settings.get_project_themes()
@@ -1564,7 +1582,13 @@ class S3OptionsMenu(object):
                  M("Reports", f="location", m="report")(
                     M("3W", f="location", m="report"),
                     M("Beneficiaries", f="beneficiary", m="report",
-                      check = stats,
+                      check=stats,
+                      ),
+                    M("Indicators", f="indicator_data", m="report",
+                      check=indicators,
+                      ),
+                    M("Indicators over Time", f="indicator_data", m="timeplot",
+                      check=indicators,
                       ),
                     M("Funding", f="organisation", m="report"),
                  ),
@@ -1593,6 +1617,10 @@ class S3OptionsMenu(object):
                  ),
                  M("Hazards", f="hazard",
                    check=hazards)(
+                    M("Create", m="create"),
+                 ),
+                 M("Indicators", f="indicator",
+                   check=indicators)(
                     M("Create", m="create"),
                  ),
                  M("Sectors", f="sector",

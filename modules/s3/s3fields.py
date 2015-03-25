@@ -43,8 +43,9 @@ from gluon.storage import Storage
 from gluon.languages import lazyT
 
 from s3dal import Query, SQLCustomType
+from s3datetime import S3DateTime
 from s3navigation import S3ScriptItem
-from s3utils import S3DateTime, s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode, S3MarkupStripper
+from s3utils import s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode, S3MarkupStripper
 from s3validators import IS_ONE_OF, IS_UTC_DATETIME
 from s3widgets import S3DateWidget, S3DateTimeWidget
 
@@ -1315,10 +1316,10 @@ def s3_date(name="date", **attr):
             widget_option["default_explicit"] = attr["default_explicit"]
             del attr["default_explicit"]
 
-        if future:
+        if future is not None:
             widget_option["future"] = future
 
-        if past:
+        if past is not None:
             widget_option["past"] = past
 
         attr["widget"] = S3DateWidget(**widget_option)

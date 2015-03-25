@@ -155,7 +155,7 @@ def config(settings):
     # Uncomment to Hide the language toolbar
     #settings.L10n.display_toolbar = False
     # Default timezone for users
-    #settings.L10n.utc_offset = "UTC +0000"
+    #settings.L10n.utc_offset = "+0000"
     # Uncomment these to use US-style dates in English
     #settings.L10n.date_format = "%m-%d-%Y"
     #settings.L10n.time_format = "%H:%M:%S"
@@ -790,6 +790,8 @@ def config(settings):
     #settings.project.community = True
     # Uncomment this to enable Hazards in 3W projects
     #settings.project.hazards = True
+    # Uncomment this to enable Indicators in projects
+    #settings.project.indicators = True
     # Uncomment this to enable Milestones in projects
     #settings.project.milestones = True
     # Uncomment this to use Projects for Activities & Tasks
@@ -940,10 +942,10 @@ def config(settings):
             module_type = 2,
         )),
         ("cms", Storage(
-        name_nice = T("Content Management"),
-        #description = "Content Management System",
-        restricted = True,
-        module_type = 10,
+            name_nice = T("Content Management"),
+            #description = "Content Management System",
+            restricted = True,
+            module_type = 10,
         )),
         ("doc", Storage(
             name_nice = T("Documents"),
@@ -1119,6 +1121,12 @@ def config(settings):
         #("patient", Storage(
         #    name_nice = T("Patient Tracking"),
         #    #description = "Tracking of Patients",
+        #    restricted = True,
+        #    module_type = 10
+        #)),
+        #("po", Storage(
+        #    name_nice = T("Population Outreach"),
+        #    #description = "Population Outreach",
         #    restricted = True,
         #    module_type = 10
         #)),

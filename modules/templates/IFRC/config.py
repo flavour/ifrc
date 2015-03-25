@@ -106,7 +106,8 @@ def config(settings):
                                 inv_send = SID,
                                 inv_track_item = "track_org_id",
                                 inv_adj_item = "adj_id",
-                                req_req_item = "req_id"
+                                req_req_item = "req_id",
+                                po_household = "area_id",
                                 )
 
         # Default Foreign Keys (ordered by priority)
@@ -166,7 +167,7 @@ def config(settings):
                     (ltable.organisation_type_id == ottable.id)
             otype = db(query).select(ottable.name,
                                      limitby=(0, 1)).first()
-            if otype and otype.name != "Red Cross / Red Crescent":
+            if not otype or otype.name != "Red Cross / Red Crescent":
                 use_user_organisation = True
 
         elif tablename == "hrm_training":
@@ -249,7 +250,7 @@ def config(settings):
     # Default Language
     settings.L10n.default_language = "en-gb"
     # Default timezone for users
-    settings.L10n.utc_offset = "UTC +0700"
+    settings.L10n.utc_offset = "+0700"
     # Number formats (defaults to ISO 31-0)
     # Decimal separator for numbers (defaults to ,)
     settings.L10n.decimal_separator = "."
@@ -265,6 +266,8 @@ def config(settings):
     settings.L10n.translate_gis_location = True
     # Uncomment this for Alternate Location Names
     settings.L10n.name_alt_gis_location = True
+    # Uncomment this to Translate Organisation Names/Acronyms
+    settings.L10n.translate_org_organisation = True
 
     # -----------------------------------------------------------------------------
     # Finance settings
@@ -308,6 +311,7 @@ def config(settings):
     ARCS = "Afghan Red Crescent Society"
     BRCS = "Bangladesh Red Crescent Society"
     CVTL = "Timor-Leste Red Cross Society (Cruz Vermelha de Timor-Leste)"
+    HRC = "Honduran Red Cross"
     NRCS = "Nepal Red Cross Society"
     PMI = "Indonesian Red Cross Society (Palang Merah Indonesia)"
     PRC = "Philippine Red Cross"
@@ -513,6 +517,12 @@ def config(settings):
         ("deploy", Storage(
                name_nice = T("Regional Disaster Response Teams"),
                #description = "Alerting and Deployment of Disaster Response Teams",
+               restricted = True,
+               #module_type = 10,
+           )),
+        ("po", Storage(
+               name_nice = T("Population Outreach"),
+               #description = "Population Outreach",
                restricted = True,
                #module_type = 10,
            )),
@@ -762,6 +772,16 @@ def config(settings):
         return default
 
     settings.ui.location_filter_bulk_select_option = location_filter_bulk_select_option
+
+    def hrm_use_code(default):
+        """ Whether to use Staff-ID/Volunteer-ID """
+
+        root_org = current.auth.root_org_name()
+        if root_org == ARCS:
+            return True # use for both staff and volunteers
+        return default
+
+    settings.hrm.use_code = hrm_use_code
 
     # -------------------------------------------------------------------------
     def customise_asset_asset_controller(**attr):
@@ -1437,7 +1457,6 @@ def config(settings):
             if root_org == ARCS:
                 arcs = True
                 settings.L10n.mandatory_lastname = False
-                settings.hrm.use_code = True
                 settings.hrm.use_skills = True
                 settings.hrm.vol_active = True
             elif root_org in (CVTL, PMI, PRC):
@@ -1488,24 +1507,32 @@ def config(settings):
             resource = r.resource
             get_config = resource.get_config
 
-            if controller == "vol" and root_org == NRCS:
-                pos = 6
-                # Add volunteer type to list_fields
-                list_fields = get_config("list_fields")
-                list_fields.insert(pos, "details.volunteer_type")
+            if controller == "vol":
+                if root_org == ARCS:
+                    field = s3db.hrm_human_resource.person_id
+                    from s3 import S3AddPersonWidget2
+                    field.widget = S3AddPersonWidget2(controller = "vol",
+                                                      father_name = True,
+                                                      grandfather_name = True,
+                                                      )
+                elif root_org == NRCS:
+                    pos = 6
+                    # Add volunteer type to list_fields
+                    list_fields = get_config("list_fields")
+                    list_fields.insert(pos, "details.volunteer_type")
 
-                # Add volunteer type to report options
-                report_options = get_config("report_options")
-                if "details.volunteer_type" not in report_options["rows"]:
-                    report_options["rows"].insert(pos, "details.volunteer_type")
-                if "details.volunteer_type" not in report_options["cols"]:
-                    report_options["cols"].insert(pos, "details.volunteer_type")
+                    # Add volunteer type to report options
+                    report_options = get_config("report_options")
+                    if "details.volunteer_type" not in report_options["rows"]:
+                        report_options["rows"].insert(pos, "details.volunteer_type")
+                    if "details.volunteer_type" not in report_options["cols"]:
+                        report_options["cols"].insert(pos, "details.volunteer_type")
 
-                # Add filter widget for volunteer type
-                filter_widgets = s3db.get_config("hrm_human_resource", "filter_widgets")
-                filter_widgets.insert(-1, S3OptionsFilter("details.volunteer_type",
-                                                          hidden = True,
-                                                          ))
+                    # Add filter widget for volunteer type
+                    filter_widgets = s3db.get_config("hrm_human_resource", "filter_widgets")
+                    filter_widgets.insert(-1, S3OptionsFilter("details.volunteer_type",
+                                                              hidden = True,
+                                                              ))
 
             if controller == "deploy":
 
@@ -2284,7 +2311,6 @@ def config(settings):
             settings.L10n.mandatory_lastname = False
             # Override what has been set in the model already
             s3db.pr_person.last_name.requires = None
-            settings.hrm.use_code = True
             settings.hrm.use_skills = True
             settings.hrm.vol_active = True
         elif root_org == PMI:
@@ -2454,7 +2480,18 @@ def config(settings):
                         # Use default form (legacy)
                         s3db.clear_config("hrm_human_resource", "crud_form")
 
-            if vnrc:
+            if arcs:
+                controller = r.controller
+                if controller == "vol" and not r.component:
+                    # Hide unwanted fields
+                    table = r.resource.table
+                    for field in ("initials", "preferred_name", "local_name"):
+                        table[field].writable = table[field].readable = False
+                    table = s3db.pr_person_details
+                    for field in ("religion",):
+                        table[field].writable = table[field].readable = False
+
+            elif vnrc:
                 controller = r.controller
                 if not r.component:
                     crud_fields = ["first_name",
@@ -2868,6 +2905,8 @@ def config(settings):
     settings.project.community = True
     # Uncomment this to enable Hazards in 3W projects
     settings.project.hazards = True
+    # Uncomment this to enable Indicators in projects
+    settings.project.indicators = True
     # Uncomment this to use multiple Budgets per project
     settings.project.multiple_budgets = True
     # Uncomment this to use multiple Organisations per project

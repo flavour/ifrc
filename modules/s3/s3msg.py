@@ -41,6 +41,7 @@ __all__ = ("S3Msg",
 
 import base64
 import datetime
+import re
 import string
 import urllib
 import urllib2
@@ -70,6 +71,7 @@ from gluon.html import *
 
 from s3codec import S3Codec
 from s3crud import S3CRUD
+from s3datetime import s3_decode_iso_datetime
 from s3forms import S3SQLDefaultForm
 from s3utils import s3_unicode
 from s3validators import IS_IN_SET, IS_ONE_OF
@@ -83,6 +85,8 @@ NOTTWITTERCHARS = ALLCHARS.translate(IDENTITYTRANS,
 TWITTER_MAX_CHARS = 140
 TWITTER_HAS_NEXT_SUFFIX = u' \u2026'
 TWITTER_HAS_PREV_PREFIX = u'\u2026 '
+
+SENDER = re.compile("(.*)\s*\<(.+@.+)\>\s*")
 
 # =============================================================================
 class S3Msg(object):
@@ -805,6 +809,7 @@ class S3Msg(object):
 
         if not sender:
             sender = default_sender
+        sender = self.sanitize_sender(sender)
 
         limit = settings.get_mail_limit()
         if limit:
@@ -838,6 +843,30 @@ class S3Msg(object):
             current.session.error = None
 
         return result
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def sanitize_sender(sender):
+        """
+            Sanitize the email sender string to prevent MIME-encoding
+            of the from-address (RFC2047)
+
+            @param: the sender-string
+            @returns: the sanitized sender-string
+        """
+
+        if not sender:
+            return sender
+        match = SENDER.match(sender)
+        if match:
+            sender_name, from_address = match.groups()
+            if any(32 > ord(c) or ord(c) > 127 for c in sender_name):
+                from email.header import Header
+                sender_name = Header(sender_name.strip(), "utf-8")
+            else:
+                sender_name = sender_name.strip()
+            sender = "%s <%s>" % (sender_name, from_address.strip())
+        return sender
 
     # -------------------------------------------------------------------------
     def send_email_by_pe_id(self,
@@ -1683,7 +1712,7 @@ class S3Msg(object):
             mtable = s3db.msg_sms
             minsert = mtable.insert
             update_super = s3db.update_super
-            decode = S3Codec.decode_iso_datetime
+            decode = s3_decode_iso_datetime
 
             # Is this channel connected to a parser?
             parser = s3db.msg_parser_enabled(channel_id)
