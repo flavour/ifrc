@@ -313,6 +313,7 @@ def config(settings):
     CVTL = "Timor-Leste Red Cross Society (Cruz Vermelha de Timor-Leste)"
     HRC = "Honduran Red Cross"
     NRCS = "Nepal Red Cross Society"
+    NZRC = "New Zealand Red Cross"
     PMI = "Indonesian Red Cross Society (Palang Merah Indonesia)"
     PRC = "Philippine Red Cross"
     VNRC = "Viet Nam Red Cross"
@@ -521,7 +522,7 @@ def config(settings):
                #module_type = 10,
            )),
         ("po", Storage(
-               name_nice = T("Population Outreach"),
+               name_nice = T("Recovery Outreach"),
                #description = "Population Outreach",
                restricted = True,
                #module_type = 10,
@@ -2058,82 +2059,127 @@ def config(settings):
             else:
                 result = True
 
-            if not r.component or r.component_name == "branch":
-                if r.interactive or r.representation == "aadata":
-                    s3db = current.s3db
-                    list_fields = ["name",
-                                   "acronym",
-                                   "organisation_organisation_type.organisation_type_id",
-                                   "country",
-                                   "website"
-                                   ]
+            if r.interactive or r.representation == "aadata":
 
-                    type_filter = r.get_vars.get("organisation_type.name",
-                                                 None)
+                if not r.component or r.component_name == "branch":
+
+                    resource = r.resource
                     type_label = T("Type")
-                    if type_filter:
-                        type_names = type_filter.split(",")
-                        if len(type_names) == 1:
-                            # Strip Type from list_fields
-                            list_fields.remove("organisation_organisation_type.organisation_type_id")
-                            type_label = ""
 
-                        if type_filter == "Red Cross / Red Crescent":
-                            # Modify filter_widgets
-                            filter_widgets = s3db.get_config("org_organisation",
-                                                             "filter_widgets")
-                            # Remove type (always 'RC')
-                            filter_widgets.pop(1)
-                            # Remove sector (not relevant)
-                            filter_widgets.pop(1)
-
-                            # Modify CRUD Strings
-                            s3.crud_strings.org_organisation = Storage(
-                                label_create = T("Create National Society"),
-                                title_display = T("National Society Details"),
-                                title_list = T("Red Cross & Red Crescent National Societies"),
-                                title_update = T("Edit National Society"),
-                                title_upload = T("Import Red Cross & Red Crescent National Societies"),
-                                label_list_button = T("List Red Cross & Red Crescent National Societies"),
-                                label_delete_button = T("Delete National Society"),
-                                msg_record_created = T("National Society added"),
-                                msg_record_modified = T("National Society updated"),
-                                msg_record_deleted = T("National Society deleted"),
-                                msg_list_empty = T("No Red Cross & Red Crescent National Societies currently registered")
-                                )
-                            # Add Region to list_fields
-                            list_fields.insert(-1, "region_id")
-                            # Region is required
-                            r.table.region_id.requires = r.table.region_id.requires.other
-                        else:
-                            r.table.region_id.readable = r.table.region_id.writable = False
-
-                    s3db.configure("org_organisation",
-                                   list_fields = list_fields,
-                                   )
-
-                    if r.interactive:
-                        r.table.country.label = T("Country")
-                        from s3 import S3SQLCustomForm, S3SQLInlineLink
-                        crud_form = S3SQLCustomForm(
-                            "name",
-                            "acronym",
-                            S3SQLInlineLink("organisation_type",
-                                            field = "organisation_type_id",
-                                            label = type_label,
-                                            multiple = False,
-                                            #widget = "hierarchy",
-                                            ),
-                            "region_id",
-                            "country",
-                            "phone",
-                            "website",
-                            "logo",
-                            "comments",
-                            )
-                        s3db.configure("org_organisation",
-                                       crud_form = crud_form,
+                    if r.controller == "po":
+                        # Referral Agencies in PO module
+                        list_fields = ("name",
+                                       "acronym",
+                                       "organisation_organisation_type.organisation_type_id",
+                                       "website",
                                        )
+                        resource.configure(list_fields=list_fields)
+
+                        # Default country
+                        root_org = current.auth.root_org_name()
+                        if root_org == NZRC:
+                            resource.table.country.default = "NZ"
+
+                        # Custom CRUD form
+                        if r.interactive:
+                            from s3 import S3SQLCustomForm, S3SQLInlineLink, S3SQLInlineComponent
+                            # Filter inline address for type "office address", also sets default
+                            OFFICE = {"field": "type", "options": 3}
+                            crud_form = S3SQLCustomForm(
+                                            "name",
+                                            "acronym",
+                                            S3SQLInlineLink("organisation_type",
+                                                            field = "organisation_type_id",
+                                                            label = type_label,
+                                                            multiple = False,
+                                                            ),
+                                            S3SQLInlineComponent("address",
+                                                                 fields = [("", "location_id")],
+                                                                 multiple = False,
+                                                                 filterby = (OFFICE,),
+                                                                 ),
+                                            "phone",
+                                            "website",
+                                            "logo",
+                                            "comments",
+                                            )
+                            # Remove unwanted filters
+                            # @todo: add a location filter for office address
+                            unwanted_filters = ("sector_organisation.sector_id",
+                                                "country",
+                                                )
+                            filter_widgets = [widget
+                                              for widget in resource.get_config("filter_widgets")
+                                              if widget.field not in unwanted_filters]
+                            resource.configure(crud_form=crud_form,
+                                               filter_widgets=filter_widgets,
+                                               )
+                    else:
+                        # Organisations in org module
+                        list_fields = ["name",
+                                       "acronym",
+                                       "organisation_organisation_type.organisation_type_id",
+                                       "country",
+                                       "website",
+                                       ]
+                        type_filter = r.get_vars.get("organisation_type.name", None)
+                        if type_filter:
+                            type_names = type_filter.split(",")
+                            if len(type_names) == 1:
+                                # Strip Type from list_fields
+                                list_fields.remove("organisation_organisation_type.organisation_type_id")
+                                type_label = ""
+
+                            if type_filter == "Red Cross / Red Crescent":
+                                # Modify filter_widgets
+                                filter_widgets = resource.get_config("filter_widgets")
+                                # Remove type (always 'RC')
+                                filter_widgets.pop(1)
+                                # Remove sector (not relevant)
+                                filter_widgets.pop(1)
+
+                                # Modify CRUD Strings
+                                s3.crud_strings.org_organisation = Storage(
+                                    label_create = T("Create National Society"),
+                                    title_display = T("National Society Details"),
+                                    title_list = T("Red Cross & Red Crescent National Societies"),
+                                    title_update = T("Edit National Society"),
+                                    title_upload = T("Import Red Cross & Red Crescent National Societies"),
+                                    label_list_button = T("List Red Cross & Red Crescent National Societies"),
+                                    label_delete_button = T("Delete National Society"),
+                                    msg_record_created = T("National Society added"),
+                                    msg_record_modified = T("National Society updated"),
+                                    msg_record_deleted = T("National Society deleted"),
+                                    msg_list_empty = T("No Red Cross & Red Crescent National Societies currently registered")
+                                    )
+                                # Add Region to list_fields
+                                list_fields.insert(-1, "region_id")
+                                # Region is required
+                                r.table.region_id.requires = r.table.region_id.requires.other
+                            else:
+                                r.table.region_id.readable = r.table.region_id.writable = False
+                        resource.configure(list_fields=list_fields)
+
+                        if r.interactive:
+                            r.table.country.label = T("Country")
+                            from s3 import S3SQLCustomForm, S3SQLInlineLink
+                            crud_form = S3SQLCustomForm(
+                                            "name",
+                                            "acronym",
+                                            S3SQLInlineLink("organisation_type",
+                                                            field = "organisation_type_id",
+                                                            label = type_label,
+                                                            multiple = False,
+                                                            #widget = "hierarchy",
+                                                            ),
+                                            "region_id",
+                                            "country",
+                                            "phone",
+                                            "website",
+                                            "logo",
+                                            "comments",
+                                            )
+                            resource.configure(crud_form=crud_form)
 
             return result
         s3.prep = custom_prep

@@ -1020,6 +1020,10 @@ def cms_index(module, resource=None, page_name=None, alt_function=None):
             environment = build_environment(request, response, current.session)
             environment["settings"] = settings
             environment["s3db"] = current.s3db
+            # Retain certain globals (extend as needed):
+            g = globals()
+            environment["s3base"] = g.get("s3base")
+            environment["s3_redirect_default"] = g.get("s3_redirect_default")
             page = run_controller_in(request.controller, alt_function, environment)
             if isinstance(page, dict):
                 response._vars = page
@@ -1572,8 +1576,11 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
     if documents:
         if not isinstance(documents, list):
             documents = [documents]
-        doc_list = UL(_class="dropdown-menu",
+        doc_list_id = "attachments-%s" % item_id
+        doc_list = UL(_class="f-dropdown dropdown-menu",
                       _role="menu",
+                      _id=doc_list_id,
+                      data={"dropdown-content": ""},
                       )
         retrieve = db.doc_document.file.retrieve
         for doc in documents:
@@ -1593,9 +1600,11 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
             doc_list.append(doc_item)
         docs = DIV(A(ICON("attachment"),
                      SPAN(_class="caret"),
-                     _class="btn dropdown-toggle",
+                     _class="btn dropdown-toggle dropdown",
                      _href="#",
-                     **{"_data-toggle": "dropdown"}
+                     data={"toggle": "dropdown",
+                           "dropdown": doc_list_id,
+                           },
                      ),
                    doc_list,
                    _class="btn-group attachments dropdown pull-right",

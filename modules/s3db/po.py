@@ -132,6 +132,20 @@ class OutreachAreaModel(S3Model):
         # Table Configuration
         self.configure(tablename,
                        filter_widgets = filter_widgets,
+                       summary = ({"common": True,
+                                   "name": "add",
+                                   "widgets": [{"method": "create"}],
+                                   },
+                                  {"name": "table",
+                                   "label": "Table",
+                                   "widgets": [{"method": "datatable"}]
+                                   },
+                                  {"name": "map",
+                                   "label": "Map",
+                                   "widgets": [{"method": "map",
+                                                "ajax_init": True}],
+                                   },
+                                  ),
                        )
 
         # ---------------------------------------------------------------------
@@ -186,6 +200,11 @@ class OutreachHouseholdModel(S3Model):
                      self.po_area_id(),
                      # @todo: inherit Lx from area and hide Lx (in area prep)
                      self.gis_location_id(label=T("Address")),
+                     s3_date("date_visited",
+                             default="now",
+                             empty=False,
+                             label=T("Date visited"),
+                             ),
                      Field("followup", "boolean",
                            default = False,
                            label = T("Follow up"),
@@ -234,6 +253,10 @@ class OutreachHouseholdModel(S3Model):
                           S3OptionsFilter("area_id",
                                           #hidden = True,
                                           ),
+                          S3DateFilter("date_visited",
+                                       label = T("Date visited"),
+                                       hidden = True,
+                                       ),
                           S3OptionsFilter("followup",
                                           cols = 2,
                                           hidden = True,
@@ -250,6 +273,7 @@ class OutreachHouseholdModel(S3Model):
         # List fields
         list_fields = ("area_id",
                        "location_id",
+                       "date_visited",
                        "followup",
                        "household_followup.followup_date",
                        "organisation_household.organisation_id",
@@ -260,6 +284,7 @@ class OutreachHouseholdModel(S3Model):
         report_axes = ["area_id",
                        "followup",
                        "organisation_household.organisation_id",
+                       "household_followup.evaluation",
                        ]
         reports = ((T("Number of Households Visited"), "count(id)"),
                    )
@@ -391,6 +416,8 @@ class OutreachHouseholdModel(S3Model):
                       "W": T("worse"),
                       }
 
+        twoweeks = s3.local_date + datetime.timedelta(days=14)
+
         tablename = "po_household_followup"
         define_table(tablename,
                      household_id(),
@@ -399,8 +426,7 @@ class OutreachHouseholdModel(S3Model):
                            ),
                      s3_date("followup_date",
                              label = T("Date for Follow-up"),
-                             default = current.request.utcnow + \
-                                       datetime.timedelta(days=14),
+                             default = twoweeks,
                              past = 0,
                              ),
                      Field("followup", "text",
@@ -581,7 +607,9 @@ class OutreachReferralModel(S3Model):
                                      comment=org_comment,
                                      ),
                      self.po_household_id(),
-                     s3_date(default="now"),
+                     s3_date(default="now",
+                             label=T("Date Referral Made"),
+                             ),
                      s3_comments(),
                      *s3_meta_fields())
 

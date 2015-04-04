@@ -29,11 +29,15 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ("S3DateTime",
+__all__ = ("ISOFORMAT",
+           "S3DateTime",
            "s3_utc",
+           "s3_parse_datetime",
+           "s3_format_datetime",
            "s3_decode_iso_datetime",
            "s3_encode_iso_datetime",
            "s3_encode_local_datetime",
+           "s3_get_utc_offset",
            )
 
 import datetime
@@ -46,9 +50,11 @@ except ImportError:
     print >> sys.stderr, "ERROR: python-dateutil module needed for date handling"
     raise
 import re
+import time
 
 from gluon import *
 
+ISOFORMAT = "%Y-%m-%dT%H:%M:%S" #: ISO 8601 Combined Date+Time format
 OFFSET = re.compile("([+|-]{0,1})(\d{1,2}):(\d\d)")
 
 # =============================================================================
@@ -181,6 +187,45 @@ class S3DateTime(object):
         return sign * (3600 * offset_hrs + 60 * offset_min)
 
 #--------------------------------------------------------------------------
+def s3_parse_datetime(string, dtfmt=None):
+    """
+        Parse a date/time string according to the given format.
+
+        @param string: the string
+        @param dtfmt: the string format (defaults to ISOFORMAT)
+
+        @return: a datetime object, or None if the string is invalid
+    """
+
+    if not string:
+        return None
+    if dtfmt is None:
+        dtfmt = ISOFORMAT
+    try:
+        (y, m, d, hh, mm, ss, t0, t1, t2) = time.strptime(string, dtfmt)
+        dt = datetime.datetime(y, m, d, hh, mm, ss)
+    except ValueError:
+        dt = None
+    return dt
+
+#--------------------------------------------------------------------------
+def s3_format_datetime(dt=None, dtfmt=None):
+    """
+        Format a datetime object according to the given format.
+
+        @param dt: the datetime object, defaults to datetime.datetime.utcnow()
+        @param dtfmt: the string format (defaults to ISOFORMAT)
+
+        @return: a string
+    """
+
+    if not dt:
+        dt = datetime.datetime.utcnow()
+    if dtfmt is None:
+        dtfmt = ISOFORMAT
+    return dt.strftime(dtfmt)
+
+#--------------------------------------------------------------------------
 def s3_decode_iso_datetime(dtstr):
     """
         Convert date/time string in ISO-8601 format into a
@@ -248,5 +293,47 @@ def s3_utc(dt):
         return dt.astimezone(dateutil.tz.tzutc())
     else:
         return None
+
+# =============================================================================
+def s3_get_utc_offset():
+    """ Get the current UTC offset for the client """
+
+    offset = None
+    session = current.session
+    request = current.request
+
+    logged_in = current.auth.is_logged_in()
+    if logged_in:
+        # 1st choice is the personal preference (useful for GETs if user
+        # wishes to see times in their local timezone)
+        offset = session.auth.user.utc_offset
+        if offset:
+            offset = offset.strip()
+
+    if not offset:
+        # 2nd choice is what the client provides in the hidden form
+        # field (for form POSTs)
+        offset = request.post_vars.get("_utc_offset", None)
+        if offset:
+            offset = int(offset)
+            utcstr = offset < 0 and "+" or "-"
+            hours = abs(int(offset/60))
+            minutes = abs(int(offset % 60))
+            offset = "%s%02d%02d" % (utcstr, hours, minutes)
+            # Make this the preferred value during this session
+            if logged_in:
+                session.auth.user.utc_offset = offset
+
+    if not offset:
+        # 3rd choice is the server default (what most clients should see
+        # the timezone as)
+        offset = current.deployment_settings.L10n.utc_offset
+
+    session.s3.utc_offset = offset
+
+    seconds = datetime.timedelta(seconds=S3DateTime.get_offset_value(offset))
+    current.response.s3.local_date = (request.utcnow + seconds).date()
+
+    return offset
 
 # END =========================================================================

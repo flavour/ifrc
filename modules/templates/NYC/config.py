@@ -113,8 +113,7 @@ def config(settings):
     settings.auth.record_approval = True
     settings.auth.record_approval_required_for = ("org_organisation",)
 
-    #settings.security.policy = 8 # Delegations when ready
-    settings.security.policy = 5 # Controller, Function & Table ACLs
+    settings.security.policy = 8 # Hierarchical Realms + Delegations
 
     # Enable this to have Open links in IFrames open a full page in a new tab
     settings.ui.iframe_opens_full = True
@@ -135,6 +134,7 @@ def config(settings):
 
     # -------------------------------------------------------------------------
     # Audit
+    #
     def audit_write(method, tablename, form, record, representation):
         if not current.auth.user:
             # Don't include prepop
@@ -151,6 +151,27 @@ def config(settings):
             return False
 
     settings.security.audit_write = audit_write
+
+    # -------------------------------------------------------------------------
+    # Realm Rules
+    #
+    def realm_entity(table, row):
+
+        tablename = table._tablename
+        if tablename == "pr_person":
+            # Person records define their own realm
+            ptable = current.s3db.pr_person
+            query = (ptable.id == row.id)
+            row = current.db(query).select(ptable.id,
+                                   ptable.pe_id,
+                                   limitby=(0, 1)).first()
+            if row.pe_id:
+                return row.pe_id
+
+        # All other cases follow default rules
+        return 0
+
+    settings.auth.realm_entity = realm_entity
 
     # -------------------------------------------------------------------------
     # CMS
@@ -412,13 +433,15 @@ def config(settings):
                 if not types:
                     # Hide Private Residences
                     from s3 import FS
-                    s3.filter = FS("site_facility_type.facility_type_id$name") != "Private Residence"
+                    query = (FS("site_facility_type.facility_type_id") == None) | \
+                            (FS("site_facility_type.facility_type_id$name") != "Private Residence")
+                    r.resource.add_filter(query)
 
             if r.interactive:
                 tablename = "org_facility"
                 table = s3db[tablename]
 
-                if not r.component and r.method in (None, "create", "update"):
+                if not r.component and r.method in (None, "create", "update", "summary"):
                     from s3 import S3LocationSelector, S3MultiSelectWidget
                     field = table.location_id
                     if r.method in ("create", "update"):
