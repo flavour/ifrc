@@ -231,8 +231,8 @@ class S3MainMenu(object):
                                 args="contact",
                                 vars={"person.pe_id" : auth.user.pe_id}),
                             #MM("Subscriptions", c="pr", f="person",
-                                #args="pe_subscription",
-                                #vars={"person.pe_id" : auth.user.pe_id}),
+                            #    args="pe_subscription",
+                            #    vars={"person.pe_id" : auth.user.pe_id}),
                             MM("Change Password", m="change_password"),
                             SEP(),
                             MM({"name": current.T("Rapid Data Entry"),
@@ -1699,6 +1699,7 @@ class S3OptionsMenu(object):
         else:
             create_menu = M("Create", m="create")
 
+        recurring = lambda i: settings.get_req_recurring()
         use_commit = lambda i: settings.get_req_use_commit()
         req_items = lambda i: "Stock" in types
         req_skills = lambda i: "People" in types
@@ -1706,7 +1707,7 @@ class S3OptionsMenu(object):
         return M(c="req")(
                     M("Requests", f="req")(
                         create_menu,
-                        M("List Recurring Requests", f="req_template"),
+                        M("List Recurring Requests", f="req_template", check=recurring),
                         M("Map", m="map"),
                         M("Report", m="report"),
                         M("Search All Requested Items", f="req_item",

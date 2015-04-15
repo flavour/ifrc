@@ -3154,7 +3154,7 @@ class S3Config(Storage):
                                                      4: T("Feedback"),
                                                      5: T("Blocked"),
                                                      6: T("On Hold"),
-                                                     7: T("Cancelled"),
+                                                     7: T("Canceled"),
                                                      8: T("Duplicate"),
                                                      9: T("Ready"),
                                                     10: T("Verified"),
@@ -3198,6 +3198,12 @@ class S3Config(Storage):
 
     def get_req_type_hrm_label(self):
         return current.T(self.req.get("type_hrm_label", "People"))
+
+    def get_req_recurring(self):
+        """
+            Do we allow creation of recurring requests?
+        """
+        return current.T(self.req.get("recurring", True))
 
     def get_req_requester_label(self):
         return current.T(self.req.get("requester_label", "Requester"))

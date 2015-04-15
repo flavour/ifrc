@@ -567,21 +567,31 @@ class S3OptionsMenu(default.S3OptionsMenu):
 
         settings = current.deployment_settings
         #use_adjust = lambda i: not settings.get_inv_direct_stock_edits()
+        root_org = current.auth.root_org_name()
         def use_adjust(i):
-            db = current.db
-            otable = s3db.org_organisation
-            try:
-                ausrc = db(otable.name == "Australian Red Cross").select(otable.id,
-                                                                         limitby=(0, 1)
-                                                                         ).first().id
-            except:
-                # No IFRC prepop done - skip (e.g. testing impacts of CSS changes in this theme)
-                return False
-            if current.auth.root_org() == ausrc:
-                # AusRC use proper Logistics workflow
+            if root_org in ("Australian Red Cross", "Honduran Red Cross"):
+                # Australian & Honduran RC use proper Logistics workflow
                 return True
             else:
                 # Others use simplified version
+                return False
+        def use_facilities(i):
+            if root_org == "Honduran Red Cross":
+                # Honduran RC don't use Facilities
+                return False
+            else:
+                return True
+        def use_kits(i):
+            if root_org == "Honduran Red Cross":
+                # Honduran RC use Kits
+                return True
+            else:
+                return False
+        def use_types(i):
+            if root_org == "Nepal Red Cross Society":
+                # Nepal RC use Warehouse Types
+                return True
+            else:
                 return False
         use_commit = lambda i: settings.get_req_use_commit()
 
@@ -591,16 +601,16 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Create", m="create"),
                         M("Import", m="import", p="create"),
                     ),
-                    M("Warehouse Stock", c="inv", f="inv_item")(
+                    M("Warehouse Stock", c="inv", f="inv_item", args="summary")(
                         M("Search Shipped Items", f="track_item"),
                         M("Adjust Stock Levels", f="adj", check=use_adjust),
-                        #M("Kitting", f="kit"),
+                        M("Kitting", f="kit", check=use_kits),
                         M("Import", f="inv_item", m="import", p="create"),
                     ),
                     M("Reports", c="inv", f="inv_item")(
                         M("Warehouse Stock", f="inv_item",m="report"),
-                        #M("Expiration Report", c="inv", f="track_item",
-                        #  vars=dict(report="exp")),
+                        M("Expiration Report", c="inv", f="track_item",
+                          vars=dict(report="exp")),
                         #M("Monetization Report", c="inv", f="inv_item",
                         #  vars=dict(report="mon")),
                         #M("Utilization Report", c="inv", f="track_item",
@@ -640,14 +650,14 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Create", m="create"),
                         M("Import", m="import", p="create"),
                     ),
-                    M("Facilities", c="inv", f="facility")(
+                    M("Facilities", c="inv", f="facility", check=use_facilities)(
                         M("Create", m="create", t="org_facility"),
                     ),
-                    M("Facility Types", c="inv", f="facility_type",
+                    M("Facility Types", c="inv", f="facility_type", check=use_facilities,
                       restrict=[ADMIN])(
                         M("Create", m="create"),
                     ),
-                    M("Warehouse Types", c="inv", f="warehouse_type",
+                    M("Warehouse Types", c="inv", f="warehouse_type", check=use_types,
                       restrict=[ADMIN])(
                         M("Create", m="create"),
                     ),
