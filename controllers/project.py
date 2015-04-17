@@ -77,8 +77,8 @@ def project():
             htable.person_id.comment = DIV(_class="tooltip",
                                            _title="%s|%s" % (T("Person"),
                                                              T("Select the person assigned to this role for this project."),
-                                                            )
-                                          )
+                                                             )
+                                           )
 
             if not component or component_name == "activity":
                 # Filter Themes/Activity Types based on Sector
@@ -141,6 +141,60 @@ def project():
                 # Filter Activity Type based on Sector
                 set_activity_type_requires("project_activity_activity_type", sector_ids)
 
+            elif component_name == "outcome":
+                if settings.get_project_goals():
+                    # Filter to just those for this Project & make mandatory
+                    r.component.table.goal_id.requires = IS_ONE_OF(db, "project_goal.id",
+                                                                   s3db.project_goal_represent,
+                                                                   sort=True,
+                                                                   filterby="project_id",
+                                                                   filter_opts=[r.id],
+                                                                   )
+
+            elif component_name == "output":
+                if settings.get_project_outcomes():
+                    # Filter to just those for this Project & make mandatory
+                    r.component.table.outcome_id.requires = IS_ONE_OF(db, "project_outcome.id",
+                                                                      s3db.project_outcome_represent,
+                                                                      sort=True,
+                                                                      filterby="project_id",
+                                                                      filter_opts=[r.id],
+                                                                      )
+
+            elif component_name == "indicator":
+                if settings.get_project_outputs():
+                    # Filter to just those for this Project & make mandatory
+                    r.component.table.output_id.requires = IS_ONE_OF(db, "project_output.id",
+                                                                     s3db.project_output_represent,
+                                                                     sort=True,
+                                                                     filterby="project_id",
+                                                                     filter_opts=[r.id],
+                                                                     )
+                elif settings.get_project_outcomes():
+                    # Filter to just those for this Project & make mandatory
+                    r.component.table.outcome_id.requires = IS_ONE_OF(db, "project_outcome.id",
+                                                                      s3db.project_outcome_represent,
+                                                                      sort=True,
+                                                                      filterby="project_id",
+                                                                      filter_opts=[r.id],
+                                                                      )
+                elif settings.get_project_goals():
+                    # Filter to just those for this Project & make mandatory
+                    r.component.table.goal_id.requires = IS_ONE_OF(db, "project_goal.id",
+                                                                   s3db.project_goal_represent,
+                                                                   sort=True,
+                                                                   filterby="project_id",
+                                                                   filter_opts=[r.id],
+                                                                   )
+
+            elif component_name == "indicator_data":
+                # Filter to just those for this Project & make mandatory
+                r.component.table.indicator_id.requires = IS_ONE_OF(db, "project_indicator.id",
+                                                                    s3db.project_indicator_represent,
+                                                                    sort=True,
+                                                                    filterby="project_id",
+                                                                    filter_opts=[r.id],
+                                                                    )
             elif component_name == "task":
                 if not auth.s3_has_role("STAFF"):
                     # Hide fields which are meant for staff members
@@ -197,7 +251,7 @@ def project():
                     s3db.pr_PersonRepresent(show_link=True)
 
                 # These values are defined in hrm_type_opts
-                human_resource_id = component.table.human_resource_id
+                human_resource_id = r.table.human_resource_id
                 filter_opts = None
                 if hr_group:
                     crud_strings = s3.crud_strings
@@ -891,10 +945,38 @@ def programme():
     return s3_rest_controller()
 
 def programme_project():
-    """ RESTful controller for Programmes """
+    """ RESTful controller for Programmes <> Projects """
 
     s3.prep = lambda r: r.method == "options" and r.representation == "s3json"
     return s3_rest_controller()
+
+# =============================================================================
+# Planning
+# =============================================================================
+def goal():
+    """ RESTful controller for Goals """
+
+    return s3_rest_controller()
+
+def outcome():
+    """ RESTful controller for Outcomes """
+
+    return s3_rest_controller()
+
+def output():
+    """ RESTful controller for Outputs """
+
+    return s3_rest_controller()
+
+def indicator():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
+
+#def indicator_data():
+#    """ RESTful CRUD controller """
+#
+#    return s3_rest_controller()
 
 # =============================================================================
 # Comments
@@ -1036,19 +1118,6 @@ $('#submit_record__row input').click(function(){
     return XML(output)
 
 def comment():
-    """ RESTful CRUD controller """
-
-    return s3_rest_controller()
-
-# =============================================================================
-# Indicators
-# =============================================================================
-def indicator():
-    """ RESTful CRUD controller """
-
-    return s3_rest_controller()
-
-def indicator_data():
     """ RESTful CRUD controller """
 
     return s3_rest_controller()

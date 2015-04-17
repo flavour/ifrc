@@ -1552,7 +1552,8 @@ class S3OptionsMenu(object):
         else:
             IMPORT = "Import Project Locations"
         hazards = lambda i: settings.get_project_hazards()
-        indicators = lambda i: settings.get_project_indicators()
+        #indicators = lambda i: settings.get_project_indicators()
+        programmes = lambda i: settings.get_project_programmes()
         sectors = lambda i: settings.get_project_sectors()
         stats = lambda i: settings.has_module("stats")
         themes = lambda i: settings.get_project_themes()
@@ -1562,6 +1563,10 @@ class S3OptionsMenu(object):
         if settings.get_project_mode_3w():
             if community:
                 menu(
+                     M("Programs", f="programme",
+                       check=programmes)(
+                        M("Create", m="create"),
+                     ),
                      M("Projects", f="project")(
                         M("Create", m="create"),
                      ),
@@ -1569,11 +1574,15 @@ class S3OptionsMenu(object):
                         # Better created from tab (otherwise Activity Type filter won't work)
                         #M("Create", m="create"),
                         M("Map", m="map"),
-                        M("List Community Contacts", f="location_contact"),
+                        M("Community Contacts", f="location_contact"),
                      ),
                     )
             else:
                 menu(
+                     M("Programs", f="programme",
+                       check=programmes)(
+                        M("Create", m="create"),
+                     ),
                      M("Projects", f="project")(
                         M("Create", m="create"),
                         M("Map", f="location", m="map"),
@@ -1585,12 +1594,12 @@ class S3OptionsMenu(object):
                     M("Beneficiaries", f="beneficiary", m="report",
                       check=stats,
                       ),
-                    M("Indicators", f="indicator_data", m="report",
-                      check=indicators,
-                      ),
-                    M("Indicators over Time", f="indicator_data", m="timeplot",
-                      check=indicators,
-                      ),
+                    #M("Indicators", f="indicator", m="report",
+                    #  check=indicators,
+                    #  ),
+                    #M("Indicators over Time", f="indicator", m="timeplot",
+                    #  check=indicators,
+                    #  ),
                     M("Funding", f="organisation", m="report"),
                  ),
                  M("Import", f="project", m="import", p="create")(
@@ -1620,10 +1629,10 @@ class S3OptionsMenu(object):
                    check=hazards)(
                     M("Create", m="create"),
                  ),
-                 M("Indicators", f="indicator",
-                   check=indicators)(
-                    M("Create", m="create"),
-                 ),
+                 #M("Indicators", f="indicator",
+                 #  check=indicators)(
+                 #   M("Create", m="create"),
+                 #),
                  M("Sectors", f="sector",
                    check=sectors)(
                     M("Create", m="create"),

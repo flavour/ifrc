@@ -272,6 +272,8 @@ def config(settings):
     #
     # Enable the use of Organisation Groups
     settings.org.groups = "Network"
+    # Represent Organisation Group affiliation in team references
+    settings.org.group_team_represent = True
     # Make Services Hierarchical
     settings.org.services_hierarchical = True
     # Set the label for Sites
@@ -1898,6 +1900,8 @@ $.filterOptionsS3({
     settings.req.skill_quantities_writable = True
     settings.req.items_ask_purpose = False
     #settings.req.use_req_number = False
+    settings.req.pack_values = False
+    settings.inv.send_show_org = False
     # Label for Requester
     settings.req.requester_label = "Site Contact"
     # Filter Requester as being from the Site
