@@ -26,13 +26,13 @@
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
     OTHER DEALINGS IN THE SOFTWARE.
 """
+from reportlab.lib.validators import Percentage
 
 __all__ = ("S3BudgetModel",
            "S3BudgetKitModel",
            "S3BudgetBundleModel",
            "S3BudgetAllocationModel",
            "S3BudgetMonitoringModel",
-           "S3BudgetProjectModel",
            "budget_rheader",
            "budget_CostItemRepresent",
            )
@@ -47,14 +47,15 @@ from s3layouts import S3AddResourceLink
 # =============================================================================
 class S3BudgetModel(S3Model):
 
-    names = ("budget_budget",
+    names = ("budget_entity",
+             "budget_budget",
              "budget_parameter",
              "budget_location",
-             "budget_budget_id",
+             #"budget_budget_id",
              "budget_location_id",
              "budget_staff",
-             "budget_budget_staff",
              "budget_staff_id",
+             "budget_budget_staff",
              )
 
     def model(self):
@@ -63,18 +64,55 @@ class S3BudgetModel(S3Model):
         db = current.db
         configure = self.configure
         define_table = self.define_table
-        add_components = self.add_components
+        super_link = self.super_link
         messages = current.messages
         UNKNOWN_OPT = messages.UNKNOWN_OPT
 
         s3 = current.response.s3
         crud_strings = s3.crud_strings
 
+        # ---------------------------------------------------------------------
+        # Budget Entity (super-entity for resources that can have a budget)
+        entity_types = Storage(#event_incident = T("Incident"),
+                               #org_organisation = T("Organization"),
+                               #org_site = T("Facility"),
+                               #pr_group = T("Team"),
+                               project_project = T("Project"),
+                               )
+
+        tablename = "budget_entity"
+        self.super_entity(tablename, "budget_entity_id", entity_types)
+
+        self.add_components(tablename,
+                            # Budget Details
+                            budget_budget = "budget_entity_id",
+                            # Allocations
+                            budget_allocation = "budget_entity_id",
+                            # Monitoring
+                            budget_monitoring = "budget_entity_id",
+                            # Staff
+                            budget_staff = {"link": "budget_budget_staff",
+                                            "joinby": "budget_entity_id",
+                                            "key": "staff_id",
+                                            "actuate": "link",
+                                            },
+                            # Bundles
+                            budget_bundle = {"link": "budget_budget_bundle",
+                                             "joinby": "budget_entity_id",
+                                             "key": "bundle_id",
+                                             "actuate": "link",
+                                             },
+                            )
+
+        # ---------------------------------------------------------------------
+        # Budgets
+        #
         status_opts = {1: T("Draft"),
                        2: T("Approved"),
                        3: T("Rejected"),
                        }
 
+        # Currently only Monthly is supported
         monitoring_opts = {1: messages["NONE"],
                            #2: T("Annually"),
                            3: T("Monthly"),
@@ -82,11 +120,11 @@ class S3BudgetModel(S3Model):
                            #3: T("Daily"),
                            }
 
-        # ---------------------------------------------------------------------
-        # Budgets
-        #
         tablename = "budget_budget"
         define_table(tablename,
+                     # This is a component, so needs to be a super_link
+                     # - can't override field name, ondelete or requires
+                     super_link("budget_entity_id", "budget_entity"),
                      Field("name", length=128, notnull=True, unique=True,
                            label = T("Name"),
                            #requires = [IS_NOT_EMPTY(),
@@ -110,6 +148,7 @@ class S3BudgetModel(S3Model):
                            default = 0.0,
                            label = T("Total Budget"),
                            ),
+                     s3_currency(required = True),
                      Field("monitoring_frequency", "integer",
                            default = 1,
                            label = T("Monitoring Frequency"),
@@ -128,9 +167,10 @@ class S3BudgetModel(S3Model):
                      )
 
         # CRUD Strings
-        ADD_BUDGET = T("Create Budget")
+        #ADD_BUDGET = T("Create Budget")
         crud_strings[tablename] = Storage(
-            label_create = ADD_BUDGET,
+            #label_create = ADD_BUDGET,
+            label_create = T("Create Budget"),
             title_display = T("Budget Details"),
             title_list = T("Budgets"),
             title_update = T("Edit Budget"),
@@ -143,41 +183,24 @@ class S3BudgetModel(S3Model):
         )
 
         # Represent
-        budget_budget_represent = S3Represent(lookup=tablename, show_link=True)
+        #budget_budget_represent = S3Represent(lookup=tablename, show_link=True)
 
         # Reusable Field
-        budget_budget_id = S3ReusableField("budget_id", "reference %s" % tablename,
-            label = T("Budget"),
-            ondelete = "CASCADE",
-            represent = budget_budget_represent,
-            requires = IS_ONE_OF(db, "budget_budget.id",
-                                 budget_budget_represent,
-                                 ),
-            comment = S3AddResourceLink(
-                c = "budget",
-                f = "budget",
-                label = ADD_BUDGET,
-                title = T("Budget"),
-                tooltip = T("You can create a new budget by clicking link '%s'.") % ADD_BUDGET
-                ),
-            )
-
-        add_components(tablename,
-                       # Staff
-                       budget_staff = {"link": "budget_budget_staff",
-                                       "joinby": "budget_id",
-                                       "key": "staff_id",
-                                       "actuate": "link",
-                                       },
-                       # Bundles
-                       budget_bundle = {"link": "budget_budget_bundle",
-                                        "joinby": "budget_id",
-                                        "key": "bundle_id",
-                                        "actuate": "link",
-                                        },
-                       # Allocations
-                       budget_allocation = "budget_id",
-                       )
+        #budget_budget_id = S3ReusableField("budget_id", "reference %s" % tablename,
+        #    label = T("Budget"),
+        #    ondelete = "CASCADE",
+        #    represent = budget_budget_represent,
+        #    requires = IS_ONE_OF(db, "budget_budget.id",
+        #                         budget_budget_represent,
+        #                         ),
+        #    comment = S3AddResourceLink(
+        #        c = "budget",
+        #        f = "budget",
+        #        label = ADD_BUDGET,
+        #        title = T("Budget"),
+        #        tooltip = T("You can create a new budget by clicking link '%s'.") % ADD_BUDGET
+        #        ),
+        #    )
 
         # Configuration
         configure(tablename,
@@ -369,9 +392,9 @@ class S3BudgetModel(S3Model):
         #
         tablename = "budget_budget_staff"
         define_table(tablename,
-                     budget_budget_id(),
-                     # @ToDo: Remove this link?
-                     self.project_project_id(),
+                     # This is a component, so needs to be a super_link
+                     # - can't override field name, ondelete or requires
+                     super_link("budget_entity_id", "budget_entity"),
                      budget_location_id(),
                      budget_staff_id(),
                      Field("quantity", "integer", notnull=True,
@@ -395,7 +418,7 @@ class S3BudgetModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return dict(budget_budget_id = budget_budget_id,
+        return dict(#budget_budget_id = budget_budget_id,
                     budget_location_id = budget_location_id,
                     budget_staff_id=budget_staff_id,
                     )
@@ -423,10 +446,10 @@ class S3BudgetModel(S3Model):
         """
 
         try:
-           budget_id = form.vars.id
+           budget_entity_id = form.vars.budget_entity_id
         except:
            return
-        budget_budget_totals(budget_id)
+        budget_budget_totals(budget_entity_id)
         return
         
     # -------------------------------------------------------------------------
@@ -442,11 +465,12 @@ class S3BudgetModel(S3Model):
         except:
             return
         linktable = current.s3db.budget_budget_staff
-        budget_id = linktable.budget_id
-        rows = current.db(linktable.staff_id == record_id).select(budget_id,
-                                                          groupby=budget_id)
+        budget_entity_id = linktable.budget_entity_id
+        query = (linktable.staff_id == record_id)
+        rows = current.db(query).select(budget_entity_id,
+                                        groupby=budget_entity_id)
         for row in rows:
-            budget_budget_totals(row.budget_id)
+            budget_budget_totals(row.budget_entity_id)
         return
 
     # -------------------------------------------------------------------------
@@ -462,11 +486,12 @@ class S3BudgetModel(S3Model):
         except:
             return
         linktable = current.s3db.budget_budget_staff
-        budget_id = linktable.budget_id
-        rows = current.db(linktable.location_id == record_id).select(budget_id,
-                                                             groupby=budget_id)
+        budget_entity_id = linktable.budget_entity_id
+        query = (linktable.location_id == record_id)
+        rows = current.db(query).select(budget_entity_id,
+                                        groupby=budget_entity_id)
         for row in rows:
-            budget_budget_totals(row.budget_id)
+            budget_budget_totals(row.budget_entity_id)
         return
 
     # -------------------------------------------------------------------------
@@ -481,10 +506,10 @@ class S3BudgetModel(S3Model):
         except:
             return
         table = current.s3db.budget_budget_staff
-        row = current.db(table.id == record_id).select(table.budget_id,
+        row = current.db(table.id == record_id).select(table.budget_entity_id,
                                                        limitby=(0, 1)).first()
         if row:
-            budget_budget_totals(row.budget_id)
+            budget_budget_totals(row.budget_entity_id)
         return
 
     # -------------------------------------------------------------------------
@@ -504,9 +529,9 @@ class S3BudgetModel(S3Model):
                                                     limitby=(0, 1)).first()
         if link:
             deleted_fk = json.loads(link.deleted_fk)
-            budget_id = deleted_fk.get("budget_id")
-            if budget_id:
-                budget_budget_totals(budget_id)
+            budget_entity_id = deleted_fk.get("budget_entity_id")
+            if budget_entity_id:
+                budget_budget_totals(budget_entity_id)
         return
 
 # =============================================================================
@@ -744,7 +769,9 @@ class S3BudgetKitModel(S3Model):
         #
         tablename = "budget_kit_item"
         define_table(tablename,
-                     budget_kit_id(),
+                     # This is a component, so needs to be a super_link
+                     # - can't override field name, ondelete or requires
+                     self.super_link("budget_entity_id", "budget_entity"),
                      budget_item_id(),
                      Field("quantity", "integer", notnull=True,
                            default = 1,
@@ -1078,8 +1105,9 @@ class S3BudgetBundleModel(S3Model):
         #
         tablename = "budget_budget_bundle"
         define_table(tablename,
-                     self.budget_budget_id(),
-                     self.project_project_id(),
+                     # This is a component, so needs to be a super_link
+                     # - can't override field name, ondelete or requires
+                     self.super_link("budget_entity_id", "budget_entity"),
                      self.budget_location_id(),
                      budget_bundle_id(),
                      Field("quantity", "integer", notnull=True,
@@ -1238,10 +1266,10 @@ class S3BudgetBundleModel(S3Model):
         except:
             return
         table = current.s3db.budget_budget_bundle
-        row = current.db(table.id == record_id).select(table.budget_id,
+        row = current.db(table.id == record_id).select(table.budget_entity_id,
                                                        limitby=(0, 1)).first()
         if row:
-            budget_budget_totals(row.budget_id)
+            budget_budget_totals(row.budget_entity_id)
         return
 
     # -------------------------------------------------------------------------
@@ -1261,9 +1289,9 @@ class S3BudgetBundleModel(S3Model):
                                                     limitby=(0, 1)).first()
         if link:
             deleted_fk = json.loads(link.deleted_fk)
-            budget_id = deleted_fk.get("budget_id")
-            if budget_id:
-                budget_budget_totals(budget_id)
+            budget_entity_id = deleted_fk.get("budget_entity_id")
+            if budget_entity_id:
+                budget_budget_totals(budget_entity_id)
         return
 
 # =============================================================================
@@ -1279,6 +1307,7 @@ class S3BudgetAllocationModel(S3Model):
     def model(self):
 
         T = current.T
+        super_link = self.super_link
   
         # ---------------------------------------------------------------------
         # Budget allocatable (super-entity for resource assignments that
@@ -1305,13 +1334,15 @@ class S3BudgetAllocationModel(S3Model):
         #
         tablename = "budget_allocation"
         self.define_table(tablename,
-                          self.budget_budget_id(),
+                          # This is a component, so needs to be a super_link
+                          # - can't override field name, ondelete or requires
+                          super_link("budget_entity_id", "budget_entity"),
                           # Component not instance
-                          self.super_link("cost_item_id", "budget_cost_item",
-                                          readable = True,
-                                          writable = True,
-                                          represent = self.budget_CostItemRepresent(),
-                                          ),
+                          super_link("cost_item_id", "budget_cost_item",
+                                     readable = True,
+                                     writable = True,
+                                     represent = self.budget_CostItemRepresent(),
+                                     ),
                           # @ToDo: s3_datetime
                           s3_date("start_date",
                                   label = T("Start Date")
@@ -1337,7 +1368,7 @@ class S3BudgetAllocationModel(S3Model):
                        deduplicate = self.budget_allocation_duplicate,
                        timeplot_options = {
                             "defaults": {
-                                "baseline": "budget_id$total_budget",
+                                "baseline": "budget_entity_id$total_budget",
                                 "fact": "cumulate(unit_cost,daily_cost,days)",
                                 "slots": "",
                                 "start": "",
@@ -1370,18 +1401,18 @@ class S3BudgetAllocationModel(S3Model):
         """
 
         data = item.data
-        budget_id = data.get("budget_id")
+        budget_entity_id = data.get("budget_entity_id")
         cost_item_id = data.get("cost_item_id")
 
-        if budget_id and cost_item_id:
+        if budget_entity_id and cost_item_id:
             table = item.table
 
             start_date = data.get("start_date")
             end_date = data.get("end_date")
 
-            # Regard same budget_id and cost_item_id, and with
+            # Regard same budget_entity_id and cost_item_id, and with
             # start_date = None or same start_date as match
-            query = (table.budget_id == budget_id) & \
+            query = (table.budget_entity_id == budget_entity_id) & \
                     (table.cost_item_id == cost_item_id) & \
                     ((table.start_date == None) | \
                      (table.start_date == start_date))
@@ -1413,9 +1444,9 @@ class S3BudgetMonitoringModel(S3Model):
         #
         tablename = "budget_monitoring"
         self.define_table(tablename,
-                          self.budget_budget_id(empty = False,
-                                                ondelete = "CASCADE",
-                                                ),
+                          # This is a component, so needs to be a super_link
+                          # - can't override field name, ondelete or requires
+                          self.super_link("budget_entity_id", "budget_entity"),
                           # Populated Automatically
                           # Used for Timeplot &, in future, to ease changing the monitoring frequency
                           s3_date("start_date",
@@ -1436,41 +1467,82 @@ class S3BudgetMonitoringModel(S3Model):
                                 label = T("Actual Spend"),
                                 requires = IS_FLOAT_AMOUNT(),
                                 ),
-                          s3_currency(required=True),
+                          s3_currency(required = True,
+                                      # Normally set at Budget level
+                                      writable = False,
+                                      ),
+                          Field.Method("percentage", self.budget_monitoring_percentage),
+                          s3_comments(),
                           *s3_meta_fields())
+
+        # CRUD Strings
+        #current.response.s3.crud_strings[tablename] = Storage(
+        #    label_create = T("Add Monitoring Data"),
+        #    title_display = T("Monitoring Data Details"),
+        #    title_list = T("Monitoring Data"),
+        #    title_update = T("Edit Monitoring Data"),
+        #    label_list_button = T("List Monitoring Data"),
+        #    label_delete_button = T("Remove Monitoring Data"),
+        #    msg_record_created = T("Monitoring Data added"),
+        #    msg_record_modified = T("Monitoring Data updated"),
+        #    msg_record_deleted = T("Monitoring Data removed"),
+        #    msg_list_empty = T("No Monitoring Data currently registered in this Budget"),
+        #)
+
+        self.configure(tablename,
+                       list_fields = ["end_date",
+                                      "planned",
+                                      "value",
+                                      (T("Percentage"), "percentage"),
+                                      "comments",
+                                      ],
+                       )
 
         # Pass names back to global scope (s3.*)
         return dict()
 
-# =============================================================================
-class S3BudgetProjectModel(S3Model):
-    """
-        Project Budget Model
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def budget_monitoring_percentage(row):
+        """
+            Virtual Field to show the percentage used of the Budget
+        """
 
-        Link between Projects & Budgets
+        if hasattr(row, "budget_monitoring"):
+            row = row.budget_monitoring
+        if hasattr(row, "planned"):
+            planned = row.planned
+            if planned == 0.0:
+                # Can't divide by Zero
+                return current.messages["NONE"]
+        else:
+            planned = None
+        if hasattr(row, "value"):
+            actual = row.value
+        else:
+            actual = None
 
-        @ToDo: Deprecate S3ProjectAnnualBudgetModel
-    """
+        if planned is not None and actual is not None:
+            percentage = actual / planned * 100
+            return "%s %%" % "{0:.2f}".format(percentage)
 
-    names = ("budget_project",)
+        if hasattr(row, "id"):
+            # Reload the record
+            s3_debug("Reload")
+            table = current.s3db.budget_monitoring
+            r = current.db(table.id == row.id).select(table.planned,
+                                                      table.value,
+                                                      limitby=(0, 1)
+                                                      ).first()
+            if r:
+                planned = r.planned
+                if planned == 0.0:
+                    # Can't divide by Zero
+                    return current.messages["NONE"]
+                percentage = r.value / planned * 100
+                return "%s %%" % percentage
 
-    def model(self):
-
-        # ---------------------------------------------------------------------
-        # Link between Projects <> Budgets
-        #
-        tablename = "budget_project"
-        self.define_table(tablename,
-                          self.budget_budget_id(empty = False,
-                                                ondelete = "CASCADE",
-                                                ),
-                          self.project_project_id(empty = False,
-                                                  ondelete = "CASCADE",
-                                                  ),
-                          *s3_meta_fields())
-
-        # Pass names back to global scope (s3.*)
-        return dict()
+        return current.messages["NONE"]
 
 # =============================================================================
 class budget_CostItemRepresent(S3Represent):
@@ -1756,22 +1828,22 @@ def budget_bundle_totals(bundle_id):
 
     # Update totals of all budgets with this bundle
     linktable = s3db.budget_budget_bundle
-    budget_id = linktable.budget_id
-    rows = db(linktable.bundle_id == bundle_id).select(budget_id,
-                                                       groupby=budget_id)
+    budget_entity_id = linktable.budget_entity_id
+    rows = db(linktable.bundle_id == bundle_id).select(budget_entity_id,
+                                                       groupby=budget_entity_id)
     for row in rows:
-        budget_budget_totals(row.budget_id)
+        budget_budget_totals(row.budget_entity_id)
 
     # @todo: fix this:
     #audit("update", module, "bundle", record=bundle, representation="html")
     return
 
 # =============================================================================
-def budget_budget_totals(budget_id):
+def budget_budget_totals(budget_entity_id):
     """
         Calculate Totals for a budget
 
-        @param budget_id: the budget_budget record ID
+        @param budget_entity_id: the budget_entity record ID
     """
 
     db = current.db
@@ -1788,8 +1860,8 @@ def budget_budget_totals(budget_id):
 
     left = [stable.on(linktable.staff_id == stable.id),
             ltable.on(linktable.location_id == ltable.id),
-           ]
-    query = (linktable.budget_id == budget_id)
+            ]
+    query = (linktable.budget_entity_id == budget_entity_id)
     rows = db(query).select(linktable.quantity,
                             linktable.months,
                             stable.salary,
@@ -1819,7 +1891,7 @@ def budget_budget_totals(budget_id):
 
     left = [btable.on(linktable.bundle_id == btable.id)]
 
-    query = (linktable.budget_id == budget_id)
+    query = (linktable.budget_entity_id == budget_entity_id)
     rows = db(query).select(linktable.quantity,
                             linktable.months,
                             btable.total_unit_cost,
@@ -1836,7 +1908,7 @@ def budget_budget_totals(budget_id):
                                 row[linktable.months]
 
     table = s3db.budget_budget
-    db(table.id == budget_id).update(total_onetime_costs=total_onetime_cost,
+    db(table.id == budget_entity_id).update(total_onetime_costs=total_onetime_cost,
                                      total_recurring_costs=total_recurring_cost)
 
     # @todo: fix this
