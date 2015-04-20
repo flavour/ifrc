@@ -3184,10 +3184,10 @@ class S3ProjectLocationModel(S3Model):
 
         filter_widgets.extend((
             # This is only suitable for deployments with a few projects
-            #S3OptionsFilter("project_id",
-            #                label = T("Project"),
-            #                hidden = True,
-            #                ),
+            S3OptionsFilter("project_id",
+                            label = T("Project"),
+                            hidden = True,
+                            ),
             S3OptionsFilter("project_id$theme_project.theme_id",
                             label = T("Theme"),
                             options = lambda: \
@@ -3953,6 +3953,18 @@ class S3ProjectPlanningModel(S3Model):
             msg_list_empty = T("No indicator data defined")
         )
 
+        report_options = {"rows": ["indicator_id", "date"],
+                          "cols": ["indicator_id", "date"],
+                          "fact": [(T("Target Value"), "avg(target_value)"),
+                                   (T("Actual Value"), "avg(value)"),
+                                   ],
+                          "defaults": {"rows": "indicator_id",
+                                       "cols": "date",
+                                       "fact": "avg(value)",
+                                       "totals": False,
+                                       },
+                          }
+
         self.configure(tablename,
                        list_fields = ["indicator_id",
                                       "date",
@@ -3961,6 +3973,7 @@ class S3ProjectPlanningModel(S3Model):
                                       (T("Percentage"), "percentage"),
                                       "comments",
                                       ],
+                       report_options = report_options,
                        )
 
         # Pass names back to global scope (s3.*)
@@ -7981,7 +7994,7 @@ class project_Details(S3Method):
             if settings.get_hrm_show_staff():
                 STAFF = settings.get_hrm_staff_label()
                 hr_widget = dict(label = STAFF,
-                                 label_create = "Add %s" % STAFF,
+                                 label_create = "Add %(staff)s" % dict(staff=STAFF),
                                  type = "datatable",
                                  actions = dt_row_actions("human_resource"),
                                  tablename = "hrm_human_resource",
