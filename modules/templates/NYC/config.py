@@ -385,7 +385,8 @@ def config(settings):
 
         filter_widgets = [
             S3TextFilter(["name"],
-                         label = T("Name"),
+                         label = T("Search"),
+                         comment = T("Search by facility name. You can use * as wildcard."),
                          ),
             S3OptionsFilter("site_facility_type.facility_type_id",
                             ),
@@ -575,9 +576,24 @@ def config(settings):
     def customise_org_organisation_resource(r, tablename):
 
         from gluon.html import DIV, INPUT
-        from s3 import s3_comments_widget, S3LocationSelector, S3MultiSelectWidget, S3SQLCustomForm, S3SQLInlineLink, S3SQLInlineComponent, S3SQLInlineComponentMultiSelectWidget
+        from s3 import s3_comments_widget, \
+                       S3LocationSelector, \
+                       S3MultiSelectWidget, \
+                       S3SQLCustomForm, \
+                       S3SQLInlineLink, \
+                       S3SQLInlineComponent, \
+                       S3SQLInlineComponentMultiSelectWidget
 
         s3db = current.s3db
+
+        # Filtered component to access phone number and email
+        s3db.add_components("org_organisation",
+                            org_facility = {"name": "main_facility",
+                                            "joinby": "organisation_id",
+                                            "filterby": "main_facility",
+                                            "filterfor": True,
+                                            },
+                            )
 
         if r.tablename == "org_organisation":
             if r.id:
@@ -791,7 +807,8 @@ def config(settings):
         from s3 import S3LocationFilter, S3OptionsFilter, S3TextFilter#, S3HierarchyFilter
         filter_widgets = [
             S3TextFilter(["name", "acronym"],
-                         label = T("Name"),
+                         label = T("Search"),
+                         comment = T("Search by organization name or acronym. You can use * as wildcard."),
                          _class = "filter-search",
                          ),
             S3OptionsFilter("group_membership.group_id",
@@ -827,16 +844,16 @@ def config(settings):
             list_fields = ["name",
                            (T("Type"), "organisation_organisation_type.organisation_type_id"),
                            (T("Date Registered"), "created_on"),
-                           "phone",
-                           (T("Email"), "email.value"),
+                           (T("Phone #"), "main_facility.phone1"),
+                           (T("Email"), "main_facility.email"),
                            "website",
                            ]
         else:
             list_fields = ["name",
                            (T("Type"), "organisation_organisation_type.organisation_type_id"),
                            (T("Services"), "service.name"),
-                           "phone",
-                           (T("Email"), "email.value"),
+                           (T("Phone #"), "main_facility.phone1"),
+                           (T("Email"), "main_facility.email"),
                            "website",
                            ]
 
@@ -1116,11 +1133,48 @@ def config(settings):
     # Doesn't yet work (form fails to submit)
     #settings.pr.select_existing = False
     settings.pr.show_emergency_contacts = False
+    # Uncomment to hide the Address tab in person details
+    settings.pr.use_address = False
     # Only show Private Contacts Tab (Public is done via Basic Details tab)
-    settings.pr.contacts_tabs = ("private",)
+    settings.pr.contacts_tabs = None #("private",)
 
     POC = T("Org PoC")
     POC_HELP = T("Main point of contact for organization")
+
+    # -------------------------------------------------------------------------
+    def profile_rheader(r, tabs=None):
+        """
+            Custom rheader for personal profile
+
+            @param r: the S3Request
+            @param tabs: the rheader tabs as defined by the controller
+        """
+
+        if r.representation != "html":
+            return None
+
+        from gluon import DIV, H4, A
+        from s3 import s3_rheader_resource, s3_rheader_tabs, s3_avatar_represent
+
+        tablename, record = s3_rheader_resource(r)
+        if record:
+            rheader_tabs = s3_rheader_tabs(r, tabs)
+
+            T = current.T
+            db = current.db
+            s3db = current.s3db
+
+            if tablename == "pr_person":
+
+                # @todo: this could be enhanced with the profile picture
+                #        since this is shown in the public profile under
+                #        "Contacts"
+                rheader = DIV(H4(s3_fullname(record), _class="subheader"),
+                              rheader_tabs,
+                              )
+                return rheader
+
+        return None
 
     # -------------------------------------------------------------------------
     # Persons
@@ -1150,10 +1204,20 @@ def config(settings):
 
             if r.interactive or r.representation == "aadata":
 
+                if r.controller == "default" and r.record:
+                    s3.pr_rheader = profile_rheader
+
                 if not r.component:
 
                     htable = s3db.hrm_human_resource
                     organisation_id = htable.organisation_id
+
+                    # Allow multiple HR records
+                    s3db.configure("hrm_human_resource",
+                                   deletable = True,
+                                   editable = True,
+                                   insertable = True,
+                                   )
 
                     # Site ID uses drop-down not autocomplete
                     site_id = htable.site_id
@@ -1260,8 +1324,9 @@ $.filterOptionsS3({
                                         "human_resource",
                                         name = "human_resource",
                                         label = "",
-                                        multiple = False,
+                                        multiple = True,
                                         fields = hr_fields,
+                                        explicit_add = T("Add another Organization"),
                                         ),
                                    S3SQLInlineComponent(
                                         "contact",
@@ -1444,8 +1509,8 @@ $.filterOptionsS3({
                               "comments",
                               "group_team.org_group_id$name",
                               ],
-                             label = T("Name"),
-                             comment = T("You can search by by group name, description or comments and by network name. You may use % as wildcard. Press 'Search' without input to list all."),
+                             label = T("Search"),
+                             comment = T("Search by group name, description, comments or by network name. You can use * as wildcard."),
                              #_class = "filter-search",
                              ),
                 S3OptionsFilter("group_team.org_group_id",
@@ -1548,7 +1613,7 @@ $.filterOptionsS3({
     # Uncomment to enable the use of HR Education
     settings.hrm.use_education = False
     # Uncomment to disable the use of HR Skills
-    #settings.hrm.use_skills = False
+    settings.hrm.use_skills = False
     # Uncomment to disable the use of HR Trainings
     settings.hrm.use_trainings = False
     # Uncomment to disable the use of HR Description
@@ -1562,6 +1627,8 @@ $.filterOptionsS3({
     settings.hrm.use_id = False
     # Uncomment to disable the use of HR Address Tab
     settings.hrm.use_address = False
+    # Uncomment to consolidate tabs into Staff Record (set to False to hide the tab)
+    settings.hrm.record_tab = False
 
     hrm_human_resource_list_fields = [
         "id",
@@ -1611,7 +1678,8 @@ $.filterOptionsS3({
                                       "person_id$middle_name",
                                       "person_id$last_name",
                                       ],
-                                     label = T("Name"),
+                                     label = T("Search"),
+                                     comment = T("Search by first, middle or last name. You can use * as wildcard."),
                                      ),
                         S3OptionsFilter("organisation_id",
                                         filter = True,
@@ -1852,7 +1920,8 @@ $.filterOptionsS3({
                                   "organisation.name",
                                   "organisation.acronym",
                                   ],
-                                 label = T("Name"),
+                                 label = T("Search"),
+                                 comment = T("Search by project name, code, description or organization name or acronym. You can use * as wildcard."),
                                  _class = "filter-search",
                                  ),
                     S3OptionsFilter("status_id",

@@ -3,7 +3,7 @@
 from gluon import *
 from s3 import S3CustomController
 
-THEME = "CERT"
+THEME = "NepalNEOC"
 
 # =============================================================================
 class index(S3CustomController):
@@ -26,11 +26,11 @@ class index(S3CustomController):
         #AUTHENTICATED = system_roles.AUTHENTICATED
         #has_role = auth.s3_has_role
 
-        menus = [{"title": T("Volunteers"),
-                  "icon": "user",
-                  "description": T("Manage people who have volunteered for your organization, their contact details, certicates and trainings."),
-                  "module": "vol",
-                  "function": "volunteer",
+        menus = [{"title": T("Incidents"),
+                  "icon": "incident",
+                  #"description": T("Manage Incidents."),
+                  "module": "event",
+                  "function": "incident",
                   "buttons": [{"args": "summary",
                                "icon": "list",
                                "label": T("View"),
@@ -40,11 +40,25 @@ class index(S3CustomController):
                                "label": T("Create"),
                                }]
                   },
-                 {"title": T("Trainings"),
-                  "icon": "book",
-                  "description": T("Catalog of Training Courses which your Volunteers can attend."),
-                  "module": "vol",
-                  "function": "course",
+                 {"title": T("Organizations"),
+                  "icon": "sitemap",
+                  #"description": T("Relief Organizations."),
+                  "module": "org",
+                  "function": "organisation",
+                  "buttons": [{"args": [],
+                               "icon": "list",
+                               "label": T("View"),
+                               },
+                              {"args": "create",
+                               "icon": "plus-sign",
+                               "label": T("Create"),
+                               }]
+                  },
+                 {"title": T("Activities"),
+                  "icon": "cogs",
+                  #"description": T("Manage Activities."),
+                  "module": "project",
+                  "function": "activity",
                   "buttons": [{"args": "summary",
                                "icon": "list",
                                "label": T("View"),
@@ -54,35 +68,19 @@ class index(S3CustomController):
                                "label": T("Create"),
                                }]
                   },
-                 {"title": T("Certificates"),
-                  "icon": "certificate",
-                  "description": T("Catalog of Certificates which your Volunteers can get."),
-                  "module": "vol",
-                  "function": "certificate",
-                  "buttons": [{"args": "summary",
-                               "icon": "list",
-                               "label": T("View"),
-                               },
-                              {"args": "create",
-                               "icon": "plus-sign",
-                               "label": T("Create"),
-                               }]
-                  },
-                 {"title": T("Messaging"),
+                 {"title": T("Requests"),
                   "icon": "envelope-alt",
-                  "description": T("Send Email, SMS and Twitter messages to your Volunteers."),
-                  "module": "msg",
-                  "function": "Index",
+                  #"description": T("Requests for goods or services."),
+                  "module": "req",
+                  "function": "req",
                   "args": None,
-                  "buttons": [{"function": "inbox",
-                               "args": None,
-                               "icon": "inbox",
-                               "label": T("Inbox"),
+                  "buttons": [{"args": "summary",
+                               "icon": "list",
+                               "label": T("View"),
                                },
-                              {"function": "compose",
-                               "args": None,
+                              {"args": "create",
                                "icon": "plus-sign",
-                               "label": T("Compose"),
+                               "label": T("Create"),
                                }]
                   },
                  ]
