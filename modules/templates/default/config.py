@@ -430,6 +430,8 @@ def config(settings):
 
     # -------------------------------------------------------------------------
     # CMS
+    # Uncomment this to hide CMS from module index pages
+    #settings.cms.hide_index = True
     # Uncomment to use Bookmarks in Newsfeed
     #settings.cms.bookmarks = True
     # Uncomment to use have Filter form in Newsfeed be open by default
@@ -505,6 +507,8 @@ def config(settings):
     # Organisations
     # Uncomment to use an Autocomplete for Organisation lookup fields
     #settings.org.autocomplete = True
+    # Enable the Organisation Sector field
+    #settings.org.sector = True
     # Enable the use of Organisation Branches
     #settings.org.branches = True
     # Show branches as tree rather than as table

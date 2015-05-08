@@ -659,7 +659,7 @@ class S3Config(Storage):
         """
             System Name (Short Version) - for the UI & Messaging
         """
-        return self.base.get("system_name_short", "Sahana Eden")
+        return self.base.get("system_name_short", "Sahana")
 
     def get_base_debug(self):
         """
@@ -2241,6 +2241,22 @@ class S3Config(Storage):
         """
         return self.cms.get("show_titles", False)
 
+    def get_cms_hide_index(self, module):
+        """
+            Whether to hide CMS from module index pages, can be configured
+            either as boolean, or as dict per module (with "_default" to
+            define the default behavior).
+        """
+
+        hide = self.cms.get("hide_index", {})
+        if isinstance(hide, dict):
+            for m in (module, "_default"):
+                if m in hide:
+                    return hide[m]
+            return False
+        else:
+            return hide
+
     # -------------------------------------------------------------------------
     # Shelters
     #
@@ -2789,6 +2805,12 @@ class S3Config(Storage):
             Whether organisation_id fields should use an Autocomplete instead of a dropdown
         """
         return self.org.get("autocomplete", False)
+
+    def get_org_sector(self):
+        """
+            Whether to use an Organization Sector field 
+        """
+        return self.org.get("sector", False)
 
     def get_org_branches(self):
         """

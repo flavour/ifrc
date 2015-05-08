@@ -11,6 +11,7 @@ except:
 
 from gluon import current
 from gluon.storage import Storage
+from controllers import deploy_index
 
 def config(settings):
     """
@@ -385,6 +386,33 @@ def config(settings):
     settings.search.filter_manager = False
 
     # -----------------------------------------------------------------------------
+    # Default Summary
+    settings.ui.summary = ({"common": True,
+                            "name": "add",
+                            "widgets": [{"method": "create"}],
+                            },
+                           {"name": "table",
+                            "label": "Table",
+                            "widgets": [{"method": "datatable"}],
+                            },
+                           {"name": "charts",
+                            "label": "Report",
+                            "widgets": [{"method": "report", "ajax_init": True}],
+                            },
+                           {"name": "map",
+                            "label": "Map",
+                            "widgets": [{"method": "map", "ajax_init": True}],
+                            },
+                           )
+
+    # -----------------------------------------------------------------------------
+    # Content Management
+    #
+    # Uncomment this to hide CMS from module index pages
+    settings.cms.hide_index = True
+    settings.cms.richtext = True
+
+    # -----------------------------------------------------------------------------
     # Messaging
     # Parser
     settings.msg.parser = "IFRC"
@@ -443,6 +471,7 @@ def config(settings):
 
     # RDRT
     settings.deploy.hr_label = "Member"
+    settings.customise_deploy_home = deploy_index
     # Enable the use of Organisation Regions
     settings.org.regions = True
     # Make Organisation Regions Hierarchical
@@ -537,6 +566,12 @@ def config(settings):
                 #description = "Human Resources Management",
                 restricted = True,
                 #module_type = 2,
+            )),
+        ("cms", Storage(
+                name_nice = T("Content Management"),
+                #description = "Content Management System",
+                restricted = True,
+                module_type = None,
             )),
         ("doc", Storage(
                 name_nice = T("Documents"),
@@ -2385,8 +2420,6 @@ def config(settings):
                                 # Modify filter_widgets
                                 filter_widgets = resource.get_config("filter_widgets")
                                 # Remove type (always 'RC')
-                                filter_widgets.pop(1)
-                                # Remove sector (not relevant)
                                 filter_widgets.pop(1)
 
                                 # Modify CRUD Strings

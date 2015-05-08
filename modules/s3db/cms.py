@@ -27,7 +27,7 @@
     OTHER DEALINGS IN THE SOFTWARE.
 """
 
-__all__ = ["S3ContentModel",
+__all__ = ("S3ContentModel",
            "S3ContentMapModel",
            "S3ContentOrgModel",
            "S3ContentOrgGroupModel",
@@ -37,7 +37,7 @@ __all__ = ["S3ContentModel",
            "cms_customise_post_fields",
            "cms_post_list_layout",
            "S3CMS",
-           ]
+           )
 
 try:
     import json # try stdlib (Python 2.6)
@@ -964,7 +964,7 @@ def cms_index(module, resource=None, page_name=None, alt_function=None):
     response.title = page_name
 
     item = None
-    if settings.has_module("cms"):
+    if settings.has_module("cms") and not settings.get_cms_hide_index(module):
         db = current.db
         table = current.s3db.cms_post
         ltable = db.cms_post_module
