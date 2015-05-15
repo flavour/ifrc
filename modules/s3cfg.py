@@ -1799,6 +1799,23 @@ class S3Config(Storage):
                                         },
                                        ))
 
+    def get_ui_autocomplete_delay(self):
+        """
+            Time in milliseconds after the last keystroke in an AC field
+            to start the search
+
+            @todo: currently only applied in S3AddPersonWidget2
+        """
+        return self.__lazy(self.ui, "autocomplete_delay", 800)
+
+    def get_ui_autocomplete_min_chars(self):
+        """
+            Minimum charcters in an AC field to start the search
+
+            @todo: currently only applied in S3AddPersonWidget2
+        """
+        return self.__lazy(self.ui, "autocomplete_min_chars", 2)
+
     def get_ui_filter_auto_submit(self):
         """
             Time in milliseconds after the last filter option change to
@@ -2808,7 +2825,7 @@ class S3Config(Storage):
 
     def get_org_sector(self):
         """
-            Whether to use an Organization Sector field 
+            Whether to use an Organization Sector field
         """
         return self.org.get("sector", False)
 

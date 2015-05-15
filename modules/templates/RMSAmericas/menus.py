@@ -26,9 +26,13 @@ class S3MainMenu(default.S3MainMenu):
         )
 
         # Additional menus
-        #current.menu.personal = cls.menu_personal()
+        current.menu.personal = cls.menu_personal()
+        current.menu.lang = cls.menu_lang()
+        current.menu.about = cls.menu_about()
+        current.menu.org = cls.menu_org()
+
+        # @todo: restore?
         #current.menu.dashboard = cls.menu_dashboard()
-        #current.menu.org = cls.menu_org()
 
         return main_menu
 
@@ -157,182 +161,201 @@ class S3MainMenu(default.S3MainMenu):
         ]
 
     # -------------------------------------------------------------------------
+    # @todo: restore? (at least for homepage? => needs re-design then)
+    #
     #@classmethod
     #def menu_dashboard(cls):
-        #""" Dashboard Menu (at bottom of page) """
+    #    """ Dashboard Menu (at bottom of page) """
 
-        #DB = S3DashBoardMenuLayout
-        #auth = current.auth
-        #request = current.request
-        #controller = request.controller
+    #    DB = S3DashBoardMenuLayout
+    #    auth = current.auth
+    #    request = current.request
+    #    controller = request.controller
 
-        #has_role = auth.s3_has_role
-        #root_org = auth.root_org_name()
-        #system_roles = current.session.s3.system_roles
-        ##ADMIN = system_roles.ADMIN
-        #ORG_ADMIN = system_roles.ORG_ADMIN
+    #    has_role = auth.s3_has_role
+    #    root_org = auth.root_org_name()
+    #    system_roles = current.session.s3.system_roles
+    #    #ADMIN = system_roles.ADMIN
+    #    ORG_ADMIN = system_roles.ORG_ADMIN
 
-        #def hrm(item):
-            #return root_org != "Honduran Red Cross" or \
-                   #has_role(ORG_ADMIN)
+    #    def hrm(item):
+    #        return root_org != "Honduran Red Cross" or \
+    #               has_role(ORG_ADMIN)
 
-        #def inv(item):
-            #return root_org != "Honduran Red Cross" or \
-                   #has_role("hn_wh_manager") or \
-                   #has_role("hn_national_wh_manager") or \
-                   #has_role(ORG_ADMIN)
+    #    def inv(item):
+    #        return root_org != "Honduran Red Cross" or \
+    #               has_role("hn_wh_manager") or \
+    #               has_role("hn_national_wh_manager") or \
+    #               has_role(ORG_ADMIN)
 
-        #def vol(item):
-            #return root_org != "Honduran Red Cross" or \
-                   #has_role(ORG_ADMIN)
+    #    def vol(item):
+    #        return root_org != "Honduran Red Cross" or \
+    #               has_role(ORG_ADMIN)
 
-        #if controller == "vol":
-            #dashboard = DB()(
-                #DB("Volunteers",
-                   #c="vol",
-                   #image = "graphic_staff_wide.png",
-                   #title = "Volunteers")(
-                   #DB("Manage Volunteer Data", f="volunteer", m="summary"),
-                   #DB("Manage Teams Data", f="group"),
-                #),
-                #DB("Catalogs",
-                   #c="hrm",
-                   #image="graphic_catalogue.png",
-                   #title="Catalogs")(
-                   #DB("Certificates", f="certificate"),
-                   #DB("Training Courses", f="course"),
-                   ##DB("Skills", f="skill"),
-                   #DB("Job Titles", f="job_title")
-                #))
-        #elif controller in ("hrm", "org"):
-            #dashboard = DB()(
-                #DB("Staff",
-                   #c="hrm",
-                   #image = "graphic_staff_wide.png",
-                   #title = "Staff")(
-                   #DB("Manage Staff Data", f="staff", m="summary"),
-                   #DB("Manage Teams Data", f="group"),
-                #),
-                #DB("Offices",
-                   #c="org",
-                   #image = "graphic_office.png",
-                   #title = "Offices")(
-                   #DB("Manage Offices Data", f="office"),
-                   #DB("Manage National Society Data", f="organisation",
-                      #vars=red_cross_filter
-                      #),
-                #),
-                #DB("Catalogs",
-                   #c="hrm",
-                   #image="graphic_catalogue.png",
-                   #title="Catalogs")(
-                   #DB("Certificates", f="certificate"),
-                   #DB("Training Courses", f="course"),
-                   ##DB("Skills", f="skill"),
-                   #DB("Job Titles", f="job_title")
-                #))
+    #    if controller == "vol":
+    #        dashboard = DB()(
+    #            DB("Volunteers",
+    #               c="vol",
+    #               image = "graphic_staff_wide.png",
+    #               title = "Volunteers")(
+    #               DB("Manage Volunteer Data", f="volunteer", m="summary"),
+    #               DB("Manage Teams Data", f="group"),
+    #            ),
+    #            DB("Catalogs",
+    #               c="hrm",
+    #               image="graphic_catalogue.png",
+    #               title="Catalogs")(
+    #               DB("Certificates", f="certificate"),
+    #               DB("Training Courses", f="course"),
+    #               #DB("Skills", f="skill"),
+    #               DB("Job Titles", f="job_title")
+    #            ))
+    #    elif controller in ("hrm", "org"):
+    #        dashboard = DB()(
+    #            DB("Staff",
+    #               c="hrm",
+    #               image = "graphic_staff_wide.png",
+    #               title = "Staff")(
+    #               DB("Manage Staff Data", f="staff", m="summary"),
+    #               DB("Manage Teams Data", f="group"),
+    #            ),
+    #            DB("Offices",
+    #               c="org",
+    #               image = "graphic_office.png",
+    #               title = "Offices")(
+    #               DB("Manage Offices Data", f="office"),
+    #               DB("Manage National Society Data", f="organisation",
+    #                  vars=red_cross_filter
+    #                  ),
+    #            ),
+    #            DB("Catalogs",
+    #               c="hrm",
+    #               image="graphic_catalogue.png",
+    #               title="Catalogs")(
+    #               DB("Certificates", f="certificate"),
+    #               DB("Training Courses", f="course"),
+    #               #DB("Skills", f="skill"),
+    #               DB("Job Titles", f="job_title")
+    #            ))
 
-        #elif controller == "default" and request.function == "index":
+    #    elif controller == "default" and request.function == "index":
 
-            #dashboard = DB(_id="dashboard")(
-                #DB("Staff", c="hrm", f="staff", m="summary",
-                   #check = hrm,
-                   #image = "graphic_staff.png",
-                   #title = "Staff",
-                   #text = "Add new and manage existing staff."),
-                #DB("Volunteers", c="vol", f="volunteer", m="summary",
-                   #check = vol,
-                   #image = "graphic_volunteers.png",
-                   #title = "Volunteers",
-                   #text = "Add new and manage existing volunteers."),
-                #DB("Members", c="member", f="membership", m="summary",
-                   #image = "graphic_members.png",
-                   #title = "Members",
-                   #text = "Add new and manage existing members."),
-                #DB("Warehouses", c="inv", f="warehouse", m="summary",
-                   #check = inv,
-                   #image = "graphic_warehouse.png",
-                   #title = "Warehouses",
-                   #text = "Stocks and relief items."),
-                #DB("Assets", c="asset", f="index",
-                   #image = "graphic_assets.png",
-                   #title = "Assets",
-                   #text = "Manage office inventories and assets."),
-                #DB("Assessments", c="survey", f="index",
-                   #image = "graphic_assessments.png",
-                   #title = "Assessments",
-                   #text = "Design, deploy & analyze surveys."),
-                #DB("Projects", c="project", f="project", m="summary",
-                   #image = "graphic_tools.png",
-                   #title = "Projects",
-                   #text = "Tracking and analysis of Projects and Activities.")
-            #)
+    #        dashboard = DB(_id="dashboard")(
+    #            DB("Staff", c="hrm", f="staff", m="summary",
+    #               check = hrm,
+    #               image = "graphic_staff.png",
+    #               title = "Staff",
+    #               text = "Add new and manage existing staff."),
+    #            DB("Volunteers", c="vol", f="volunteer", m="summary",
+    #               check = vol,
+    #               image = "graphic_volunteers.png",
+    #               title = "Volunteers",
+    #               text = "Add new and manage existing volunteers."),
+    #            DB("Members", c="member", f="membership", m="summary",
+    #               image = "graphic_members.png",
+    #               title = "Members",
+    #               text = "Add new and manage existing members."),
+    #            DB("Warehouses", c="inv", f="warehouse", m="summary",
+    #               check = inv,
+    #               image = "graphic_warehouse.png",
+    #               title = "Warehouses",
+    #               text = "Stocks and relief items."),
+    #            DB("Assets", c="asset", f="index",
+    #               image = "graphic_assets.png",
+    #               title = "Assets",
+    #               text = "Manage office inventories and assets."),
+    #            DB("Assessments", c="survey", f="index",
+    #               image = "graphic_assessments.png",
+    #               title = "Assessments",
+    #               text = "Design, deploy & analyze surveys."),
+    #            DB("Projects", c="project", f="project", m="summary",
+    #               image = "graphic_tools.png",
+    #               title = "Projects",
+    #               text = "Tracking and analysis of Projects and Activities.")
+    #        )
 
-        #else:
-            #dashboard = None
+    #    else:
+    #        dashboard = None
 
-        #return dashboard
-
-    # -------------------------------------------------------------------------
-    #@classmethod
-    #def menu_org(cls):
-        #""" Custom Organisation Menu """
-
-        #OM = S3OrgMenuLayout
-        #return OM()
+    #    return dashboard
 
     # -------------------------------------------------------------------------
-    #@classmethod
-    #def menu_personal(cls):
-        #""" Custom Personal Menu """
+    @classmethod
+    def menu_org(cls):
+        """ Custom Organisation Menu """
 
-        #auth = current.auth
-        #s3 = current.response.s3
-        #settings = current.deployment_settings
+        OM = S3OrgMenuLayout
+        return OM()
 
-        ## Language selector
-        #menu_lang = ML("Language", right=True)
-        #for language in s3.l10n_languages.items():
-            #code, name = language
-            #menu_lang(
-                #ML(name, translate=False, lang_code=code, lang_name=name)
-            #)
+    # -------------------------------------------------------------------------
+    @classmethod
+    def menu_lang(cls):
 
-        #if not auth.is_logged_in():
-            #request = current.request
-            #login_next = URL(args=request.args, vars=request.vars)
-            #if request.controller == "default" and \
-            #request.function == "user" and \
-            #"_next" in request.get_vars:
-                #login_next = request.get_vars["_next"]
+        s3 = current.response.s3
 
-            #self_registration = settings.get_security_self_registration()
-            #menu_personal = MP()(
-                        #MP("Register", c="default", f="user",
-                           #m="register", check=self_registration),
-                        #MP("Login", c="default", f="user",
-                           #m="login", vars=dict(_next=login_next)),
-                        #MP("Lost Password", c="default", f="user",
-                           #m="retrieve_password"),
-                        #menu_lang
-            #)
-        #else:
-            #s3_has_role = auth.s3_has_role
-            #is_org_admin = lambda i: s3_has_role("ORG_ADMIN") and \
-                                     #not s3_has_role("ADMIN")
-            #menu_personal = MP()(
-                        #MP("Administration", c="admin", f="index",
-                           #check=s3_has_role("ADMIN")),
-                        #MP("Administration", c="admin", f="user",
-                           #check=is_org_admin),
-                        #MP("Profile", c="default", f="person"),
-                        #MP("Change Password", c="default", f="user",
-                           #m="change_password"),
-                        #MP("Logout", c="default", f="user",
-                           #m="logout"),
-                        #menu_lang,
-            #)
-        #return menu_personal
+        # Language selector
+        menu_lang = ML("Language", right=True)
+        for language in s3.l10n_languages.items():
+            code, name = language
+            menu_lang(
+                ML(name, translate=False, lang_code=code, lang_name=name)
+            )
+        return menu_lang
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def menu_personal(cls):
+        """ Custom Personal Menu """
+
+        auth = current.auth
+        s3 = current.response.s3
+        settings = current.deployment_settings
+
+        if not auth.is_logged_in():
+            request = current.request
+            login_next = URL(args=request.args, vars=request.vars)
+            if request.controller == "default" and \
+            request.function == "user" and \
+            "_next" in request.get_vars:
+                login_next = request.get_vars["_next"]
+
+            self_registration = settings.get_security_self_registration()
+            menu_personal = MP()(
+                        MP("Register", c="default", f="user",
+                           m="register", check=self_registration),
+                        MP("Login", c="default", f="user",
+                           m="login", vars=dict(_next=login_next)),
+                        MP("Lost Password", c="default", f="user",
+                           m="retrieve_password"),
+            )
+        else:
+            s3_has_role = auth.s3_has_role
+            is_org_admin = lambda i: s3_has_role("ORG_ADMIN") and \
+                                     not s3_has_role("ADMIN")
+            menu_personal = MP()(
+                        MP("Administration", c="admin", f="index",
+                           check=s3_has_role("ADMIN")),
+                        MP("Administration", c="admin", f="user",
+                           check=is_org_admin),
+                        MP("Profile", c="default", f="person"),
+                        MP("Change Password", c="default", f="user",
+                           m="change_password"),
+                        MP("Logout", c="default", f="user",
+                           m="logout"),
+            )
+        return menu_personal
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def menu_about(cls):
+
+        menu_about = MA(c="default")(
+            MA("About Us", f="about"),
+            MA("Contact", f="contact"),
+            MA("Help", f="help"),
+            MA("Privacy", f="privacy"),
+        )
+        return menu_about
 
 # =============================================================================
 class S3OptionsMenu(default.S3OptionsMenu):
