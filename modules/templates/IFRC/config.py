@@ -1067,7 +1067,7 @@ def config(settings):
                                     S3SQLInlineComponent(
                                         "item",
                                         label = T("Items"),
-                                        fields = ["item_id",
+                                        fields = ("item_id",
                                                   "quantity",
                                                   "sn",
                                                   # These are too wide for the screen & hence hide the AddResourceLinks
@@ -1076,7 +1076,7 @@ def config(settings):
                                                   #"purchase_price",
                                                   #"purchase_currency",
                                                   "comments",
-                                                  ],
+                                                  ),
                                         ),
                                     S3SQLInlineComponent(
                                         "group",
@@ -1333,6 +1333,19 @@ def config(settings):
                 result = standard_prep(r)
             else:
                 result = True
+
+            if r.interactive and not current.auth.s3_has_role("RDRT_ADMIN"):
+                # Limit write-access to these fields to RDRT Admins:
+                fields = ("name",
+                          "event_type_id",
+                          "location_id",
+                          "code",
+                          "status",
+                          )
+                table = r.resource.table
+                for f in fields:
+                    if f in table:
+                        table[f].writable = False
 
             if not r.component and r.method == "create":
                 # Org is always IFRC
@@ -2296,6 +2309,19 @@ def config(settings):
         return attr
 
     settings.customise_member_membership_type_controller = customise_member_membership_type_controller
+
+    # -----------------------------------------------------------------------------
+    def customise_org_capacity_assessment_controller(**attr):
+
+        # Organisation needs to be an NS/Branch
+        ns_only("org_capacity_assessment",
+                required = True,
+                branches = True,
+                )
+
+        return attr
+
+    settings.customise_org_capacity_assessment_controller = customise_org_capacity_assessment_controller
 
     # -----------------------------------------------------------------------------
     def customise_org_office_controller(**attr):
