@@ -18,10 +18,13 @@ def config(settings):
     T = current.T
 
     # Pre-Populate
-    settings.base.prepopulate = ("CAP", "default/users")
+    settings.base.prepopulate = ("SAMBRO", "default/users")
 
     # Theme (folder to use for views/layout.html)
-    #settings.base.theme = "default"
+    #settings.base.theme = "SAMBRO"
+
+    # The Registration functionality shouldn't be visible to the Public
+    settings.security.registration_visible = False
 
     # GeoNames username
     settings.gis.geonames_username = "eden_test"
@@ -29,7 +32,7 @@ def config(settings):
     # -----------------------------------------------------------------------------
     # Messaging
     # Parser
-    settings.msg.parser = "CAP"
+    settings.msg.parser = "SAMBRO"
 
     def customise_msg_rss_channel_resource(r, tablename):
         s3db = current.s3db

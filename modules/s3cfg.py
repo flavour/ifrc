@@ -394,10 +394,18 @@ class S3Config(Storage):
 
         """
         return self.security.get("self_registration", True)
+
+    def get_security_registration_visible(self):
+        visible = self.get_security_self_registration() and \
+                  self.security.get("registration_visible", True)
+        return visible
+
     def get_auth_registration_requires_verification(self):
         return self.auth.get("registration_requires_verification", False)
+
     def get_auth_registration_requires_approval(self):
         return self.auth.get("registration_requires_approval", False)
+
     def get_auth_always_notify_approver(self):
         return self.auth.get("always_notify_approver", True)
 
@@ -3064,6 +3072,10 @@ class S3Config(Storage):
     def get_pr_request_dob(self):
         """ Include Date of Birth in the AddPersonWidget[2] """
         return self.pr.get("request_dob", True)
+
+    def get_pr_request_email(self):
+        """ Include Email in the AddPersonWidget2 """
+        return self.pr.get("request_email", True)
 
     def get_pr_request_gender(self):
         """ Include Gender in the AddPersonWidget[2] """

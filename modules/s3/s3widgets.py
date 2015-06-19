@@ -636,6 +636,7 @@ class S3AddPersonWidget2(FormWidget):
                  controller = None,
                  father_name = False,
                  grandfather_name = False,
+                 year_of_birth = False, # Whether to use Year of Birth (as well as, or instead of, Date of Birth)
                  ):
 
         # Controller to retrieve the person or hrm record
@@ -643,6 +644,7 @@ class S3AddPersonWidget2(FormWidget):
 
         self.father_name = father_name
         self.grandfather_name = grandfather_name
+        self.year_of_birth = year_of_birth
 
     def __call__(self, field, value, **attributes):
 
@@ -707,12 +709,19 @@ class S3AddPersonWidget2(FormWidget):
         controller = self.controller or request.controller
         settings = current.deployment_settings
 
+        date_of_birth = None
+        year_of_birth = None
+
+        dtable = None
         ptable = s3db.pr_person
+
+        if self.year_of_birth:
+            dtable = s3db.pr_person_details
+            year_of_birth = dtable.year_of_birth
 
         if settings.get_pr_request_dob():
             date_of_birth = ptable.date_of_birth
-        else:
-            date_of_birth = None
+
         if settings.get_pr_request_gender():
             gender = ptable.gender
             if request.env.request_method == "POST":
@@ -720,34 +729,32 @@ class S3AddPersonWidget2(FormWidget):
         else:
             gender = None
 
+        req_email = settings.get_pr_request_email()
         req_home_phone = settings.get_pr_request_home_phone()
 
+        emailRequired = settings.get_hrm_email_required()
+        occupation = None
+        father_name = None
+        grandfather_name = None
+
         if controller == "hrm":
-            emailRequired = settings.get_hrm_email_required()
-            occupation = None
+            pass
 
         elif controller == "vol":
             dtable = s3db.pr_person_details
             occupation = dtable.occupation
-            emailRequired = settings.get_hrm_email_required()
+            father_name = dtable.father_name if self.father_name else None
+            grandfather_name = dtable.grandfather_name if self.grandfather_name else None
 
         elif controller == "patient":
             controller = "pr"
-            emailRequired = settings.get_hrm_email_required()
-            occupation = None
-
+        
         elif hrm:
             controller = "hrm"
-            emailRequired = settings.get_hrm_email_required()
-            occupation = None
-
+        
         else:
             controller = "pr"
             emailRequired = False
-            occupation = None
-
-        father_name = dtable.father_name if self.father_name else None
-        grandfather_name = dtable.grandfather_name if self.grandfather_name else None
 
         if value:
             db = current.db
@@ -778,6 +785,9 @@ class S3AddPersonWidget2(FormWidget):
             if occupation:
                 fields.append(occupation)
                 details = True
+            if year_of_birth:
+                fields.append(year_of_birth)
+                details = True
 
             if details:
                 left = dtable.on(dtable.person_id == ptable.id)
@@ -805,6 +815,8 @@ class S3AddPersonWidget2(FormWidget):
             if grandfather_name:
                 values["grandfather_name"] = person_details.grandfather_name
             values["full_name"] = s3_fullname(person)
+            if year_of_birth:
+                values["year_of_birth"] = person_details.year_of_birth
             if date_of_birth:
                 values["date_of_birth"] = person.date_of_birth
             if gender:
@@ -812,10 +824,11 @@ class S3AddPersonWidget2(FormWidget):
 
             # Contacts as separate query as we can't easily limitby
             ctable = s3db.pr_contact
+            contact_methods = ["SMS"]
+            if req_email:
+                contact_methods.append("EMAIL")
             if req_home_phone:
-                contact_methods = ("SMS", "EMAIL", "HOME_PHONE")
-            else:
-                contact_methods = ("SMS", "EMAIL")
+                contact_methods.append("HOME_PHONE")
             query = (ctable.pe_id == person.pe_id) & \
                     (ctable.deleted == False) & \
                     (ctable.contact_method.belongs(contact_methods))
@@ -823,27 +836,19 @@ class S3AddPersonWidget2(FormWidget):
                                         ctable.value,
                                         orderby=ctable.priority,
                                         )
-            email = mobile_phone = ""
-            if req_home_phone:
-                home_phone = ""
-                for contact in contacts:
-                    if not email and contact.contact_method == "EMAIL":
-                        email = contact.value
-                    elif not mobile_phone and contact.contact_method == "SMS":
-                        mobile_phone = contact.value
-                    elif not home_phone and contact.contact_method == "HOME_PHONE":
-                        home_phone = contact.value
-                    if email and mobile_phone and home_phone:
-                        break
-                values["home_phone"] = home_phone
-            else:
-                for contact in contacts:
-                    if not email and contact.contact_method == "EMAIL":
-                        email = contact.value
-                    elif not mobile_phone and contact.contact_method == "SMS":
-                        mobile_phone = contact.value
-                    if email and mobile_phone:
-                        break
+            email = mobile_phone = home_phone = ""
+            for contact in contacts:
+                if req_email and not email and contact.contact_method == "EMAIL":
+                    email = contact.value
+                elif not mobile_phone and contact.contact_method == "SMS":
+                    mobile_phone = contact.value
+                elif req_home_phone and not home_phone and contact.contact_method == "HOME_PHONE":
+                    home_phone = contact.value
+                if mobile_phone and \
+                   ((req_email and email) or (not req_email)) and \
+                   ((req_home_phone and home_phone) or (not req_home_phone)):
+                    break
+            values["home_phone"] = home_phone
             values["email"] = email
             values["mobile_phone"] = mobile_phone
 
@@ -922,7 +927,13 @@ class S3AddPersonWidget2(FormWidget):
         # - multiple names get assigned to first, middle, last
         fappend(("full_name", T("Name"), INPUT(data=data), True))
 
-        if date_of_birth:
+        if father_name:
+            fappend(("father_name", father_name.label, INPUT(), False))
+        if grandfather_name:
+            fappend(("grandfather_name", grandfather_name.label, INPUT(), False))
+        if year_of_birth:
+            fappend(("year_of_birth", year_of_birth.label, INPUT(), False))
+        elif date_of_birth:
             fappend(("date_of_birth", date_of_birth.label,
                      date_of_birth.widget(date_of_birth, values.get("date_of_birth", None),
                                           _id = "%s_date_of_birth" % fieldname),
@@ -932,15 +943,13 @@ class S3AddPersonWidget2(FormWidget):
                      OptionsWidget.widget(gender, values.get("gender", None),
                                           _id = "%s_gender" % fieldname),
                      False))
-        if father_name:
-            fappend(("father_name", father_name.label, INPUT(), False))
-        if grandfather_name:
-            fappend(("grandfather_name", grandfather_name.label, INPUT(), False))
         if occupation:
             fappend(("occupation", occupation.label, INPUT(), False))
 
+        if req_email:
+            fappend(("email", T("Email"), INPUT(), emailRequired))
+
         fappend(("mobile_phone", settings.get_ui_label_mobile_phone(), INPUT(), False))
-        fappend(("email", T("Email"), INPUT(), emailRequired))
 
         if req_home_phone:
             fappend(("home_phone", T("Home Phone"), INPUT(), False))
@@ -1310,6 +1319,8 @@ class S3CalendarWidget(FormWidget):
                  future_months=None,
                  month_selector=False,
                  year_selector=True,
+                 min_year=None,
+                 max_year=None,
                  week_number=False,
                  buttons=None,
                  timepicker=False,
@@ -1333,6 +1344,9 @@ class S3CalendarWidget(FormWidget):
 
             @param month_selector: show a months drop-down
             @param year_selector: show a years drop-down
+            @param min_year: the minimum selectable year (can be relative to now like "-10")
+            @param max_year: the maximum selectable year (can be relative to now like "+10")
+
             @param week_number: show the week number in the calendar
             @param buttons: show the button panel (defaults to True if
                             the widget has a timepicker, else False)
@@ -1356,6 +1370,9 @@ class S3CalendarWidget(FormWidget):
 
         self.month_selector = month_selector
         self.year_selector = year_selector
+        self.min_year = min_year
+        self.max_year = max_year
+
         self.week_number = week_number
         self.buttons = buttons if buttons is not None else timepicker
 
@@ -1421,7 +1438,7 @@ class S3CalendarWidget(FormWidget):
 
         firstDOW = settings.get_L10n_firstDOW()
 
-        extremes = self.extremes()
+        extremes = self.extremes(time_format=time_format)
 
         options = {"calendar": calendar,
                    "dateFormat": date_format,
@@ -1451,13 +1468,17 @@ class S3CalendarWidget(FormWidget):
                        )
 
     # -------------------------------------------------------------------------
-    def extremes(self):
+    def extremes(self, time_format=None):
         """
-            Compute the minimum/maximum selectable date/time.
+            Compute the minimum/maximum selectable date/time, as well as
+            the default time (=the minute-step closest to now)
 
-            @return: a dict {minDateTime, maxDateTime} with the options
-                     as ISO-formatted strings in local time, to be passed
-                     as-is to s3.calendarwidget
+            @param time_format: the user time format
+
+            @return: a dict {minDateTime, maxDateTime, defaultValue, yearRange}
+                     with the min/max options as ISO-formatted strings, and the
+                     defaultValue in user-format (all in local time), to be
+                     passed as-is to s3.calendarwidget
         """
 
         extremes = {}
@@ -1465,8 +1486,11 @@ class S3CalendarWidget(FormWidget):
 
         offset = S3DateTime.get_offset_value(current.session.s3.utc_offset)
 
+        pyears, fyears = 10, 10
+
         # Minimum
         earliest = None
+        fallback = False
         if self.minimum:
             earliest = self.minimum
             if isinstance(earliest, datetime.date):
@@ -1477,13 +1501,19 @@ class S3CalendarWidget(FormWidget):
         elif self.past_months:
             earliest = now - relativedelta(months=self.past_months)
         else:
+            fallback = True
             earliest = now - datetime.timedelta(hours=876000)
         if earliest is not None:
+            if not fallback:
+                pyears = abs(earliest.year - now.year)
+            earliest = earliest.replace(microsecond=0)
             if offset:
                 earliest += datetime.timedelta(seconds=offset)
             extremes["minDateTime"] = earliest.isoformat()
 
         # Maximum
+        latest = None
+        fallback = False
         if self.maximum:
             latest = self.maximum
             if isinstance(latest, datetime.date):
@@ -1494,11 +1524,53 @@ class S3CalendarWidget(FormWidget):
         elif self.future_months:
             latest = now + relativedelta(months=self.future_months)
         else:
+            fallback = True
             latest = now + datetime.timedelta(hours=876000)
         if latest is not None:
+            if not fallback:
+                fyears = abs(latest.year - now.year)
+            latest = latest.replace(microsecond=0)
             if offset:
                 latest += datetime.timedelta(seconds=offset)
             extremes["maxDateTime"] = latest.isoformat()
+
+        # Default date/time
+        if self.timepicker and time_format:
+            # Pick a start date/time
+            if earliest <= now <= latest:
+                start = now
+            elif now < earliest:
+                start = earliest
+            elif now > latest:
+                start = latest
+            # Round to the closest minute-step
+            step = self.minute_step * 60
+            seconds = (start - start.min).seconds
+            rounding = (seconds + step / 2) // step * step
+            rounded = start + datetime.timedelta(0,
+                                                 rounding - seconds,
+                                                 -start.microsecond,
+                                                 )
+            # Limits
+            if rounded < earliest:
+                rounded = earliest
+            elif rounded > latest:
+                rounded = latest
+            # Translate into local time
+            if offset:
+                rounded += datetime.timedelta(seconds=offset)
+            # Convert into user format (time part only)
+            default = rounded.strftime(time_format)
+            extremes["defaultValue"] = default
+
+        # Year range
+        min_year = self.min_year
+        if not min_year:
+            min_year = "-%s" % pyears
+        max_year = self.max_year
+        if not max_year:
+            max_year = "+%s" % fyears
+        extremes["yearRange"] = "%s:%s" % (min_year, max_year)
 
         return extremes
 
