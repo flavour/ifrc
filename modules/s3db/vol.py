@@ -148,21 +148,23 @@ class S3VolunteerAwardModel(S3Model):
         tablename = "vol_award"
         define_table(tablename,
                      Field("name",
-                           label = T("Name")),
+                           label = T("Name"),
+                           ),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
                      self.org_organisation_id(default = root_org,
                                               readable = is_admin,
                                               writable = is_admin,
                                               ),
-                     s3_comments(label=T("Description"),
-                                 comment=None),
+                     s3_comments(label = T("Description"),
+                                 comment = None,
+                                 ),
                      *s3_meta_fields())
 
         crud_strings[tablename] = Storage(
             label_create = T("Create Award"),
             title_display = T("Award"),
-            title_list = T("Award"),
+            title_list = T("Awards"),
             title_update = T("Edit Award"),
             title_upload = T("Import Awards"),
             label_list_button = T("List Awards"),
@@ -199,13 +201,27 @@ class S3VolunteerAwardModel(S3Model):
                      self.pr_person_id(empty=False),
                      award_id(),
                      s3_date(),
+                     Field("number",
+                           label = T("Number"),
+                           # Enable in templates as-required
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("file", "upload",
+                           autodelete = True,
+                           label = T("Attachment"),
+                           represent = self.vol_award_file_represent,
+                           # Enable in templates as-required
+                           readable = False,
+                           writable = False,
+                           ),
                      s3_comments(),
                      *s3_meta_fields())
 
         crud_strings[tablename] = Storage(
-            label_create = T("Create Award"),
+            label_create = T("Add Award"),
             title_display = T("Award"),
-            title_list = T("Award"),
+            title_list = T("Awards"),
             title_update = T("Edit Award"),
             title_upload = T("Import Awards"),
             label_list_button = T("List Awards"),
@@ -221,6 +237,23 @@ class S3VolunteerAwardModel(S3Model):
 
         # Pass names back to global scope (s3.*)
         return {}
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def vol_award_file_represent(file):
+        """ File representation """
+
+        if file:
+            try:
+                # Read the filename from the file
+                filename = current.db.vol_volunteer_award.file.retrieve(file)[0]
+            except IOError:
+                return current.T("File not found")
+            else:
+                return A(filename,
+                         _href=URL(c="default", f="download", args=[file]))
+        else:
+            return current.messages["NONE"]
 
 # =============================================================================
 class S3VolunteerClusterModel(S3Model):
@@ -415,6 +448,8 @@ def vol_service_record(r, **attr):
 
     T = current.T
     db = current.db
+    settings = current.deployment_settings
+
     ptable = db.pr_person
     person_id = record.person_id
     person = db(ptable.id == person_id).select(ptable.pe_id,
@@ -433,11 +468,16 @@ def vol_service_record(r, **attr):
         otable = db.org_organisation
         org_id = record.organisation_id
         org = db(otable.id == org_id).select(otable.name,
-                                             otable.acronym,
+                                             otable.acronym, # Present for consistent cache key
                                              otable.logo,
                                              limitby=(0, 1),
                                              ).first()
-        org_name = org.name
+        if settings.get_L10n_translate_org_organisation():
+            org_name = s3db.org_OrganisationRepresent(parent=False,
+                                                      acronym=False)(org_id)
+        else:
+            org_name = org.name
+
         logo = org.logo
         if logo:
             logo = s3db.org_organisation_logo(org)
@@ -449,6 +489,7 @@ def vol_service_record(r, **attr):
                 time_expire=120
                 )
             logo = s3db.org_organisation_logo(root_org)
+
         innerTable = TABLE(TR(TH(vol_name)),
                            TR(TD(org_name)))
         person_details = TABLE(TR(TD(logo),
@@ -659,7 +700,7 @@ def vol_service_record(r, **attr):
         # Space for the printed document to be signed
         datestamp = S3DateTime.date_represent(current.request.now)
         datestamp = "%s: %s" % (T("Date Printed"), datestamp)
-        manager = T("Branch Coordinator")
+        manager = settings.get_hrm_vol_service_record_manager()
         signature = TABLE(TR(TH(T("Signature"))),
                           TR(TD()),
                           TR(TD(manager)),
@@ -679,11 +720,11 @@ def vol_service_record(r, **attr):
 
     from s3.s3export import S3Exporter
     exporter = S3Exporter().pdf
+    pdf_title = vol_name + " - " + s3_unicode(T("Volunteer Service Record")) # %-string substitution doesn't work
     return exporter(r.resource,
                     request = r,
                     method = "list",
-                    pdf_title = "%s - %s" % \
-                        (vol_name, T("Volunteer Service Record")),
+                    pdf_title = pdf_title,
                     pdf_table_autogrow = "B",
                     pdf_callback = callback,
                     **attr
@@ -826,17 +867,16 @@ def vol_volunteer_controller():
                     set_org_dependent_field("vol_volunteer_cluster", "vol_cluster_position_id")
                     # Label for "occupation"
                     s3db.pr_person_details.occupation.label = T("Normal Job")
-                    # Assume volunteers only between 12-81
-                    s3db.pr_person.date_of_birth.widget = S3DateWidget(past=972, future=-144)
+                    # Assume staff only between 12-81
+                    dob = s3db.pr_person.date_of_birth
+                    dob.widget = S3CalendarWidget(past_months = 972,
+                                                  future_months = -144,
+                                                  )
         return True
     s3.prep = prep
 
     def postp(r, output):
         if r.interactive and not r.component:
-            # Set the minimum end_date to the same as the start_date
-            s3.jquery_ready.append(
-'''S3.start_end_date('hrm_human_resource_start_date','hrm_human_resource_end_date')''')
-
             # Configure action buttons
             S3CRUD.action_buttons(r, deletable=settings.get_hrm_deletable())
             if settings.has_module("msg") and \
@@ -849,53 +889,6 @@ def vol_volunteer_controller():
                         "_class": "action-btn send",
                         "label": str(T("Send Message"))
                     })
-
-            # Insert field to set the Programme
-            if vol_experience in ("programme", "both") and \
-               r.method not in ("report", "import") and \
-               "form" in output:
-                # @ToDo: Re-implement using
-                # http://eden.sahanafoundation.org/wiki/S3SQLForm
-                # NB This means adjusting IFRC/config.py too
-                sep = ": "
-                table = s3db.hrm_programme_hours
-                field = table.programme_id
-                default = field.default
-                widget = field.widget or SQLFORM.widgets.options.widget(field, default)
-                field_id = "%s_%s" % (table._tablename, field.name)
-                label = field.label
-                row_id = field_id + SQLFORM.ID_ROW_SUFFIX
-                s3_formstyle = settings.get_ui_formstyle()
-                if s3_formstyle == "bootstrap":
-                    label = LABEL(label, label and sep, _class="control-label", _for=field_id)
-                    _controls = DIV(widget, _class="controls")
-                    row = DIV(label, _controls,
-                                _class="control-group",
-                                _id=row_id,
-                                )
-                    output["form"][0].insert(4, row)
-                elif callable(s3_formstyle):
-                    label = LABEL(label, label and sep, _for=field_id,
-                                    _id=field_id + SQLFORM.ID_LABEL_SUFFIX)
-                    programme = s3_formstyle(row_id, label, widget,
-                                                field.comment)
-                    if isinstance(programme, DIV) and \
-                       "form-row" in programme["_class"]:
-                        # Foundation formstyle
-                        output["form"][0].insert(4, programme)
-                    else:
-                        try:
-                            output["form"][0].insert(4, programme[1])
-                        except:
-                            # A non-standard formstyle with just a single row
-                            pass
-                        try:
-                            output["form"][0].insert(4, programme[0])
-                        except:
-                            pass
-                else:
-                    # Unsupported
-                    raise
 
         elif r.representation == "plain":
             # Map Popups
@@ -1074,7 +1067,10 @@ def vol_person_controller():
             if not r.component:
                 table = r.table
                 # Assume volunteers only between 12-81
-                table.date_of_birth.widget = S3DateWidget(past=972, future=-144)
+                dob = table.date_of_birth
+                dob.widget = S3CalendarWidget(past_months = 972,
+                                              future_months = -144,
+                                              )
                 table.pe_label.readable = table.pe_label.writable = False
                 table.missing.readable = table.missing.writable = False
                 table.age_group.readable = table.age_group.writable = False
@@ -1178,9 +1174,6 @@ def vol_person_controller():
     def postp(r, output):
         if r.interactive and r.component:
             if r.component_name == "human_resource":
-                # Set the minimum end_date to the same as the start_date
-                s3.jquery_ready.append(
-'''S3.start_end_date('hrm_human_resource_start_date','hrm_human_resource_end_date')''')
                 vol_experience = settings.get_hrm_vol_experience()
                 if vol_experience in ("programme", "both") and \
                    r.method not in ("report", "import") and \
@@ -1217,10 +1210,6 @@ def vol_person_controller():
                     except:
                         pass
 
-            elif r.component_name == "experience":
-                # Set the minimum end_date to the same as the start_date
-                s3.jquery_ready.append(
-'''S3.start_end_date('hrm_experience_start_date','hrm_experience_end_date')''')
             elif r.component_name == "asset":
                 # Provide a link to assign a new Asset
                 # @ToDo: Proper Widget to do this inline

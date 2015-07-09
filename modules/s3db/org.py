@@ -318,7 +318,7 @@ class S3OrganisationModel(S3Model):
                            writable = False,
                            represent = S3Represent(lookup="org_organisation"),
                            ),
-                     Field("name", notnull=True, unique=True, # @ToDo: Remove unique=True (ARC have 3x Wayne County chapters)
+                     Field("name", notnull=True,
                            length=128, # Mayon Compatibility
                            label = T("Name"),
                            ),
@@ -748,6 +748,8 @@ class S3OrganisationModel(S3Model):
 
         configure(tablename,
                   xml_post_parse = self.org_organisation_organisation_type_xml_post_parse,
+                  onaccept = self.org_organisation_organisation_type_onaccept,
+                  ondelete = self.org_organisation_organisation_type_ondelete,
                   )
 
         # ---------------------------------------------------------------------
@@ -858,6 +860,69 @@ class S3OrganisationModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def org_organisation_organisation_type_onaccept(form):
+        """
+            Update the realm entity of the organisation after changing the
+            organisation type (otherwise type-dependent realm rules won't
+            ever take effect since the org_organisation record is written
+            before the org_organisation_organisation_type)
+
+            @param form: the Form
+        """
+
+        # Get the type-link
+        try:
+            record_id = form.vars.id
+        except AttributeError:
+            return
+        table = current.s3db.org_organisation_organisation_type
+        row = current.db(table.id == record_id).select(table.organisation_id,
+                                                       limitby = (0, 1),
+                                                       ).first()
+
+        if row:
+            # Update the realm entity
+            current.auth.set_realm_entity("org_organisation",
+                                          row.organisation_id,
+                                          force_update = True,
+                                          )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def org_organisation_organisation_type_ondelete(row):
+        """
+            Update the realm entity of the organisation after removing an
+            organisation type (otherwise type-dependent realm rules won't
+            take effect)
+
+            @param form: the Row
+        """
+
+        # Get the type-link
+        try:
+            record_id = row.id
+        except AttributeError:
+            return
+        table = current.s3db.org_organisation_organisation_type
+        row = current.db(table.id == record_id).select(table.deleted_fk,
+                                                       limitby = (0, 1),
+                                                       ).first()
+        if row and row.deleted_fk:
+            # Find the organisation ID
+            try:
+                deleted_fk = json.loads(row.deleted_fk)
+            except ValueError:
+                return
+            organisation_id = deleted_fk.get("organisation_id")
+
+            # Update the realm entity
+            current.auth.set_realm_entity("org_organisation",
+                                          organisation_id,
+                                          force_update = True,
+                                          )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def org_organisation_organisation_type_xml_post_parse(element, record):
         """
             Check for defaults provided by project/organisation.xsl
@@ -920,13 +985,9 @@ class S3OrganisationModel(S3Model):
     @staticmethod
     def organisation_duplicate(item):
         """
-            Import item deduplication, match by name
-            NB: usually, this is only needed to catch cases where the
-                import item is misspelled (case mismatch), otherwise the
-                org name is a primary key and matches automatically.
-                However, if there's a spelling mistake, we would want to
-                retain the original spelling *because* the name is a
-                primary key.
+            Import item deduplication, match by name or l10_name
+
+            @ToDo: parent (for Branches)
 
             @param item: the S3ImportItem instance
         """
@@ -939,10 +1000,27 @@ class S3OrganisationModel(S3Model):
                                                  table.name,
                                                  limitby=(0, 1)).first()
             if duplicate:
+                # @ToDo: Can we see the parent in the import?
+                #if current.deployment_settings.get_org_branches():
+                #    btable = s3db.org_organisation_branch
                 item.id = duplicate.id
-                # Retain the correct spelling of the name
+                # Retain the original spelling of the name
                 item.data.name = duplicate.name
                 item.method = item.METHOD.UPDATE
+            elif current.deployment_settings.get_L10n_translate_org_organisation():
+                # See if this a name_l10n
+                ltable = current.s3db.org_organisation_name
+                query = (ltable.name_l10n == name) & \
+                        (ltable.organisation_id == table.id)
+                duplicate = current.db(query).select(table.id,
+                                                     table.name,
+                                                     limitby=(0, 1)).first()
+                if duplicate:
+                    # @ToDo: Import Log
+                    #current.log.debug("Organisation l10n Match")
+                    item.data.name = duplicate.name # Don't update the name
+                    item.id = duplicate.id
+                    item.method = item.METHOD.UPDATE
 
     # -----------------------------------------------------------------------------
     @staticmethod
@@ -1306,9 +1384,11 @@ class S3OrganisationBranchModel(S3Model):
                     else:
                         branch_types.add(row.organisation_type_id)
                 for t in org_types - branch_types:
-                    ltable.insert(organisation_id = branch_id,
-                                  organisation_type_id = t,
-                                  )
+                    link_id = ltable.insert(organisation_id = branch_id,
+                                            organisation_type_id = t,
+                                            )
+                    form = Storage(vars = Storage(id = link_id))
+                    S3OrganisationModel.org_organisation_organisation_type_onaccept(link_id)
 
                 # Inherit Org Sectors
                 ltable = s3db.org_sector_organisation
@@ -4979,11 +5059,13 @@ class org_OrganisationRepresent(S3Represent):
             if self.parent:
                 lptable = db.org_organisation_name.with_alias("org_parent_organisation_name")
                 fields.append(lptable.name_l10n)
-                left += [ltable.on(ltable.organisation_id == otable.id),
+                left += [ltable.on((ltable.organisation_id == otable.id) & \
+                                   (ltable.language == current.session.s3.language)),
                          lptable.on(lptable.organisation_id == btable.organisation_id),
                          ]
             else:
-                left = [ltable.on(ltable.organisation_id == otable.id),
+                left = [ltable.on((ltable.organisation_id == otable.id) & \
+                                  (ltable.language == current.session.s3.language)),
                         ]
 
         qty = len(values)
@@ -5041,7 +5123,7 @@ class org_OrganisationRepresent(S3Represent):
 
             @ToDo: Support for self.translate = True
                    need to handle the inevitable NULL values which vary in
-                   order by DB, altthough perhaps DB handline doesn't matter
+                   order by DB, altthough perhaps DB handling doesn't matter
                    here.
         """
 
@@ -5755,17 +5837,12 @@ def org_organisation_controller():
     def postp(r, output):
         if r.interactive and r.component:
             if r.component_name == "human_resource":
-                s3.jquery_ready.append(
-'''S3.start_end_date('hrm_human_resource_start_date','hrm_human_resource_end_date')''')
                 # Modify action button to open staff instead of human_resource
                 # (Delete not overridden to keep errors within Tab)
                 read_url = URL(c="hrm", f="staff", args=["[id]"])
                 update_url = URL(c="hrm", f="staff", args=["[id]", "update"])
                 S3CRUD.action_buttons(r, read_url=read_url,
                                          update_url=update_url)
-            elif r.component_name == "project":
-                s3.jquery_ready.append(
-'''S3.start_end_date('project_project_start_date','project_project_end_date')''')
 
             elif r.component_name == "branch" and r.record and \
                  isinstance(output, dict) and \

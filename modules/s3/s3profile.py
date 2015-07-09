@@ -226,7 +226,7 @@ class S3Profile(S3CRUD):
                 elif w_type == "form":
                     w = self._form(r, widget, **attr)
                 elif w_type == "map":
-                    w = self._map(r, widget, **attr)
+                    w = self._map(r, widget, widgets, **attr)
                 elif w_type == "report":
                     w = self._report(r, widget, **attr)
                 else:
@@ -624,9 +624,9 @@ class S3Profile(S3CRUD):
                                 **dtargs)
 
             if dt.data:
-                empty.update(_style="display:none;")
+                empty.update(_style="display:none")
             else:
-                datatable.update(_style="display:none;")
+                datatable.update(_style="display:none")
             contents = DIV(datatable, empty, _class="dt-contents")
 
             # Link for create-popup
@@ -641,6 +641,8 @@ class S3Profile(S3CRUD):
             label = widget.get("label", "")
             if label:
                 label = current.T(label)
+            else:
+                label = S3CRUD.crud_string(tablename, "title_list")
             icon = widget.get("icon", "")
             if icon:
                 icon = ICON(icon)
@@ -794,7 +796,7 @@ class S3Profile(S3CRUD):
         return output
 
     # -------------------------------------------------------------------------
-    def _map(self, r, widget, **attr):
+    def _map(self, r, widget, widgets, **attr):
         """
             Generate a Map widget
 
@@ -832,7 +834,6 @@ class S3Profile(S3CRUD):
         mtable = s3db.gis_marker
         feature_resources = []
         fappend = feature_resources.append
-        widgets = s3db.get_config(tablename, "profile_widgets")
         s3dbresource = s3db.resource
         for widget in widgets:
             if widget["type"] not in ("datalist", "datatable", "report"):
@@ -1127,9 +1128,9 @@ class S3Profile(S3CRUD):
                 multiple = widget.get("multiple", True)
                 if not multiple and hasattr(create, "update"):
                     if numrows:
-                        create.update(_style="display:none;")
+                        create.update(_style="display:none")
                     else:
-                        create.update(_style="display:block;")
+                        create.update(_style="display:block")
                     # Script to hide/unhide the create-button on Ajax
                     # list updates
                     createid = create["_id"]

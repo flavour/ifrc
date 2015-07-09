@@ -166,10 +166,11 @@ class S3PersonEntity(S3Model):
                            deploy_alert = T("Deployment Alert"),
                            dvi_body = T("Body"),
                            dvi_morgue = T("Morgue"),
-                           # If we want these, then pe_id needs adding to their
-                           # tables & configuring as a super-entity
+                           # If we want this, then pe_id needs adding to the
+                           # table & configuring as a super-entity
                            #fire_station = T("Fire Station"),
                            hms_hospital = T("Hospital"),
+                           hrm_training_event = T("Training Event"),
                            inv_warehouse = T("Warehouse"),
                            org_organisation = messages.ORGANISATION,
                            org_group = org_group_label,
@@ -2918,9 +2919,11 @@ class S3PersonIdentityModel(S3Model):
                           s3_date("valid_from",
                                   label = T("Valid From"),
                                   future = 0,
+                                  set_min = "#pr_identity_valid_until",
                                   ),
                           s3_date("valid_until",
                                   label = T("Valid Until"),
+                                  set_max = "#pr_identity_valid_from",
                                   start_field = "pr_identity_valid_from",
                                   default_interval = 12,
                                   ),
@@ -3246,6 +3249,11 @@ class S3PersonDetailsModel(S3Model):
                                 ),
                           Field("grandfather_name",
                                 label = T("Name of Grandfather"),
+                                readable = False,
+                                writable = False,
+                                ),
+                          Field("grandmother_name",
+                                label = T("Name of Grandmother"),
                                 readable = False,
                                 writable = False,
                                 ),
@@ -4363,7 +4371,7 @@ def pr_get_entities(pe_ids=None,
 
     if pe_ids is None:
         pe_ids = []
-    elif not isinstance(pe_ids, (list, tuple)):
+    elif not isinstance(pe_ids, (list, set, tuple)):
         pe_ids = [pe_ids]
     pe_ids = [long(pe_id) for pe_id in set(pe_ids)]
     query = (pe_table.deleted != True)

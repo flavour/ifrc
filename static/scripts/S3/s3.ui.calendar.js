@@ -6,8 +6,6 @@
  *
  * requires jQuery 1.9.1+
  * requires jQuery UI 1.10 widget factory
- *
- * work in progress...
  */
 (function($, undefined) {
 
@@ -31,6 +29,11 @@
             maxTime = timepicker.data('maxTime'),
             dp_inst = timepicker.data('datepicker'),
             tp_inst = $.datepicker._get(dp_inst, 'timepicker');
+
+        if (!selectedDate) {
+            // Nothing selected yet => fall back to draw date
+            selectedDate = inst.drawDate;
+        }
 
         // Reset the defaults (timepicker does not expect a dynamic change!)
         tp_inst._defaults.hourMin = 0;
@@ -91,11 +94,18 @@
             inst.inline = true;
 
             // Run _base_selectDate
-            // FIXME: does not highlight the selected date! (base version does not either)
             this._base_selectDate(elem, target);
 
             // Reset inline flag
             inst.inline = was_inline;
+
+            if (!was_inline) {
+                // Forced inline-flag has placed the refreshed calendar
+                // contents inside the hidden input => move it into the
+                // popup so that we can see the selection ;)
+                inst.div.find('.ui-datepicker-group')
+                        .replaceWith($(elem).find('.ui-datepicker-group').first());
+            }
 
             // Re-apply limits for timepicker
             limitTimePicker(inst, timepicker);
@@ -107,6 +117,7 @@
             // it now (this also triggers the onSelect-callback to update
             // the real input)
             this._updateInput(elem);
+
         } else {
             // No timepicker (phew!), run base version
             this._base_selectDate(elem, target);
@@ -137,13 +148,16 @@
      * - remove clear-button (rendered separately)
      * - move today-button to the bottom
      * - separate out button panel so it can be turned on and off
+     * - move prev/next commands into the month header (remove separate header)
      */
     var cpLayoutButtonPanel = '{popup:start}<div class="ui-datepicker-header ui-widget-header ui-helper-clearfix ' +
                               'ui-corner-all">{button:today}{button:close}</div>{popup:end}';
+    var cpLayoutMonth = '<div class="ui-datepicker-group">' +
+                        '<div class="ui-datepicker-header ui-widget-header ui-helper-clearfix ui-corner-all">{link:prev}{monthHeader:MM yyyy}{link:next}</div>' +
+                        '<table class="ui-datepicker-calendar"><thead>{weekHeader}</thead><tbody>{weeks}</tbody></table></div>';
     var cpLayout = '<div{popup:start} id="ui-datepicker-div"{popup:end} class="ui-datepicker ui-widget ' +
                    'ui-widget-content ui-helper-clearfix ui-corner-all{inline:start} ui-datepicker-inline{inline:end}">' +
-                   '<div class="ui-datepicker-header ui-widget-header ui-helper-clearfix ui-corner-all">' +
-                   '{link:prev}{link:next}</div>{months}' +
+                   '{months}' +
                    '{buttonPanel}' +
                    '<div class="ui-helper-clearfix"></div></div>';
 
@@ -179,6 +193,11 @@
          *
          * @prop {bool} clearButton - show a "Clear"-button
          *
+         * @prop {string} setMin - CSS selector for target widget to set minimum selectable
+         *                         date/time to the selected date/time of this widget
+         * @prop {string} setMax - CSS selector for target widget to set maximum selectable
+         *                         date/time to the selected date/time of this widget
+         *
          * @prop {string} todayText - label for the button to go to the current date
          * @prop {string} nowText - label for the button to go to the current date/time
          * @prop {string} closeText - label for the button to close the popup
@@ -209,6 +228,10 @@
             minuteStep: 5,
 
             clearButton: true,
+            triggerButton: false,
+
+            setMin: null,
+            setMax: null,
 
             todayText: 'Today',
             nowText: 'Now',
@@ -301,8 +324,48 @@
                 this.clearButton = clearButton;
             }
 
+            // Remove any existing trigger-button
+            if (this.triggerButton) {
+                this.triggerButton.remove();
+                this.triggerButton = null;
+            }
+
+            // Add trigger button
+            if (opts.triggerButton) {
+                var triggerButton = $('<button class="ui-datepicker-trigger" type="button">');
+                $(el).after(triggerButton);
+                this.triggerButton = triggerButton;
+            }
+
             // Bind event handlers
             this._bindEvents();
+        },
+
+        /**
+         * Clear all inputs
+         */
+        clear: function() {
+
+            var el = $(this.element);
+
+            // Clear any hidden inputs
+            if (this.dateInput) {
+                this.dateInput.val('');
+            }
+            if (this.timeInput) {
+                this.timeInput.val('');
+            }
+            // Update the real input
+            if (this.dateInput && this.timeInput) {
+                this._updateInput();
+            } else {
+                el.val('');
+            }
+
+            this._updateExtremes(null);
+
+            // Inform the filter form about the change
+            el.closest('.filter-form').trigger('optionChanged');
         },
 
         /**
@@ -311,11 +374,18 @@
         _datePicker: function() {
 
             var el = $(this.element),
+                self = this,
                 opts = this.options,
                 dateFormat = this._transformDateFormat();
 
+            $.datepicker.setDefaults($.datepicker.regional[opts.language]);
+
             if (opts.timepicker) {
                 // $.datetimepicker
+
+                // Localize timepicker
+                $.timepicker.setDefaults($.timepicker.regional[opts.language]);
+
                 el.datetimepicker({
                     minDateTime: this.minDateTime,
                     maxDateTime: this.maxDateTime,
@@ -332,7 +402,12 @@
                     yearRange: opts.yearRange,
                     showButtonPanel: opts.showButtons,
                     stepMinute: opts.minuteStep,
-                    showSecond: false
+                    showSecond: false,
+
+                    onClose: function() {
+                        var selectedDate = el.datetimepicker('getDate');
+                        self._updateExtremes(selectedDate, true);
+                    }
                 });
             } else {
                 // $.datepicker
@@ -347,7 +422,12 @@
                     changeMonth: opts.monthSelector,
                     changeYear: opts.yearSelector,
                     yearRange: opts.yearRange,
-                    showButtonPanel: opts.showButtons
+                    showButtonPanel: opts.showButtons,
+
+                    onClose: function() {
+                        var selectedDate = el.datetimepicker('getDate');
+                        self._updateExtremes(selectedDate);
+                    }
                 });
             }
             this._clickFocus(el);
@@ -389,6 +469,7 @@
                 buttonPanel = '<div>';
             }
             renderer.picker = layout.replace('{buttonPanel}', buttonPanel);
+            renderer.month = cpLayoutMonth;
 
             // Change today-button text (consistency with datePicker)
             var currentText;
@@ -402,7 +483,10 @@
             $.calendarsPicker.setDefaults({
                 renderer: renderer,
                 todayText: currentText,
-                closeText: opts.closeText
+                closeText: opts.closeText,
+                // Render prev/next as UI icons
+                prevText: '<span class="ui-icon ui-icon-circle-triangle-w">Prev</span>',
+                nextText: '<span class="ui-icon ui-icon-circle-triangle-e">Next</span>'
             });
 
             // Split extremes into date and time values
@@ -411,20 +495,21 @@
                 minDate = null,
                 maxDate = null,
                 minTime = null,
-                maxTime = null;
+                maxTime = null,
+                splitExtreme;
+
             if (minDateTime) {
-                minDate = calendar.fromJSDate(minDateTime);
-                minTime = ('0' + minDateTime.getHours()).slice(-2) + ':' +
-                          ('0' + minDateTime.getMinutes()).slice(-2) + ':' +
-                          ('0' + minDateTime.getSeconds()).slice(-2);
+                splitExtreme = this._splitExtreme(calendar, minDateTime);
+                minDate = splitExtreme.date;
+                minTime = splitExtreme.time;
             }
             if (maxDateTime) {
-                maxDate = calendar.fromJSDate(maxDateTime);
-                maxTime = ('0' + maxDateTime.getHours()).slice(-2) + ':' +
-                          ('0' + maxDateTime.getMinutes()).slice(-2) + ':' +
-                          ('0' + maxDateTime.getSeconds()).slice(-2);
+                splitExtreme = this._splitExtreme(calendar, maxDateTime);
+                maxDate = splitExtreme.date;
+                maxTime = splitExtreme.time;
             }
 
+            var self = this;
             if (opts.timepicker) {
                 // $.calendarsPicker with injected $.timepicker and split inputs
 
@@ -434,8 +519,10 @@
                 this.dateInput = $('<input type="hidden">').insertAfter(el).val(dt.date);
                 this.timeInput = $('<input type="hidden">').insertAfter(el).val(dt.time);
 
+                // Localize
+                $.timepicker.setDefaults($.timepicker.regional[opts.language]);
+
                 // Instantiate calendarsPicker
-                var self = this;
                 this.dateInput.calendarsPicker({
                     calendar: calendar,
 
@@ -450,21 +537,39 @@
 
                     defaultDate: +0, // drawDate will automatically be min/max adjusted
                     showTrigger: '<div>',
+
                     onSelect: function(input) {
                         self._updateInput();
                     },
                     onShow: function(picker, calendar, inst) {
                         self._injectTimePicker(picker, calendar, inst, minTime, maxTime);
                     },
-                    onClose: function() {
+                    onClose: function(selectedDates) {
                         var inst = this;
                         if (inst.name != 'calendarsPicker') {
                             inst = $.calendarsPicker._getInst(this);
                         }
+                        // Get the selected date
+                        var selectedDate = null;
+                        if (selectedDates.length) {
+                            selectedDate = selectedDates[0].toJSDate();
+                        }
+
                         if (inst.timepicker) {
+                            if (selectedDate) {
+                                var selectedTime = self.timeInput.data('selectedTime');
+                                if (selectedTime) {
+                                    selectedDate.setHours(
+                                        selectedTime.getHours(),
+                                        selectedTime.getMinutes(),
+                                        selectedTime.getSeconds()
+                                    );
+                                }
+                            }
                             inst.timepicker.remove();
                             inst.timepicker = null;
                         }
+                        self._updateExtremes(selectedDate, true);
                     }
                 });
 
@@ -480,7 +585,19 @@
                     yearRange: opts.yearRange,
 
                     minDate: minDate,
-                    maxDate: maxDate
+                    maxDate: maxDate,
+
+                    onSelect: function(input) {
+                        // Trigger a change event (calendarPicker does not)
+                        el.change();
+                    },
+                    onClose: function(selectedDates) {
+                        var selectedDate = null;
+                        if (selectedDates.length) {
+                            selectedDate = selectedDates[0].toJSDate();
+                        }
+                        self._updateExtremes(selectedDate);
+                    }
                 });
             }
             this._clickFocus(el);
@@ -507,8 +624,7 @@
                 timeFormat = this._transformTimeFormat();
 
             picker.find('.ui-datepicker-group').first().each(function() {
-                var input = $('<div>').insertAfter($(this)),
-                    lock = false;
+                var input = $('<div>').insertAfter($(this));
                 input.timepicker({
                     timeFormat: timeFormat,
                     stepMinute: opts.minuteStep,
@@ -519,6 +635,7 @@
 
                         // Update the time input
                         self.timeInput.val(input);
+                        self.timeInput.data('selectedTime', $(this).datetimepicker('getDate'));
 
                         // Also pick up the date unless called from inside selectDate
                         if (!inst.pickUpTime) {
@@ -529,26 +646,35 @@
                 });
 
                 // Set initial value for timepicker
-                var lastInput = self.timeInput.val();
+                var timeInput = self.timeInput,
+                    lastInput = timeInput.val();
                 if (!lastInput && opts.defaultValue) {
                     // Set default value
                     lastInput = opts.defaultValue;
                     // Pick up the date and update real input
-                    self.timeInput.val(lastInput);
+                    timeInput.val(lastInput);
                     self._pickUpDate(inst);
                     self._updateInput();
                 } else {
                     // Restore last input
-                    self.timeInput.val(lastInput);
+                    timeInput.val(lastInput);
                 }
                 if (lastInput) {
                     // Update the timepicker
-                    var lastTime = $.datepicker.parseTime(timeFormat, lastInput);
-                    input.timepicker('setTime', new Date(1970, 1, 1, lastTime.hour, lastTime.minute, lastTime.second));
+                    var lastTime = $.datepicker.parseTime(timeFormat, lastInput),
+                        selectedTime = new Date(1970, 1, 1,
+                                                lastTime.hour,
+                                                lastTime.minute,
+                                                lastTime.second);
+                    input.timepicker('setTime', selectedTime);
+                    timeInput.data('selectedTime', selectedTime);
                 }
 
+                var minTimeEffective = timeInput.data('minTime') || minTime,
+                    maxTimeEffective = timeInput.data('maxTime') || maxTime;
+
                 // Store minTime and maxTime in timepicker div
-                input.data({minTime: minTime, maxTime: maxTime});
+                input.data({minTime: minTimeEffective, maxTime: maxTimeEffective});
 
                 // Apply min/max if necessary
                 limitTimePicker(inst, input);
@@ -631,6 +757,90 @@
         },
 
         /**
+         * Update the real input from the hidden date and time inputs
+         */
+        _updateInput: function() {
+
+            var el = $(this.element),
+                date = this.dateInput.val(),
+                time = this.timeInput.val();
+
+            el.val(this._join(date, time));
+
+            // Inform the filter form about the change
+            el.closest('.filter-form').trigger('optionChanged');
+
+        },
+
+        /**
+         * Remove any existing hidden inputs
+         */
+        _removeHiddenInputs: function() {
+
+            if (this.dateInput) {
+                this.dateInput.remove();
+                this.dateInput = null;
+            }
+            if (this.timeInput) {
+                this.timeInput.remove();
+                this.timeInput = null;
+            }
+        },
+
+        /**
+         * Transform the date format (Python strftime) into a datepicker
+         * or calendarsPicker format string
+         *
+         * @param {string} variant - the picker variant (default=datepicker)
+         */
+        _transformDateFormat: function(variant) {
+
+            var format = this.options.dateFormat;
+
+            switch(variant) {
+                case 'calendarsPicker':
+                    format = format.replace('%Y', 'yyyy')
+                                   .replace('%y', 'yy')
+                                   .replace('%-m', 'm')
+                                   .replace('%m', 'mm')
+                                   .replace('%-d', 'd')
+                                   .replace('%d', 'dd')
+                                   .replace('%B', 'MM')
+                                   .replace('%b', 'M');
+                    break;
+                default:
+                    format = format.replace('%Y', 'yy')
+                                   .replace('%y', 'y')
+                                   .replace('%-m', 'm')
+                                   .replace('%m', 'mm')
+                                   .replace('%-d', 'd')
+                                   .replace('%d', 'dd')
+                                   .replace('%B', 'MM')
+                                   .replace('%b', 'M');
+                    break;
+            }
+            return format;
+        },
+
+        /**
+         * Transform the time format (Python strftime) into a timepicker
+         * format string
+         */
+        _transformTimeFormat: function() {
+
+            var format = this.options.timeFormat;
+
+            format = format.replace('%p', 'TT')
+                           .replace('%-I', 'h')
+                           .replace('%I', 'hh')
+                           .replace('%-H', 'H')
+                           .replace('%H', 'HH')
+                           .replace('%M', 'mm')
+                           .replace('%S', 'ss');
+            return format;
+        },
+
+        /**
          * Split a date/time string into its date and time parts
          *
          * @param {string} dtstr - the date/time string
@@ -665,86 +875,6 @@
         },
 
         /**
-         * Update the real input from the hidden date and time inputs
-         */
-        _updateInput: function() {
-
-            var el = $(this.element),
-                date = this.dateInput.val(),
-                time = this.timeInput.val();
-
-            el.val(this._join(date, time));
-        },
-
-        /**
-         * Remove any existing hidden inputs
-         */
-        _removeHiddenInputs: function() {
-
-            if (this.dateInput) {
-                this.dateInput.remove();
-                this.dateInput = null;
-            }
-            if (this.timeInput) {
-                this.timeInput.remove();
-                this.timeInput = null;
-            }
-        },
-
-        /**
-         * Transform the date format (Python strftime) into a datepicker
-         * or calendarsPicker format string
-         *
-         * @param {string} variant - the picker variant (default=datepicker)
-         */
-        _transformDateFormat: function(variant) {
-
-            var format = this.options.dateFormat;
-
-            switch(variant) {
-                case 'calendarsPicker':
-                    format = format.replace("%Y", "yyyy")
-                                   .replace("%y", "yy")
-                                   .replace("%-m", "m")
-                                   .replace("%m", "mm")
-                                   .replace("%-d", "d")
-                                   .replace("%d", "dd")
-                                   .replace("%B", "MM")
-                                   .replace("%b", "M");
-                    break;
-                default:
-                    format = format.replace("%Y", "yy")
-                                   .replace("%y", "y")
-                                   .replace("%-m", "m")
-                                   .replace("%m", "mm")
-                                   .replace("%-d", "d")
-                                   .replace("%d", "dd")
-                                   .replace("%B", "MM")
-                                   .replace("%b", "M");
-                    break;
-            }
-            return format;
-        },
-
-        /**
-         * Transform the time format (Python strftime) into a timepicker
-         * format string
-         */
-        _transformTimeFormat: function() {
-
-            var format = this.options.timeFormat;
-
-            format = format.replace("%p", "TT")
-                           .replace("%-I", "h")
-                           .replace("%I", "hh")
-                           .replace("%-H", "H")
-                           .replace("%H", "HH")
-                           .replace("%M", "mm")
-                           .replace("%S", "ss");
-            return format;
-        },
-
-        /**
          * Replace the focus event on the trigger by a click event
          * in case the trigger element already has the focus
          *
@@ -753,7 +883,7 @@
         _clickFocus: function(trigger) {
 
             var node = $(trigger);
-            if (node.is(":focus")) {
+            if (node.is(':focus')) {
                 node.one('click', function(){
                     $(this).focus();
                 });
@@ -762,29 +892,240 @@
         },
 
         /**
-         * Clear
+         * Public method to change the minimum selectable date/time of this instance
          *
-         * @todo: also clear set_min/set_max limits (once implemented)
+         * @param {Date} jsDate - the minimum date/time
          */
-        clear: function() {
+        setMinDate: function(jsDate) {
 
-            var el = $(this.element);
+            return this._setExtreme('min', jsDate);
+        },
 
-            // Clear any hidden inputs
-            if (this.dateInput) {
-                this.dateInput.val('');
-            }
-            if (this.timeInput) {
-                this.timeInput.val('');
-            }
-            // Update the real input
-            if (this.dateInput && this.timeInput) {
-                this._updateInput();
+        /**
+         * Public method to change the maximum selectable date/time of this instance
+         *
+         * @param {Date} jsDate - the maximum date/time
+         */
+        setMaxDate: function(jsDate) {
+
+            return this._setExtreme('max', jsDate);
+        },
+
+        /**
+         * Helper function to split an extreme into date/time parts
+         * for calendarsPicker/timepicker combination
+         *
+         * @param {object} calendar: the calendar
+         * @param {Date} jsDate: the JS Date
+         */
+        _splitExtreme: function(calendar, jsDate) {
+
+            return {
+                date: calendar.fromJSDate(jsDate),
+                time: ('0' + jsDate.getHours()).slice(-2) + ':' +
+                      ('0' + jsDate.getMinutes()).slice(-2) + ':' +
+                      ('0' + jsDate.getSeconds()).slice(-2)
+            };
+        },
+
+        /**
+         * Set minimum or maximum date/time for this instance
+         *
+         * @param {string} extreme: the extreme ('min' or 'max')
+         * @param {Date} jsDate: the JS Date to set
+         */
+        _setExtreme: function(extreme, jsDate) {
+
+            var el = $(this.element),
+                opts = this.options,
+                extremeDateTime;
+
+            if (!jsDate) {
+                // Reset to original extremeDateTime
+                extremeDateTime = this[extreme + 'DateTime'];
             } else {
-                el.val('');
+                // Set jsDate as extremeDateTime
+                extremeDateTime = jsDate;
             }
-            // Inform the filter form about the change
-            el.closest('.filter-form').trigger('optionChanged');
+
+            if (opts.calendar == 'gregorian') {
+                if (opts.timepicker) {
+                    // Update datetimepicker (for some reason, we must update
+                    // both min/maxDate and min/maxDateTime in this case :/)
+                    el.datetimepicker('option', extreme + 'Date', extremeDateTime);
+                    el.datetimepicker('option', extreme + 'DateTime', extremeDateTime);
+                } else {
+                    // Update datepicker
+                    el.datepicker('option', extreme + 'Date', extremeDateTime);
+                }
+            } else {
+                // Get the dateInput
+                var dateInput;
+                if (opts.timepicker) {
+                    dateInput = this.dateInput;
+                } else {
+                    dateInput = el;
+                }
+                // Split extremeDateTime into extremeDate and extremeTime
+                var extremeDate,
+                    extremeTime,
+                    splitExtreme;
+                if (extremeDateTime) {
+                    var calendar = dateInput.calendarsPicker('option', 'calendar');
+                    splitExtreme = this._splitExtreme(calendar, extremeDateTime);
+                    extremeDate = splitExtreme.date;
+                    extremeTime = splitExtreme.time;
+                } else {
+                    // Reset to zero
+                    extremeDate = null;
+                    extremeTime = null;
+                }
+                // Update timepicker if necessary
+                if (opts.timepicker) {
+                    this.timeInput.data(extreme + 'Time', jsDate ? extremeTime : null);
+                }
+                // Update the calendarsPicker
+                dateInput.calendarsPicker('option', extreme + 'Date', extremeDate);
+            }
+        },
+
+        /**
+         * Update the minimum/maximum selectable date/times in any
+         * setMin/setMax target widgets with the given JS Date.
+         *
+         * @param {Date} jsDate - the JS Date
+         * @param {bool} withTime - use the time from the jsDate (otherwise
+         *                          fall back to day start/end)
+         */
+        _updateExtremes: function(jsDate, withTime) {
+
+            var opts = this.options;
+
+            if (opts.setMin) {
+                if (!withTime && jsDate) {
+                    jsDate.setHours(0, 0, 0);
+                }
+                $(opts.setMin).each(function() {
+                    if ($(this).calendarWidget('instance')) {
+                        $(this).calendarWidget('setMinDate', jsDate);
+                    }
+                });
+            }
+            if (opts.setMax) {
+                if (!withTime && jsDate) {
+                    jsDate.setHours(23, 59, 59);
+                }
+                $(opts.setMax).each(function() {
+                    if ($(this).calendarWidget('instance')) {
+                        $(this).calendarWidget('setMaxDate', jsDate);
+                    }
+                });
+            }
+        },
+
+        /**
+         * Get the currently selected date/time as JS Date (public method)
+         *
+         * @param {bool} end - without timepicker, set the time to the end
+         *                     of the selected day (23:59:59), rather than
+         *                     the start (00:00:00, default)
+         */
+        getJSDate: function(end) {
+
+            var el = $(this.element),
+                opts = this.options,
+                selectedDate = null;
+
+            if (opts.timepicker) {
+                if (opts.calendar == 'gregorian') {
+                    // datetimepicker
+                    selectedDate = el.datetimepicker('getDate');
+                } else {
+                    // calendarsPicker + timepicker
+                    var calendarDates = this.dateInput.calendarsPicker('getDate');
+                    if (calendarDates.length) {
+                        selectedDate = calendarDates[0].toJSDate();
+                        var selectedTime = this.timeInput.data('selectedTime');
+                        if (selectedTime) {
+                            selectedDate.setHours(
+                                selectedTime.getHours(),
+                                selectedTime.getMinutes(),
+                                selectedTime.getSeconds()
+                            );
+                        }
+                    }
+                }
+            } else {
+                if (opts.calendar == 'gregorian') {
+                    // datepicker
+                    selectedDate = el.datepicker('getDate');
+                } else {
+                    // calendarsPicker
+                    calendarDates = el.calendarsPicker('getDate');
+                    if (calendarDates.length) {
+                        selectedDate = calendarDates[0].toJSDate();
+                    }
+                }
+                if (selectedDate) {
+                    if (end) {
+                        selectedDate.setHours(23, 59, 59);
+                    } else {
+                        selectedDate.setHours(0, 0, 0);
+                    }
+                }
+            }
+
+            return selectedDate;
+        },
+
+        /**
+         * Set the currently selected date
+         *
+         * @param {Date} jsDate - the JS Date
+         */
+        setJSDate: function(jsDate) {
+
+            if (!jsDate || isNaN(jsDate.getTime())) {
+                return;
+            }
+
+            var el = $(this.element),
+                opts = this.options,
+                calendar;
+
+            if (opts.timepicker) {
+                if (opts.calendar == 'gregorian') {
+                    // datetimepicker
+                    el.datetimepicker('setDate', jsDate);
+                } else {
+                    // calendarsPicker + timepicker
+                    var dateInput = this.dateInput,
+                        inst = dateInput.data('calendarsPicker');
+
+                    // Update calendarsPicker
+                    calendar = dateInput.calendarsPicker('option', 'calendar');
+                    dateInput.calendarsPicker('setDate', calendar.fromJSDate(jsDate));
+
+                    // Update timepicker
+                    if (inst && inst.timepicker) {
+                        // Set time
+                        inst.timepicker.timepicker('setTime', jsDate);
+                        // Forced select to update the timeInput after adjustment
+                        selectTimePicker(inst, inst.timepicker);
+                        // Update the real input (prevented in selectTimePicker)
+                        this._updateInput();
+                    }
+                }
+            } else {
+                if (opts.calendar == 'gregorian') {
+                    // datepicker
+                    el.datepicker('setDate', jsDate);
+                } else {
+                    // calendarsPicker
+                    calendar = el.calendarsPicker('option', 'calendar');
+                    el.calendarsPicker('setDate', calendar.fromJSDate(jsDate));
+                }
+            }
         },
 
         /**
@@ -819,10 +1160,30 @@
                 });
             }
 
+            // Trigger-button
+            if (this.triggerButton) {
+                if (this.options.calendar == "gregorian") {
+                    this.triggerButton.bind('click' + ns, function() {
+                        el.datepicker('show');
+                    });
+                } else {
+                    var element = this.dateInput;
+                    if (!element) {
+                        element = el;
+                    }
+                    this.triggerButton.bind('click' + ns, function() {
+                        element.calendarsPicker('show');
+                    });
+                }
+            }
+
             // Clear-button
-            this.clearButton.bind('click' + ns, function() {
-                self.clear();
-            });
+            if (this.clearButton) {
+                this.clearButton.bind('click' + ns, function() {
+                    self.clear();
+                });
+            }
+
 
             return true;
         },
@@ -850,6 +1211,11 @@
             // Clear-button
             if (this.clearButton) {
                 this.clearButton.unbind(ns);
+            }
+
+            // Trigger-button
+            if (this.triggerButton) {
+                this.triggerButton.unbind(ns);
             }
 
             return true;
