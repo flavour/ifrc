@@ -925,7 +925,10 @@ class S3PersonModel(S3Model):
                        main = "first_name",
                        extra = "last_name",
                        onaccept = self.pr_person_onaccept,
-                       realm_components = ("presence",),
+                       realm_components = ("address",
+                                           "contact",
+                                           "presence",
+                                           ),
                        super_entity = ("pr_pentity", "sit_trackable"),
                        )
 
@@ -1161,8 +1164,8 @@ class S3PersonModel(S3Model):
         db = current.db
         s3db = current.s3db
 
-        vars = form.vars
-        person_id = vars.id
+        form_vars = form.vars
+        person_id = form_vars.id
 
         ptable = s3db.pr_person
         ltable = s3db.pr_person_user
@@ -1178,13 +1181,13 @@ class S3PersonModel(S3Model):
                                 limitby=(0, 1)).first()
 
         # If there is a user and their first or last name have changed
-        if user and vars.first_name and \
-           (user.first_name != vars.first_name or \
-            user.last_name != vars.last_name):
+        if user and form_vars.first_name and \
+           (user.first_name != form_vars.first_name or \
+            user.last_name != form_vars.last_name):
             # Update the user record
             query = (utable.id == user.id)
-            db(query).update(first_name = vars.first_name,
-                             last_name = vars.last_name,
+            db(query).update(first_name = form_vars.first_name,
+                             last_name = form_vars.last_name,
                              )
 
     # -------------------------------------------------------------------------
@@ -2049,6 +2052,7 @@ class S3GroupModel(S3Model):
                                  ],
                   onaccept = self.group_membership_onaccept,
                   ondelete = self.group_membership_onaccept,
+                  realm_entity = self.group_membership_realm_entity,
                   )
 
         # ---------------------------------------------------------------------
@@ -2111,7 +2115,28 @@ class S3GroupModel(S3Model):
                                  group_id = None,
                                  deleted_fk = json.dumps(deleted_fk))
             pr_update_affiliations(table, record)
-        return
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def group_membership_realm_entity(table, row):
+        """
+            Set the realm entity of Group Membership records to the same as
+            that of the person
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        # Find the Group
+        gtable = s3db.pr_group
+        group = db(gtable.id == row.group_id).select(gtable.realm_entity,
+                                                     limitby=(0, 1)
+                                                     ).first()
+        try:
+            return group.realm_entity
+        except:
+            # => Set to default of None
+            return None
 
 # =============================================================================
 class S3ContactModel(S3Model):
@@ -5735,7 +5760,6 @@ def pr_update_affiliations(table, record):
             return
 
         # Find the person_ids to update
-        update = pr_human_resource_update_affiliations
         person_id = None
         if record.deleted_fk:
             try:
@@ -5743,11 +5767,11 @@ def pr_update_affiliations(table, record):
             except:
                 pass
         if person_id:
-            update(person_id)
+            pr_human_resource_update_affiliations(person_id)
         if person_id != record.person_id:
             person_id = record.person_id
             if person_id:
-                update(person_id)
+                pr_human_resource_update_affiliations(person_id)
 
     elif rtype == "pr_group_membership":
 
@@ -5861,8 +5885,6 @@ def pr_human_resource_update_affiliations(person_id):
     STAFF = "Staff"
     VOLUNTEER = "Volunteer"
 
-    update = pr_human_resource_update_affiliations
-
     db = current.db
     s3db = current.s3db
     etable = s3db.pr_pentity
@@ -5949,15 +5971,15 @@ def pr_human_resource_update_affiliations(person_id):
                 masters[role].remove(pe)
 
     # Add affiliations to all masters which are not in current affiliations
+    #vol_role = current.deployment_settings.get_hrm_vol_affiliation() or OTHER_ROLE
     for role in masters:
         if role == VOLUNTEER:
+            #role_type = vol_role
             role_type = OTHER_ROLE
         else:
             role_type = OU
         for m in masters[role]:
             pr_add_affiliation(m, pe_id, role=role, role_type=role_type)
-
-    return
 
 # =============================================================================
 def pr_add_affiliation(master, affiliate, role=None, role_type=OU):
@@ -5990,7 +6012,8 @@ def pr_add_affiliation(master, affiliate, role=None, role_type=OU):
         if not row:
             data = {"pe_id": master_pe,
                     "role": role,
-                    "role_type": role_type}
+                    "role_type": role_type,
+                    }
             role_id = rtable.insert(**data)
         else:
             role_id = row.id

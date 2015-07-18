@@ -781,6 +781,7 @@ class S3HRModel(S3Model):
             crud_fields.extend(("details.volunteer_type",
                                 "details.availability",
                                 "details.card",
+                                # @ToDo: Move these to the IFRC Template
                                 "volunteer_cluster.vol_cluster_type_id",
                                 "volunteer_cluster.vol_cluster_id",
                                 "volunteer_cluster.vol_cluster_position_id",
@@ -3381,7 +3382,16 @@ class S3HRSkillModel(S3Model):
         data = item.data
         name = data.get("name")
         table = item.table
-        query = (table.name.lower() == name.lower())
+        if current.deployment_settings.get_database_type() == "postgres":
+            # Python lower() only works properly on Unicode strings not UTF-8 encoded strings
+            # Oddity:
+            # Python lower() converts the TR char İ to i (Correctly, according to http://www.fileformat.info/info/unicode/char/0130/index.htm)
+            # PostgreSQL LOWER() on Windows doesn't convert it, although this seems to be a locale issue:
+            # http://stackoverflow.com/questions/18507589/the-lower-function-on-international-characters-in-postgresql
+            # Works fine on Debian servers if the locale is a .UTF-8 before the Postgres cluster is created
+            query = (table.name.lower() == s3_unicode(name).lower().encode("utf8"))
+        else:
+            query = (table.name.lower() == name.lower())
         organisation_id = data.get("organisation_id")
         if organisation_id:
             query &= (table.organisation_id == organisation_id)
@@ -5293,7 +5303,7 @@ def hrm_human_resource_onaccept(form):
     person_id = record.person_id
     person = Storage(id = person_id)
     if settings.get_auth_person_realm_human_resource_site_then_org():
-        # Set pr_person.realm_entity to the human_resource's site pe_id
+        # Set pr_person.realm_entity to the human_resource's site pe_id or organisation_pe_id
         entity = s3db.pr_get_pe_id("org_site", site_id) or \
                  s3db.pr_get_pe_id("org_organisation", organisation_id)
 
@@ -5475,7 +5485,7 @@ def hrm_human_resource_onaccept(form):
                 profile["organisation_id"] = organisation_id
                 profile["site_id"] = site_id
         if profile:
-            db(utable.id == user.id).update(**profile)
+            db(utable.id == user_id).update(**profile)
 
 # =============================================================================
 def hrm_compose():
@@ -8722,9 +8732,9 @@ def hrm_human_resource_filters(resource_type=None,
             # Programme filter
             append_filter(S3OptionsFilter("person_id$hours.programme_id",
                                           label = T("Program"),
-                                          options = lambda: \
-                                            get_s3_filter_opts("hrm_programme",
-                                                               org_filter=True),
+                                          #options = lambda: \
+                                          #  get_s3_filter_opts("hrm_programme",
+                                          #                     org_filter=True),
                                           hidden = True,
                                           ))
 
