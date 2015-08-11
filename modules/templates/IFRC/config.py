@@ -314,6 +314,18 @@ def config(settings):
     VNRC = "Viet Nam Red Cross"
 
     # -----------------------------------------------------------------------------
+    def airegex(default):
+        """ NS-specific settings for accent-insensitive searching """
+
+        root_org = current.auth.root_org_name()
+        if root_org == VNRC:
+            return True
+        else:
+            return False
+
+    settings.database.airegex = airegex
+
+    # -----------------------------------------------------------------------------
     # Finance settings
     #
     def currencies(default):
@@ -1960,8 +1972,6 @@ def config(settings):
         #elif vnrc:
         #    settings.org.site_label = "Office/Center"
 
-        s3db.org_organisation.root_organisation.label = T("National Society")
-
         s3 = current.response.s3
 
         # Custom prep
@@ -2176,6 +2186,7 @@ def config(settings):
 
                 # Custom list fields for RDRT
                 phone_label = settings.get_ui_label_mobile_phone()
+                s3db.org_organisation.root_organisation.label = T("National Society")
                 list_fields = ["person_id",
                                (T("Sectors"), "credential.job_title_id"),
                                # @todo: Languages?
@@ -4035,7 +4046,9 @@ def config(settings):
     def customise_vulnerability_data_resource(r, tablename):
 
         # Date is required: We don't store modelled data
-        r.table.date.requires = r.table.date.requires.other
+        requires = r.table.date.requires
+        if hasattr(requires, "other"):
+            r.table.date.requires = requires.other
 
     settings.customise_vulnerability_data_resource = customise_vulnerability_data_resource
 
