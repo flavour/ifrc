@@ -17,6 +17,9 @@ def config(settings):
 
     T = current.T
 
+    settings.base.system_name = T("Sahana Alerting and Messaging Broker")
+    settings.base.system_name_short = T("SAMBRO")
+
     # Pre-Populate
     settings.base.prepopulate = ("SAMBRO", "SAMBRO/Demo", "default/users")
 
@@ -32,11 +35,56 @@ def config(settings):
     # =========================================================================
     # System Settings
     # -------------------------------------------------------------------------
+    # Security Policy
+    # http://eden.sahanafoundation.org/wiki/S3/S3AAA#System-widePolicy
+    # 1: Simple (default): Global as Reader, Authenticated as Editor
+    # 2: Editor role required for Update/Delete, unless record owned by session
+    # 3: Apply Controller ACLs
+    # 4: Apply both Controller & Function ACLs
+    # 5: Apply Controller, Function & Table ACLs
+    # 6: Apply Controller, Function, Table ACLs and Entity Realm
+    # 7: Apply Controller, Function, Table ACLs and Entity Realm + Hierarchy
+    # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations    
+    settings.security.policy = 4 # Controller-Function ACLs
+    
     # Record Approval
     settings.auth.record_approval = True
     # cap_alert record requires approval before sending
     settings.auth.record_approval_required_for = ("cap_alert",)
 
+    # =============================================================================
+    # Module Settings
+    # -----------------------------------------------------------------------------
+    # Notifications
+    
+    # Template for the subject line in update notifications
+    settings.msg.notify_subject = "$S %s" % T("Alert Notification")
+
+    # -----------------------------------------------------------------------------
+    # L10n (Localization) settings
+    languages = OrderedDict([
+        #("ar", "العربية"),
+        ("dv", "ދިވެހި"), # Divehi (Maldives)
+        ("en-US", "English"),
+        #("es", "Español"),
+        #("fr", "Français"),
+        #("km", "ភាសាខ្មែរ"),        # Khmer
+        #("mn", "Монгол хэл"),  # Mongolian
+        ("my", "မြန်မာစာ"),        # Burmese
+        #("ne", "नेपाली"),          # Nepali
+        #("prs", "دری"),        # Dari
+        #("ps", "پښتو"),        # Pashto
+        #("tet", "Tetum"),
+        #("th", "ภาษาไทย"),        # Thai
+        ("tl", "Tagalog"), # Filipino
+        #("vi", "Tiếng Việt"),   # Vietnamese
+        #("zh-cn", "中文 (简体)"),
+    ])
+    settings.L10n.languages = languages
+    settings.cap.languages = languages
+    # Translate the cap_area name
+    settings.L10n.translate_cap_area = True
+    
     # -------------------------------------------------------------------------
     # Messaging
     # Parser
@@ -161,7 +209,7 @@ def config(settings):
             module_type = None,
         )),
         ("gis", Storage(
-            name_nice = T("Map"),
+            name_nice = T("Mapping"),
             #description = "Situation Awareness & Geospatial Analysis",
             restricted = True,
             module_type = 6,     # 6th item in the menu
@@ -187,7 +235,7 @@ def config(settings):
         #    module_type = 2,
         #)),
         ("cap", Storage(
-            name_nice = T("CAP"),
+            name_nice = T("Alerting"),
             #description = "Create & broadcast CAP alerts",
             restricted = True,
             module_type = 1,
@@ -210,12 +258,6 @@ def config(settings):
             restricted = True,
             # The user-visible functionality of this module isn't normally required. Rather it's main purpose is to be accessed from other modules.
             module_type = None,
-        )),
-        ("irs", Storage(
-            name_nice = T("Incidents"),
-            #description = "Incident Reporting System",
-            restricted = True,
-            module_type = 10
         )),
         ("event", Storage(
             name_nice = T("Events"),

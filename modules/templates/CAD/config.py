@@ -17,19 +17,25 @@ def config(settings):
 
     T = current.T
 
-    # =============================================================================
+    # =========================================================================
     # System Settings
     #
     settings.base.system_name = T("Sahana: Washington Common Operating Picture (WA-COP)")
     settings.base.system_name_short = T("Sahana")
 
-    # PrePopulate data
-    settings.base.prepopulate = ("CAD", "default/users")
+    # Prepop options
+    settings.base.prepopulate_options = {"mandatory": "CAD",
+                                         "default": ("default/users",
+                                                     "CAD/Demo",
+                                                     ),
+                                         }
+    # Prepop default
+    settings.base.prepopulate = "template:default"
 
     # Theme (folder to use for views/layout.html)
     #settings.base.theme = "default"
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Self-Registration and User Profile
     #
     # Users can self-register
@@ -52,13 +58,13 @@ def config(settings):
     settings.auth.show_utc_offset = False
     settings.auth.show_link = False
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Security Policy
     #
     settings.security.policy = 7 # Apply Controller, Function and Table ACLs
     settings.security.map = True
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # L10n (Localization) settings
     #
     settings.L10n.languages = OrderedDict([
@@ -92,7 +98,7 @@ def config(settings):
     # Uncomment this to Translate Location Names
     #settings.L10n.translate_gis_location = True
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # GIS settings
     #
     # Restrict the Location Selector to just certain countries
@@ -115,6 +121,11 @@ def config(settings):
     settings.gis.location_represent_address_only = "icon"
     # Resources which can be directly added to the main map
     settings.gis.poi_create_resources = None
+
+    # -------------------------------------------------------------------------
+    # Event Management Settings
+    #
+    settings.event.incident_teams_tab = "Units"
 
     # -------------------------------------------------------------------------
     # Modules

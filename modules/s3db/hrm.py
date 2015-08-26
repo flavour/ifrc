@@ -347,11 +347,15 @@ class S3HRModel(S3Model):
                          2: T("Volunteer"),
                          }
 
-        hrm_status_opts = {1: T("current"),
-                           2: T("obsolete"),
+        hrm_status_opts = {1: T("Active"),
+                           2: T("Resigned"),   # They left of their own accord
+                           3: T("Terminated"), # Org terminated their contract
+                           4: T("Died"),
                            }
 
         organisation_label = settings.get_hrm_organisation_label()
+
+        multiple_contracts = settings.get_hrm_multiple_contracts()
 
         if group == "volunteer" or s3.bulk or not group:
             # Volunteers don't have a Site
@@ -666,7 +670,7 @@ class S3HRModel(S3Model):
                         hrm_salary = "human_resource_id",
                         hrm_insurance = "human_resource_id",
                         hrm_contract = {"joinby": "human_resource_id",
-                                        "multiple": False,
+                                        "multiple": multiple_contracts,
                                         },
                         hrm_training = {"link": "pr_person",
                                         "joinby": "id",
@@ -688,7 +692,7 @@ class S3HRModel(S3Model):
                                             "pkey": "person_id",
                                             },
                         # Projects
-                        project_project = {"link": "project_human_resource",
+                        project_project = {"link": "project_human_resource_project",
                                            "joinby": "human_resource_id",
                                            "key": "project_id",
                                            },
@@ -911,6 +915,7 @@ class S3HRModel(S3Model):
         return dict(hrm_department_id = department_id,
                     hrm_job_title_id = job_title_id,
                     hrm_human_resource_id = human_resource_id,
+                    hrm_status_opts = hrm_status_opts,
                     hrm_type_opts = hrm_type_opts,
                     hrm_human_resource_represent = hrm_human_resource_represent,
                     )
@@ -1825,6 +1830,14 @@ class S3HRContractModel(S3Model):
         tablename = "hrm_contract"
         self.define_table(tablename,
                           self.hrm_human_resource_id(),
+                          Field("name",
+                                label = T("Name"),
+                                ),
+                          s3_date(label = T("Start Date"),
+                                  ),
+                          #s3_date("end_date",
+                          #        label = T("End Date"),
+                          #        ),
                           Field("term",
                                 requires = IS_IN_SET(contract_terms),
                                 represent = contract_term_represent,
@@ -4742,14 +4755,14 @@ class hrm_AssignMethod(S3Method):
                            "organisation_id",
                            ]
             if len(types) == 2:
-                list_fields.append("type")
+                list_fields.append((T("Type"),"type"))
             list_fields.append("job_title_id")
             if settings.get_hrm_use_certificates():
-                list_fields.append(("Certificates", "person_id$certification.certificate_id"))
+                list_fields.append((T("Certificates"), "person_id$certification.certificate_id"))
             if settings.get_hrm_use_skills():
-                list_fields.append(("Skills", "person_id$competency.skill_id"))
+                list_fields.append((T("Skills"), "person_id$competency.skill_id"))
             if settings.get_hrm_use_trainings():
-                list_fields.append(("Trainings", "person_id$training.course_id"))
+                list_fields.append((T("Trainings"), "person_id$training.course_id"))
 
             # Data table
             resource = s3db.resource("hrm_human_resource",

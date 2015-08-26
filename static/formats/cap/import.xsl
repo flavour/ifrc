@@ -95,11 +95,11 @@
                     <xsl:value-of select="cap:addresses" />
                 </data>
             </xsl:if>
-            <xsl:if test="cap:alert/code!=''">
-                <data field="code">
+            <xsl:if test="cap:code!=''">
+                <data field="codes">
                     <xsl:attribute name="value">
                         <xsl:text>[</xsl:text>
-                            <xsl:for-each select="cap:alert/code">
+                            <xsl:for-each select="cap:code">
                                 <xsl:text>&quot;</xsl:text>
                                 <xsl:value-of select="."/>
                                 <xsl:text>&quot;</xsl:text>
@@ -188,6 +188,9 @@
                         <xsl:value-of select="cap:event" />
                     </xsl:attribute>
                 </reference>
+                <data field="event">
+                    <xsl:value-of select="cap:event" />
+                </data>
             </xsl:if>
             <xsl:if test="cap:responseType!=''">
                 <data field="response_type">
@@ -234,7 +237,7 @@
             <xsl:if test="cap:eventCode!=''">
                 <data field="event_code">
                     <xsl:attribute name="value">
-                        <xsl:text>[</xsl:text>
+                        <xsl:text>&quot;[</xsl:text>
                             <xsl:for-each select="cap:eventCode">
                                 <xsl:text>{&quot;key&quot;: &quot;</xsl:text>
                                 <xsl:value-of select="cap:valueName"/>
@@ -245,7 +248,7 @@
                                     <xsl:text>, </xsl:text>
                                 </xsl:if>
                             </xsl:for-each>
-                        <xsl:text>]</xsl:text>
+                        <xsl:text>]&quot;</xsl:text>
                     </xsl:attribute>
                 </data>
             </xsl:if>
@@ -297,16 +300,18 @@
             <xsl:if test="cap:parameter!=''">
                 <data field="parameter">
                     <xsl:attribute name="value">
-                        <xsl:text>[</xsl:text>
+                        <xsl:text>&quot;[</xsl:text>
                             <xsl:for-each select="cap:parameter">
-                                <xsl:text>&quot;</xsl:text>
-                                <xsl:value-of select="."/>
-                                <xsl:text>&quot;</xsl:text>
+                                <xsl:text>{&quot;key&quot;: &quot;</xsl:text>
+                                <xsl:value-of select="cap:valueName"/>
+                                <xsl:text>&quot;, &quot;value&quot;: &quot;</xsl:text>
+                                <xsl:value-of select="cap:value"/>
+                                <xsl:text>&quot;}</xsl:text>
                                 <xsl:if test="position()!=last()">
-                                    <xsl:text>,</xsl:text>
+                                    <xsl:text>, </xsl:text>
                                 </xsl:if>
                             </xsl:for-each>
-                        <xsl:text>]</xsl:text>
+                        <xsl:text>]&quot;</xsl:text>
                     </xsl:attribute>
                 </data>
             </xsl:if>
