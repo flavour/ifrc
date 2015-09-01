@@ -4209,6 +4209,7 @@ class S3ProjectPlanningModel(S3Model):
                                       "comments",
                                       ],
                        onaccept = self.project_indicator_data_onaccept,
+                       ondelete = self.project_indicator_data_ondelete,
                        report_options = report_options,
                        )
 
@@ -4250,7 +4251,8 @@ class S3ProjectPlanningModel(S3Model):
         # Read all of the Indicator Data for this Project
         table = s3db.project_indicator_data
         query = (table.project_id == project_id) & \
-                (table.deleted == False)
+                (table.deleted == False) & \
+                (table.end_date < current.request.utcnow)
         indicator_data = db(query).select(table.indicator_id,
                                           table.target_value,
                                           table.value,
@@ -4258,8 +4260,8 @@ class S3ProjectPlanningModel(S3Model):
                                           )
         for d in indicator_data:
             indicator_id = d.indicator_id
-            target_value = d.target_value
-            value = d.value
+            target_value = d.target_value or 0
+            value = d.value or 0
             end_date = d.end_date
             if indicator_id not in indicators:
                 indicators[indicator_id] = {"total_target": target_value,
@@ -4271,8 +4273,8 @@ class S3ProjectPlanningModel(S3Model):
             else:
                 # Add this data to Totals
                 i = indicators[indicator_id]
-                i["total_target"] = i["total_target"] + target_value
-                i["total_value"] = i["total_value"] + value
+                i["total_target"] = i["total_target"] + (target_value or 0)
+                i["total_value"] = i["total_value"] + (value or 0)
                 if end_date > i["current_date"]:
                     # Replace the Current data
                     i.update(current_target = target_value,
@@ -4497,7 +4499,7 @@ class S3ProjectPlanningModel(S3Model):
         try:
             project_id = record.project_id
         except:
-            s3_debug("Cannot find Project Goal record (no record for this ID), so can't setup default weightings")
+            current.log.error("Cannot find Project Goal record (no record for this ID), so cannot setup default weightings")
             return
 
         # Read the records
@@ -4532,7 +4534,7 @@ class S3ProjectPlanningModel(S3Model):
         try:
             project_id = record.project_id
         except:
-            s3_debug("Cannot find Project Goal record (no record for this ID), so can't update statuses or validate weighting")
+            current.log.error("Cannot find Project Goal record (no record for this ID), so cannot update statuses or validate weighting")
             return
 
         if not create:
@@ -4594,7 +4596,9 @@ class S3ProjectPlanningModel(S3Model):
         try:
             goal_id = record.goal_id
         except:
-            s3_debug("Cannot find Project Outcome record (no record for this ID), so can't setup default weightings")
+            error = "Cannot find Project Outcome record (no record for this ID), so cannot setup default weightings"
+            current.log.error(error)
+            current.session.error = error
             return
 
         # Read the records
@@ -4618,7 +4622,8 @@ class S3ProjectPlanningModel(S3Model):
         """
 
         db = current.db
-        record_id = form.record_id
+        form_vars = form.vars
+        record_id = form_vars.id
 
         # Find the project_id
         table = current.s3db.project_outcome
@@ -4629,7 +4634,9 @@ class S3ProjectPlanningModel(S3Model):
         try:
             project_id = record.project_id
         except:
-            s3_debug("Cannot find Project Outcome record (no record for this ID), so can't update statuses or validate weighting")
+            error = "Cannot find Project Outcome record (no record for this ID), so cannot update statuses or validate weighting"
+            current.log.error(error)
+            current.session.error = error
             return
 
         if not create:
@@ -4642,7 +4649,7 @@ class S3ProjectPlanningModel(S3Model):
             for r in records:
                 total += r.weighting
             # Add what we're trying to add
-            total += form.vars.weighting
+            total += form_vars.weighting
 
             # Check if we're on 1.0
             if total <> 1.0:
@@ -4691,7 +4698,7 @@ class S3ProjectPlanningModel(S3Model):
         try:
             outcome_id = record.outcome_id
         except:
-            s3_debug("Cannot find Project Output record (no record for this ID), so can't setup default weightings")
+            current.log.error("Cannot find Project Output record (no record for this ID), so cannot setup default weightings")
             return
 
         # Read the records
@@ -4760,7 +4767,7 @@ class S3ProjectPlanningModel(S3Model):
         try:
             self.project_planning_status_update(row.project_id)
         except:
-            s3_debug("Cannot find Project record (no record for this ID), so can't update statuses")
+            current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4802,7 +4809,7 @@ class S3ProjectPlanningModel(S3Model):
         try:
             output_id = record.output_id
         except:
-            s3_debug("Cannot find Project Indicator record (no record for this ID), so can't setup default weightings")
+            current.log.error("Cannot find Project Indicator record (no record for this ID), so cannot setup default weightings")
             return
 
         # Read the records
@@ -4887,7 +4894,7 @@ class S3ProjectPlanningModel(S3Model):
         try:
             self.project_planning_status_update(row.project_id)
         except:
-            s3_debug("Cannot find Project record (no record for this ID), so can't update statuses")
+            current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
 
     # -------------------------------------------------------------------------
     def project_indicator_data_onaccept(self, form):
@@ -4911,7 +4918,76 @@ class S3ProjectPlanningModel(S3Model):
         try:
             indicator_id = record.indicator_id
         except:
-            s3_debug("Cannot find Project Indicator Data record (no record for this ID), so can't update start_date or statuses")
+            current.log.error("Cannot find Project Indicator Data record (no record for this ID), so cannot update start_date or statuses")
+            return
+        start_date = record.start_date
+        end_date = record.end_date
+
+        # Locate the immediately preceding record
+        query = (table.indicator_id == indicator_id)  & \
+                (table.deleted == False) & \
+                (table.end_date < end_date)
+        date_field = table.end_date
+        record = db(query).select(date_field,
+                                  limitby=(0, 1),
+                                  orderby=date_field,
+                                  ).first()
+        if record and record[date_field] != start_date:
+            # Update this record's start_date
+            db(table.id == record_id).update(start_date = record[date_field])
+
+        # Locate the immediately succeeding record
+        query = (table.indicator_id == indicator_id)  & \
+                (table.deleted == False) & \
+                (table.end_date > end_date)
+        record = db(query).select(table.id,
+                                  table.start_date,
+                                  date_field, # Needed for orderby on Postgres
+                                  limitby=(0, 1),
+                                  orderby=date_field,
+                                  ).first()
+        if record and record.start_date != end_date:
+            # Update that record's start_date
+            db(table.id == record.id).update(start_date = end_date)
+
+        # Update Statuses
+        table = s3db.project_indicator
+        row = db(table.id == indicator_id).select(table.project_id,
+                                                  limitby=(0, 1)
+                                                  ).first()
+        try:
+            project_id = row.project_id
+        except:
+            error = "Cannot find Project record (no record for this ID), so cannot update statuses"
+            current.log.error(error)
+            current.session.error = error
+        else:
+            self.project_planning_status_update(project_id)
+
+    # -------------------------------------------------------------------------
+    def project_indicator_data_ondelete(self, row):
+        """
+            Handle Updates of entries to reset the hidden start_date
+
+            Update Project Status at all levels
+        """
+
+        db = current.db
+        s3db = current.s3db
+        table = s3db.project_indicator_data
+        record_id = row.get("id")
+
+        # Read the Indicator Data record
+        record = db(table.id == record_id).select(table.deleted_fk,
+                                                  table.start_date,
+                                                  table.end_date,
+                                                  limitby=(0, 1)
+                                                  ).first()
+        try:
+            fks = json.loads(record.deleted_fk)
+            indicator_id = fks["indicator_id"]
+        except:
+            current.log.error("Cannot find Project Indicator Data record (no record for this ID), so cannot update start_date or statuses")
             return
         start_date = record.start_date
         end_date = record.end_date
@@ -4951,7 +5027,7 @@ class S3ProjectPlanningModel(S3Model):
         try:
             self.project_planning_status_update(row.project_id)
         except:
-            s3_debug("Cannot find Project record (no record for this ID), so can't update statuses")
+            current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -8784,6 +8860,7 @@ class project_Details(S3Method):
                     form = form(r)
                 if form is not None:
                     profile_widgets.append(form)
+
             if settings.get_project_multiple_organisations():
                 orgs_widget = dict(label = "Organizations",
                                    label_create = "Add Organization",
@@ -8797,6 +8874,7 @@ class project_Details(S3Method):
                                    pagesize = None, # all records
                                    )
                 profile_widgets.append(orgs_widget)
+
             if settings.get_project_community():
                 label = "Communities"
                 label_create = "Add Community"
@@ -8815,6 +8893,7 @@ class project_Details(S3Method):
                                     pagesize = None, # all records
                                     )
             profile_widgets.append(locations_widget)
+
             if settings.get_project_mode_3w():
                 beneficiaries_widget = dict(label = "Beneficiaries",
                                             label_create = "Add Beneficiaries",
@@ -8830,7 +8909,8 @@ class project_Details(S3Method):
                 profile_widgets.append(beneficiaries_widget)
                 label = T("Documents")
             else:
-                label = attachments_label
+                label = settings.get_ui_label_attachments()
+
             docs_widget = dict(label = label,
                                label_create = "Add Document",
                                type = "datatable",
@@ -8845,6 +8925,7 @@ class project_Details(S3Method):
                                pagesize = None, # all records
                                )
             profile_widgets.append(docs_widget)
+
             if settings.get_hrm_show_staff():
                 STAFF = settings.get_hrm_staff_label()
                 hr_widget = dict(label = STAFF,
