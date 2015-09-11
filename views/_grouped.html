@@ -1,8 +1,8 @@
-<div>
- <div class='gi-container' {{try:}}id='{{=widget_id}}{{except:}}{{pass}}'>
+<div class='row'>
+ <div class='gi-container medium-12 columns' {{try:}}id='{{=widget_id}}{{except:}}{{pass}}'>
   <!-- Form -->
   <div class='gi-form-container form-container'>
-   {{try:}}{{=form}}{{except:}}{{pass}}
+   {{try:}}{{=filter_form}}{{except:}}{{pass}}
   </div>
   <!-- Throbber -->
   <div class='gi-throbber inline-throbber'></div>

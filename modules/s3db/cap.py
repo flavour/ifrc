@@ -259,18 +259,18 @@ class S3CAPModel(S3Model):
         ])
         # CAP info categories
         cap_info_category_opts = OrderedDict([
-            ("Geo", T("Geophysical (inc. landslide)")),
-            ("Met", T("Meteorological (inc. flood)")),
-            ("Safety", T("General emergency and public safety")),
-            ("Security", T("Law enforcement, military, homeland and local/private security")),
-            ("Rescue", T("Rescue and recovery")),
-            ("Fire", T("Fire suppression and rescue")),
-            ("Health", T("Medical and public health")),
-            ("Env", T("Pollution and other environmental")),
-            ("Transport", T("Public and private transportation")),
-            ("Infra", T("Utility, telecommunication, other non-transport infrastructure")),
-            ("CBRNE", T("Chemical, Biological, Radiological, Nuclear or High-Yield Explosive threat or attack")),
-            ("Other", T("Other events")),
+            ("Geo", T("Geo - Geophysical (inc. landslide)")),
+            ("Met", T("Met - Meteorological (inc. flood)")),
+            ("Safety", T("Safety - General emergency and public safety")),
+            ("Security", T("Security - Law enforcement, military, homeland and local/private security")),
+            ("Rescue", T("Rescue - Rescue and recovery")),
+            ("Fire", T("Fire - Fire suppression and rescue")),
+            ("Health", T("Health - Medical and public health")),
+            ("Env", T("Env - Pollution and other environmental")),
+            ("Transport", T("Transport - Public and private transportation")),
+            ("Infra", T("Infra - Utility, telecommunication, other non-transport infrastructure")),
+            ("CBRNE", T("CBRNE - Chemical, Biological, Radiological, Nuclear or High-Yield Explosive threat or attack")),
+            ("Other", T("Other - Other events")),
         ])
 
         tablename = "cap_alert"
@@ -489,9 +489,8 @@ class S3CAPModel(S3Model):
         if crud_strings["cap_template"]:
             crud_strings[tablename] = crud_strings["cap_template"]
         else:
-            ADD_ALERT = T("Create Alert")
             crud_strings[tablename] = Storage(
-                label_create = ADD_ALERT,
+                label_create = T("Create Alert"),
                 title_display = T("Alert Details"),
                 title_list = T("Alerts"),
                 # If already-published, this should create a new "Update"
@@ -792,6 +791,11 @@ class S3CAPModel(S3Model):
                      alert_id(writable = False,
                               ),
                      info_id(),
+                     Field("is_template", "boolean",
+                           default = False,
+                           readable = False,
+                           writable = False,
+                           ),
                      self.super_link("doc_id", "doc_entity"),
                      Field("resource_desc",
                            requires = IS_NOT_EMPTY(),
@@ -831,8 +835,9 @@ class S3CAPModel(S3Model):
                     msg_list_empty = T("No resources currently defined for this alert"))
 
         # @todo: complete custom form
-        crud_form = S3SQLCustomForm(#"name",
+        crud_form = S3SQLCustomForm("alert_id",
                                     "info_id",
+                                    "is_template",
                                     "resource_desc",
                                     S3SQLInlineComponent("image",
                                                          label=T("Image"),
@@ -845,11 +850,11 @@ class S3CAPModel(S3Model):
                                                                  ],
                                                          ),
                                     )
-        configure(tablename,
-                  super_entity = "doc_entity",
-                  crud_form = crud_form,
+        configure(tablename,                  
                   # Shouldn't be required if all UI actions go through alert controller & XSLT configured appropriately
                   create_onaccept = update_alert_id(tablename),
+                  crud_form = crud_form,
+                  super_entity = "doc_entity",
                   )
 
         # ---------------------------------------------------------------------
@@ -1396,10 +1401,10 @@ def cap_rheader(r):
                     else:
                         error = ""
 
-                    tabs = [(T("Template"), None),
-                            (T("Information template"), "info"),
+                    tabs = [(T("Alert Details"), None),
+                            (T("Information"), "info"),
                             #(T("Area"), "area"),
-                            #(T("Resource Files"), "resource"),
+                            (T("Resource Files"), "resource"),
                             ]
 
                     rheader_tabs = s3_rheader_tabs(r, tabs)
@@ -1455,8 +1460,10 @@ def cap_rheader(r):
                                                                    "pe_ids": pe_ids,
                                                                    },
                                                            ),
-                                               _class = "action-btn"
+                                               _class = "action-btn confirm-btn"
                                                )
+                                current.response.s3.jquery_ready.append(
+'''S3.confirmClick('.confirm-btn','%s')''' % T("Do you want to submit the alert for approval?"))
                             else:
                                 submit_btn = None
                         else:
@@ -2044,14 +2051,23 @@ def add_area_from_template(area_id, alert_id):
     db = current.db
     s3db = current.s3db
     atable = s3db.cap_area
+    itable = s3db.cap_info
     ltable = s3db.cap_area_location
     ttable = s3db.cap_area_tag
     
     # Create Area Record from Template
-    atemplate = db(atable.id == area_id).select(limitby=(0, 1),
-                                                *afieldnames).first()
+    atemplate = db(atable.id == area_id).select(*afieldnames,
+                                                limitby=(0, 1)).first()
+    rows = db(itable.alert_id == alert_id).select(itable.id)
+    
+    if len(rows) == 1:
+        info_id = rows.first().id
+    else:
+        info_id = ""
+        
     adata = {"is_template": False,
-             "alert_id": alert_id
+             "alert_id": alert_id,
+             "info_id": info_id,
              }
     for field in afieldnames:
         adata[field] = atemplate[field]
@@ -2061,7 +2077,8 @@ def add_area_from_template(area_id, alert_id):
     ltemplate = db(ltable.area_id == area_id).select(*lfieldnames)
     for rows in ltemplate:
         ldata = {"area_id": aid,
-                 "alert_id": alert_id}
+                 "alert_id": alert_id,
+                 }
         for field in lfieldnames:
             ldata[field] = rows[field]
         lid = ltable.insert(**ldata)
@@ -2069,7 +2086,9 @@ def add_area_from_template(area_id, alert_id):
     # Add Area Tag Components of Template
     ttemplate = db(ttable.area_id == area_id).select(*tfieldnames)      
     for row in ttemplate:
-        tdata = {"area_id": aid}
+        tdata = {"area_id": aid,
+                 "alert_id": alert_id,
+                 }
         for field in tfieldnames:
             tdata[field] = row[field]
         tid = ttable.insert(**tdata)
