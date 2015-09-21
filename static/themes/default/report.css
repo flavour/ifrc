@@ -241,17 +241,27 @@
   color: #fff;
 }
 
+.gi-group-header.gi-level-1 td,
 .gi-group-footer.gi-level-1 td {
   background-color: #999;
   color: #fff;
 }
+.gi-group-header.gi-level-1 td a,
 .gi-group-footer.gi-level-1 td a {
   color: #fff;
 }
 
+.gi-group-header.gi-level-2 td {
+  border-top: 1px solid #999;
+}
+
 .gi-group-footer.gi-level-2 td {
   border-bottom: 1px solid #999;
-  background-color: #f3f3f3;
+}
+
+.gi-group-header.gi-level-2 td,
+.gi-group-footer.gi-level-2 td {
+  background-color: #eee;
 }
 
 /* Show label for summary in tables */
@@ -266,4 +276,16 @@
   text-transform: uppercase;
   background-color: #ccc;
   color: #666;
+}
+
+.gi-export-formats {
+  display: inline;
+}
+.gi-export-formats .gi-export {
+  height: 16px;
+  width: 16px;
+  display: block;
+  padding-bottom: 1.5rem;
+  background-repeat: no-repeat;
+  cursor: pointer;
 }

@@ -650,7 +650,6 @@ class S3CAPModel(S3Model):
                            represent = S3Represent(options = cap_info_category_opts,
                                                    multiple = True,
                                                    ),
-                           required = True,
                            requires = IS_IN_SET(cap_info_category_opts,
                                                 multiple = True,
                                                 ),
@@ -687,17 +686,23 @@ class S3CAPModel(S3Model):
                      Field("urgency",
                            represent = lambda opt: \
                             cap_info_urgency_opts.get(opt, UNKNOWN_OPT),
-                           requires = IS_IN_SET(cap_info_urgency_opts),
+                           # Empty For Template, checked onvalidation hook
+                           requires = IS_EMPTY_OR(
+                                        IS_IN_SET(cap_info_urgency_opts)),
                            ),
                      Field("severity",
                            represent = lambda opt: \
                             cap_info_severity_opts.get(opt, UNKNOWN_OPT),
-                           requires = IS_IN_SET(cap_info_severity_opts),
+                           # Empty For Template, checked onvalidation hook 
+                           requires = IS_EMPTY_OR(
+                                        IS_IN_SET(cap_info_severity_opts)),
                            ),
                      Field("certainty",
                            represent = lambda opt: \
                             cap_info_certainty_opts.get(opt, UNKNOWN_OPT),
-                           requires = IS_IN_SET(cap_info_certainty_opts),
+                           # Empty For Template, checked onvalidation hook 
+                           requires = IS_EMPTY_OR(
+                                        IS_IN_SET(cap_info_certainty_opts)),
                            ),
                      Field("audience", "text"),
                      Field("event_code", "text",
@@ -769,7 +774,10 @@ class S3CAPModel(S3Model):
 
         configure(tablename,
                   #create_next = URL(f="info", args=["[id]", "area"]),
+                  # Required Fields
+                  mark_required = ("urgency", "severity", "certainty",),
                   onaccept = self.cap_info_onaccept,
+                  onvalidation = self.cap_info_onvalidation,
                   )
 
         # Components
@@ -928,7 +936,7 @@ class S3CAPModel(S3Model):
                              })'''
                      ),
                      # Only used for Templates
-                     Field("priority",
+                     Field("priority", "reference cap_warning_priority",
                            label = T("Priority"),
                            represent = priority_represent,
                            requires = IS_EMPTY_OR(
@@ -1228,7 +1236,7 @@ class S3CAPModel(S3Model):
     def cap_alert_onvalidation(form):
         """
             Custom Form Validation:
-                mujlti-field level
+                multi-field level
         """
 
         form_vars = form.vars
@@ -1273,6 +1281,27 @@ class S3CAPModel(S3Model):
                 set_.update(event = current.db.cap_info.event_type_id.\
                             represent(info.event_type_id))
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_info_onvalidation(form):
+        """
+            Custom Form Validation:
+                used for import from CSV
+        """
+
+        form_record = form.record
+        if form_record and form_record.is_template == False:
+            form_vars = form.vars
+            if not form_vars.get("urgency"):
+                form.errors["urgency"] = \
+                    current.T("'Urgency' field is mandatory")
+            if not form_vars.get("severity"):
+                form.errors["severity"] = \
+                    current.T("'Severity' field is mandatory")
+            if not form_vars.get("certainty"):
+                form.errors["certainty"] = \
+                    current.T("'Certainty' field is mandatory")                
+    
     # -------------------------------------------------------------------------
     @staticmethod
     def cap_alert_approve(record=None):

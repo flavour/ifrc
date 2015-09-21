@@ -3626,7 +3626,7 @@ class S3Config(Storage):
 
     def get_req_inline_forms(self):
         """
-            Whether Requests module should use inline forms for Items
+            Whether Requests module should use inline forms for Items/Skills
         """
         return self.req.get("inline_forms", True)
 
@@ -3647,6 +3647,15 @@ class S3Config(Storage):
             Whether there is a Commit step in Requests Management
         """
         return self.req.get("use_commit", True)
+
+    def get_req_commit_people(self):
+        """
+            Whether Skills Requests should be Committed with Named Indviduals
+            or just Anonymous Skill 
+
+            @ToDo: Make this do something
+        """
+        return self.req.get("commit_people", False)
 
     def get_req_commit_value(self):
         """
