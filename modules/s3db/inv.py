@@ -45,6 +45,7 @@ __all__ = ("S3WarehouseModel",
            "inv_InvItemRepresent",
            "inv_item_total_weight",
            "inv_item_total_volume",
+           "inv_stock_movements",
            )
 
 import datetime
@@ -223,15 +224,22 @@ class S3WarehouseModel(S3Model):
                         ),
                      warehouse_type_id(),
                      self.gis_location_id(),
-                     Field("phone1", label = T("Phone"),
+                     Field("contact",
+                           label = T("Contact"),
+                           represent = lambda v: v or NONE,
+                           ),
+                     Field("phone1",
+                           label = T("Phone"),
                            represent = lambda v: v or NONE,
                            requires = IS_EMPTY_OR(s3_phone_requires)
                            ),
-                     Field("phone2", label = T("Phone 2"),
+                     Field("phone2",
+                           label = T("Phone 2"),
                            represent = lambda v: v or NONE,
                            requires = IS_EMPTY_OR(s3_phone_requires)
                            ),
-                     Field("email", label = T("Email"),
+                     Field("email",
+                           label = T("Email"),
                            represent = lambda v: v or NONE,
                            requires = IS_EMPTY_OR(IS_EMAIL())
                            ),
@@ -606,7 +614,7 @@ $.filterOptionsS3({
                             hidden = True,
                             ),
             S3RangeFilter("quantity",
-                          label=T("Quantity range"),
+                          label=T("Quantity Range"),
                           comment=T("Include only items where quantity is in this range."),
                           ge=10,
                           hidden = True,
@@ -1857,13 +1865,25 @@ $.filterOptionsS3({
                                  writable = False,
                                  ),
                      Field.Method("total_value",
-                                  self.inv_track_item_total_value),
+                                  self.inv_track_item_total_value,
+                                  ),
                      Field.Method("pack_quantity",
-                                  self.supply_item_pack_quantity(tablename=tablename)),
+                                  self.supply_item_pack_quantity(tablename=tablename),
+                                  ),
                      Field.Method("total_volume",
-                                  self.inv_track_item_total_volume),
+                                  self.inv_track_item_total_volume,
+                                  ),
                      Field.Method("total_weight",
-                                  self.inv_track_item_total_weight),
+                                  self.inv_track_item_total_weight,
+                                  ),
+                     Field.Method("total_recv_volume",
+                                  lambda row: \
+                                  self.inv_track_item_total_volume(row, received=True),
+                                  ),
+                     Field.Method("total_recv_weight",
+                                  lambda row: \
+                                  self.inv_track_item_total_weight(row, received=True),
+                                  ),
                      s3_comments(),
                      *s3_meta_fields()
                      )
@@ -1964,7 +1984,7 @@ $.filterOptionsS3({
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def inv_track_item_total_volume(row):
+    def inv_track_item_total_volume(row, received=False):
         """ Total volume of a track item """
 
         if hasattr(row, "inv_track_item"):
@@ -1976,15 +1996,17 @@ $.filterOptionsS3({
                                                               limitby=(0, 1)
                                                               ).first()
             # Return the total volume
-            v = row.quantity * item.volume
-            return v
+            quantity = row.quantity if not received else row.recv_quantity
+            if not quantity:
+                quantity = 0
+            return quantity * item.volume
         except:
             # not available
             return current.messages["NONE"]
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def inv_track_item_total_weight(row):
+    def inv_track_item_total_weight(row, received=False):
         """ Total weight of a track item """
 
         if hasattr(row, "inv_track_item"):
@@ -1996,8 +2018,10 @@ $.filterOptionsS3({
                                                               limitby=(0, 1)
                                                               ).first()
             # Return the total weight
-            v = row.quantity * item.weight
-            return v
+            quantity = row.quantity if not received else row.recv_quantity
+            if not quantity:
+                quantity = 0
+            return quantity * item.weight
         except:
             # not available
             return current.messages["NONE"]
@@ -2704,8 +2728,8 @@ $.filterOptionsS3({
             Check that either organisation_id or to_site_id are filled according to the type
         """
 
-        vars = form.vars
-        if not vars.to_site_id and not vars.organisation_id:
+        form_vars = form.vars
+        if not form_vars.to_site_id and not form_vars.organisation_id:
             error = current.T("Please enter a %(site)s OR an Organization") % \
                               dict(site=current.deployment_settings.get_org_site_label())
             errors = form.errors
@@ -2720,12 +2744,13 @@ $.filterOptionsS3({
             @ToDo: lookup the type values from s3cfg.py instead of hardcoding it
         """
 
-        type = form.vars.type and int(form.vars.type)
-        if type == 11 and not form.vars.from_site_id:
+        form_vars = form.vars
+        type = form_vars.type and int(form_vars.type)
+        if type == 11 and not form_vars.from_site_id:
             # Internal Shipment needs from_site_id
             form.errors.from_site_id = current.T("Please enter a %(site)s") % \
                                             dict(site=current.deployment_settings.get_org_site_label())
-        if type >= 32 and not form.vars.organisation_id:
+        if type >= 32 and not form_vars.organisation_id:
             # Internal Shipment needs from_site_id
             form.errors.organisation_id = current.T("Please enter an Organization/Supplier")
 
@@ -2885,8 +2910,8 @@ $.filterOptionsS3({
             ensure that the correct bin is selected and save those details.
         """
 
-        vars = form.vars
-        send_inv_item_id = vars.send_inv_item_id
+        form_vars = form.vars
+        send_inv_item_id = form_vars.send_inv_item_id
 
         if send_inv_item_id:
             # Copy the data from the sent inv_item
@@ -2894,33 +2919,33 @@ $.filterOptionsS3({
             itable = db.inv_inv_item
             query = (itable.id == send_inv_item_id)
             record = db(query).select(limitby=(0, 1)).first()
-            vars.item_id = record.item_id
-            vars.item_source_no = record.item_source_no
-            vars.expiry_date = record.expiry_date
-            vars.bin = record.bin
-            vars.owner_org_id = record.owner_org_id
-            vars.supply_org_id = record.supply_org_id
-            vars.pack_value = record.pack_value
-            vars.currency = record.currency
-            vars.inv_item_status = record.status
+            form_vars.item_id = record.item_id
+            form_vars.item_source_no = record.item_source_no
+            form_vars.expiry_date = record.expiry_date
+            form_vars.bin = record.bin
+            form_vars.owner_org_id = record.owner_org_id
+            form_vars.supply_org_id = record.supply_org_id
+            form_vars.pack_value = record.pack_value
+            form_vars.currency = record.currency
+            form_vars.inv_item_status = record.status
 
             # Save the organisation from where this tracking originates
             stable = current.s3db.org_site
             query = query & (itable.site_id == stable.id)
             record = db(query).select(stable.organisation_id,
                                       limitby=(0, 1)).first()
-            vars.track_org_id = record.organisation_id
+            form_vars.track_org_id = record.organisation_id
 
-        if not vars.recv_quantity:
+        if not form_vars.recv_quantity:
             # If we have no send_id and no recv_quantity then
             # copy the quantity sent directly into the received field
             # This is for when there is no related send record
             # The Quantity received ALWAYS defaults to the quantity sent
             # (Please do not change this unless there is a specific user requirement)
-            #db.inv_track_item.recv_quantity.default = form.vars.quantity
-            vars.recv_quantity = vars.quantity
+            #db.inv_track_item.recv_quantity.default = form_vars.quantity
+            form_vars.recv_quantity = form_vars.quantity
 
-        recv_bin = vars.recv_bin
+        recv_bin = form_vars.recv_bin
         if recv_bin:
             # If there is a receiving bin then select the right one
             if isinstance(recv_bin, list):
@@ -2928,8 +2953,6 @@ $.filterOptionsS3({
                     recv_bin = recv_bin[1]
                 else:
                     recv_bin = recv_bin[0]
-
-        return
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4741,6 +4764,206 @@ def inv_item_total_volume(row):
         return current.messages["NONE"]
     else:
         return quantity * volume
+
+# -----------------------------------------------------------------------------
+def inv_stock_movements(resource, selectors, orderby):
+    """
+        Extraction method for stock movements report
+
+        @param resource: the S3Resource (inv_inv_item)
+        @param selectors: the field selectors
+        @param orderby: orderby expression
+
+        @note: transactions can be filtered by earliest/latest date
+               using an S3DateFilter with selector="_transaction.date"
+
+        @todo: does not take manual stock adjustments into account
+        @todo: does not represent sites or Waybill/GRN as
+               links (breaks PDF export, but otherwise it's useful)
+    """
+
+    # Extract the stock item data
+    selectors = ["id",
+                 "site_id",
+                 "site_id$name",
+                 "item_id$item_category_id",
+                 "bin",
+                 "item_id$name",
+                 "quantity",
+                 ]
+
+    data = resource.select(selectors,
+                           limit = None,
+                           orderby = orderby,
+                           raw_data = True,
+                           represent = True,
+                           )
+
+    # Get all stock item IDs
+    inv_item_ids = [row["_row"]["inv_inv_item.id"] for row in data.rows]
+
+    # Earliest and latest date of the report (read from filter)
+    convert = S3TypeConverter.convert
+    request = current.request
+
+    get_vars = request.get_vars
+    dtstr = get_vars.get("_transaction.date__ge")
+    earliest = convert(datetime.datetime, dtstr) if dtstr else None
+    dtstr = get_vars.get("_transaction.date__le")
+    latest = convert(datetime.datetime, dtstr) if dtstr else request.utcnow
+
+    def item_dict():
+        """ Stock movement data per inventory item """
+
+        return {# Quantity in/out between earliest and latest date
+                "quantity_in": 0,
+                "quantity_out": 0,
+                # Quantity in/out after latest date
+                "quantity_in_after": 0,
+                "quantity_out_after": 0,
+                # Origin/destination sites
+                "sites": [],
+                # GRN/Waybill numbers
+                "documents": [],
+                }
+
+    # Dict to collect stock movement data
+    movements = {}
+
+    # Set of site IDs for bulk representation
+    all_sites = set()
+
+    s3db = current.s3db
+
+    # Incoming shipments
+    query = (FS("recv_inv_item_id").belongs(inv_item_ids))
+    if earliest:
+        query &= (FS("recv_id$date") >= earliest)
+    incoming = s3db.resource("inv_track_item", filter=query)
+    transactions = incoming.select(["recv_id$date",
+                                    "recv_id$from_site_id",
+                                    "recv_id$recv_ref",
+                                    "recv_inv_item_id",
+                                    "recv_quantity",
+                                    ],
+                                    limit = None,
+                                    raw_data = True,
+                                    represent = True,
+                                    )
+    for transaction in transactions.rows:
+        raw = transaction["_row"]
+        inv_item_id = raw["inv_track_item.recv_inv_item_id"]
+        # Get the movement data dict for this item
+        if inv_item_id in movements:
+            item_data = movements[inv_item_id]
+        else:
+            movements[inv_item_id] = item_data = item_dict()
+        # Incoming quantities
+        quantity_in = raw["inv_track_item.recv_quantity"]
+        if quantity_in:
+            if raw["inv_recv.date"] > latest:
+                item_data["quantity_in_after"] += quantity_in
+                continue
+            else:
+                item_data["quantity_in"] += quantity_in
+        # Origin sites
+        sites = item_data["sites"]
+        from_site = raw["inv_recv.from_site_id"]
+        if from_site and from_site not in sites:
+            all_sites.add(from_site)
+            sites.append(from_site)
+        # GRN numbers
+        if raw["inv_recv.recv_ref"]:
+            documents = item_data["documents"]
+            documents.append(raw["inv_recv.recv_ref"])
+
+    # Outgoing shipments
+    query = (FS("send_inv_item_id").belongs(inv_item_ids))
+    if earliest:
+        query &= (FS("send_id$date") >= earliest)
+    outgoing = s3db.resource("inv_track_item", filter=query)
+    transactions = outgoing.select(["send_id$date",
+                                    "send_id$to_site_id",
+                                    "send_id$send_ref",
+                                    "send_inv_item_id",
+                                    "quantity",
+                                    ],
+                                    limit = None,
+                                    raw_data = True,
+                                    represent = True,
+                                    )
+    for transaction in transactions.rows:
+        raw = transaction["_row"]
+        inv_item_id = raw["inv_track_item.send_inv_item_id"]
+        # Get the movement data dict for this item
+        if inv_item_id in movements:
+            item_data = movements[inv_item_id]
+        else:
+            movements[inv_item_id] = item_data = item_dict()
+        # Outgoing quantities
+        quantity_in = raw["inv_track_item.quantity"]
+        if quantity_in:
+            if raw["inv_send.date"] > latest:
+                item_data["quantity_out_after"] += quantity_in
+                continue
+            else:
+                item_data["quantity_out"] += quantity_in
+        # Destination sites
+        sites = item_data["sites"]
+        to_site = raw["inv_send.to_site_id"]
+        if to_site and to_site not in sites:
+            all_sites.add(to_site)
+            sites.append(to_site)
+        # Waybill numbers
+        if raw["inv_send.send_ref"]:
+            documents = item_data["documents"]
+            documents.append(raw["inv_send.send_ref"])
+
+    # Bulk-represent sites (stores the representations in represent)
+    represent = s3db.inv_inv_item.site_id.represent
+    represent.bulk(list(all_sites))
+
+    # Extend the original rows in the data dict
+    for row in data.rows:
+        raw = row["_row"]
+
+        inv_item_id = raw["inv_inv_item.id"]
+        if inv_item_id in movements:
+            item_data = movements[inv_item_id]
+        else:
+            item_data = item_dict()
+
+        # Compute original and final quantity
+        total_in = item_data["quantity_in"]
+        total_out = item_data["quantity_out"]
+
+        current_quantity = raw["inv_inv_item.quantity"]
+        final_quantity = current_quantity - \
+                         item_data["quantity_in_after"] + \
+                         item_data["quantity_out_after"]
+        original_quantity = final_quantity - total_in + total_out
+
+        # Write into raw data (for aggregation)
+        raw["inv_inv_item.quantity"] = final_quantity
+        raw["inv_inv_item.quantity_in"] = total_in
+        raw["inv_inv_item.quantity_out"] = total_out
+        raw["inv_inv_item.original_quantity"] = original_quantity
+
+        # Copy into represented data (for rendering)
+        row["inv_inv_item.quantity"] = final_quantity
+        row["inv_inv_item.quantity_in"] = total_in
+        row["inv_inv_item.quantity_out"] = total_out
+        row["inv_inv_item.original_quantity"] = original_quantity
+
+        # Add sites
+        row["inv_inv_item.sites"] = represent.multiple(item_data["sites"],
+                                                        show_link = False,
+                                                        )
+        # Add GRN/Waybill numbers
+        row["inv_inv_item.documents"] = ", ".join(item_data["documents"])
+
+    # Return to S3GroupedItemsReport
+    return data.rows
 
 # =============================================================================
 def inv_adj_rheader(r):

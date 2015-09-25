@@ -10,6 +10,8 @@ except:
 from gluon import current
 from gluon.storage import Storage
 
+from s3 import S3Method
+
 def config(settings):
     """
         Template settings for IFRC's Resource Management System
@@ -1113,15 +1115,38 @@ def config(settings):
             @param title: the report title
         """
 
+        # Get organisation name and logo
         from layouts import OM
         name, logo = OM().render()
 
-        from gluon.html import DIV, H2, H4, TABLE, TR, TD
-        title = H2(title) if title else ""
+        from gluon.html import DIV, H2, H4, P, TABLE, TR, TD
 
+        # Report title and subtitle
+        title = H2(title) if title else ""
+        subtitle = ""
+
+        get_vars = r.get_vars
+        report = get_vars.get("report")
+        if report == "movements":
+            import datetime
+            from s3 import S3TypeConverter, S3DateTime
+            # Get earliest/latest date from filter
+            convert = S3TypeConverter.convert
+            dtstr = get_vars.get("_transaction.date__ge")
+            earliest = convert(datetime.datetime, dtstr) if dtstr else ""
+            dtstr = get_vars.get("_transaction.date__le")
+            latest = convert(datetime.datetime, dtstr) if dtstr else ""
+            # Convert into local calendar/format
+            if earliest:
+                earliest = S3DateTime.date_represent(earliest, utc=True)
+            if latest:
+                latest = S3DateTime.date_represent(latest, utc=True)
+            # Add as subtitle
+            if earliest or latest:
+                subtitle = P(" - ".join((earliest, latest)))
 
         output = TABLE(TR(TD(DIV(logo, H4(name))),
-                          TD(H2(title)),
+                          TD(DIV(title, subtitle)),
                           ),
                        )
 
@@ -1130,23 +1155,36 @@ def config(settings):
     # -----------------------------------------------------------------------------
     def customise_inv_inv_item_resource(r, tablename):
 
-        if r.method == "grouped" and \
-           r.get_vars.get("report") == "weight_and_volume":
+        s3db = current.s3db
 
-            s3db = current.s3db
-            from gluon import Field
-            table = s3db.inv_inv_item
-            table.total_weight = Field.Method("total_weight",
-                                              s3db.inv_item_total_weight,
-                                              )
-            table.total_volume = Field.Method("total_volume",
-                                              s3db.inv_item_total_volume,
-                                              )
-            current.s3db.configure("inv_inv_item",
-                                   extra_fields = ["item_id$weight",
-                                                   "item_id$volume",
-                                                   ],
-                                   )
+        resource = r.resource
+        if resource.tablename == "inv_inv_item" and r.method == "grouped":
+            report = r.get_vars.get("report")
+            if report == "weight_and_volume":
+                # Add field methods for total weight and volume
+                from gluon import Field
+                table = s3db.inv_inv_item
+                table.total_weight = Field.Method("total_weight",
+                                                  s3db.inv_item_total_weight,
+                                                  )
+                table.total_volume = Field.Method("total_volume",
+                                                  s3db.inv_item_total_volume,
+                                                  )
+                s3db.configure("inv_inv_item",
+                               extra_fields = ["item_id$weight",
+                                               "item_id$volume",
+                                               ],
+                               )
+            elif report == "movements":
+                # Inject a date filter for transactions
+                filter_widgets = resource.get_config("filter_widgets")
+                from s3 import S3DateFilter
+                date_filter = S3DateFilter("transaction_date",
+                                           label = T("Date"),
+                                           fieldtype = "date",
+                                           selector = "_transaction.date",
+                                           )
+                filter_widgets.insert(1, date_filter)
 
         # Stock Reports
         stock_reports = {"default": {
@@ -1192,8 +1230,32 @@ def config(settings):
                                           ],
                             "pdf_header": inv_pdf_header,
                             },
-                         # @todo
-                         #"movements": {},
+                         "movements": {
+                            "title": T("Stock Movements Report"),
+                            "fields": [(T("Warehouse"), "site_id$name"),
+                                       "item_id$item_category_id",
+                                       "bin",
+                                       "item_id$name",
+                                       (T("Origin/Destination"), "sites"),
+                                       (T("Documents"), "documents"),
+                                       (T("Initial Quantity"), "original_quantity"),
+                                       (T("Incoming"), "quantity_in"),
+                                       (T("Outgoing"), "quantity_out"),
+                                       (T("Final Quantity"), "quantity"),
+                                       ],
+                            "groupby": ["site_id",
+                                        ],
+                            "orderby": ["site_id$name",
+                                        "item_id$name",
+                                        ],
+                            "aggregate": [("sum", "original_quantity"),
+                                          ("sum", "quantity_in"),
+                                          ("sum", "quantity_out"),
+                                          ("sum", "quantity"),
+                                          ],
+                            "extract": s3db.inv_stock_movements,
+                            "pdf_header": inv_pdf_header,
+                            },
                          }
 
         current.s3db.configure("inv_inv_item",
@@ -1209,26 +1271,47 @@ def config(settings):
     # -----------------------------------------------------------------------------
     def customise_inv_send_resource(r, tablename):
 
-        current.s3db.configure("inv_send",
-                               list_fields = ["id",
-                                              "send_ref",
-                                              "req_ref",
-                                              #"sender_id",
-                                              "site_id",
-                                              "date",
-                                              "recipient_id",
-                                              "delivery_date",
-                                              "to_site_id",
-                                              "status",
-                                              #"driver_name",
-                                              #"driver_phone",
-                                              #"vehicle_plate_no",
-                                              #"time_out",
-                                              "comments",
-                                              ],
-                               )
+        s3db = current.s3db
+
+        s3db.configure("inv_send",
+                       list_fields = ["id",
+                                      "send_ref",
+                                      "req_ref",
+                                      #"sender_id",
+                                      "site_id",
+                                      "date",
+                                      "recipient_id",
+                                      "delivery_date",
+                                      "to_site_id",
+                                      "status",
+                                      #"driver_name",
+                                      #"driver_phone",
+                                      #"vehicle_plate_no",
+                                      #"time_out",
+                                      "comments",
+                                      ],
+                       )
+
+        # Custom Waybill
+        s3db.set_method("inv", "send",
+                       method = "form",
+                       action = PrintableShipmentForm,
+                       )
 
     settings.customise_inv_send_resource = customise_inv_send_resource
+
+    # -----------------------------------------------------------------------------
+    def customise_inv_recv_resource(r, tablename):
+
+        s3db = current.s3db
+
+        # Custom GRN
+        s3db.set_method("inv", "recv",
+                       method = "form",
+                       action = PrintableShipmentForm,
+                       )
+
+    settings.customise_inv_recv_resource = customise_inv_recv_resource
 
     # -----------------------------------------------------------------------------
     def customise_inv_warehouse_resource(r, tablename):
@@ -1903,7 +1986,6 @@ def config(settings):
         # Special cases for different NS
         root_org = current.auth.root_org_name()
         if root_org == HNRC:
-            HFA = None
             # @ToDo: Use Inter-American Framework instead (when extending to Zone office)
             # @ToDo: Add 'Business Line' (when extending to Zone office)
             settings.project.details_tab = True
@@ -1942,7 +2024,6 @@ def config(settings):
                             (T("Cumulative Status"), "overall_status_by_indicators"),
                             ]
         else:
-            HFA = "drr.hfa"
             objectives = "objectives"
             outputs = S3SQLInlineComponent(
                 "output",
@@ -2022,7 +2103,6 @@ def config(settings):
      'tooltip':'project_theme_help_fields(id,name)'
     })'''
             ),
-            HFA,
             objectives,
             "human_resource_id",
             # Disabled since we need organisation_id filtering to either organisation_type_id == RC or NOT
@@ -2222,7 +2302,7 @@ def config(settings):
 
         table = current.s3db.project_indicator
         table.definition.label = T("Indicator Definition")
-        table.measures.label = T("Indicator Criteria and Sources of Verification")
+        table.measures.label = T("Indicator Criteria")
 
     settings.customise_project_indicator_resource = customise_project_indicator_resource
 
@@ -2301,6 +2381,591 @@ def config(settings):
             # Already removed
             pass
 
+        # Custom Request Form
+        s3db.set_method("req", "req",
+                       method = "form",
+                       action = PrintableShipmentForm,
+                       )
+
     settings.customise_req_req_resource = customise_req_req_resource
+
+# =============================================================================
+class PrintableShipmentForm(S3Method):
+    """ REST Method Handler for Printable Shipment Forms """
+
+    # -------------------------------------------------------------------------
+    def apply_method(self, r, **attr):
+        """
+            Entry point for REST interface.
+
+            @param r: the S3Request instance
+            @param attr: controller attributes
+
+            @note: always returns PDF, disregarding the requested format
+        """
+
+        output = {}
+        if r.http == "GET":
+            if r.id:
+                tablename = r.tablename
+                if tablename == "req_req":
+                    output = self.request_form(r, **attr)
+                elif tablename == "inv_send":
+                    output = self.waybill(r, **attr)
+                elif tablename == "inv_recv":
+                    output = self.goods_received_note(r, **attr)
+                else:
+                    # Not supported
+                    r.error(405, current.ERROR.BAD_METHOD)
+            else:
+                # Record ID is required
+                r.error(400, current.ERROR.BAD_REQUEST)
+        else:
+            r.error(405, current.ERROR.BAD_METHOD)
+        return output
+
+    # -------------------------------------------------------------------------
+    def request_form(self, r, **attr):
+        """
+            Request Form
+
+            @param r: the S3Request instance
+            @param attr: controller attributes
+        """
+
+        T = current.T
+        s3db = current.s3db
+
+        # Master record (=req_req)
+        resource = s3db.resource(r.tablename,
+                                 id = r.id,
+                                 components = ["req_item"],
+                                 )
+
+        # Columns and data for the form header
+        header_fields = ["req_ref",
+                         "date",
+                         "date_required",
+                         (T("Deliver to"), "site_id"),
+                         (T("Reason for Request"), "purpose"),
+                         "requester_id",
+                         "comments",
+                         ]
+
+        header_data = resource.select(header_fields,
+                                      start = 0,
+                                      limit = 1,
+                                      represent = True,
+                                      show_links = False,
+                                      raw_data = True,
+                                      )
+        if not header_data:
+            r.error(404, current.ERROR.BAD_RECORD)
+
+        # Generate PDF header
+        pdf_header = self.request_form_header(header_data)
+
+        # Filename from send_ref
+        header_row = header_data.rows[0]
+        pdf_filename = header_row["_row"]["req_req.req_ref"]
+
+        # Component (=inv_track_item)
+        component = resource.components["req_item"]
+        body_fields = ["item_id",
+                       "item_pack_id",
+                       "quantity",
+                       "comments",
+                       ]
+
+        # Aggregate methods and column names
+        aggregate = [("sum", "req_req_item.quantity"),
+                     ]
+
+        # Generate the JSON data dict
+        json_data = self._json_data(component,
+                                    body_fields,
+                                    aggregate = aggregate,
+                                    )
+
+        # Generate the grouped items table
+        from s3 import S3GroupedItemsTable
+        output = S3GroupedItemsTable(component,
+                                     data = json_data,
+                                     totals_label = T("Total"),
+                                     title = T("Logistics Requisition"),
+                                     pdf_header = pdf_header,
+                                     pdf_footer = self.request_form_footer,
+                                     )
+
+        # ...and export it as PDF
+        return output.pdf(r, filename=pdf_filename)
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def request_form_header(cls, data):
+        """
+            Header for Request Forms
+
+            @param data: the S3ResourceData for the req_req
+        """
+
+        row = data.rows[0]
+        labels = dict((rfield.colname, rfield.label) for rfield in data.rfields)
+
+        from gluon import DIV, H2, H4, TABLE, TD, TH, TR, P
+
+        T = current.T
+
+        # Get organisation name and logo
+        from layouts import OM
+        name, logo = OM().render()
+
+        # The title
+        title = H2(T("Logistics Requisition"))
+
+        # Waybill details
+        row_ = lambda left, right, row=row, labels=labels: \
+                      cls._header_row(left, right, row=row, labels=labels)
+        dtable = TABLE(
+                    TR(TD(DIV(logo, H4(name)), _colspan = 2),
+                       TD(DIV(title), _colspan = 2),
+                       ),
+                    row_("req_req.req_ref", None),
+                    row_("req_req.date", "req_req.date_required"),
+                    row_("req_req.site_id", "req_req.purpose"),
+                    # @todo: contact info for requester
+                    row_("req_req.requester_id", None),
+                 )
+
+        # Waybill comments
+        ctable = TABLE(TR(TH(T("Comments"))),
+                       TR(TD(row["req_req.comments"])),
+                       )
+
+        return DIV(dtable, P("&nbsp;"), ctable)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def request_form_footer(r):
+        """
+            Footer for Request Forms
+
+            @param r: the S3Request
+        """
+
+        T = current.T
+        from gluon import TABLE, TD, TH, TR
+
+        return TABLE(TR(TH("&nbsp;"),
+                        TH(T("Name")),
+                        TH(T("Signature")),
+                        TH(T("Date")),
+                        ),
+                     TR(TH(T("Requester"))),
+                     TR(TH(T("Budget Administrator"))),
+                     TR(TH(T("Finance"))),
+                     )
+
+    # -------------------------------------------------------------------------
+    def waybill(self, r, **attr):
+        """
+            Waybill
+
+            @param r: the S3Request instance
+            @param attr: controller attributes
+        """
+
+        T = current.T
+        s3db = current.s3db
+
+        # Master record (=inv_send)
+        resource = s3db.resource(r.tablename,
+                                 id = r.id,
+                                 components = ["track_item"],
+                                 )
+
+        # Columns and data for the form header
+        header_fields = ["send_ref",
+                         "req_ref",
+                         "date",
+                         "delivery_date",
+                         (T("Origin"), "site_id"),
+                         (T("Destination"), "to_site_id"),
+                         "sender_id",
+                         "recipient_id",
+                         "transported_by",
+                         "transport_ref",
+                         (T("Delivery Address"), "to_site_id$location_id"),
+                         "comments",
+                         ]
+
+        header_data = resource.select(header_fields,
+                                      start = 0,
+                                      limit = 1,
+                                      represent = True,
+                                      show_links = False,
+                                      raw_data = True,
+                                      )
+        if not header_data:
+            r.error(404, current.ERROR.BAD_RECORD)
+
+        # Generate PDF header
+        pdf_header = self.waybill_header(header_data)
+
+        # Filename from send_ref
+        header_row = header_data.rows[0]
+        pdf_filename = header_row["_row"]["inv_send.send_ref"]
+
+        # Component (=inv_track_item)
+        component = resource.components["track_item"]
+        body_fields = ["bin",
+                       "item_id",
+                       "item_pack_id",
+                       "quantity",
+                       (T("Total Volume (m3)"), "total_volume"),
+                       (T("Total Weight (kg)"), "total_weight"),
+                       "supply_org_id",
+                       "inv_item_status",
+                       ]
+        # Any extra fields needed for virtual fields
+        component.configure(extra_fields = ["item_id$weight",
+                                            "item_id$volume",
+                                            ],
+                            )
+
+        # Aggregate methods and column names
+        aggregate = [("sum", "inv_track_item.quantity"),
+                     ("sum", "inv_track_item.total_volume"),
+                     ("sum", "inv_track_item.total_weight"),
+                     ]
+
+        # Generate the JSON data dict
+        json_data = self._json_data(component,
+                                    body_fields,
+                                    aggregate = aggregate,
+                                    )
+
+        # Generate the grouped items table
+        from s3 import S3GroupedItemsTable
+        output = S3GroupedItemsTable(component,
+                                     data = json_data,
+                                     totals_label = T("Total"),
+                                     title = T("Waybill"),
+                                     pdf_header = pdf_header,
+                                     pdf_footer = self.waybill_footer,
+                                     )
+
+        # ...and export it as PDF
+        return output.pdf(r, filename=pdf_filename)
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def waybill_header(cls, data):
+        """
+            Header for Waybills
+
+            @param data: the S3ResourceData for the inv_send
+        """
+
+        row = data.rows[0]
+        labels = dict((rfield.colname, rfield.label) for rfield in data.rfields)
+
+        from gluon import DIV, H2, H4, TABLE, TD, TH, TR, P
+
+        T = current.T
+
+        # Get organisation name and logo
+        from layouts import OM
+        name, logo = OM().render()
+
+        # The title
+        title = H2(T("Waybill"))
+
+        # Waybill details
+        row_ = lambda left, right, row=row, labels=labels: \
+                      cls._header_row(left, right, row=row, labels=labels)
+        dtable = TABLE(
+                    TR(TD(DIV(logo, H4(name)), _colspan = 2),
+                       TD(DIV(title), _colspan = 2),
+                       ),
+                    row_("inv_send.send_ref", "inv_send.req_ref"),
+                    row_("inv_send.date", "inv_send.delivery_date"),
+                    row_("inv_send.site_id", "inv_send.to_site_id"),
+                    row_("inv_send.sender_id", "inv_send.recipient_id"),
+                    # @todo: contact info row (which contact info?)
+                    row_("inv_send.transported_by", "inv_send.transport_ref"),
+                    row_("org_site.location_id", None),
+                 )
+
+        # Waybill comments
+        ctable = TABLE(TR(TH(T("Comments"))),
+                       TR(TD(row["inv_send.comments"])),
+                       )
+
+        return DIV(dtable, P("&nbsp;"), ctable)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def waybill_footer(r):
+        """
+            Footer for Waybills
+
+            @param r: the S3Request
+        """
+
+        T = current.T
+        from gluon import TABLE, TD, TH, TR
+
+        return TABLE(TR(TH(T("Shipment")),
+                        TH(T("Date")),
+                        TH(T("Function")),
+                        TH(T("Name")),
+                        TH(T("Signature")),
+                        TH(T("Status")),
+                        ),
+                     TR(TD(T("Sent by"))),
+                     TR(TD(T("Transported by"))),
+                     TR(TH(T("Received by")),
+                        TH(T("Date")),
+                        TH(T("Function")),
+                        TH(T("Name")),
+                        TH(T("Signature")),
+                        TH(T("Status")),
+                        ),
+                     TR(TD("&nbsp;")),
+                     )
+
+    # -------------------------------------------------------------------------
+    def goods_received_note(self, r, **attr):
+        """
+            GRN (Goods Received Note)
+
+            @param r: the S3Request instance
+            @param attr: controller attributes
+        """
+
+        T = current.T
+        s3db = current.s3db
+
+        # Master record (=inv_recv)
+        resource = s3db.resource(r.tablename,
+                                 id = r.id,
+                                 components = ["track_item"],
+                                 )
+
+        # Columns and data for the form header
+        header_fields = ["eta",
+                         "date",
+                         (T("Origin"), "from_site_id"),
+                         (T("Destination"), "site_id"),
+                         "sender_id",
+                         "recipient_id",
+                         "send_ref",
+                         "recv_ref",
+                         "comments",
+                         ]
+
+        header_data = resource.select(header_fields,
+                                      start = 0,
+                                      limit = 1,
+                                      represent = True,
+                                      show_links = False,
+                                      raw_data = True,
+                                      )
+        if not header_data:
+            r.error(404, current.ERROR.BAD_RECORD)
+
+        # Generate PDF header
+        pdf_header = self.goods_received_note_header(header_data)
+
+        # Filename from send_ref
+        header_row = header_data.rows[0]
+        pdf_filename = header_row["_row"]["inv_recv.recv_ref"]
+
+        # Component (=inv_track_item)
+        component = resource.components["track_item"]
+        body_fields = ["recv_bin",
+                       "item_id",
+                       "item_pack_id",
+                       "recv_quantity",
+                       (T("Total Volume (m3)"), "total_recv_volume"),
+                       (T("Total Weight (kg)"), "total_recv_weight"),
+                       "supply_org_id",
+                       "inv_item_status",
+                       ]
+        # Any extra fields needed for virtual fields
+        component.configure(extra_fields = ["item_id$weight",
+                                            "item_id$volume",
+                                            ],
+                            )
+
+        # Aggregate methods and column names
+        aggregate = [("sum", "inv_track_item.recv_quantity"),
+                     ("sum", "inv_track_item.total_recv_volume"),
+                     ("sum", "inv_track_item.total_recv_weight"),
+                     ]
+
+        # Generate the JSON data dict
+        json_data = self._json_data(component,
+                                    body_fields,
+                                    aggregate = aggregate,
+                                    )
+
+        # Generate the grouped items table
+        from s3 import S3GroupedItemsTable
+        output = S3GroupedItemsTable(component,
+                                     data = json_data,
+                                     totals_label = T("Total"),
+                                     title = T("Goods Received Note"),
+                                     pdf_header = pdf_header,
+                                     pdf_footer = self.goods_received_note_footer,
+                                     )
+
+        # ...and export it as PDF
+        return output.pdf(r, filename=pdf_filename)
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def goods_received_note_header(cls, data):
+        """
+            Header for Goods Received Notes
+
+            @param data: the S3ResourceData for the inv_recv
+        """
+
+        row = data.rows[0]
+        labels = dict((rfield.colname, rfield.label) for rfield in data.rfields)
+
+        from gluon import DIV, H2, H4, TABLE, TD, TH, TR, P
+
+        T = current.T
+
+        # Get organisation name and logo
+        from layouts import OM
+        name, logo = OM().render()
+
+        # The title
+        title = H2(T("Goods Received Note"))
+
+        # GRN details
+        row_ = lambda left, right, row=row, labels=labels: \
+                      cls._header_row(left, right, row=row, labels=labels)
+        dtable = TABLE(TR(TD(DIV(logo, H4(name)), _colspan = 2),
+                          TD(DIV(title), _colspan = 2),
+                          ),
+                       row_("inv_recv.eta", "inv_recv.date"),
+                       row_("inv_recv.from_site_id", "inv_recv.site_id"),
+                       row_("inv_recv.sender_id", "inv_recv.recipient_id"),
+                       row_("inv_recv.send_ref", "inv_recv.recv_ref"),
+                       )
+
+        # GRN comments
+        ctable = TABLE(TR(TH(T("Comments"))),
+                       TR(TD(row["inv_recv.comments"])),
+                       )
+
+        return DIV(dtable, P("&nbsp;"), ctable)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def goods_received_note_footer(r):
+        """
+            Footer for Goods Received Notes
+
+            @param r: the S3Request
+        """
+
+        T = current.T
+        from gluon import TABLE, TD, TH, TR
+
+        return TABLE(TR(TH(T("Delivered by")),
+                        TH(T("Date")),
+                        TH(T("Function")),
+                        TH(T("Name")),
+                        TH(T("Signature")),
+                        TH(T("Status")),
+                        ),
+                     TR(TD(T("&nbsp;"))),
+                     TR(TH(T("Received by")),
+                        TH(T("Date")),
+                        TH(T("Function")),
+                        TH(T("Name")),
+                        TH(T("Signature")),
+                        TH(T("Status")),
+                        ),
+                     TR(TD("&nbsp;")),
+                     )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _header_row(left, right, row=None, labels=None):
+        """
+            Helper function to generate a 2-column table row
+            for the PDF header
+
+            @param left: the column name for the left column
+            @param right: the column name for the right column,
+                          or None for an empty column
+            @param row: the S3ResourceData row
+            @param labels: dict of labels {colname: label}
+        """
+
+        from gluon import TD, TH, TR
+
+        if right:
+            header_row = TR(TH(labels[left]),
+                            TD(row[left]),
+                            TH(labels[right]),
+                            TD(row[right]),
+                            )
+        else:
+            header_row = TR(TH(labels[left]),
+                            TD(row[left], _colspan = 3),
+                            )
+        return header_row
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _json_data(component, list_fields, aggregate=None):
+        """
+            Extract, group and aggregate the data for the form body
+
+            @param component: the component (S3Resource)
+            @param list_fields: the columns for the form body
+                                (list of field selectors)
+            @param aggregate: aggregation methods and fields,
+                              a list of tuples (method, column name)
+        """
+
+        # Extract the data
+        data = component.select(list_fields,
+                                limit = None,
+                                raw_data = True,
+                                represent = True,
+                                show_links = False,
+                                )
+
+        # Get the column names and labels
+        columns = []
+        append_column = columns.append
+        labels = {}
+        for rfield in data.rfields:
+            colname = rfield.colname
+            append_column(colname)
+            labels[colname] = rfield.label
+
+        # Group and aggregate the items
+        from s3 import S3GroupedItems
+        gi = S3GroupedItems(data.rows,
+                            aggregate = aggregate,
+                            )
+
+        # Convert into JSON-serializable dict for S3GroupedItemsTable
+        json_data = gi.json(fields = columns,
+                            labels = labels,
+                            as_dict = True,
+                            )
+
+        return json_data
 
 # END =========================================================================
