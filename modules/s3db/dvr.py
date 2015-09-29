@@ -38,8 +38,8 @@ from s3layouts import S3AddResourceLink
 # =============================================================================
 class S3DVRModel(S3Model):
     """
-        Allow an individual or household to register to receive compensation
-            &/or Distributions of Relief Items
+        Allow an individual or household to register to receive
+        compensation and/or distributions of relief items
     """
 
     names = ("dvr_need",
@@ -56,45 +56,7 @@ class S3DVRModel(S3Model):
 
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
-
-        # ---------------------------------------------------------------------
-        # Needs
-        #
-        tablename = "dvr_need"
-        define_table(tablename,
-                     Field("name",
-                           label = T("name"),
-                           ),
-                     s3_comments(),
-                     *s3_meta_fields())
-
-        # CRUD Strings
-        ADD_NEED = T("Create Need")
-        crud_strings[tablename] = Storage(
-            label_create = ADD_NEED,
-            title_display = T("Need Details"),
-            title_list = T("Needs"),
-            title_update = T("Edit Need"),
-            label_list_button = T("List Needs"),
-            label_delete_button = T("Delete Need"),
-            msg_record_created = T("Need added"),
-            msg_record_modified = T("Need updated"),
-            msg_record_deleted = T("Need deleted"),
-            msg_list_empty = T("No Needs found")
-        )
-
-        represent = S3Represent(lookup=tablename, translate=True)
-        need_id = S3ReusableField("need_id", "reference %s" % tablename,
-                                  label = T("Need"),
-                                  ondelete = "RESTRICT",
-                                  represent = represent,
-                                  requires = IS_EMPTY_OR(
-                                                IS_ONE_OF(db, "dvr_need.id",
-                                                          represent)),
-                                  comment=S3AddResourceLink(c="dvr",
-                                                            f="need",
-                                                            label=ADD_NEED),
-                                  )
+        configure = self.configure
 
         # ---------------------------------------------------------------------
         # Case
@@ -106,11 +68,11 @@ class S3DVRModel(S3Model):
         #    4: T("Low"),
         #}
 
-        #dvr_status_opts = {
-        #    1: T("Open"),
-        #    2: T("Accepted"),
-        #    3: T("Rejected"),
-        #}
+        dvr_status_opts = {
+            1: T("Open"),
+            2: T("Pending"),
+            3: T("Closed"),
+        }
 
         tablename = "dvr_case"
         define_table(tablename,
@@ -120,7 +82,8 @@ class S3DVRModel(S3Model):
                            ),
                      self.org_organisation_id(),
                      self.pr_person_id(
-                        # @ToDo: Modify this to update location_id if the selected person has a Home Address already
+                        # @ToDo: Modify this to update location_id if the selected
+                        #        person has a Home Address already
                         comment = None,
                         represent = self.pr_PersonRepresent(show_link=True),
                         requires = IS_ADD_PERSON_WIDGET2(),
@@ -136,13 +99,12 @@ class S3DVRModel(S3Model):
                      #      label = T("Insurance"),
                      #      represent = s3_yes_no_represent,
                      #      ),
-                     #Field("status", "integer",
-                     #      default = 1,
-                     #      label = T("Status"),
-                     #      represent = lambda opt: \
-                     #           dvr_status_opts.get(opt, UNKNOWN_OPT),
-                     #      requires = IS_EMPTY_OR(IS_IN_SET(dvr_status_opts)),
-                     #      ),
+                     Field("status", "integer",
+                           default = 1,
+                           label = T("Status"),
+                           represent = S3Represent(options=dvr_status_opts),
+                           requires = IS_EMPTY_OR(IS_IN_SET(dvr_status_opts)),
+                           ),
                      s3_comments(),
                      *s3_meta_fields())
 
@@ -198,6 +160,7 @@ class S3DVRModel(S3Model):
 
         crud_form = S3SQLCustomForm("reference",
                                     "organisation_id",
+                                    "status",
                                     "person_id",
                                     S3SQLInlineComponent("current_address",
                                                          label = T("Current Address"),
@@ -221,10 +184,75 @@ class S3DVRModel(S3Model):
                                                     ),
                                     "comments",
                                     )
-        
-        self.configure(tablename,
-                       crud_form = crud_form,
-                       )
+
+        axes = ["organisation_id",
+                "case_need.need_id",
+                ]
+        levels = current.gis.get_relevant_hierarchy_levels()
+        for level in levels:
+            axes.append("current_address.location_id$%s" % level)
+        highest_lx = "current_address.location_id$%s" % levels[0]
+
+        facts = [(T("Number of Cases"), "count(id)"),
+                 ]
+
+        report_options = {"rows": axes,
+                          "cols": axes,
+                          "fact": facts,
+                          "defaults": {"rows": "case_need.need_id",
+                                       "cols": highest_lx,
+                                       "fact": facts[0],
+                                       "totals": True,
+                                       },
+                          }
+
+        configure(tablename,
+                  crud_form = crud_form,
+                  report_options = report_options,
+                  )
+
+        # ---------------------------------------------------------------------
+        # Needs
+        #
+        tablename = "dvr_need"
+        define_table(tablename,
+                     Field("name",
+                           label = T("Name"),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        ADD_NEED = T("Create Need")
+        crud_strings[tablename] = Storage(
+            label_create = ADD_NEED,
+            title_display = T("Need Details"),
+            title_list = T("Needs"),
+            title_update = T("Edit Need"),
+            label_list_button = T("List Needs"),
+            label_delete_button = T("Delete Need"),
+            msg_record_created = T("Need added"),
+            msg_record_modified = T("Need updated"),
+            msg_record_deleted = T("Need deleted"),
+            msg_list_empty = T("No Needs found")
+        )
+
+        represent = S3Represent(lookup=tablename, translate=True)
+        need_id = S3ReusableField("need_id", "reference %s" % tablename,
+                                  label = T("Need"),
+                                  ondelete = "RESTRICT",
+                                  represent = represent,
+                                  requires = IS_EMPTY_OR(
+                                                IS_ONE_OF(db, "dvr_need.id",
+                                                          represent)),
+                                  comment=S3AddResourceLink(c="dvr",
+                                                            f="need",
+                                                            label=ADD_NEED),
+                                  )
+
+        configure(tablename,
+                  deduplicate = S3Duplicate(),
+                  )
 
         # ---------------------------------------------------------------------
         # Cases <> Needs
@@ -237,7 +265,7 @@ class S3DVRModel(S3Model):
                      need_id(empty = False,
                              ondelete = "CASCADE",
                              ),
-                     s3_comments(),
+                     #s3_comments(),
                      *s3_meta_fields())
 
         # ---------------------------------------------------------------------

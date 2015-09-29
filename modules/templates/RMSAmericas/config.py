@@ -2309,43 +2309,40 @@ def config(settings):
     # -----------------------------------------------------------------------------
     def customise_project_indicator_data_resource(r, tablename):
 
-        # Only M & E should be updating the Actuals
-        has_role = current.auth.s3_has_role
-        if has_role("monitoring_evaluation") or has_role("ORG_ADMIN"):
-            pass
-        else:
-            current.s3db.project_indicator_data.value.writable = False
+        if r.method == "update":
+            has_role = current.auth.s3_has_role
+            if has_role("monitoring_evaluation") or has_role("ORG_ADMIN"):
+                # Normal Access
+                return
+            # Project Manager
+            table = current.s3db.project_indicator_data
+            if r.tablename == "project_indicator_data":
+                record_id = r.id
+            else:
+                record_id = r.component_id
+            record = current.db(table.id == record_id).select(table.value,
+                                                              limitby=(0, 1)
+                                                              ).first()
+            if record.value:
+                # Redirect to Read-only mode
+                # @ToDo: Remove 'Update' button from the read-only page
+                from gluon.http import redirect
+                redirect(r.url(method="read"))
+            else:
+                # Cannot edit anything
+                for f in table.fields:
+                    table[f].writable = False
+                # Except add a Real value
+                table.value.writable = True
 
     settings.customise_project_indicator_data_resource = customise_project_indicator_data_resource
 
     # -----------------------------------------------------------------------------
     def customise_project_location_resource(r, tablename):
 
-        from s3 import S3SQLCustomForm, S3SQLInlineComponentCheckbox
-        crud_form = S3SQLCustomForm(
-            "project_id",
-            "location_id",
-            # @ToDo: Grouped Checkboxes
-            S3SQLInlineComponentCheckbox(
-                "activity_type",
-                label = T("Activity Types"),
-                field = "activity_type_id",
-                cols = 3,
-                # Filter Activity Type by Sector
-                filter = {"linktable": "project_activity_type_sector",
-                          "lkey": "activity_type_id",
-                          "rkey": "sector_id",
-                          "lookuptable": "project_project",
-                          "lookupkey": "project_id",
-                          },
-                translate = True,
-                ),
-            "comments",
-            )
-
-        current.s3db.configure(tablename,
-                               crud_form = crud_form,
-                               )
+        table = current.s3db.project_location
+        table.name.readable = False
+        table.percentage.readable = table.percentage.writable = False
 
     settings.customise_project_location_resource = customise_project_location_resource
 
