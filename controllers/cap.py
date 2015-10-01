@@ -105,6 +105,35 @@ def alert():
     tablename = "cap_alert"
 
     def prep(r):
+        from s3.s3filter import S3OptionsFilter
+        itable = s3db.cap_info
+        rows = db(itable.expires < request.utcnow).select(itable.id,
+                                                          orderby=itable.id)
+        if rows:
+            expired_ids = ",".join([str(row.id) for row in rows])
+        else:
+            expired_ids = "*"            
+        rows = db(itable.expires >= request.utcnow).select(itable.id,
+                                                           orderby=itable.id)
+        if rows:
+            unexpired_ids = ",".join([str(row.id) for row in rows])
+        else:
+            unexpired_ids = "*"
+        
+        filter_widgets = s3db.get_config(tablename, "filter_widgets")
+        filter_widgets.insert(0, S3OptionsFilter("info.id",
+                                                 label = T("Expiration"),
+                                                 options = OrderedDict(
+                                                        [(expired_ids, T("Expired")),
+                                                         (unexpired_ids, T("Unexpired")),
+                                                         ("*", T("All")),
+                                                         ]),
+                                                 cols = 3,
+                                                 multiple = False,
+                                                 ))
+        s3db.configure(tablename,
+                       filter_widgets = filter_widgets,
+                       )
         
         if r.representation == "dl":
             # DataList: match list_layout
@@ -129,8 +158,8 @@ def alert():
                            "scope",
                            "info.event_type_id",
                            ]
-            
-            s3db.configure(tablename, 
+
+            s3db.configure(tablename,
                            list_fields = list_fields,
                            )
 
@@ -536,7 +565,7 @@ def alert():
                     # Do not show for the actual area
                     field = atable[f]
                     field.writable = field.readable = False
-                
+
                 # Auto assign the info_id to area if only one info segment
                 itable = s3db.cap_info
                 rows = db(itable.alert_id == r.record.id).select(itable.id)
@@ -544,7 +573,7 @@ def alert():
                     field = atable.info_id
                     field.default = rows.first().id
                     field.writable = field.readable = False
-                    
+
             elif r.component_name == "resource":
                 atable = r.component.table
                 # Limit to those for this Alert
@@ -554,7 +583,7 @@ def alert():
                                                           filterby="alert_id",
                                                           filter_opts=(r.id,),
                                                           ))
-                
+
                 # Auto assign the info_id to area if only one info segment
                 itable = s3db.cap_info
                 rows = db(itable.alert_id == r.record.id).select(itable.id)
@@ -625,7 +654,7 @@ def alert():
                 # First get the info_id
                 itable = s3db.cap_info
                 rows = db(itable.alert_id == lastid).select(itable.id)
-                    
+
                 rtable = s3db.cap_resource
                 r_unwanted_fields = set(("deleted_rb",
                                          "owned_by_user",
@@ -758,7 +787,7 @@ def template():
 
     viewing = request.vars["viewing"]
     tablename = "cap_alert"
-    
+
     if viewing:
         table, _id = viewing.strip().split(".")
         if table == tablename:
@@ -771,11 +800,11 @@ def template():
                        "incidents",
                        "info.category",
                        ]
-        
+
         s3db.configure(tablename,
                        list_fields = list_fields,
                        )
-        
+
         for f in ("identifier", "msg_type"):
             field = atable[f]
             field.writable = False
@@ -809,10 +838,10 @@ def template():
                                                       filterby="alert_id",
                                                       filter_opts=(r.id,),
                                                       ))
-            
+
             # Set is_template to true as only accessed by template
             rtable.is_template.default = True
-            
+
             # Auto assign the info_id to area if only one info segment
             itable = s3db.cap_info
             rows = db(itable.alert_id == r.record.id).select(itable.id)
@@ -820,7 +849,7 @@ def template():
                 field = rtable.info_id
                 field.default = rows.first().id
                 field.writable = field.readable = False
-            
+
         s3.crud_strings[tablename] = Storage(
             label_create = T("Create Template"),
             title_display = T("Template"),
@@ -868,19 +897,19 @@ def area():
         Should only be accessed for defining area template
     """
 
-    def prep(r):        
+    def prep(r):
         artable = s3db.cap_area
         for f in ("alert_id", "info_id"):
             field = artable[f]
             field.writable = False
             field.readable = False
-        
+
         # Area create from this controller is template
         artable.is_template.default = True
-        
+
         return True
     s3.prep = prep
-    
+
     def postp(r, output):
         if r.interactive and r.component and r.component_name == "area_location":
             # Modify action button to open cap/area_location directly.
@@ -908,7 +937,7 @@ def warning_priority():
 
 # -----------------------------------------------------------------------------
 def priority_get():
-    
+
     try:
         event_type_id = request.args[0]
     except:
@@ -919,7 +948,7 @@ def priority_get():
         except:
             result = current.xml.json_message(False, 400, "Invalid Event Type!")
         else:
-            # Get Event Name for Event ID 
+            # Get Event Name for Event ID
             etable = s3db.event_event_type
             item = db(etable.id == event_type_id).select(etable.name,
                                                          limitby=(0, 1)
@@ -931,7 +960,7 @@ def priority_get():
             else:
                 wptable = s3db.cap_warning_priority
                 query = (wptable.event_type == event_type_name)
-                      
+
                 rows = db(query).select(wptable.id,
                                         wptable.name,
                                         orderby = wptable.id)
@@ -942,26 +971,26 @@ def priority_get():
                                [{"id": "", "name": T("Undefined")}]
                     result = jsons(row_dict)
                 else:
-                    rows = db(wptable.event_type == "others").select(wptable.id, 
+                    rows = db(wptable.event_type == "others").select(wptable.id,
                                                                      wptable.name,
                                                                      orderby = wptable.id)
-            
+
                     row_dict = [{"id": r.id, "name": T(r.name)} for r in rows] + \
                                [{"id": "", "name": T("Undefined")}]
                     result = jsons(row_dict)
     finally:
         response.headers["Content-Type"] = "application/json"
         return result
-    
+
 # -----------------------------------------------------------------------------
 def compose():
     """
         Send message to the people with role of Alert Approval
     """
-    
+
     # For SAMBRO, permission is checked by the Authentication Roles but the permission
     # should be checked if CAP module is enabled
-    if settings.has_module("msg"):        
+    if settings.has_module("msg"):
         # Notify People with the role of Alert Approval via email and SMS
         pe_ids = get_vars.get("pe_ids")
         alert_id = get_vars.get("cap_alert.id")
@@ -972,7 +1001,7 @@ def compose():
         msg.send_by_pe_id(pe_ids, subject, message)
         msg.send_by_pe_id(pe_ids, subject, message, contact_method = "SMS")
         session.confirmation = T("Alert Approval Notified")
-        
+
     redirect(URL(c="cap", f="alert"))
 
 # -----------------------------------------------------------------------------
@@ -1270,19 +1299,19 @@ def set_priority_js():
     """ Output json for priority field """
 
     wptable = s3db.cap_warning_priority
-    
-    rows = db(wptable).select(wptable.name, 
-                              wptable.urgency, 
+
+    rows = db(wptable).select(wptable.name,
+                              wptable.urgency,
                               wptable.severity,
-                              wptable.certainty, 
+                              wptable.certainty,
                               wptable.color_code,
                               orderby = wptable.name,
                               )
-    
+
     from gluon.serializers import json as jsons
     p_settings = [(T(r.name), r.urgency, r.severity, r.certainty, r.color_code)\
                  for r in rows]
-    
+
     priority_conf = '''S3.cap_priorities=%s''' % jsons(p_settings)
     js_global = s3.js_global
     if not priority_conf in js_global:

@@ -230,7 +230,7 @@ def project():
                                                          filter_opts=[r.id],
                                                          )
                 # @ToDo: end_date cannot be before Project Start
-                #ctable.end_date.requires = 
+                #ctable.end_date.requires =
 
                 # Have a filter for indicator in indicator data report
                 #if r.method == "report":
@@ -542,9 +542,10 @@ def organisation():
     if settings.get_project_multiple_organisations():
         # e.g. IFRC
         s3db.configure("project_organisation",
-                       insertable=False,
-                       editable=False,
-                       deletable=False)
+                       deletable = False,
+                       editable = False,
+                       insertable = False,
+                       )
 
         #list_btn = A(T("Funding Report"),
         #             _href=URL(c="project", f="organisation",
@@ -562,7 +563,8 @@ def organisation():
                 ]
         rheader = lambda r: s3db.org_rheader(r, tabs)
         return s3_rest_controller("org", resourcename,
-                                  rheader=rheader)
+                                  rheader = rheader,
+                                  )
 
 # =============================================================================
 def beneficiary_type():
@@ -814,6 +816,9 @@ def partners():
 
     # Load model
     table = s3db.org_organisation
+
+    # Type is Mandatory (otherwise they can disappear from view)
+    # @ToDo: How to achieve this in an S3SQLInlineLink?
 
     # Modify CRUD Strings
     s3.crud_strings.org_organisation = Storage(
@@ -1096,7 +1101,7 @@ def indicator():
             field.readable = field.writable = False
 
         return True
-    s3.prep = prep                       
+    s3.prep = prep
 
     return s3_rest_controller()
 

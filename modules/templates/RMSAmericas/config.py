@@ -1959,6 +1959,32 @@ def config(settings):
         s3db = current.s3db
         table = s3db[tablename]
 
+        # Disable Map Tab on Summary View
+        # - until we can support multiple Points per Record
+        settings.ui.summary = ({"common": True,
+                                "name": "add",
+                                "widgets": [{"method": "create"}],
+                                },
+                               #{"common": True,
+                               # "name": "cms",
+                               # "widgets": [{"method": "cms"}]
+                               # },
+                               {"name": "table",
+                                "label": "Table",
+                                "widgets": [{"method": "datatable"}]
+                                },
+                               {"name": "charts",
+                                "label": "Report",
+                                "widgets": [{"method": "report",
+                                             "ajax_init": True}]
+                                },
+                               #{"name": "map",
+                               # "label": "Map",
+                               # "widgets": [{"method": "map",
+                               #              "ajax_init": True}],
+                               # },
+                               )
+
         # @ToDo: S3SQLInlineComponent for Project orgs
         # Get IDs for PartnerNS/Partner-Donor
         # db = current.db
@@ -2446,6 +2472,7 @@ class PrintableShipmentForm(S3Method):
                          (T("Deliver to"), "site_id"),
                          (T("Reason for Request"), "purpose"),
                          "requester_id",
+                         "site_id$site_id:inv_warehouse.contact",
                          "comments",
                          ]
 
@@ -2530,8 +2557,7 @@ class PrintableShipmentForm(S3Method):
                     row_("req_req.req_ref", None),
                     row_("req_req.date", "req_req.date_required"),
                     row_("req_req.site_id", "req_req.purpose"),
-                    # @todo: contact info for requester
-                    row_("req_req.requester_id", None),
+                    row_("req_req.requester_id", "inv_warehouse.contact"),
                  )
 
         # Waybill comments
@@ -2575,10 +2601,31 @@ class PrintableShipmentForm(S3Method):
         T = current.T
         s3db = current.s3db
 
+        # Component declarations to distinguish between the
+        # origin and destination warehouses
+        s3db.add_components("inv_send",
+                            inv_warehouse = ({"name": "origin",
+                                              "joinby": "site_id",
+                                              "pkey": "site_id",
+                                              "filterby": False,
+                                              "multiple": False,
+                                              },
+                                             {"name": "destination",
+                                              "joinby": "site_id",
+                                              "pkey": "to_site_id",
+                                              "filterby": False,
+                                              "multiple": False,
+                                              },
+                                             ),
+                            )
+
         # Master record (=inv_send)
         resource = s3db.resource(r.tablename,
                                  id = r.id,
-                                 components = ["track_item"],
+                                 components = ["origin",
+                                               "destination",
+                                               "track_item",
+                                               ],
                                  )
 
         # Columns and data for the form header
@@ -2589,10 +2636,12 @@ class PrintableShipmentForm(S3Method):
                          (T("Origin"), "site_id"),
                          (T("Destination"), "to_site_id"),
                          "sender_id",
+                         "origin.contact",
                          "recipient_id",
+                         "destination.contact",
                          "transported_by",
                          "transport_ref",
-                         (T("Delivery Address"), "to_site_id$location_id"),
+                         (T("Delivery Address"), "destination.location_id"),
                          "comments",
                          ]
 
@@ -2689,9 +2738,11 @@ class PrintableShipmentForm(S3Method):
                     row_("inv_send.date", "inv_send.delivery_date"),
                     row_("inv_send.site_id", "inv_send.to_site_id"),
                     row_("inv_send.sender_id", "inv_send.recipient_id"),
-                    # @todo: contact info row (which contact info?)
+                    row_("inv_origin_warehouse.contact",
+                         "inv_destination_warehouse.contact",
+                         ),
                     row_("inv_send.transported_by", "inv_send.transport_ref"),
-                    row_("org_site.location_id", None),
+                    row_("inv_destination_warehouse.location_id", None),
                  )
 
         # Waybill comments

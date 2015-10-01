@@ -3646,7 +3646,7 @@ class S3ProjectOrganisationModel(S3Model):
         #    # Check that total budget isn't exceeded
         #    # - either needs knowledge of exchange rates or forcing that org contribnutions are in same currency as total_budget which doesn't match real world
         #    btable = current.s3db.budget_budget
-        #    total_budget = 
+        #    total_budget =
         #    form.errors.amount = \
         #            current.T("Amount contributed cannot be greater than the total budget.")
 
@@ -4163,9 +4163,6 @@ class S3ProjectPlanningModel(S3Model):
                                              )
                         ),
                      indicator_id(),
-                     Field("name",
-                           label = T("Evaluation"),
-                           ),
                      # Populated Automatically
                      # Used for Timeplot &, in future, to ease changing the monitoring frequency
                      s3_date("start_date",
@@ -5241,9 +5238,9 @@ def project_status_represent(value):
         @ToDo: Configurable thresholds
     """
 
-    if value >= 86:
+    if value >= 80:
         colour = "00ff00" # Green
-    elif value  >= 66:
+    elif value  >= 60:
         colour = "ffff00" # Yellow
     else:
         colour = "ff0000" # Red
@@ -5313,7 +5310,9 @@ class S3ProjectProgrammeModel(S3Model):
                             requires = IS_EMPTY_OR(
                                             IS_ONE_OF(db, "project_programme.id",
                                                       represent,
-                                                      updateable = True,
+                                                      # We want to allow creation of Projects linked to Programmes
+                                                      # without giving update access to the Programme
+                                                      #updateable = True,
                                                       )),
                             sortby = "name",
                             comment = S3AddResourceLink(c="project",
