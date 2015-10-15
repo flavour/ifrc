@@ -29,7 +29,6 @@
 
 __all__ = ("S3CAPModel",
            "S3CAPAreaNameModel",
-           "cap_info_labels",
            "cap_alert_is_template",
            "cap_rheader",
            "cap_alert_list_layout",
@@ -294,6 +293,9 @@ class S3CAPModel(S3Model):
                            ),
                      Field("template_title",
                            label = T("Template Title"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Template Title"),
+                                                           T("Title for the template, to indicate to which event this template is related to"))),
                            ),
                      Field("template_settings", "text",
                            default = "{}",
@@ -302,11 +304,23 @@ class S3CAPModel(S3Model):
                      Field("identifier", unique=True, length=128,
                            default = self.generate_identifier,
                            label = T("Identifier"),
+                           requires = IS_MATCH('^[^,<&\s]+$',
+                                               error_message=current.T("Cannot be empty and Must not include spaces, commas, or restricted characters (< and &).")),
+                           # Dont Allow to change the identifier
+                           readable = True,
+                           writable = False,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("A unique identifier of the alert message"),
+                                                           T("A number or string uniquely identifying this message, assigned by the sender. Must notnclude spaces, commas or restricted characters (< and &)."))),
                            ),
                      Field("sender",
                            label = T("Sender"),
                            default = self.generate_sender,
-                           # @todo: can not be empty in alerts (validator!)
+                           requires = IS_MATCH('^[^,<&\s]+$',
+                                               error_message=current.T("Cannot be empty and Must not include spaces, commas, or restricted characters (< and &).")),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The identifier of the sender of the alert message"),
+                                                           T("This is guaranteed by assigner to be unique globally; e.g., may be based on an Internet domain name. Must not include spaces, commas or restricted characters (< and &)."))),
                            ),
                      s3_datetime("sent",
                                  default = "now",
@@ -318,18 +332,28 @@ class S3CAPModel(S3Model):
                            represent = lambda opt: \
                             cap_alert_status_code_opts.get(opt, UNKNOWN_OPT),
                            requires = IS_IN_SET(cap_alert_status_code_opts),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the appropriate handling of the alert message"),
+                                                           T("See options."))),
                            ),
                      Field("msg_type",
                            label = T("Message Type"),
+                           default = "Alert",
                            represent = lambda opt: \
                             cap_alert_msgType_code_opts.get(opt, UNKNOWN_OPT),
                            requires = IS_EMPTY_OR(
                                         IS_IN_SET(cap_alert_msgType_code_opts)
                                         ),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The nature of the alert message"),
+                                                           T("See options."))),
                            ),
                      Field("source",
                            label = T("Source"),
                            default = self.generate_source,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The text identifying the source of the alert message"),
+                                                           T("The particular source of this alert; e.g., an operator or a specific device."))),
                            ),
                      Field("scope",
                            label = T("Scope"),
@@ -338,14 +362,23 @@ class S3CAPModel(S3Model):
                            requires = IS_EMPTY_OR(
                                         IS_IN_SET(cap_alert_scope_code_opts)
                                         ),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the intended distribution of the alert message"),
+                                                           T("Who is this alert for?"))),
                            ),
                      # Text describing the restriction for scope=restricted
                      Field("restriction", "text",
                            label = T("Restriction"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The text describing the rule for limiting distribution of the restricted alert message"),
+                                                           T("Used when scope is 'Restricted'."))),
                            ),
                      Field("addresses", "list:string",
                            label = T("Recipients"),
                            represent = self.list_string_represent,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The group listing of intended recipients of the alert message"),
+                                                           T("Required when scope is 'Private', optional when scope is 'Public' or 'Restricted'. Each recipient shall be identified by an identifier or an address."))),
                            #@ToDo: provide a better way to add multiple addresses,
                            #       do not ask the user to delimit it themselves
                            #       this should eventually use the CAP contacts
@@ -355,9 +388,15 @@ class S3CAPModel(S3Model):
                            default = settings.get_cap_codes(),
                            label = T("Codes"),
                            represent = self.list_string_represent,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Codes for special handling of the message"),
+                                                           T("Any user-defined flags or special codes used to flag the alert message for special handling."))),
                            ),
                      Field("note", "text",
                            label = T("Note"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The text describing the purpose or significance of the alert message"),
+                                                           T("The message note is primarily intended for use with status 'Exercise' and message type 'Error'"))),
                            ),
                      Field("reference", "list:reference cap_alert",
                            label = T("Reference"),
@@ -366,6 +405,9 @@ class S3CAPModel(S3Model):
                                                    field_sep = " - ",
                                                    multiple = True,
                                                    ),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The group listing identifying earlier message(s) referenced by the alert message"),
+                                                           T("The extended message identifier(s) (in the form sender,identifier,sent) of an earlier CAP message or messages referenced by this one."))),
                            # @ToDo: This should not be manually entered,
                            #        needs a widget
                            #widget = S3ReferenceWidget(table,
@@ -383,6 +425,9 @@ class S3CAPModel(S3Model):
                                                   sort = True,
                                                   )),
                            widget = S3MultiSelectWidget(selectedList = 10),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("A list of incident(s) referenced by the alert message"),
+                                                           T("Used to collate multiple messages referring to different aspects of the same incident. If multiple incident identifiers are referenced, they SHALL be separated by whitespace.  Incident names including whitespace SHALL be surrounded by double-quotes."))),
                            ),
                      # approved_on field for recording when the alert was approved
                      s3_datetime("approved_on",
@@ -565,30 +610,70 @@ class S3CAPModel(S3Model):
                      Field("priority_rank", "integer",
                            label = T("Priority Rank"),
                            length = 2,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Priority Rank"),
+                                                           T("The Priority Rank is basically to give it a ranking 1, 2, ..., n. That way we know 1 is the most important of the chain and n is lowest element. For eg. (1, Signal 1), (2, Signal 2)..., (5, Signal 5) to enumerate the priority for cyclone."))),
                            ),
                      Field("event_code",
                            label = T("Event Code"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Event Code"),
+                                                           T("Code (key) for the event like for eg. (2001, Typhoon), (2002, Flood)"))),
                            ),
                      Field("name", notnull=True, length=64,
                            label = T("Name"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Name"),
+                                                           T("The actual name for the warning priority, for eg. Typhoons in Philippines have five priority name (PSWS# 1, PSWS# 2, PSWS# 3, PSWS# 4 and PSWS# 5)"))),
                            ),
                      Field("event_type",
                            label = T("Event Type"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Event Type"),
+                                                           T("The Event to which this priority is targeted for. The 'Event Type' is the name of the standard Eden Event Type . These are available at /eden/event/event_type (The 'Event Type' should be exactly same as in /eden/event/event_type - case sensitive). For those events which are not in /eden/event/event_type but having the warning priority, you can create the event type using /eden/event/event_type/create and they will appear in this list."))),
                            ),
                      Field("urgency",
                            label = T("Urgency"),
                            requires = IS_IN_SET(cap_info_urgency_opts),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the urgency of the subject event of the alert message"),
+                                                           T("The urgency, severity, and certainty of the information collectively distinguish less emphatic from more emphatic messages." +
+                                                             "'Immediate' - Responsive action should be taken immediately" +
+                                                             "'Expected' - Responsive action should be taken soon (within next hour)" +
+                                                             "'Future' - Responsive action should be taken in the near future" +
+                                                             "'Past' - Responsive action is no longer required" +
+                                                             "'Unknown' - Urgency not known"))),
                            ),
                      Field("severity",
                            label = T("Severity"),
                            requires = IS_IN_SET(cap_info_severity_opts),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the severity of the subject event of the alert message"),
+                                                           T("The urgency, severity, and certainty elements collectively distinguish less emphatic from more emphatic messages." +
+                                                             "'Extreme' - Extraordinary threat to life or property" +
+                                                             "'Severe' - Significant threat to life or property" +
+                                                             "'Moderate' - Possible threat to life or property" +
+                                                             "'Minor' - Minimal to no known threat to life or property" +
+                                                             "'Unknown' - Severity unknown"))),
                            ),
                      Field("certainty",
                            label = T("Certainty"),
                            requires = IS_IN_SET(cap_info_certainty_opts),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the certainty of the subject event of the alert message"),
+                                                           T("The urgency, severity, and certainty elements collectively distinguish less emphatic from more emphatic messages." +
+                                                             "'Observed' - Determined to have occurred or to be ongoing" +
+                                                             "'Likely' - Likely (p > ~50%)" +
+                                                             "'Possible' - Possible but not likely (p <= ~50%)" +
+                                                             "'Unlikely' - Not expected to occur (p ~ 0)" +
+                                                             "'Unknown' - Certainty unknown"))),
                            ),
                      Field("color_code",
                            label = T("Color Code"),
+                           widget = S3ColorPickerWidget(),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The color code for this priority"),
+                                                           T("Pick from the color widget the color that is associated to this priority of the event. The color code is in hex format"))),
                            ),
                      *s3_meta_fields())
 
@@ -640,13 +725,18 @@ class S3CAPModel(S3Model):
                            ),
                      Field("language",
                            default = "en-US",
+                           label = T("Language"),
                            represent = lambda opt: languages.get(opt,
                                                                  UNKNOWN_OPT),
                            requires = IS_EMPTY_OR(
                                         IS_IN_SET(languages)
                                         ),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the language of the information"),
+                                                           T("Code Values: Natural language identifier per [RFC 3066]. If not present, an implicit default value of 'en-US' will be assumed. Edit settings.cap.languages in 000_config.py to add more languages. See <a href=\"%s\">here</a> for a full list.") % "http://www.i18nguy.com/unicode/language-identifiers.html")),
                            ),
                      Field("category", "list:string", # 1 or more allowed
+                           label = T("Category"),
                            represent = S3Represent(options = cap_info_category_opts,
                                                    multiple = True,
                                                    ),
@@ -654,11 +744,21 @@ class S3CAPModel(S3Model):
                                                 multiple = True,
                                                 ),
                            widget = S3MultiSelectWidget(selectedList = 10),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the category of the subject event of the alert message"),
+                                                           T("You may select multiple categories by holding down control and then selecting the items."))),
                            ),
                      Field("event",
                            label = T("Event"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The text denoting the type of the subject event of the alert message"),
+                                                           T("If not specified, will the same as the Event Type."))),
                            ),
                      self.event_type_id(empty = False,
+                                        label = T("Event Type"),
+                                        comment = DIV(_class="tooltip",
+                                                      _title="%s|%s" % (T("Event Type of the alert message"),
+                                                                        T("Event field above is more general. And this Event Type is classification of event. For eg. Event can be 'Terrorist Attack' and Event Type can be either 'Terrorist Bomb Explosion' or 'Terrorist Chemical Waefare Attack'. If not specified, will the same as the Event Type."))),
                                         script = '''
                             $.filterOptionsS3({
                              'trigger':'event_type_id',
@@ -668,76 +768,160 @@ class S3CAPModel(S3Model):
                              })'''
                      ),
                      Field("response_type", "list:string", # 0 or more allowed
+                           label = T("Response Type"),
                            represent = S3Represent(options = cap_info_responseType_opts,
                                                    multiple = True,
                                                    ),
                            requires = IS_IN_SET(cap_info_responseType_opts,
                                                 multiple = True),
                            widget = S3MultiSelectWidget(selectedList = 10),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the type of action recommended for the target audience"),
+                                                           T("Multiple response types can be selected by holding down control and then selecting the items"))),
                            ),
                      Field("priority", "reference cap_warning_priority",
+                           label = T("Priority"),
                            represent = priority_represent,
                            requires = IS_EMPTY_OR(
                                         IS_ONE_OF(db, "cap_warning_priority.id",
                                                   priority_represent
                                                   ),
                                         ),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Priority of the alert message"),
+                                                           T("Defines the priority of the alert message. Selection of the priority automatically sets the value for 'Urgency', 'Severity' and 'Certainty'"))),
                            ),
                      Field("urgency",
+                           label = T("Urgency"),
                            represent = lambda opt: \
                             cap_info_urgency_opts.get(opt, UNKNOWN_OPT),
                            # Empty For Template, checked onvalidation hook
                            requires = IS_EMPTY_OR(
                                         IS_IN_SET(cap_info_urgency_opts)),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the urgency of the subject event of the alert message"),
+                                                           T("The urgency, severity, and certainty of the information collectively distinguish less emphatic from more emphatic messages." +
+                                                             "'Immediate' - Responsive action should be taken immediately" +
+                                                             "'Expected' - Responsive action should be taken soon (within next hour)" +
+                                                             "'Future' - Responsive action should be taken in the near future" +
+                                                             "'Past' - Responsive action is no longer required" +
+                                                             "'Unknown' - Urgency not known"))),
                            ),
                      Field("severity",
+                           label = T("Severity"),
                            represent = lambda opt: \
                             cap_info_severity_opts.get(opt, UNKNOWN_OPT),
                            # Empty For Template, checked onvalidation hook
                            requires = IS_EMPTY_OR(
                                         IS_IN_SET(cap_info_severity_opts)),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the severity of the subject event of the alert message"),
+                                                           T("The urgency, severity, and certainty elements collectively distinguish less emphatic from more emphatic messages." +
+                                                             "'Extreme' - Extraordinary threat to life or property" +
+                                                             "'Severe' - Significant threat to life or property" +
+                                                             "'Moderate' - Possible threat to life or property" +
+                                                             "'Minor' - Minimal to no known threat to life or property" +
+                                                             "'Unknown' - Severity unknown"))),
                            ),
                      Field("certainty",
+                           label = T("Certainty"),
                            represent = lambda opt: \
                             cap_info_certainty_opts.get(opt, UNKNOWN_OPT),
                            # Empty For Template, checked onvalidation hook
                            requires = IS_EMPTY_OR(
                                         IS_IN_SET(cap_info_certainty_opts)),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Denotes the certainty of the subject event of the alert message"),
+                                                           T("The urgency, severity, and certainty elements collectively distinguish less emphatic from more emphatic messages." +
+                                                             "'Observed' - Determined to have occurred or to be ongoing" +
+                                                             "'Likely' - Likely (p > ~50%)" +
+                                                             "'Possible' - Possible but not likely (p <= ~50%)" +
+                                                             "'Unlikely' - Not expected to occur (p ~ 0)" +
+                                                             "'Unknown' - Certainty unknown"))),
                            ),
-                     Field("audience", "text"),
+                     Field("audience", "text",
+                           label = T("Audience"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Audience"),
+                                                           T("The intended audience of the alert message"))),
+                           ),
                      Field("event_code", "text",
+                           label = T("Event Code"),
                            default = settings.get_cap_event_codes(),
                            represent = S3KeyValueWidget.represent,
                            widget = S3KeyValueWidget(),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("A system-specific code identifying the event type of the alert message"),
+                                                           T("Any system-specific code for events, in the form of key-value pairs. (e.g., SAME, FIPS, ZIP)."))),
                            ),
                      s3_datetime("effective",
+                                 label = T("Effective"),
                                  default = "now",
+                                 comment = DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("The effective time of the information of the alert message"),
+                                                                 T("If not specified, the effective time shall be assumed to be the same the time the alert was sent."))),
                                  ),
-                     s3_datetime("onset"),
+                     s3_datetime("onset",
+                                 label = T("Onset"),
+                                 comment = DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("Onset"),
+                                                                 T("The expected time of the beginning of the subject event of the alert message"))),
+                                 ),
                      s3_datetime("expires",
+                                 label = T("Expires at"),
                                  past = 0,
                                  default = self.get_expirydate,
+                                 comment = DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("The expiry time of the information of the alert message"),
+                                                                 T("If this item is not provided, each recipient is free to enforce its own policy as to when the message is no longer in effect."))),
                                  ),
-                     Field("sender_name"),
-                     Field("headline"),
-                     Field("description", "text"),
-                     Field("instruction", "text"),
-                     Field("contact", "text"),
+                     Field("sender_name",
+                           label = T("Sender's name"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The text naming the originator of the alert message"),
+                                                           T("The human-readable name of the agency or authority issuing this alert."))),
+                           ),
+                     Field("headline",
+                           label = T("Headline"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The text headline of the alert message"),
+                                                           T("A brief human-readable headline.  Note that some displays (for example, short messaging service devices) may only present this headline; it should be made as direct and actionable as possible while remaining short.  160 characters may be a useful target limit for headline length."))),
+                           ),
+                     Field("description", "text",
+                           label = T("Description"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The subject event of the alert message"),
+                                                           T("An extended human readable description of the hazard or event that occasioned this message."))),
+                           ),
+                     Field("instruction", "text",
+                           label = T("Instruction"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The recommended action to be taken by recipients of the alert message"),
+                                                           T("An extended human readable instruction to targeted recipients.  If different instructions are intended for different recipients, they should be represented by use of multiple information blocks. You can use a different information block also to specify this information in a different language."))),
+                           ),
+                     Field("contact", "text",
+                           label = T("Contact information"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Contact"),
+                                                           T("The contact for follow-up and confirmation of the alert message"))),
+                           ),
                      Field("web",
+                           label = T("URL"),
                            requires = IS_EMPTY_OR(IS_URL()),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("A URL associating additional information with the alert message"),
+                                                           T("A full, absolute URI for an HTML page or other text resource with additional or reference information regarding this alert."))),
                            ),
                      Field("parameter", "text",
                            default = settings.get_cap_parameters(),
                            label = T("Parameters"),
                            represent = S3KeyValueWidget.represent,
                            widget = S3KeyValueWidget(),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("A system-specific additional parameter associated with the alert message"),
+                                                           T("Any system-specific datum, in the form of key-value pairs."))),
                            ),
                      *s3_meta_fields())
-
-        # @ToDo: Move labels into main define_table (can then be lazy & performs better anyway)
-        info_labels = cap_info_labels()
-        for field in info_labels:
-            db.cap_info[field].label = info_labels[field]
 
         if crud_strings["cap_template_info"]:
             crud_strings[tablename] = crud_strings["cap_template_info"]
@@ -807,24 +991,42 @@ class S3CAPModel(S3Model):
                      self.super_link("doc_id", "doc_entity"),
                      Field("resource_desc",
                            requires = IS_NOT_EMPTY(),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The type and content of the resource file"),
+                                                           T("The human-readable text describing the type and content, such as 'map' or 'photo', of the resource file."))),
                            ),
                      Field("mime_type",
                            requires = IS_NOT_EMPTY(),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The identifier of the MIME content type and sub-type describing the resource file"),
+                                                           T("MIME content type and sub-type as described in [RFC 2046]. (As of this document, the current IANA registered MIME types are listed at http://www.iana.org/assignments/media-types/)"))),
                            ),
                      Field("size", "integer",
                            writable = False,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The integer indicating the size of the resource file"),
+                                                           T("Approximate size of the resource file in bytes."))),
                            ),
                      Field("uri",
                            # needs a special validation
                            writable = False,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The identifier of the hyperlink for the resource file"),
+                                                           T("A full absolute URI, typically a Uniform Resource Locator that can be used to retrieve the resource over the Internet."))),
                            ),
                      #Field("file", "upload"),
                      Field("deref_uri", "text",
                            readable = False,
                            writable = False,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Deref URI"),
+                                                           T("The base-64 encoded data content of the resource file"))),
                            ),
                      Field("digest",
                            writable = False,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The code representing the digital digest ('hash') computed from the resource file"),
+                                                           T("Calculated using the Secure Hash Algorithm (SHA-1)."))),
                            ),
                      *s3_meta_fields())
 
@@ -848,14 +1050,20 @@ class S3CAPModel(S3Model):
                                     "is_template",
                                     "resource_desc",
                                     S3SQLInlineComponent("image",
-                                                         label=T("Image"),
-                                                         fields=["file",
-                                                                 ],
+                                                         label = T("Image"),
+                                                         fields = ["file",
+                                                                  ],
+                                                         comment = DIV(_class="tooltip",
+                                                                       _title="%s|%s" % (T("Image"),
+                                                                                         T("Attach an image that provides extra information about the event."))),
                                                          ),
                                     S3SQLInlineComponent("document",
-                                                         label=T("Document"),
-                                                         fields=["file",
-                                                                 ],
+                                                         label = T("Document"),
+                                                         fields = ["file",
+                                                                   ],
+                                                         comment = DIV(_class="tooltip",
+                                                                       _title="%s|%s" % (T("Document"),
+                                                                                         T("Attach document that provides extra information about the event."))),
                                                          ),
                                     )
         configure(tablename,
@@ -910,7 +1118,10 @@ class S3CAPModel(S3Model):
         tablename = "cap_area"
         define_table(tablename,
                      alert_id(),
-                     info_id(),
+                     info_id(comment = DIV(_class="tooltip",
+                                           _title="%s|%s" % (T("Information segment for this Area segment"),
+                                                             T("To which Information segment is this Area segment related. Note an Information segment can have multiple Area segments."))),
+                             ),
                      Field("is_template", "boolean",
                            default = False,
                            readable = False,
@@ -919,15 +1130,27 @@ class S3CAPModel(S3Model):
                      Field("name",
                            label = T("Area Description"),
                            required = True,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The affected area of the alert message"),
+                                                           T("A text description of the affected area."))),
                            ),
                      Field("altitude", "integer", # Feet above Sea-level in WGS84 (Specific or Minimum is using a range)
                            label = T("Altitude"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The specific or minimum altitude of the affected area"),
+                                                           T("If used with the ceiling element this value is the lower limit of a range. Otherwise, this value specifies a specific altitude. The altitude measure is in feet above mean sea level."))),
                            ),
                      Field("ceiling", "integer", # Feet above Sea-level in WGS84 (Maximum)
                            label = T("Ceiling"),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("The maximum altitude of the affected area"),
+                                                           T("must not be used except in combination with the 'altitude' element. The ceiling measure is in feet above mean sea level."))),
                            ),
                      # Only used for Templates
-                     self.event_type_id(script = '''
+                     self.event_type_id(comment = DIV(_class="tooltip",
+                                                      _title="%s|%s" % (T("Event Type of this predefined alert area"),
+                                                                        T("Event Type relating to this predefined area."))),
+                                        script = '''
                             $.filterOptionsS3({
                              'trigger':'event_type_id',
                              'target':'priority',
@@ -945,6 +1168,9 @@ class S3CAPModel(S3Model):
                                                   priority_represent
                                                   ),
                                        ),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Priority of the Event Type"),
+                                                           T("Defines the priority of the Event Type for this predefined area."))),
                            ),
                      *s3_meta_fields())
 
@@ -973,6 +1199,9 @@ class S3CAPModel(S3Model):
                                                          label = "",
                                                          multiple = False,
                                                          fields = [("", "location_id")],
+                                                         comment = DIV(_class="tooltip",
+                                                                       _title="%s|%s" % (T("Geolocation"),
+                                                                                         T("The paired values of points defining a polygon that delineates the affected area of the alert message"))),
                                                          ),
                                     S3SQLInlineComponent("tag",
                                                          name = "tag",
@@ -980,7 +1209,9 @@ class S3CAPModel(S3Model):
                                                          fields = ["tag",
                                                                    "value",
                                                                    ],
-
+                                                         comment = DIV(_class="tooltip",
+                                                                       _title="%s|%s" % (T("The geographic code delineating the affected area"),
+                                                                                         T("Any geographically-based code to describe a message target area, in the form. The key is a user-assigned string designating the domain of the code, and the content of value is a string (which may represent a number) denoting the value itself (e.g., name='ZIP' and value='54321'). This should be used in concert with an equivalent description in the more universally understood polygon and circle forms whenever possible."))),
                                                          ),
                                     "altitude",
                                     "ceiling",
@@ -993,7 +1224,7 @@ class S3CAPModel(S3Model):
         configure(tablename,
                   #create_next = URL(f="area", args=["[id]", "location"]),
                   # Old: Shouldn't be required if all UI actions go through alert controller & XSLT configured appropriately
-                  create_onaccept = update_alert_id(tablename),
+                  onvalidation = self.cap_area_onvalidation,
                   crud_form = crud_form,
                   )
 
@@ -1272,6 +1503,8 @@ class S3CAPModel(S3Model):
         info = db(itable.id == info_id).select(itable.alert_id,
                                                itable.event,
                                                itable.event_type_id,
+                                               itable.event_code,
+                                               itable.parameter,
                                                limitby=(0, 1)).first()
         if info:
             alert_id = info.alert_id
@@ -1281,6 +1514,15 @@ class S3CAPModel(S3Model):
             if not info.event:
                 set_.update(event = current.db.cap_info.event_type_id.\
                             represent(info.event_type_id))
+            event_code = info.event_code
+            parameter = info.parameter
+            # For prepopulating
+            if event_code and ("|{" in event_code or "||" in event_code):
+                fstring = json_formatter(event_code)
+                set_.update(event_code = fstring)
+            if parameter and ("|{" in parameter or "||" in parameter):
+                fstring = json_formatter(parameter)
+                set_.update(parameter = fstring)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1319,7 +1561,33 @@ class S3CAPModel(S3Model):
         if alert_id:
             db = current.db
             approved_on = record["approved_on"]
-            db(db.cap_alert.id == alert_id).update(approved_on = current.request.utcnow)
+            table = db.cap_alert
+            query = table.id == alert_id
+            db(query).update(approved_on = current.request.utcnow)
+
+            # Notify the owner of the record about approval
+            row = db(query).select(table.owned_by_user,
+                                   limitby=(0, 1)).first()
+            if row.owned_by_user:
+                settings = current.deployment_settings
+                pe_id = current.auth.s3_user_pe_id(int(row.owned_by_user))
+                subject = "%s: Alert Approved" % settings.get_system_name_short()
+                url = "%s%s" % (settings.get_base_public_url(),
+                                URL(c="cap", f="alert", args=[alert_id]))
+                message = current.T("This alert that you requested to review has been approved:\n\n%s") % url
+                current.msg.send_by_pe_id(pe_id, subject, message)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_area_onvalidation(form):
+        """
+            Custom Form Validation
+        """
+
+        form_vars = form.vars
+        if form_vars.get("ceiling") and not form_vars.get("altitude"):
+            form.errors["altitude"] = \
+            current.T("'Altitude' field is mandatory if using 'Ceiling' field.")
 
 # =============================================================================
 class S3CAPAreaNameModel(S3Model):
@@ -1364,32 +1632,24 @@ class S3CAPAreaNameModel(S3Model):
         return {}
 
 # =============================================================================
-def cap_info_labels():
+def json_formatter(fstring):
     """
-        Labels for CAP info segments
+        Properly format the Key-Value import string to json
     """
 
-    T = current.T
-    return dict(language=T("Language"),
-                category=T("Category"),
-                event=T("Event"),
-                response_type=T("Response type"),
-                urgency=T("Urgency"),
-                severity=T("Severity"),
-                certainty=T("Certainty"),
-                audience=T("Audience"),
-                event_code=T("Event code"),
-                effective=T("Effective"),
-                onset=T("Onset"),
-                expires=T("Expires at"),
-                sender_name=T("Sender's name"),
-                headline=T("Headline"),
-                description=T("Description"),
-                instruction=T("Instruction"),
-                web=T("URL"),
-                contact=T("Contact information"),
-                parameter=T("Parameters")
-                )
+    if fstring == "||":
+        fstring = "[]"
+    else:
+        fstring = fstring.replace(" ", "") # Remove space
+        fstring = fstring.replace("|", "")
+        fstring = fstring.replace("}{", "},{")
+        fstring = fstring.replace("{u'", "{'")
+        fstring = fstring.replace(":u'", ":'")
+        fstring = fstring.replace(",u'", ",'")
+        fstring = fstring.replace("'", '"')
+        fstring = "[%s]" % fstring
+
+    return fstring
 
 # =============================================================================
 def cap_alert_is_template(alert_id):
@@ -1453,7 +1713,7 @@ def cap_rheader(r):
                         error = DIV(T("You need to create at least one alert information item in order to be able to broadcast this alert!"),
                                     _class="error")
                         export_btn = ""
-                        submit_btn = None
+                        action_btn = None
                     else:
                         error = ""
                         export_btn = A(DIV(_class="export_cap_large"),
@@ -1461,43 +1721,59 @@ def cap_rheader(r):
                                        _target="_blank",
                                        )
 
-                        # Display 'Submit for Approval' based on permission
-                        # and deployment settings
+                        # Display 'Submit for Approval', 'Publish Alert' or
+                        # 'Review Alert' based on permission and deployment settings
                         if not current.request.get_vars.get("_next") and \
-                           not r.record.approved_by and \
                            current.deployment_settings.get_cap_authorisation() and \
-                           current.auth.s3_has_permission("update", "cap_alert",
-                                                          record_id=alert_id):
-                            # Get the user ids for the role alert_approver
+                           record.approved_by is None:
                             db = current.db
-                            agtable = db.auth_group
-                            group_rows = db(agtable.role == "Alert Approver").\
-                                           select(agtable.id)
-                            if group_rows:
-                                group_members = current.auth.s3_group_members
-                                user_pe_id = current.auth.s3_user_pe_id
-                                for group_row in group_rows:
-                                    group_id = group_row.id
-                                    user_ids = group_members(group_id) # List of user_ids
-                                    pe_ids = [] # List of pe_ids
-                                    pe_append = pe_ids.append
-                                    for user_id in user_ids:
-                                        pe_append(user_pe_id(int(user_id)))
-
-                                submit_btn = A(T("Submit for Approval"),
-                                               _href = URL(f = "compose",
-                                                           vars = {"cap_alert.id": record.id,
-                                                                   "pe_ids": pe_ids,
-                                                                   },
-                                                           ),
-                                               _class = "action-btn confirm-btn"
-                                               )
-                                current.response.s3.jquery_ready.append(
+                            auth = current.auth
+                            has_permission = auth.s3_has_permission
+                            
+                            # For Alert Editor
+                            if has_permission("update", "cap_alert",
+                                              record_id=alert_id):
+                                # Get the user ids for the role alert_approver
+                                agtable = db.auth_group
+                                group_rows = db(agtable.role == "Alert Approver").\
+                                               select(agtable.id)
+                                if group_rows:
+                                    group_members = auth.s3_group_members
+                                    user_pe_id = auth.s3_user_pe_id
+                                    for group_row in group_rows:
+                                        group_id = group_row.id
+                                        user_ids = group_members(group_id) # List of user_ids
+                                        pe_ids = [] # List of pe_ids
+                                        pe_append = pe_ids.append
+                                        for user_id in user_ids:
+                                            pe_append(user_pe_id(int(user_id)))
+    
+                                    action_btn = A(T("Submit for Approval"),
+                                                   _href = URL(f = "compose",
+                                                               vars = {"cap_alert.id": record.id,
+                                                                       "pe_ids": pe_ids,
+                                                                       },
+                                                               ),
+                                                   _class = "action-btn confirm-btn"
+                                                   )
+                                    current.response.s3.jquery_ready.append(
 '''S3.confirmClick('.confirm-btn','%s')''' % T("Do you want to submit the alert for approval?"))
+                                else:
+                                    action_btn = None
                             else:
-                                submit_btn = None
+                                action_btn = None
+
+                            # For Alert Approver
+                            if has_permission("approve", "cap_alert"):
+                                action_btn = A(T("Review Alert"),
+                                               _href = URL(args = [record.id,
+                                                                   "review"
+                                                                   ],
+                                                           ),
+                                               _class = "action-btn",
+                                               )
                         else:
-                            submit_btn = None
+                            action_btn = None
 
                     tabs = [(T("Alert Details"), None),
                             (T("Information"), "info"),
@@ -1549,8 +1825,8 @@ def cap_rheader(r):
                     if copy_btn:
                         rheader.insert(1, TR(TD(copy_btn)))
 
-                    if submit_btn:
-                        rheader.insert(1, TR(TD(submit_btn)))
+                    if action_btn:
+                        rheader.insert(1, TR(TD(action_btn)))
 
             elif tablename == "cap_area":
                 # Used only for Area Templates
@@ -2010,10 +2286,18 @@ def cap_alert_list_layout(list_id, item_id, resource, rfields, record):
     else:
         _href = URL(c="cap", f="public", args=[record_id, "profile"])
 
-    headline = A(headline,
-                 _href = _href,
-                 _target = "_blank",
-                 )
+    priority_row = None
+    if priority and priority != "-":
+        # Give the priority color to headline
+        db = current.db
+        wptable = db.cap_warning_priority
+        priority_row = db(wptable.name == priority).select(wptable.color_code,
+                                                           limitby=(0, 1)).first()
+
+    more = A(T("Full Alert"),
+             _href = _href,
+             _target = "_blank",
+             )
 
     if list_id == "map_popup":
         itable = current.s3db.cap_info
@@ -2034,30 +2318,71 @@ def cap_alert_list_layout(list_id, item_id, resource, rfields, record):
                        sender,
                        BR(),
                        )
+
+        details = "%s %s %s" % (priority, status, scope)
+
+        headline_ = A(headline,
+                      _href = _href,
+                      _target = "_blank",
+                      )
+
+        if priority_row:
+            headline_["_style"] = "color: #%s" % (priority_row.color_code)
+
+        item = DIV(headline_,
+                   BR(),
+                   location,
+                   BR(),
+                   details,
+                   BR(),
+                   event,
+                   last,
+                   more,
+                   _class=item_class,
+                   _id=item_id,
+                   )
     else:
         if priority == current.messages["NONE"]:
             priority = T("Unknown")
-        last = BR()
+        certainty = record["cap_info.certainty"]
+        severity = record["cap_info.severity"]
+        urgency = record["cap_info.urgency"]
+        msg_type = record["cap_alert.msg_type"]
+        sender_name = record["cap_info.sender_name"]
+        sent = record["cap_alert.sent"]
 
-    details = "%s %s %s" % (priority, status, scope)
+        headline = "%s; %s, %s" % (msg_type, headline, location)
 
-    more = A(T("Full Alert"),
-             _href = _href,
-             _target = "_blank",
-             )
+        sub_heading = "%s %s" % (priority, event)
 
-    item = DIV(headline,
-               BR(),
-               location,
-               BR(),
-               details,
-               BR(),
-               event,
-               last,
-               more,
-               _class=item_class,
-               _id=item_id,
-               )
+        sub_headline = A(sub_heading,
+                         _href = _href,
+                         _target = "_blank",
+                         )
+
+        if priority_row:
+            sub_headline["_style"] = "color: #%s" % (priority_row.color_code)
+
+        para = T("It is %(certainty)s and %(urgency)s with %(severity)s threat to life and property.") \
+                % dict(certainty=certainty, urgency=urgency, severity=severity)
+
+        issuer = "%s: %s" % (T("Issued by"), sender_name)
+        issue_date = "%s: %s" % (T("Issued on"), sent)
+
+        item = DIV(headline,
+                   BR(),
+                   sub_headline,
+                   BR(),
+                   para,
+                   BR(),
+                   issuer,
+                   BR(),
+                   issue_date,
+                   BR(),
+                   more,
+                   _class=item_class,
+                   _id=item_id,
+                   )
 
     return item
 
@@ -2090,40 +2415,42 @@ def add_area_from_template(area_id, alert_id):
                                                 limitby=(0, 1)).first()
     rows = db(itable.alert_id == alert_id).select(itable.id)
 
-    if len(rows) == 1:
-        info_id = rows.first().id
-    else:
-        info_id = ""
-
-    adata = {"is_template": False,
-             "alert_id": alert_id,
-             "info_id": info_id,
-             }
-    for field in afieldnames:
-        adata[field] = atemplate[field]
-    aid = atable.insert(**adata)
-
-    # Add Area Location Components of Template
-    ltemplate = db(ltable.area_id == area_id).select(*lfieldnames)
-    for rows in ltemplate:
-        ldata = {"area_id": aid,
+    area_ids = []
+    for row in rows:
+        # @ToDo set_record_owner, update_super and/or onaccept
+        # Currently not required by SAMBRO template
+        adata = {"is_template": False,
                  "alert_id": alert_id,
+                 "info_id": row.id,
                  }
-        for field in lfieldnames:
-            ldata[field] = rows[field]
-        lid = ltable.insert(**ldata)
+        for field in afieldnames:
+            adata[field] = atemplate[field]
 
-    # Add Area Tag Components of Template
-    ttemplate = db(ttable.area_id == area_id).select(*tfieldnames)
-    for row in ttemplate:
-        tdata = {"area_id": aid,
-                 "alert_id": alert_id,
-                 }
-        for field in tfieldnames:
-            tdata[field] = row[field]
-        tid = ttable.insert(**tdata)
+        aid = atable.insert(**adata)
 
-    return aid
+        # Add Area Location Components of Template
+        ltemplate = db(ltable.area_id == area_id).select(*lfieldnames)
+        for rows in ltemplate:
+            ldata = {"area_id": aid,
+                     "alert_id": alert_id,
+                     }
+            for field in lfieldnames:
+                ldata[field] = rows[field]
+            lid = ltable.insert(**ldata)
+
+        # Add Area Tag Components of Template
+        ttemplate = db(ttable.area_id == area_id).select(*tfieldnames)
+        for row in ttemplate:
+            tdata = {"area_id": aid,
+                     "alert_id": alert_id,
+                     }
+            for field in tfieldnames:
+                tdata[field] = row[field]
+            tid = ttable.insert(**tdata)
+
+        area_ids.append(aid)
+
+    return area_ids
 
 # =============================================================================
 class CAPImportFeed(S3Method):

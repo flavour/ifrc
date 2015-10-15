@@ -93,7 +93,7 @@ from gluon.storage import Storage
 
 from s3dal import Row
 from ..s3 import *
-from s3layouts import S3AddResourceLink
+from s3layouts import S3PopupLink
 
 # Compact JSON encoding
 SEPARATORS = (",", ":")
@@ -386,6 +386,7 @@ class S3ProjectModel(S3Model):
                                             fields=["code", "name"])
         else:
             project_represent = S3Represent(lookup=tablename)
+
         project_id = S3ReusableField("project_id", "reference %s" % tablename,
             label = T("Project"),
             ondelete = "CASCADE",
@@ -397,9 +398,10 @@ class S3ProjectModel(S3Model):
                                   )
                         ),
             sortby = "name",
-            comment = S3AddResourceLink(c="project", f="project",
-                                        tooltip=T("If you don't see the project in the list, you can add a new one by clicking link 'Create Project'."),
-                                        ),
+            comment = S3PopupLink(c = "project",
+                                  f = "project",
+                                  tooltip = T("If you don't see the project in the list, you can add a new one by clicking link 'Create Project'."),
+                                  ),
             )
 
         # Custom Methods
@@ -418,6 +420,10 @@ class S3ProjectModel(S3Model):
         set_method("project", "project",
                    method = "timeline",
                    action = self.project_timeline)
+
+        set_method("project", "project",
+                   method = "indicator_summary_report",
+                   action = project_indicator_summary_report)
 
         # Components
         add_components(tablename,
@@ -1139,9 +1145,11 @@ class S3ProjectActivityModel(S3Model):
         # Reusable Field
         represent = project_ActivityRepresent()
         activity_id = S3ReusableField("activity_id", "reference %s" % tablename,
-                        comment = S3AddResourceLink(ADD_ACTIVITY,
-                                                    c="project", f="activity",
-                                                    tooltip=ACTIVITY_TOOLTIP),
+                        comment = S3PopupLink(ADD_ACTIVITY,
+                                              c = "project",
+                                              f = "activity",
+                                              tooltip = ACTIVITY_TOOLTIP,
+                                              ),
                         label = T("Activity"),
                         ondelete = "CASCADE",
                         represent = represent,
@@ -1397,10 +1405,11 @@ class S3ProjectActivityTypeModel(S3Model):
                                                                   represent,
                                                                   sort=True)),
                                            sortby = "name",
-                                           comment = S3AddResourceLink(title=ADD_ACTIVITY_TYPE,
-                                                                       c="project",
-                                                                       f="activity_type",
-                                                                       tooltip=T("If you don't see the type in the list, you can add a new one by clicking link 'Create Activity Type'.")),
+                                           comment = S3PopupLink(title = ADD_ACTIVITY_TYPE,
+                                                                 c = "project",
+                                                                 f = "activity_type",
+                                                                 tooltip = T("If you don't see the type in the list, you can add a new one by clicking link 'Create Activity Type'."),
+                                                                 ),
                                            )
 
         if current.deployment_settings.get_project_sectors():
@@ -1818,12 +1827,12 @@ class S3ProjectBeneficiaryModel(S3Model):
                                                         ),
                                 readable = True,
                                 writable = True,
-                                comment = S3AddResourceLink(c="project",
-                                                            f="beneficiary_type",
-                                                            vars = dict(child="parameter_id"),
-                                                            title=ADD_BNF_TYPE,
-                                                            tooltip=T("Please record Beneficiary according to the reporting needs of your project")
-                                                            ),
+                                comment = S3PopupLink(c = "project",
+                                                      f = "beneficiary_type",
+                                                      vars = {"child": "parameter_id"},
+                                                      title = ADD_BNF_TYPE,
+                                                      tooltip = T("Please record Beneficiary according to the reporting needs of your project"),
+                                                      ),
                                 ),
                      # Populated automatically from project_location
                      self.gis_location_id(readable = False,
@@ -2012,10 +2021,11 @@ class S3ProjectBeneficiaryModel(S3Model):
                                   self.project_beneficiary_represent,
                                   sort=True)),
             sortby = "name",
-            comment = S3AddResourceLink(c="project", f="beneficiary",
-                                        title=ADD_BNF,
-                                        tooltip=\
-                T("If you don't see the beneficiary in the list, you can add a new one by clicking link 'Add Beneficiaries'.")),
+            comment = S3PopupLink(c = "project",
+                                  f = "beneficiary",
+                                  title = ADD_BNF,
+                                  tooltip = T("If you don't see the beneficiary in the list, you can add a new one by clicking link 'Add Beneficiaries'."),
+                                  ),
             )
 
         # Components
@@ -2249,11 +2259,11 @@ class S3ProjectCampaignModel(S3Model):
                                                               sort=True)),
                                       represent = represent,
                                       label = T("Campaign"),
-                                      comment = S3AddResourceLink(c="project",
-                                                                  f="campaign",
-                                                                  title=ADD_CAMPAIGN,
-                                                                  tooltip=\
-                                        T("If you don't see the campaign in the list, you can add a new one by clicking link 'Add Campaign'.")),
+                                      comment = S3PopupLink(c = "project",
+                                                            f = "campaign",
+                                                            title = ADD_CAMPAIGN,
+                                                            tooltip = T("If you don't see the campaign in the list, you can add a new one by clicking link 'Add Campaign'."),
+                                                            ),
                                       ondelete = "CASCADE")
 
         add_components(tablename,
@@ -2750,6 +2760,7 @@ class S3ProjectHRModel(S3Model):
                                                      ),
                           Field("status", "integer",
                                 default = 1,
+                                label = T("Status"),
                                 represent = lambda opt: \
                                        status_opts.get(opt, current.messages.UNKNOWN_OPT),
                                 requires = IS_IN_SET(status_opts),
@@ -2769,32 +2780,7 @@ class S3ProjectHRModel(S3Model):
             msg_record_deleted = T("Human Resource unassigned"),
             msg_list_empty = T("No Human Resources currently assigned to this project"))
 
-        if settings.has_module("budget"):
-            crud_form = S3SQLCustomForm("project_id",
-                                        "human_resource_id",
-                                        "status",
-                                        S3SQLInlineComponent("allocation",
-                                                             label = T("Budget"),
-                                                             fields = ["budget_id",
-                                                                       "start_date",
-                                                                       "end_date",
-                                                                       "daily_cost",
-                                                                       ],
-                                                             ),
-                                        )
-        else:
-            crud_form = None
-
         self.configure(tablename,
-                       crud_form = crud_form,
-                       list_fields = [#"project_id", # Not being dropped in component view
-                                      "human_resource_id",
-                                      "status",
-                                      "allocation.budget_id",
-                                      "allocation.start_date",
-                                      "allocation.end_date",
-                                      "allocation.daily_cost",
-                                      ],
                        onvalidation = self.project_human_resource_onvalidation,
                        super_entity = "budget_cost_item",
                        )
@@ -2806,16 +2792,17 @@ class S3ProjectHRModel(S3Model):
     @staticmethod
     def project_human_resource_onvalidation(form):
         """
-            Prevent the same hrm_human_resource record being added more than
-            once.
+            Prevent the same human_resource record being added more than once
         """
 
-        # The project human resource table
         hr = current.s3db.project_human_resource_project
 
         # Fetch the first row that has the same project and human resource ids
-        query = (hr.human_resource_id == form.vars.human_resource_id) & \
-                (hr.project_id == form.request_vars.project_id)
+        # (which isn't this record!)
+        form_vars = form.request_vars
+        query = (hr.human_resource_id == form_vars.human_resource_id) & \
+                (hr.project_id == form_vars.project_id) & \
+                (hr.id != form_vars.id)
         row = current.db(query).select(hr.id,
                                        limitby=(0, 1)).first()
 
@@ -2910,10 +2897,11 @@ class S3ProjectIndicatorModel(S3Model):
                                                         ),
                                 readable = True,
                                 writable = True,
-                                comment = S3AddResourceLink(c="project",
-                                                            f="indicator",
-                                                            vars = dict(child="parameter_id"),
-                                                            title=ADD_INDICATOR),
+                                comment = S3PopupLink(c = "project",
+                                                      f = "indicator",
+                                                      vars = dict(child="parameter_id"),
+                                                      title = ADD_INDICATOR,
+                                                      ),
                                 ),
                      #self.gis_location_id(),
                      s3_date(empty = False,
@@ -3156,11 +3144,12 @@ class S3ProjectLocationModel(S3Model):
                         represent = self.gis_LocationRepresent(sep=", "),
                         requires = IS_LOCATION(),
                         widget = S3LocationAutocompleteWidget(),
-                        comment = S3AddResourceLink(c="gis",
-                                                    f="location",
-                                                    label = T("Create Location"),
-                                                    title=T("Location"),
-                                                    tooltip=messages.AUTOCOMPLETE_HELP),
+                        comment = S3PopupLink(c = "gis",
+                                              f = "location",
+                                              label = T("Create Location"),
+                                              title = T("Location"),
+                                              tooltip = messages.AUTOCOMPLETE_HELP,
+                                              ),
                      ),
                      # % breakdown by location
                      Field("percentage", "decimal(3,2)",
@@ -3178,7 +3167,7 @@ class S3ProjectLocationModel(S3Model):
         if community:
             LOCATION = T("Community")
             LOCATION_TOOLTIP = T("If you don't see the community in the list, you can add a new one by clicking link 'Create Community'.")
-            ADD_LOCATION = T("Create Community")
+            ADD_LOCATION = T("Add Community")
             crud_strings[tablename] = Storage(
                     label_create = ADD_LOCATION,
                     title_display = T("Community Details"),
@@ -3196,7 +3185,7 @@ class S3ProjectLocationModel(S3Model):
         else:
             LOCATION = T("Location")
             LOCATION_TOOLTIP = T("If you don't see the location in the list, you can add a new one by clicking link 'Create Location'.")
-            ADD_LOCATION = T("Create Location")
+            ADD_LOCATION = T("Add Location")
             crud_strings[tablename] = Storage(
                     label_create = ADD_LOCATION,
                     title_display = T("Location Details"),
@@ -3359,9 +3348,11 @@ class S3ProjectLocationModel(S3Model):
                                   project_location_represent,
                                   updateable = True,
                                   sort=True)),
-            comment = S3AddResourceLink(ADD_LOCATION,
-                                        c="project", f="location",
-                                        tooltip=LOCATION_TOOLTIP),
+            comment = S3PopupLink(ADD_LOCATION,
+                                  c = "project",
+                                  f = "location",
+                                  tooltip = LOCATION_TOOLTIP,
+                                  ),
             )
 
         # ---------------------------------------------------------------------
@@ -3529,24 +3520,25 @@ class S3ProjectOrganisationModel(S3Model):
         tablename = "project_organisation"
         self.define_table(tablename,
                           self.project_project_id(
-                            comment=S3AddResourceLink(c="project",
-                                                      f="project",
-                                                      vars = dict(prefix="project"),
-                                                      tooltip=T("If you don't see the project in the list, you can add a new one by clicking link 'Create Project'."),
-                                                      )
+                            comment = S3PopupLink(c = "project",
+                                                  f = "project",
+                                                  vars = {"prefix": "project"},
+                                                  tooltip = T("If you don't see the project in the list, you can add a new one by clicking link 'Create Project'."),
+                                                  ),
                           ),
                           self.org_organisation_id(
-                          requires = self.org_organisation_requires(
-                                         required=True,
-                                         # Need to be able to add Partners/Donors not just Lead org
-                                         #updateable=True,
-                                         ),
-                          widget = None,
-                          comment=S3AddResourceLink(c="org",
-                                                    f="organisation",
-                                                    label=T("Create Organization"),
-                                                    title=messages.ORGANISATION,
-                                                    tooltip=organisation_help)
+                                requires = self.org_organisation_requires(
+                                                required=True,
+                                                # Need to be able to add Partners/Donors not just Lead org
+                                                #updateable=True,
+                                                ),
+                                widget = None,
+                                comment = S3PopupLink(c = "org",
+                                                      f = "organisation",
+                                                      label = T("Create Organization"),
+                                                      title = messages.ORGANISATION,
+                                                      tooltip = organisation_help,
+                                                      ),
                           ),
                           Field("role", "integer",
                                 label = T("Role"),
@@ -3857,7 +3849,7 @@ class S3ProjectPlanningModel(S3Model):
                                                           )
                                                 ),
                                   sortby = "name",
-                                  #comment = S3AddResourceLink(c="project", f="goal"),
+                                  #comment = S3PopupLink(c="project", f="goal"),
                                   )
 
         # ---------------------------------------------------------------------
@@ -3938,7 +3930,7 @@ class S3ProjectPlanningModel(S3Model):
                                                               )
                                                     ),
                                      sortby = "name",
-                                     #comment = S3AddResourceLink(c="project", f="outcome"),
+                                     #comment = S3PopupLink(c="project", f="outcome"),
                                      )
 
         # ---------------------------------------------------------------------
@@ -4037,7 +4029,7 @@ class S3ProjectPlanningModel(S3Model):
                                                               )
                                                     ),
                                     sortby = "name",
-                                    #comment = S3AddResourceLink(c="project", f="output"),
+                                    #comment = S3PopupLink(c="project", f="output"),
                                     )
 
         # ---------------------------------------------------------------------
@@ -4142,7 +4134,7 @@ class S3ProjectPlanningModel(S3Model):
                                                         ),
                                        # Match the Represent
                                        sortby = ("code", "name"),
-                                       #comment = S3AddResourceLink(c="project", f="indicator"),
+                                       #comment = S3PopupLink(c="project", f="indicator"),
                                        )
 
         self.add_components(tablename,
@@ -5231,12 +5223,204 @@ class S3ProjectPlanningModel(S3Model):
         return current.messages["NONE"]
 
 # =============================================================================
+def project_indicator_summary_report(r, **attr):
+    """
+        Display the a Summary of the Indicator Statuses for the Project
+    """
+
+    if r.representation == "html" and r.name == "project":
+
+        T = current.T
+
+        # Extract Data
+        resource = current.s3db.resource("project_indicator_data")
+        resource.add_filter(FS("project_id") == r.id)
+        list_fields = ("indicator_id",
+                       "indicator_id$output_id",
+                       "indicator_id$outcome_id",
+                       "indicator_id$goal_id",
+                       "end_date",
+                       "target_value",
+                       "value",
+                       )
+        data = resource.select(list_fields, orderby="end_date", represent=True)
+
+        # Build the Data Structure
+        dates = []
+        dappend = dates.append
+        goals = {}
+        for row in data.rows:
+            date = row["project_indicator_data.end_date"]
+            goal = row["project_indicator.goal_id"]
+            outcome = row["project_indicator.outcome_id"]
+            output = row["project_indicator.output_id"]
+            indicator = row["project_indicator_data.indicator_id"]
+            target = row["project_indicator_data.target_value"]
+            if target is None:
+                target = 0
+            else:
+                target = int(target)
+            actual = int(row["project_indicator_data.value"])
+            if actual is None:
+                actual = 0
+            else:
+                actual = int(actual)
+
+            if date not in dates:
+                dappend(date)
+
+            if goal not in goals:
+                goals[goal] = dict(dates = {},
+                                   outcomes = {},
+                                   target = 0,
+                                   actual = 0,
+                                   )
+            goal = goals[goal]
+            goal["target"] += target
+            goal["actual"] += actual
+            if date in goal["dates"]:
+                goal["dates"][date]["target"] += target
+                goal["dates"][date]["actual"] += actual
+            else:
+                goal["dates"][date] = dict(target = target,
+                                           actual = actual,
+                                           )
+
+            if outcome not in goal["outcomes"]:
+                goal["outcomes"][outcome] = dict(dates={},
+                                                 outputs={},
+                                                 target = 0,
+                                                 actual = 0,
+                                                 )
+            outcome = goal["outcomes"][outcome]
+            if date in outcome["dates"]:
+                outcome["dates"][date]["target"] += target
+                outcome["dates"][date]["actual"] += actual
+            else:
+                outcome["dates"][date] = dict(target = target,
+                                              actual = actual,
+                                              )
+
+            if output not in outcome["outputs"]:
+                outcome["outputs"][output] = dict(dates={},
+                                                  indicators={},
+                                                  target = 0,
+                                                  actual = 0,
+                                                  )
+            output = outcome["outputs"][output]
+            if date in output["dates"]:
+                output["dates"][date]["target"] += target
+                output["dates"][date]["actual"] += actual
+            else:
+                output["dates"][date] = dict(target = target,
+                                             actual = actual,
+                                             )
+
+            if indicator not in output["indicators"]:
+                output["indicators"][indicator] = dict(dates={},
+                                                       target = 0,
+                                                       actual = 0,
+                                                       )
+
+            indicator = output["indicators"][indicator]
+            if date in indicator["dates"]:
+                indicator["dates"][date]["target"] += target
+                indicator["dates"][date]["actual"] += actual
+            else:
+                indicator["dates"][date] = dict(target = target,
+                                                actual = actual,
+                                                )
+
+        # Sort
+        #goals = OrderedDict(sorted(goals.items(), key=lambda item: item[1]['depth']))
+        goals = OrderedDict(sorted(goals.items()))
+        # @ToDo: Sort outcomes, outputs & indicators too
+
+        # Calculate Totals
+        
+
+        # Format Data
+        header_row = TR(TD(T("Indicators"),
+                           _rowspan=2,
+                           ),
+                        TD(T("Total Target"),
+                           _rowspan=2,
+                           ),
+                        )
+        happend = header_row.append
+        for d in dates:
+            happend(TD(T(d), # @ToDo: Format
+                       _colspan=2,
+                       ))
+        happend(TD(T("Actual Total"),
+                   _rowspan=2,
+                   ))
+        happend(TD(T("% Achieved"),
+                   _rowspan=2,
+                   ))
+        item = TABLE(header_row)
+        iappend = item.append
+        row_2 = TR()
+        rappend = row_2.append
+        for d in dates:
+            rappend(TD(T("Target")))
+            rappend(TD(T("Actual")))
+        iappend(row_2)
+
+        # @ToDo: Styling of rows to differentiate
+        for g in goals:
+            row = TR(TD(g))
+            rappend = row.append
+            goal = goals[g]
+            target = goal["target"]
+            actual = goal["actual"]
+            rappend(TD(target))
+            for d in goal["dates"]:
+                date = goal["dates"][d]
+                rappend(TD(date["target"]))
+                rappend(TD(date["actual"]))
+            rappend(TD(actual))
+            percentage_completion = (actual / target) * 100
+            rappend(TD(percentage_completion))
+            iappend(row)
+            #for o in goal[]:
+            #    iappend(TR(TD(o)))
+            #    outcome = goal[o]
+            #    for p in outcome:
+            #        iappend(TR(TD(p)))
+            #        output = outcome[p]
+            #        for i in output:
+            #            iappend(TR(TD(i)))
+
+        # Output
+        output = dict(item=item)
+
+        output["title"] = T("Summary of Progress Indicators for Outcomes and Indicators")
+        output["subtitle"] = "%s: %s" % (T("Project"), r.record.name)
+        # @ToDo: Add "On Date"
+
+        # Maintain RHeader for consistency
+        if "rheader" in attr:
+            rheader = attr["rheader"](r)
+            if rheader:
+                output["rheader"] = rheader
+
+        current.response.view = "simple.html"
+        return output
+
+    else:
+        raise HTTP(501, current.ERROR.BAD_METHOD)
+    
+# =============================================================================
 def project_status_represent(value):
     """
         Colour-coding of Statuses
 
         @ToDo: Configurable thresholds
     """
+
+    if current.auth.permission.format == "geojson":
+        return value
 
     if value >= 80:
         colour = "00ff00" # Green
@@ -5315,9 +5499,9 @@ class S3ProjectProgrammeModel(S3Model):
                                                       #updateable = True,
                                                       )),
                             sortby = "name",
-                            comment = S3AddResourceLink(c="project",
-                                                        f="programme",
-                                                        ),
+                            comment = S3PopupLink(c = "project",
+                                                  f = "programme",
+                                                  ),
                        )
 
         self.configure(tablename,
@@ -5469,9 +5653,10 @@ class S3ProjectStatusModel(S3Model):
         represent = S3Represent(lookup=tablename, translate=True)
                                 #none = T("Unknown"))
         status_id = S3ReusableField("status_id", "reference %s" % tablename,
-                        comment = S3AddResourceLink(title=ADD_STATUS,
-                                                    c="project",
-                                                    f="status"),
+                        comment = S3PopupLink(title = ADD_STATUS,
+                                              c = "project",
+                                              f = "status",
+                                              ),
                         label = T("Status"),
                         ondelete = "SET NULL",
                         represent = represent,
@@ -6030,9 +6215,9 @@ class S3ProjectDRRPPModel(S3Model):
         """
 
         db = current.db
-        vars = form.vars
-        id = vars.id
-        project_id = vars.project_id
+        form_vars = form.vars
+        id = form_vars.id
+        project_id = form_vars.project_id
 
         dtable = db.project_drrpp
 
@@ -6176,10 +6361,11 @@ class S3ProjectTaskModel(S3Model):
                                                     IS_ONE_OF(db, "project_milestone.id",
                                                               represent)),
                                        sortby = "name",
-                                       comment = S3AddResourceLink(c="project",
-                                                                   f="milestone",
-                                                                   title=ADD_MILESTONE,
-                                                                   tooltip=T("A project milestone marks a significant date in the calendar which shows that progress towards the overall objective is being made.")),
+                                       comment = S3PopupLink(c = "project",
+                                                             f = "milestone",
+                                                             title = ADD_MILESTONE,
+                                                             tooltip = T("A project milestone marks a significant date in the calendar which shows that progress towards the overall objective is being made."),
+                                                             ),
                                        )
 
         configure(tablename,
@@ -6222,10 +6408,11 @@ class S3ProjectTaskModel(S3Model):
                                               IS_ONE_OF(db, "project_tag.id",
                                                         represent)),
                                  sortby = "name",
-                                 comment = S3AddResourceLink(c="project",
-                                                             f="tag",
-                                                             title=ADD_TAG,
-                                                             tooltip=T("A project tag helps to assosiate keywords with projects/tasks.")),
+                                 comment = S3PopupLink(c = "project",
+                                                       f = "tag",
+                                                       title = ADD_TAG,
+                                                       tooltip = T("A project tag helps to assosiate keywords with projects/tasks."),
+                                                       ),
                                  )
 
         # ---------------------------------------------------------------------
@@ -6566,10 +6753,11 @@ class S3ProjectTaskModel(S3Model):
                                                 IS_ONE_OF(db, "project_task.id",
                                                           represent)),
                                   sortby = "name",
-                                  comment = S3AddResourceLink(c="project",
-                                                              f="task",
-                                                              title=ADD_TASK,
-                                                              tooltip=T("A task is a piece of work that an individual or team can do in 1-2 days.")),
+                                  comment = S3PopupLink(c = "project",
+                                                        f = "task",
+                                                        title = ADD_TASK,
+                                                        tooltip = T("A task is a piece of work that an individual or team can do in 1-2 days."),
+                                                        ),
                                   )
 
         # Representation with project name, for time log form
@@ -7062,51 +7250,52 @@ class S3ProjectTaskModel(S3Model):
         s3db = current.s3db
         session = current.session
 
-        id = form.vars.id
+        task_id = form.vars.id
 
         if session.s3.incident:
             # Create a link between this Task & the active Incident
             etable = s3db.event_task
-            etable.insert(incident_id=session.s3.incident,
-                          task_id=id)
+            etable.insert(incident_id = session.s3.incident,
+                          task_id = task_id)
 
         ltp = db.project_task_project
 
-        vars = current.request.post_vars
-        project_id = vars.get("project_id", None)
+        post_vars = current.request.post_vars
+        project_id = post_vars.get("project_id")
         if project_id:
             # Create Link to Project
-            link_id = ltp.insert(task_id = id,
+            link_id = ltp.insert(task_id = task_id,
                                  project_id = project_id)
 
-        activity_id = vars.get("activity_id", None)
+        activity_id = post_vars.get("activity_id")
         if activity_id:
             # Create Link to Activity
             lta = db.project_task_activity
-            link_id = lta.insert(task_id = id,
+            link_id = lta.insert(task_id = task_id,
                                  activity_id = activity_id)
 
-        milestone_id = vars.get("milestone_id", None)
+        milestone_id = post_vars.get("milestone_id")
         if milestone_id:
             # Create Link to Milestone
             ltable = db.project_task_milestone
-            link_id = ltable.insert(task_id = id,
+            link_id = ltable.insert(task_id = task_id,
                                     milestone_id = milestone_id)
 
         # Make sure the task is also linked to the project
         # when created under an activity
-        row = db(ltp.task_id == id).select(ltp.project_id,
-                                           limitby=(0, 1)).first()
+        row = db(ltp.task_id == task_id).select(ltp.project_id,
+                                                limitby=(0, 1)
+                                                ).first()
         if not row:
             lta = db.project_task_activity
             ta = db.project_activity
-            query = (lta.task_id == id) & \
+            query = (lta.task_id == task_id) & \
                     (lta.activity_id == ta.id)
             row = db(query).select(ta.project_id,
                                    limitby=(0, 1)).first()
             if row and row.project_id:
-                ltp.insert(task_id=id,
-                           project_id=row.project_id)
+                ltp.insert(task_id = task_id,
+                           project_id = row.project_id)
 
         # Notify Assignee
         task_notify(form)
@@ -7123,7 +7312,7 @@ class S3ProjectTaskModel(S3Model):
         db = current.db
         s3db = current.s3db
 
-        vars = form.vars
+        form_vars = form.vars
         id = vars.id
         record = form.record
 
@@ -7131,8 +7320,8 @@ class S3ProjectTaskModel(S3Model):
 
         changed = {}
         if record: # Not True for a record merger
-            for var in vars:
-                vvar = vars[var]
+            for var in form_vars:
+                vvar = form_vars[var]
                 rvar = record[var]
                 if vvar != rvar:
                     type = table[var].type
@@ -7160,11 +7349,11 @@ class S3ProjectTaskModel(S3Model):
             table.insert(task_id=id,
                          body=text)
 
-        vars = current.request.post_vars
-        if "project_id" in vars:
+        post_vars = current.request.post_vars
+        if "project_id" in post_vars:
             ltable = db.project_task_project
             filter = (ltable.task_id == id)
-            project = vars.project_id
+            project = post_vars.project_id
             if project:
                 # Create the link to the Project
                 #ptable = db.project_project
@@ -7186,11 +7375,11 @@ class S3ProjectTaskModel(S3Model):
             links = s3db.resource("project_task_project", filter=filter)
             links.delete()
 
-        if "activity_id" in vars:
+        if "activity_id" in post_vars:
             ltable = db.project_task_activity
             filter = (ltable.task_id == id)
-            activity = vars.activity_id
-            if vars.activity_id:
+            activity = post_vars.activity_id
+            if post_vars.activity_id:
                 # Create the link to the Activity
                 #atable = db.project_activity
                 #master = s3db.resource("project_task", id=id)
@@ -7211,10 +7400,10 @@ class S3ProjectTaskModel(S3Model):
             links = s3db.resource("project_task_activity", filter=filter)
             links.delete()
 
-        if "milestone_id" in vars:
+        if "milestone_id" in post_vars:
             ltable = db.project_task_milestone
             filter = (ltable.task_id == id)
-            milestone = vars.milestone_id
+            milestone = post_vars.milestone_id
             if milestone:
                 # Create the link to the Milestone
                 #mtable = db.project_milestone
@@ -9090,12 +9279,12 @@ class project_Details(S3Method):
                                  # NB T() here to prevent requiring an extra translation of 'Add <translation of Staff>'
                                  label_create = T("Add %(staff)s") % dict(staff=STAFF),
                                  type = "datatable",
-                                 actions = dt_row_actions("human_resource"),
-                                 tablename = "hrm_human_resource",
+                                 actions = dt_row_actions("human_resource_project"),
+                                 tablename = "project_human_resource_project",
                                  context = "project",
                                  create_controller = "project",
                                  create_function = "project",
-                                 create_component = "human_resource",
+                                 create_component = "human_resource_project",
                                  pagesize = None, # all records
                                  )
                 profile_widgets.append(hr_widget)

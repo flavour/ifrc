@@ -70,7 +70,7 @@ def config(settings):
                                                #"member": T("Member")
                                                }
 
-    settings.auth.record_approval = True
+    #settings.auth.record_approval = True
 
     # @ToDo: Should we fallback to organisation_id if site_id is None?
     settings.auth.registration_roles = {"site_id": ["reader",
@@ -828,15 +828,16 @@ def config(settings):
         # Comment
         if (Admin or s3_has_role("ORG_ADMIN")):
             # Need to do import after setting Theme
-            from s3layouts import S3AddResourceLink
+            from s3layouts import S3PopupLink
             from s3 import S3ScriptItem
-            add_link = S3AddResourceLink(c="org", f="organisation",
-                                         vars={"organisation_type.name":"Red Cross / Red Crescent"},
-                                         label=T("Create National Society"),
-                                         title=T("National Society"),
-                                         )
+            add_link = S3PopupLink(c = "org",
+                                   f = "organisation",
+                                   vars = {"organisation_type.name":"Red Cross / Red Crescent"},
+                                   label = T("Create National Society"),
+                                   title = T("National Society"),
+                                   )
             comment = f.comment
-            if not comment or isinstance(comment, S3AddResourceLink):
+            if not comment or isinstance(comment, S3PopupLink):
                 f.comment = add_link
             elif isinstance(comment[1], S3ScriptItem):
                 # Don't overwrite scripts
@@ -1749,42 +1750,6 @@ def config(settings):
 
     settings.customise_survey_series_controller = customise_survey_series_controller
 
-    # -----------------------------------------------------------------------------
-    # Projects
-    # Uncomment this to use settings suitable for a global/regional organisation (e.g. DRR)
-    settings.project.mode_3w = True
-    # Uncomment this to use DRR (Disaster Risk Reduction) extensions
-    settings.project.mode_drr = True
-    # Uncomment this to use Activity Types for Activities & Projects
-    settings.project.activity_types = True
-    # Uncomment this to use Codes for projects
-    settings.project.codes = True
-    # Uncomment this to call project locations 'Communities'
-    settings.project.community = True
-    # Uncomment this to enable Hazards in 3W projects
-    settings.project.hazards = True
-    # Uncomment this to enable Indicators in projects
-    # Just HNRC
-    #settings.project.indicators = True
-    # Uncomment this to use multiple Budgets per project
-    settings.project.multiple_budgets = True
-    # Uncomment this to use multiple Organisations per project
-    settings.project.multiple_organisations = True
-    # Uncomment this to enable Programmes in projects
-    settings.project.programmes = True
-    # Uncomment this to enable Themes in 3W projects
-    settings.project.themes = True
-    # Uncomment this to customise
-    # Links to Filtered Components for Donors & Partners
-    settings.project.organisation_roles = {
-        1: T("Host National Society"),
-        2: T("Partner"),
-        3: T("Donor"),
-        #4: T("Customer"), # T("Beneficiary")?
-        #5: T("Supplier"),
-        9: T("Partner National Society"),
-    }
-
     # -------------------------------------------------------------------------
     def household_inject_form_script(r, record):
         """
@@ -2015,7 +1980,7 @@ def config(settings):
             # @ToDo: Use Inter-American Framework instead (when extending to Zone office)
             # @ToDo: Add 'Business Line' (when extending to Zone office)
             settings.project.details_tab = True
-            settings.project.community_volunteers = True
+            #settings.project.community_volunteers = True
             # Done in a more structured way instead
             objectives = None
             outputs = None
@@ -2029,16 +1994,15 @@ def config(settings):
             # Require start/end dates
             table.start_date.requires = table.start_date.requires.other
             table.end_date.requires = table.end_date.requires.other
-            budget = S3SQLInlineComponent(
-                "budget",
-                label = T("Budget"),
-                #link = False,
-                multiple = False,
-                fields = ["total_budget",
-                          "currency",
-                          #"monitoring_frequency",
-                          ],
-            )
+            budget = S3SQLInlineComponent("budget",
+                                          label = T("Budget"),
+                                          #link = False,
+                                          multiple = False,
+                                          fields = ["total_budget",
+                                                    "currency",
+                                                    #"monitoring_frequency",
+                                                    ],
+                                          )
             btable = s3db.budget_budget
             # Need to provide a name
             import random, string
@@ -2061,7 +2025,7 @@ def config(settings):
 
         if settings.get_project_programmes():
             # Inject inline link for programmes including AddResourceLink
-            #from s3layouts import S3AddResourceLink
+            #from s3layouts import S3PopupLink
             comment = s3db.project_programme_id.attr.comment
             comment.vars = {"caller": "link_defaultprogramme",
                             "prefix": "project",
@@ -2238,64 +2202,64 @@ def config(settings):
                 # Unknown!
                 return
 
-            db = current.db
-            s3db = current.s3db
+            #db = current.db
+            #s3db = current.s3db
 
             # Filter Activity Type by Sector
-            ltable = s3db.project_sector_project
-            rows = db(ltable.project_id == project_id).select(ltable.sector_id)
-            sectors = [row.sector_id for row in rows]
-            ltable = s3db.project_activity_type_sector
-            rows = db(ltable.sector_id.belongs(sectors)).select(ltable.activity_type_id)
-            filteropts = [row.activity_type_id for row in rows]
+            #ltable = s3db.project_sector_project
+            #rows = db(ltable.project_id == project_id).select(ltable.sector_id)
+            #sectors = [row.sector_id for row in rows]
+            #ltable = s3db.project_activity_type_sector
+            #rows = db(ltable.sector_id.belongs(sectors)).select(ltable.activity_type_id)
+            #filteropts = [row.activity_type_id for row in rows]
 
-            def postprocess(form):
-                # Update project_location.activity_type
-                beneficiary_id = form.vars.get("id", None)
-                table = db.project_beneficiary
-                row = db(table.id == beneficiary_id).select(table.project_location_id,
-                                                            limitby = (0, 1)
-                                                            ).first()
-                if not row:
-                    return
-                project_location_id = row.project_location_id
-                if not project_location_id:
-                    return
-                ltable = db.project_beneficiary_activity_type
-                row = db(ltable.beneficiary_id == beneficiary_id).select(ltable.activity_type_id,
-                                                                         limitby = (0, 1)
-                                                                         ).first()
-                if not row:
-                    return
-                activity_type_id = row.activity_type_id
-                ltable = s3db.project_activity_type_location
-                query = (ltable.project_location_id == project_location_id) & \
-                        (ltable.activity_type_id == activity_type_id)
-                exists = db(query).select(ltable.id,
-                                          limitby = (0, 1)
-                                          ).first()
-                if not exists:
-                    ltable.insert(project_location_id = project_location_id,
-                                  activity_type_id = activity_type_id,
-                                  )
+            #def postprocess(form):
+            #    # Update project_location.activity_type
+            #    beneficiary_id = form.vars.get("id", None)
+            #    table = db.project_beneficiary
+            #    row = db(table.id == beneficiary_id).select(table.project_location_id,
+            #                                                limitby = (0, 1)
+            #                                                ).first()
+            #    if not row:
+            #        return
+            #    project_location_id = row.project_location_id
+            #    if not project_location_id:
+            #        return
+            #    ltable = db.project_beneficiary_activity_type
+            #    row = db(ltable.beneficiary_id == beneficiary_id).select(ltable.activity_type_id,
+            #                                                             limitby = (0, 1)
+            #                                                             ).first()
+            #    if not row:
+            #        return
+            #    activity_type_id = row.activity_type_id
+            #    ltable = s3db.project_activity_type_location
+            #    query = (ltable.project_location_id == project_location_id) & \
+            #            (ltable.activity_type_id == activity_type_id)
+            #    exists = db(query).select(ltable.id,
+            #                              limitby = (0, 1)
+            #                              ).first()
+            #    if not exists:
+            #        ltable.insert(project_location_id = project_location_id,
+            #                      activity_type_id = activity_type_id,
+            #                      )
 
-            from s3 import S3SQLCustomForm, S3SQLInlineLink
+            from s3 import S3SQLCustomForm#, S3SQLInlineLink
             crud_form = S3SQLCustomForm(#"project_id",
                                         "project_location_id",
-                                        S3SQLInlineLink("activity_type",
-                                                        field = "activity_type_id",
-                                                        filterby = "id",
-                                                        options = filteropts,
-                                                        label = T("Activity Type"),
-                                                        multiple = False,
-                                                        ),
+                                        #S3SQLInlineLink("activity_type",
+                                        #                field = "activity_type_id",
+                                        #                filterby = "id",
+                                        #                options = filteropts,
+                                        #                label = T("Activity Type"),
+                                        #                multiple = False,
+                                        #                ),
                                         "parameter_id",
                                         "value",
                                         "target_value",
                                         "date",
                                         "end_date",
                                         "comments",
-                                        postprocess = postprocess,
+                                        #postprocess = postprocess,
                                         )
 
             s3db.configure(tablename,
@@ -2366,11 +2330,104 @@ def config(settings):
     # -----------------------------------------------------------------------------
     def customise_project_location_resource(r, tablename):
 
-        table = current.s3db.project_location
+        s3db = current.s3db
+        table = s3db.project_location
         table.name.readable = False
         table.percentage.readable = table.percentage.writable = False
+        list_fields = s3db.get_config(tablename, "list_fields")
+        try:
+            list_fields.remove((T("Activity Types"), "activity_type.name"))
+        except:
+            # Already removed
+            pass
 
     settings.customise_project_location_resource = customise_project_location_resource
+
+    # -----------------------------------------------------------------------------
+    def customise_project_location_controller(**attr):
+
+        s3 = current.response.s3
+
+        # Custom postp
+        #standard_postp = s3.postp
+        def custom_postp(r, output):
+            # Call standard postp (just does same thing but different)
+            #if callable(standard_postp):
+            #    output = standard_postp(r, output)
+
+            if r.representation == "plain":
+                # Map Popup
+                from gluon import A, TABLE, TR, TD, B, URL
+                s3db = current.s3db
+                table = s3db.project_project
+                project_id = r.record.project_id
+                resource = s3db.resource("project_project", id=project_id)
+                list_fields = ("name",
+                               "status_id",
+                               "start_date",
+                               "end_date",
+                               "budget.total_budget",
+                               "budget.currency",
+                               "hazard_project.hazard_id",
+                               "sector_project.sector_id",
+                               "theme_project.theme_id",
+                               # Contact
+                               "human_resource_id",
+                               "overall_status_by_indicators",
+                               )
+                data = resource.select(list_fields, represent=True)
+                record = data.rows[0]
+                item = TABLE(TR(TD(B("%s:" % table.name.label)),
+                                          TD(record["project_project.name"]),
+                                          ),
+                                       TR(TD(B("%s:" % table.status_id.label)),
+                                          TD(record["project_project.status_id"]),
+                                          ),
+                                       TR(TD(B("%s:" % table.start_date.label)),
+                                          TD(record["project_project.start_date"]),
+                                          ),
+                                       TR(TD(B("%s:" % table.end_date.label)),
+                                          TD(record["project_project.end_date"]),
+                                          ),
+                                       TR(TD(B("%s:" % T("Budget"))),
+                                          TD("%s %s" % (record["budget_budget.currency"],
+                                                        record["budget_budget.total_budget"])),
+                                          ),
+                                       TR(TD(B("%s:" % s3db.project_hazard_project.hazard_id.label)),
+                                          TD(record["project_hazard_project.hazard_id"]),
+                                          ),
+                                       TR(TD(B("%s:" % s3db.project_sector_project.sector_id.label)),
+                                          TD(record["project_sector_project.sector_id"]),
+                                          ),
+                                       TR(TD(B("%s:" % s3db.project_theme_project.theme_id.label)),
+                                          TD(record["project_theme_project.theme_id"]),
+                                          ),
+                                       TR(TD(B("%s:" % table.human_resource_id.label)),
+                                          TD(record["project_project.human_resource_id"]),
+                                          ),
+                                       TR(TD(B("%s:" % T("Cumulative Status"))),
+                                          TD(record["project_project.overall_status_by_indicators"]),
+                                          ),
+                                       )
+                title = s3.crud_strings["project_project"].title_display
+                # Assume authorised to see details
+                popup_url = URL(f="project", args=[project_id])
+                details_btn = A(T("Open"),
+                                _href=popup_url,
+                                _class="btn",
+                                _id="details-btn",
+                                _target="_blank")
+                output = dict(item = item,
+                              title = title,
+                              details_btn = details_btn,
+                              )
+
+            return output
+
+        s3.postp = custom_postp
+        return attr
+
+    settings.customise_project_location_controller = customise_project_location_controller
 
     # -----------------------------------------------------------------------------
     def customise_req_commit_controller(**attr):

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 
 """ Authentication, Authorization, Accouting
 
@@ -354,7 +353,9 @@ Thank you"""
                      Field("user_id", utable),
                      Field("home"),
                      Field("mobile"),
-                     Field("image", "upload"),
+                     Field("image", "upload",
+                           length = current.MAX_FILENAME_LENGTH,
+                           ),
                      *(s3_uid()+s3_timestamp()))
 
         # Group table (roles)
@@ -1685,11 +1686,13 @@ Thank you"""
             else:
                 organisation_id.requires = IS_EMPTY_OR(requires)
 
-            from s3layouts import S3AddResourceLink
-            organisation_id.comment = S3AddResourceLink(c="org",
-                                                        f="organisation",
-                                                        label=s3db.crud_strings["org_organisation"].label_create,
-                                                        title=s3db.crud_strings["org_organisation"].title_list,)
+            from s3layouts import S3PopupLink
+            org_crud_strings = s3db.crud_strings["org_organisation"]
+            organisation_id.comment = S3PopupLink(c = "org",
+                                                  f = "organisation",
+                                                  label = org_crud_strings.label_create,
+                                                  title = org_crud_strings.title_list,
+                                                  )
             #from s3widgets import S3OrganisationAutocompleteWidget
             #organisation_id.widget = S3OrganisationAutocompleteWidget()
             #organisation_id.comment = DIV(_class="tooltip",
@@ -1717,11 +1720,13 @@ Thank you"""
                 org_group_id.requires = requires
             else:
                 org_group_id.requires = IS_EMPTY_OR(requires)
-            #from s3layouts import S3AddResourceLink
-            #org_group_id.comment = S3AddResourceLink(c="org",
-            #                                         f="group",
-            #                                         label=s3db.crud_strings["org_group"].label_create,
-            #                                         title=s3db.crud_strings["org_group"].title_list,)
+            #from s3layouts import S3PopupLink
+            #ogroup_crud_strings = s3db.crud_strings["org_group"]
+            #org_group_id.comment = S3PopupLink(c = "org",
+            #                                   f = "group",
+            #                                   label = ogroup_crud_strings.label_create,
+            #                                   title = ogroup_crud_strings.title_list,
+            #                                   )
             if multiselect_widget:
                 org_group_id.widget = S3MultiSelectWidget(multiple=False)
 
@@ -5751,15 +5756,26 @@ class S3Permission(object):
             Set the default approver for new records in table
 
             @param table: the table
-            @param force: whether to force approval for tables which require manual approval
+            @param force: whether to force approval for tables which
+                          require manual approval
         """
 
         APPROVER = "approved_by"
-
-        if APPROVER in table and (force or table._tablename not in \
-            current.deployment_settings.get_auth_record_approval_manual()):
-            auth = current.auth
+        if APPROVER in table:
             approver = table[APPROVER]
+        else:
+            return
+
+        settings = current.deployment_settings
+        auth = current.auth
+
+        if not settings.get_auth_record_approval():
+            if auth.s3_logged_in() and auth.user:
+                approver.default = auth.user.id
+            else:
+                approver.default = 0
+        elif force or \
+             table._tablename not in settings.get_auth_record_approval_manual():
             if auth.override:
                 approver.default = 0
             elif auth.s3_logged_in() and \

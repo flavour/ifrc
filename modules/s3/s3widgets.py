@@ -7706,6 +7706,11 @@ class S3TimeIntervalWidget(FormWidget):
 
         if value is None:
             value = 0
+        elif isinstance(value, basestring):
+            try:
+                value = int(value)
+            except ValueError:
+                value = 0
 
         if value == 0:
             multiplier = 1
@@ -7985,6 +7990,7 @@ class S3PasswordWidget(FormWidget):
                             )
         return DIV(password_input,
                    password_unmask,
+                   _class = "s3-password-widget",
                    )
 
 # =============================================================================

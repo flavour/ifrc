@@ -97,9 +97,13 @@ from gluon.storage import Storage
 # http://en.wikipedia.org/wiki/Anti_pattern#Programming_anti-patterns
 response.s3 = Storage()
 s3 = response.s3
-s3.gis = Storage()  # Defined early for use by S3Config.
+s3.gis = Storage() # Defined early for use by S3Config.
 
 current.cache = cache
+# Limit for filenames on filesystem:
+# https://en.wikipedia.org/wiki/Comparison_of_file_systems#Limits
+# NB This takes effect during the file renaming algorithm - the length of uploaded filenames is unaffected
+current.MAX_FILENAME_LENGTH = 255 # Defined early for use by S3Config.
 
 # Import S3Config
 import s3cfg

@@ -138,12 +138,13 @@ class SyncDataModel(S3Model):
         # Repository
         # -------------------------------------------------------------------------
         sync_repository_types = {
-            "eden": "Sahana Eden",
-            "ccrm": "CiviCRM",
-            "wrike": "Wrike",
-            "mcb": "Mariner CommandBridge",
             "adashi": "ADASHI (passive)",
+            "ccrm": "CiviCRM",
+            "eden": "Sahana Eden",
+            #"filesync": "Local Filesystem",
             "ftp": "FTP",
+            "mcb": "Mariner CommandBridge",
+            "wrike": "Wrike",
         }
         password_widget = S3PasswordWidget()
         tablename = "sync_repository"
@@ -241,6 +242,15 @@ class SyncDataModel(S3Model):
                                                 T("Synchronize UUIDs"),
                                                 T("Allow records to be synchronized even if the remote record has a different unique identifier (UUID), and update local identifiers. Useful in active repositories when there are known duplicates in the remote database. Must be activated before the first synchronization run to take effect."))),
                            ),
+                     Field("keep_source", "boolean",
+                           default = False,
+                           label = T("Keep Source Data"),
+                           represent = s3_yes_no_represent,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (
+                                                T("Keep Source Data"),
+                                                T("Stores the data sent from the peer in the local file system (if supported by the adapter), for testing purposes. Enable only temporarily if and when required!"))),
+                           ),
                      Field.Method("last_pull_time",
                                   self.sync_repository_last_pull_time),
                      Field.Method("last_push_time",
@@ -287,9 +297,10 @@ class SyncDataModel(S3Model):
         # Reusable Fields
         sync_repository_represent = S3Represent(lookup=tablename)
         repository_id = S3ReusableField("repository_id", "reference %s" % tablename,
-                                        comment = S3PopupLink(c="sync", f="repository",
-                                                              label=ADD_REPOSITORY,
-                                                              title=ADD_REPOSITORY,
+                                        comment = S3PopupLink(c = "sync",
+                                                              f = "repository",
+                                                              label = ADD_REPOSITORY,
+                                                              title = ADD_REPOSITORY,
                                                               tooltip = ADD_REPOSITORY,
                                                               ),
                                         label = T("Repository"),

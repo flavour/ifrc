@@ -2518,7 +2518,8 @@ class GIS(object):
                         attribute = {}
                         for fieldname in attr_cols:
                             represent = row[fieldname]
-                            if represent and represent != NONE:
+                            if represent is not None and \
+                               represent not in (NONE, ""):
                                 # Skip empty fields
                                 _attr = attr_cols[fieldname]
                                 ftype = _attr[0]
@@ -2535,7 +2536,7 @@ class GIS(object):
                                             # @ToDo: Don't assume this i18n formatting...better to have no represent & then bypass the s3_unicode in select too
                                             #        (although we *do* want the represent in the tooltips!)
                                             pass
-                                elif ftype == "double":
+                                elif ftype in ("double", "float"):
                                     # Attributes should be numbers not strings
                                     try:
                                         float_represent = float(represent.replace(",", ""))
@@ -9431,6 +9432,7 @@ class S3ImportPOI(S3Method):
                             default = T("Can read PoIs either from an OpenStreetMap file (.osm) or mirror."),
                             writable = False),
                       Field("file", "upload",
+                            length = current.MAX_FILENAME_LENGTH,
                             uploadfolder = uploadpath,
                             label = T("File")),
                       Field("text2", # Dummy Field to add text inside the Form

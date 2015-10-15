@@ -236,7 +236,9 @@ class S3XML(S3Codec):
             except:
                 pass
         try:
-            parser = etree.XMLParser(no_network=False)
+            parser = etree.XMLParser(no_network = False,
+                                     remove_blank_text = True,
+                                     )
             result = etree.parse(source, parser)
             return result
         except:
@@ -1009,6 +1011,7 @@ class S3XML(S3Codec):
                 LatLon = latlons[tablename].get(record_id, None)
                 if LatLon:
                     # @ToDo: Support records with multiple locations
+                    #        via making these also use the map element
                     lat = LatLon[0]
                     lon = LatLon[1]
                     if lat is not None and lon is not None:
@@ -2120,7 +2123,7 @@ class S3XML(S3Codec):
                         else:
                             single = True
                 child_obj = element2json(child, native=native)
-                if child_obj:
+                if child_obj is not None and child_obj != "":
                     if tag not in obj:
                         if single and collapse:
                             obj[tag] = child_obj
@@ -2208,7 +2211,10 @@ class S3XML(S3Codec):
         root_dict = cls.__element2json(root, native=native)
         if "s3" in root_dict:
             # Don't double JSON-encode
-            root_dict["s3"] = json.loads(root_dict["s3"])
+            if root_dict["s3"] == {}:
+                del root_dict["s3"]
+            else:
+                root_dict["s3"] = json.loads(root_dict["s3"])
 
         if pretty_print:
             js = json.dumps(root_dict, indent=4)

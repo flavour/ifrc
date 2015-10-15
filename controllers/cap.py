@@ -30,33 +30,6 @@ def info_prep(r):
     s3.stylesheets.append("S3/cap.css")
 
     table = db.cap_info
-    if r.representation == "html":
-        if r.component:
-            if r.component_name == "info":
-                info_fields_comments()
-            elif r.component_name == "area":
-                area_fields_comments()
-            elif r.component_name == "resource":
-                resource_fields_comments()
-        elif r.tablename == "cap_info":
-            info_fields_comments()
-
-        item = r.record
-        if item and r.tablename == "cap_info" and \
-           s3db.cap_alert_is_template(item.alert_id):
-            for f in ("urgency",
-                      "certainty",
-                      "effective",
-                      "onset",
-                      "expires",
-                      "priority",
-                      "severity"
-                      ):
-                field = table[f]
-                field.writable = False
-                field.readable = False
-                field.required = False
-            table.category.required = False
 
     post_vars = request.post_vars
     template_id = None
@@ -105,21 +78,21 @@ def alert():
     tablename = "cap_alert"
 
     def prep(r):
-        from s3.s3filter import S3OptionsFilter
+        from s3 import S3OptionsFilter
         itable = s3db.cap_info
         rows = db(itable.expires < request.utcnow).select(itable.id,
                                                           orderby=itable.id)
         if rows:
             expired_ids = ",".join([str(row.id) for row in rows])
         else:
-            expired_ids = "*"            
+            expired_ids = "*"
         rows = db(itable.expires >= request.utcnow).select(itable.id,
                                                            orderby=itable.id)
         if rows:
             unexpired_ids = ",".join([str(row.id) for row in rows])
         else:
             unexpired_ids = "*"
-        
+
         filter_widgets = s3db.get_config(tablename, "filter_widgets")
         filter_widgets.insert(0, S3OptionsFilter("info.id",
                                                  label = T("Expiration"),
@@ -134,15 +107,21 @@ def alert():
         s3db.configure(tablename,
                        filter_widgets = filter_widgets,
                        )
-        
+
         if r.representation == "dl":
             # DataList: match list_layout
-            list_fields = ["info.headline",
+            list_fields = ["msg_type",
+                           "info.headline",
                            "area.name",
                            "info.priority",
                            "status",
                            "scope",
                            "info.event_type_id",
+                           "info.certainty",
+                           "info.severity",
+                           "info.urgency",
+                           "info.sender_name",
+                           "sent",
                            ]
 
             s3db.configure(tablename,
@@ -181,7 +160,6 @@ def alert():
             s3.formats["cap"] = r.url() # .have added by JS
 
         if r.interactive:
-            alert_fields_comments()
 
             if not r.component:
                 if r.method == "profile":
@@ -552,6 +530,15 @@ def alert():
                                               "",
                                               ),)
 
+            elif r.component_name == "info":
+                itable = r.component.table
+                alert_id = request.args(0)
+                # Check for prepopulate
+                if alert_id:
+                    itable.web.default = current.deployment_settings.get_base_public_url()+\
+                                         URL(c="cap", f="alert", args=alert_id)
+
+
             elif r.component_name == "area":
                 atable = r.component.table
                 # Limit to those for this Alert
@@ -685,7 +672,13 @@ def alert():
                         del row_clone["info_id"]
                     rtable.insert(**row_clone)
 
-            r.next = URL(c="cap", f="alert", args=[lastid, "info"])
+            itable = s3db.cap_info
+            row = db(itable.alert_id == lastid).select(itable.id,
+                                                       limitby=(0, 1)).first()
+            if row:
+                r.next = URL(c="cap", f="alert", args=[lastid, "info"])
+            else:
+                r.next = URL(c="cap", f="alert", args=[lastid, "info", "create"])
 
         if r.interactive:
             if get_vars.get("_next"):
@@ -701,11 +694,6 @@ def alert():
             if isinstance(output, dict) and "form" in output:
                 if not r.component and \
                    r.method not in ("import", "import_feed", "profile"):
-                    fields = s3db.cap_info_labels()
-                    jsobj = []
-                    for f in fields:
-                        jsobj.append("'%s': '%s'" % (f, fields[f].replace("'", "\\'")))
-                    s3.js_global.append('''i18n.cap_info_labels={%s}''' % ", ".join(jsobj))
                     form = output["form"]
                     form.update(_class="cap_alert_form")
                 set_priority_js()
@@ -812,24 +800,32 @@ def template():
             field.requires = None
         atable.template_title.requires = IS_NOT_EMPTY()
         atable.status.readable = atable.status.writable = False
-        itable = db.cap_info
-        for f in ("event",
-                  "urgency",
-                  "certainty",
-                  "priority",
-                  "severity",
-                  "effective",
-                  "onset",
-                  "expires",
-                  ):
-            field = itable[f]
-            field.writable = False
-            field.readable = False
-            field.required = False
 
-        itable.category.required = False
+        if r.component_name == "info":
+            itable = db.cap_info
+            for f in ("event",
+                      "urgency",
+                      "certainty",
+                      "priority",
+                      "severity",
+                      "effective",
+                      "onset",
+                      "expires",
+                      ):
+                field = itable[f]
+                field.writable = False
+                field.readable = False
+                field.required = False
 
-        if r.component_name == "resource":
+            itable.category.required = False
+
+            alert_id = request.args(0)
+            # Check for prepopulate
+            if alert_id:
+                itable.web.default = current.deployment_settings.get_base_public_url()+\
+                                     URL(c="cap", f="alert", args=alert_id)
+
+        elif r.component_name == "resource":
             rtable = r.component.table
             # Limit to those for this Alert
             rtable.info_id.requires = IS_EMPTY_OR(
@@ -864,7 +860,6 @@ def template():
             msg_list_empty = T("No templates to show"))
 
         if r.representation == "html":
-            alert_fields_comments()
             s3.scripts.append("/%s/static/scripts/json2.min.js" % appname)
             if s3.debug:
                 s3.scripts.append("/%s/static/scripts/S3/s3.cap.js" % appname)
@@ -876,7 +871,20 @@ def template():
     s3.prep = prep
 
     def postp(r,output):
+        lastid = r.resource.lastid
+        if lastid:
+            itable = s3db.cap_info
+            row = db(itable.alert_id == lastid).select(itable.id,
+                                                       limitby=(0, 1)).first()
+            if row:
+                r.next = URL(c="cap", f="template", args=[lastid, "info"])
+            else:
+                r.next = URL(c="cap", f="template", args=[lastid, "info", "create"])
+
         if r.interactive and "form" in output:
+            if get_vars.get("_next"):
+                r.next = get_vars.get("_next")
+
             s3.js_global.append('''i18n.cap_locked="%s"''' % T("Locked"))
             tablename = r.tablename
             if tablename == tablename:
@@ -951,8 +959,7 @@ def priority_get():
             # Get Event Name for Event ID
             etable = s3db.event_event_type
             item = db(etable.id == event_type_id).select(etable.name,
-                                                         limitby=(0, 1)
-                                                         ).first()
+                                                         limitby=(0, 1)).first()
             try:
                 event_type_name = item.name
             except:
@@ -964,20 +971,20 @@ def priority_get():
                 rows = db(query).select(wptable.id,
                                         wptable.name,
                                         orderby = wptable.id)
+                result = rows.json()
+                # Uses "others" event_type
+                # Use this according to deployment
+                #from gluon.serializers import json as jsons
+                #if rows:
+                #    row_dict = [{"id": r.id, "name": T(r.name)} for r in rows]
+                #    result = jsons(row_dict)
+                #else:
+                #    rows = db(wptable.event_type == "others").select(wptable.id,
+                #                                                     wptable.name,
+                #                                                     orderby = wptable.id)
 
-                from gluon.serializers import json as jsons
-                if rows:
-                    row_dict = [{"id": r.id, "name": T(r.name)} for r in rows] + \
-                               [{"id": "", "name": T("Undefined")}]
-                    result = jsons(row_dict)
-                else:
-                    rows = db(wptable.event_type == "others").select(wptable.id,
-                                                                     wptable.name,
-                                                                     orderby = wptable.id)
-
-                    row_dict = [{"id": r.id, "name": T(r.name)} for r in rows] + \
-                               [{"id": "", "name": T("Undefined")}]
-                    result = jsons(row_dict)
+                #    row_dict = [{"id": r.id, "name": T(r.name)} for r in rows]
+                #    result = jsons(row_dict)
     finally:
         response.headers["Content-Type"] = "application/json"
         return result
@@ -1003,296 +1010,6 @@ def compose():
         session.confirmation = T("Alert Approval Notified")
 
     redirect(URL(c="cap", f="alert"))
-
-# -----------------------------------------------------------------------------
-def alert_fields_comments():
-    """
-        Add comments to Alert fields
-    """
-
-    table = db.cap_alert
-    table.identifier.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("A unique identifier of the alert message"),
-              T("A number or string uniquely identifying this message, assigned by the sender. Must notnclude spaces, commas or restricted characters (< and &).")))
-
-    table.sender.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The identifier of the sender of the alert message"),
-              T("This is guaranteed by assigner to be unique globally; e.g., may be based on an Internet domain name. Must not include spaces, commas or restricted characters (< and &).")))
-
-    table.status.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the appropriate handling of the alert message"),
-              T("See options.")))
-
-    table.msg_type.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The nature of the alert message"),
-              T("See options.")))
-
-    table.source.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The text identifying the source of the alert message"),
-              T("The particular source of this alert; e.g., an operator or a specific device.")))
-
-    table.scope.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the intended distribution of the alert message"),
-              T("Who is this alert for?")))
-
-    table.restriction.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The text describing the rule for limiting distribution of the restricted alert message"),
-              T("Used when scope is 'Restricted'.")))
-
-    table.addresses.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The group listing of intended recipients of the alert message"),
-              T("Required when scope is 'Private', optional when scope is 'Public' or 'Restricted'. Each recipient shall be identified by an identifier or an address.")))
-
-    table.codes.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Codes for special handling of the message"),
-              T("Any user-defined flags or special codes used to flag the alert message for special handling.")))
-
-    table.note.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The text describing the purpose or significance of the alert message"),
-              T("The message note is primarily intended for use with status 'Exercise' and message type 'Error'")))
-
-    table.reference.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The group listing identifying earlier message(s) referenced by the alert message"),
-              T("The extended message identifier(s) (in the form sender,identifier,sent) of an earlier CAP message or messages referenced by this one.")))
-
-    table.incidents.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("A list of incident(s) referenced by the alert message"),
-              T("Used to collate multiple messages referring to different aspects of the same incident. If multiple incident identifiers are referenced, they SHALL be separated by whitespace.  Incident names including whitespace SHALL be surrounded by double-quotes.")))
-
-# -----------------------------------------------------------------------------
-def area_fields_comments():
-    """
-        Add comments to Area fields
-    """
-
-    table = db.cap_area
-    table.name.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The affected area of the alert message"),
-              T("A text description of the affected area.")))
-
-    # table.circle.comment = DIV(
-          # _class="tooltip",
-          # _title="%s|%s" % (
-              # T("A point and radius delineating the affected area"),
-              # T("The circular area is represented by a central point given as a coordinate pair followed by a radius value in kilometers.")))
-
-    # table.geocode.comment = DIV(
-          # _class="tooltip",
-          # _title="%s|%s" % (
-              # T("The geographic code delineating the affected area"),
-              # T("Any geographically-based code to describe a message target area, in the form. The key is a user-assigned string designating the domain of the code, and the content of value is a string (which may represent a number) denoting the value itself (e.g., name='ZIP' and value='54321'). This should be used in concert with an equivalent description in the more universally understood polygon and circle forms whenever possible.")))
-
-    table.altitude.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The specific or minimum altitude of the affected area"),
-              T("If used with the ceiling element this value is the lower limit of a range. Otherwise, this value specifies a specific altitude. The altitude measure is in feet above mean sea level.")))
-
-    table.ceiling.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The maximum altitude of the affected area"),
-              T("must not be used except in combination with the 'altitude' element. The ceiling measure is in feet above mean sea level.")))
-
-# -----------------------------------------------------------------------------
-def info_fields_comments():
-    """
-        Add comments to Information segment fields
-    """
-
-    table = db.cap_info
-    table.language.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the language of the information"),
-              T("Code Values: Natural language identifier per [RFC 3066]. If not present, an implicit default value of 'en-US' will be assumed. Edit settings.cap.languages in 000_config.py to add more languages. See <a href=\"%s\">here</a> for a full list.") % "http://www.i18nguy.com/unicode/language-identifiers.html"))
-
-    table.category.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the category of the subject event of the alert message"),
-              T("You may select multiple categories by holding down control and then selecting the items.")))
-
-    table.event.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The text denoting the type of the subject event of the alert message"),
-              T("If not specified, will the same as the Event Type.")))
-
-    table.response_type.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the type of action recommended for the target audience"),
-              T("Multiple response types can be selected by holding down control and then selecting the items")))
-
-    table.urgency.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the urgency of the subject event of the alert message"),
-              T("The urgency, severity, and certainty of the information collectively distinguish less emphatic from more emphatic messages." +
-                "'Immediate' - Responsive action should be taken immediately" +
-                "'Expected' - Responsive action should be taken soon (within next hour)" +
-                "'Future' - Responsive action should be taken in the near future" +
-                "'Past' - Responsive action is no longer required" +
-                "'Unknown' - Urgency not known")))
-
-    table.severity.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the severity of the subject event of the alert message"),
-              T("The urgency, severity, and certainty elements collectively distinguish less emphatic from more emphatic messages." +
-              "'Extreme' - Extraordinary threat to life or property" +
-              "'Severe' - Significant threat to life or property" +
-              "'Moderate' - Possible threat to life or property" +
-              "'Minor' - Minimal to no known threat to life or property" +
-              "'Unknown' - Severity unknown")))
-
-    table.certainty.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("Denotes the certainty of the subject event of the alert message"),
-              T("The urgency, severity, and certainty elements collectively distinguish less emphatic from more emphatic messages." +
-              "'Observed' - Determined to have occurred or to be ongoing" +
-              "'Likely' - Likely (p > ~50%)" +
-              "'Possible' - Possible but not likely (p <= ~50%)" +
-              "'Unlikely' - Not expected to occur (p ~ 0)" +
-              "'Unknown' - Certainty unknown")))
-
-    table.audience.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The intended audience of the alert message"),
-              T("")))
-
-    table.event_code.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("A system-specific code identifying the event type of the alert message"),
-              T("Any system-specific code for events, in the form of key-value pairs. (e.g., SAME, FIPS, ZIP).")))
-
-    table.effective.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The effective time of the information of the alert message"),
-              T("If not specified, the effective time shall be assumed to be the same the time the alert was sent.")))
-
-    table.onset.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The expected time of the beginning of the subject event of the alert message"),
-              T("")))
-
-    table.expires.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The expiry time of the information of the alert message"),
-              T("If this item is not provided, each recipient is free to enforce its own policy as to when the message is no longer in effect.")))
-
-    table.sender_name.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The text naming the originator of the alert message"),
-              T("The human-readable name of the agency or authority issuing this alert.")))
-
-    table.headline.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The text headline of the alert message"),
-              T("A brief human-readable headline.  Note that some displays (for example, short messaging service devices) may only present this headline; it should be made as direct and actionable as possible while remaining short.  160 characters may be a useful target limit for headline length.")))
-
-    table.description.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The subject event of the alert message"),
-              T("An extended human readable description of the hazard or event that occasioned this message.")))
-
-    table.instruction.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The recommended action to be taken by recipients of the alert message"),
-              T("An extended human readable instruction to targeted recipients.  If different instructions are intended for different recipients, they should be represented by use of multiple information blocks. You can use a different information block also to specify this information in a different language.")))
-
-    table.web.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("A URL associating additional information with the alert message"),
-              T("A full, absolute URI for an HTML page or other text resource with additional or reference information regarding this alert.")))
-
-    table.contact.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The contact for follow-up and confirmation of the alert message"),
-              T("")))
-
-    table.parameter.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("A system-specific additional parameter associated with the alert message"),
-              T("Any system-specific datum, in the form of key-value pairs.")))
-
-# -----------------------------------------------------------------------------
-def resource_fields_comments():
-    """
-        Add comments to Resource fields
-    """
-
-    table = db.cap_resource
-    table.resource_desc.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The type and content of the resource file"),
-              T("The human-readable text describing the type and content, such as 'map' or 'photo', of the resource file.")))
-
-    table.mime_type.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The identifier of the MIME content type and sub-type describing the resource file"),
-              T("MIME content type and sub-type as described in [RFC 2046]. (As of this document, the current IANA registered MIME types are listed at http://www.iana.org/assignments/media-types/)")))
-
-    table.size.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The integer indicating the size of the resource file"),
-              T("Approximate size of the resource file in bytes.")))
-
-    # @ToDo: This should be handled under the hood
-    table.uri.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The identifier of the hyperlink for the resource file"),
-              T("A full absolute URI, typically a Uniform Resource Locator that can be used to retrieve the resource over the Internet.")))
-
-    table.digest.comment = DIV(
-          _class="tooltip",
-          _title="%s|%s" % (
-              T("The code representing the digital digest ('hash') computed from the resource file"),
-              T("Calculated using the Secure Hash Algorithm (SHA-1).")))
 
 # -----------------------------------------------------------------------------
 def set_priority_js():
