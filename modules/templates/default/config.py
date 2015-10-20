@@ -193,6 +193,8 @@ def config(settings):
     #settings.L10n.name_alt_gis_location = True
     # Uncomment this to Translate Organisation Names/Acronyms
     #settings.L10n.translate_org_organisation = True
+    # Uncomment this to Translate Site Names
+    #settings.L10n.translate_org_site = True
 
     # Finance settings
     #settings.fin.currencies = {
@@ -473,6 +475,8 @@ def config(settings):
     #settings.cr.shelter_population_dynamic = True
     # Uncomment to disable people registration in shelters
     #settings.cr.people_registration = False
+    # Uncomment to use Tags for Shelters
+    #settings.cr.tags = True
 
     # -------------------------------------------------------------------------
     # Events
@@ -577,6 +581,8 @@ def config(settings):
     #settings.org.office_code_unique = True
     # Uncomment to make Facility codes unique
     #settings.org.facility_code_unique = True
+    # Uncomment to use Tags for Organisations, Offices & Facilities
+    #settings.org.tags = True
 
     # -------------------------------------------------------------------------
     # Human Resource Management
@@ -811,6 +817,8 @@ def config(settings):
     #settings.project.codes = True
     # Uncomment this to call project locations 'Communities'
     #settings.project.community = True
+    # Uncomment this to enable Demographics in 3W projects
+    #settings.project.demographics = True
     # Uncomment this to enable Hazards in 3W projects
     #settings.project.hazards = True
     # Uncomment this to enable Indicators in projects
@@ -1203,6 +1211,12 @@ def config(settings):
         #("ocr", Storage(
         #   name_nice = T("Optical Character Recognition"),
         #   #description = "Optical Character Recognition for reading the scanned handwritten paper forms.",
+        #   restricted = False,
+        #   module_type = None,
+        #)),
+        #("work", Storage(
+        #   name_nice = T("Jobs"),
+        #   #description = "Simple Volunteer Jobs Management",
         #   restricted = False,
         #   module_type = None,
         #)),

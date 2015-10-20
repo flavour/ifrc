@@ -522,6 +522,19 @@ def alert():
                                    )
 
                     response.s3.stylesheets.append("../themes/default/cap.css")
+                    
+                elif r.method == "assign":
+                    translate = settings.get_L10n_translate_cap_area()
+                    if translate:
+                        if session.s3.language == settings.get_L10n_default_language():
+                            translate = False
+                        if translate:
+                            # Represent each row with local name if available
+                            from s3 import S3Represent
+                            atable = s3db.cap_area
+                            cap_area_options = cap_AreaRowOptionsBuilder(r.id,
+                                                                         caller=r.method)
+                            atable.name.represent = S3Represent(options=cap_area_options)
 
                 elif r.method != "import" and not get_vars.get("_next"):
                     s3.crud.submit_style = "hide"
@@ -552,6 +565,16 @@ def alert():
                     # Do not show for the actual area
                     field = atable[f]
                     field.writable = field.readable = False
+
+                translate = settings.get_L10n_translate_cap_area()
+                if translate:
+                    if session.s3.language == settings.get_L10n_default_language():
+                        translate = False
+                    if translate:
+                        # Represent each row with local name if available
+                        from s3 import S3Represent
+                        cap_area_options = cap_AreaRowOptionsBuilder(r.id)
+                        atable.name.represent = S3Represent(options=cap_area_options)
 
                 # Auto assign the info_id to area if only one info segment
                 itable = s3db.cap_info
@@ -944,52 +967,6 @@ def warning_priority():
     return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
-def priority_get():
-
-    try:
-        event_type_id = request.args[0]
-    except:
-        result = current.xml.json_message(False, 400, "No Event Type provided!")
-    else:
-        try:
-            event_type_id = int(event_type_id)
-        except:
-            result = current.xml.json_message(False, 400, "Invalid Event Type!")
-        else:
-            # Get Event Name for Event ID
-            etable = s3db.event_event_type
-            item = db(etable.id == event_type_id).select(etable.name,
-                                                         limitby=(0, 1)).first()
-            try:
-                event_type_name = item.name
-            except:
-                result = current.xml.json_message(False, 400, "Event Type Not Found!")
-            else:
-                wptable = s3db.cap_warning_priority
-                query = (wptable.event_type == event_type_name)
-
-                rows = db(query).select(wptable.id,
-                                        wptable.name,
-                                        orderby = wptable.id)
-                result = rows.json()
-                # Uses "others" event_type
-                # Use this according to deployment
-                #from gluon.serializers import json as jsons
-                #if rows:
-                #    row_dict = [{"id": r.id, "name": T(r.name)} for r in rows]
-                #    result = jsons(row_dict)
-                #else:
-                #    rows = db(wptable.event_type == "others").select(wptable.id,
-                #                                                     wptable.name,
-                #                                                     orderby = wptable.id)
-
-                #    row_dict = [{"id": r.id, "name": T(r.name)} for r in rows]
-                #    result = jsons(row_dict)
-    finally:
-        response.headers["Content-Type"] = "application/json"
-        return result
-
-# -----------------------------------------------------------------------------
 def compose():
     """
         Send message to the people with role of Alert Approval
@@ -1035,5 +1012,61 @@ def set_priority_js():
         js_global.append(priority_conf)
 
     return
+
+# -----------------------------------------------------------------------------
+def cap_AreaRowOptionsBuilder(alert_id, caller=None):
+    """ 
+        Build the options for the cap_area associated with alert_id
+        with the translated name (if available)
+        @param caller: currently used by assign method
+    """
+          
+    atable = s3db.cap_area
+    
+    if caller:
+        assign = caller == "assign"
+    else:
+        assign = None        
+    if assign:
+        query = (atable.is_template == True) & (atable.deleted != True)
+    else:
+        query = (atable.alert_id == alert_id) & (atable.deleted != True)
+
+    rows = db(query).select(atable.id,
+                            atable.template_area_id,
+                            atable.name,
+                            orderby=atable.id)
+    values = [row.id for row in rows]
+    count = len(values)
+    if count:
+        if count == 1:
+            query_ = (atable.id == values[0])
+        else:
+            query_ = (atable.id.belongs(values))
+                                
+        ltable = s3db.cap_area_name
+        if assign:
+            left = [ltable.on((ltable.area_id == atable.id) & \
+                              (ltable.language == session.s3.language)),
+                    ]
+        else:
+            left = [ltable.on((ltable.area_id == atable.template_area_id) & \
+                              (ltable.language == session.s3.language)),
+                    ]
+            
+        fields = [atable.name,
+                  ltable.name_l10n,
+                  ]                
+        rows_ = db(query_).select(left=left,
+                                  limitby=(0, count),
+                                  *fields)
+        
+        cap_area_options = {}
+        for row_ in rows_:
+                cap_area_options[row_["cap_area.name"]] = \
+                            s3_unicode(row_["cap_area_name.name_l10n"] or \
+                                       row_["cap_area.name"])
+                            
+        return cap_area_options
 
 # END =========================================================================

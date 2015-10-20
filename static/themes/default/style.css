@@ -614,6 +614,10 @@ table.dataTable .selected-action {
   margin: 5px 0 5px;
 }
 
+.dt-wrapper {
+  margin-bottom: 1.5rem;
+}
+
 .dataTables_processing {
   padding: 14px 0 28px;
 }
@@ -793,6 +797,11 @@ input.date.hasDatepicker {
   font-size: 0.8rem;
 }
 
+/* Checkboxes Widget */
+.controls .checkboxes-widget-s3 {
+  display: inline-flex;
+}
+
 /* Data Lists (including profile) */
 .dl .dl-header {
   float: none;
@@ -835,6 +844,11 @@ h4.profile-sub-header {
 /* Comment feeds */
 .comment-box {
   background: none repeat scroll 0 0 #f5f5f5;
+}
+
+/* Text representation */
+.text-body {
+  white-space: pre-wrap;
 }
 
 /* Iframe Map (Location Represent links) */

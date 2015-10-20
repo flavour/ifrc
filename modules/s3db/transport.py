@@ -43,6 +43,9 @@ class S3TransportModel(S3Model):
     names = ("transport_airport",
              "transport_heliport",
              "transport_seaport",
+             "transport_border_crossing",
+             "transport_border_crossing_location",
+             #"transport_border_control_point",
              )
 
     def model(self):
@@ -570,6 +573,105 @@ class S3TransportModel(S3Model):
                   #super_entity = ("doc_entity", "pr_pentity", "org_site"),
                   super_entity = "org_site",
                   )
+
+        # ---------------------------------------------------------------------
+        # Border Crossings
+        #
+        tablename = "transport_border_crossing"
+        define_table(tablename,
+                     Field("name", notnull=True,
+                           length = 64, # Mayon Compatibility
+                           label = T("Name"),
+                           ),
+                     # The exact location of the border
+                     location_id(),
+                     # @todo: status
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD strings
+        crud_strings[tablename] = Storage(
+            label_create=T("Create Border Crossing"),
+            title_display=T("Border Crossing Details"),
+            title_list=T("Border Crossings"),
+            title_update=T("Edit Border Crossing"),
+            title_upload=T("Import Border Crossings"),
+            label_list_button=T("List Border Crossings"),
+            label_delete_button=T("Delete Border Crossing"),
+            msg_record_created=T("Border Crossing added"),
+            msg_record_modified=T("Border Crossing updated"),
+            msg_record_deleted=T("Border Crossing deleted"),
+            msg_list_empty=T("No Border Crossings currently registered"))
+
+        crud_form = S3SQLCustomForm("name",
+                                    S3SQLInlineComponent("border_crossing_location",
+                                                         name = "location",
+                                                         label = "",
+                                                         fields = [("", "location_id")],
+                                                         ),
+                                    "comments",
+                                    )
+
+        # Components
+        self.add_components(tablename,
+                            transport_border_crossing_location = "border_crossing_id",
+                            )
+
+        configure(tablename,
+                  crud_form = crud_form,
+                  #context = {"location": "border_crossing_location.location_id"},
+                  #onaccept = self.transport_border_crossing_onaccept,
+                  )
+
+        # ---------------------------------------------------------------------
+        # Border crossing <> Location
+        #
+        # The locations either side of the border - typically just the Countries
+        #
+        tablename = "transport_border_crossing_location"
+        define_table(tablename,
+                     Field("border_crossing_id", "reference transport_border_crossing"),
+                     location_id(),
+                     *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
+        # Border Control Points
+        # - the Facilities at either side of the Border
+        #
+
+        #tablename = "transport_border_control_point"
+        #define_table(tablename,
+        #             #super_link("doc_id", "doc_entity"),
+        #             #super_link("pe_id", "pr_pentity"),
+        #             super_link("site_id", "org_site"),
+        #             Field("name", notnull=True,
+        #                   length = 64, # Mayon Compatibility
+        #                   label = T("Name"),
+        #                   ),
+        #             organisation_id(),
+        #             location_id(),
+        #             s3_comments(),
+        #             *s3_meta_fields())
+
+        # CRUD strings
+        #crud_strings[tablename] = Storage(
+        #    label_create=T("Create Border Control Point"),
+        #    title_display=T("Border Control Points"),
+        #    title_list=T("Border Control Points"),
+        #    title_update=T("Edit Border Control Point"),
+        #    title_upload=T("Import Border Control Points"),
+        #    label_list_button=T("List Border Control Points"),
+        #    label_delete_button=T("Delete Border Control Point"),
+        #    msg_record_created=T("Border Control Point added"),
+        #    msg_record_modified=T("Border Control Point updated"),
+        #    msg_record_deleted=T("Border Control Point deleted"),
+        #    msg_list_empty=T("No Border Control Points currently registered"))
+
+        #configure(tablename,
+        #          #onaccept = self.transport_border_control_point_onaccept,
+        #          #super_entity = ("doc_entity", "pr_pentity", "org_site"),
+        #          super_entity = "org_site",
+        #          )
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)

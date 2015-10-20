@@ -1578,6 +1578,7 @@ class S3OptionsMenu(object):
         else:
             IMPORT = "Import Project Locations"
         community_volunteers = lambda i: settings.get_project_community_volunteers()
+        demographics = lambda i: settings.get_project_demographics()
         hazards = lambda i: settings.get_project_hazards()
         #indicators = lambda i: settings.get_project_indicators()
         programmes = lambda i: settings.get_project_programmes()
@@ -1651,7 +1652,7 @@ class S3OptionsMenu(object):
                     M("Create", m="create"),
                  ),
                  M("Demographics", f="demographic",
-                   check=stats)(
+                   check=demographics)(
                     M("Create", m="create"),
                  ),
                  M("Hazards", f="hazard",
@@ -1826,6 +1827,11 @@ class S3OptionsMenu(object):
                         M("Map", m="map"),
                         M("Import", m="import", restrict=[ADMIN]),
                     ),
+                    M("Border Crossings", f="border_crossing")(
+                        M("Create", m="create"),
+                        M("Map", m="map"),
+                        M("Import", m="import", restrict=[ADMIN]),
+                    ),
                     M("Heliports", f="heliport")(
                         M("Create", m="create"),
                         M("Map", m="map"),
@@ -1894,6 +1900,29 @@ class S3OptionsMenu(object):
                         M("Create", m="create"),
                         M("Map", m="map"),
                         #M("Import", m="import"),
+                    ),
+                )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def work():
+        """ WORK: Simple Volunteer Jobs Management """
+
+        return M(c="work")(
+                    # @todo: my jobs
+                    M("Joblist", f="job", m="datalist"),
+                    M("Jobs", f="job")(
+                        M("Create", m="create"),
+                    ),
+                    M("Assignments", f="assignment")(
+                        M("Create", m="create"),
+                    ),
+                    # Hide until implemented:
+                    #M("Contexts", f="context")(
+                    #    M("Create", m="create"),
+                    #),
+                    M("Job Types", f="job_type")(
+                        M("Create", m="create"),
                     ),
                 )
 

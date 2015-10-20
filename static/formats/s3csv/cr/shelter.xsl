@@ -8,10 +8,11 @@
          Column headers defined in this stylesheet:
 
          Name...........................required.....cr_shelter.name
+         Name L10n:XX...................org_site_name.name_10n (Language = XX in column name, name_10n = cell in row. Multiple allowed)
          Organisation...................org_organisation
          Branch.........................org_organisation[_branch]
          Type...........................shelter_type_id.name
-         Service........................shelter_service_id.name
+         #Service........................shelter_service_id.name
          Country........................optional.....country
          L1.............................optional.....L1
          L2.............................optional.....L2
@@ -24,6 +25,7 @@
          Capacity Night.................cr_shelter.capacity_night
          Population.....................cr_shelter.population
          Status.........................cr_shelter.status (@ToDo: Populate cr_shelter_status for historical data)
+         KV:XX..........................Key,Value (Key = XX in column name, value = cell in row)
 
     *********************************************************************** -->
     <xsl:output method="xml"/>
@@ -253,6 +255,21 @@
                 </xsl:attribute>
             </reference>
 
+            <!-- L10n -->
+            <xsl:for-each select="col[starts-with(@field, 'Name L10n')]">
+                <xsl:variable name="Lang" select="normalize-space(substring-after(@field, ':'))"/>
+                <xsl:call-template name="L10n">
+                    <xsl:with-param name="Lang">
+                        <xsl:value-of select="$Lang"/>
+                    </xsl:with-param>
+                </xsl:call-template>
+            </xsl:for-each>
+
+            <!-- Arbitrary Tags -->
+            <xsl:for-each select="col[starts-with(@field, 'KV')]">
+                <xsl:call-template name="KeyValue"/>
+            </xsl:for-each>
+
         </resource>
 
         <!-- Locations -->
@@ -313,6 +330,32 @@
             <data field="name"><xsl:value-of select="$type"/></data>
        </resource>
 
+    </xsl:template>
+
+    <!-- ****************************************************************** -->
+    <xsl:template name="KeyValue">
+        <xsl:variable name="Key" select="normalize-space(substring-after(@field, ':'))"/>
+        <xsl:variable name="Value" select="text()"/>
+
+        <xsl:if test="$Value!=''">
+            <resource name="org_site_tag">
+                <data field="tag"><xsl:value-of select="$Key"/></data>
+                <data field="value"><xsl:value-of select="$Value"/></data>
+            </resource>
+        </xsl:if>
+    </xsl:template>
+
+    <!-- ****************************************************************** -->
+    <xsl:template name="L10n">
+        <xsl:param name="Lang"/>
+        <xsl:variable name="Value" select="text()"/>
+
+        <xsl:if test="$Value!=''">
+            <resource name="org_site_name">
+                <data field="language"><xsl:value-of select="$Lang"/></data>
+                <data field="name_l10n"><xsl:value-of select="$Value"/></data>
+            </resource>
+        </xsl:if>
     </xsl:template>
 
     <!-- ****************************************************************** -->

@@ -1497,6 +1497,12 @@ class S3Config(Storage):
         """
         return self.L10n.get("translate_org_organisation", False)
 
+    def get_L10n_translate_org_site(self):
+        """
+            Whether to translate Site names
+        """
+        return self.L10n.get("translate_org_site", False)
+
     def get_L10n_translate_cap_area(self):
         """
             Whether to translate CAP Area names
@@ -2434,6 +2440,12 @@ class S3Config(Storage):
         """
         return self.cr.get("shelter_housing_unit_management", False)
 
+    def get_cr_tags(self):
+        """
+            Whether Shelters should show a Tags tab
+        """
+        return self.cr.get("tags", False)
+
     # -------------------------------------------------------------------------
     # Deployments
     #
@@ -3190,6 +3202,12 @@ class S3Config(Storage):
         """
         return self.org.get("facility_code_unique", False)
 
+    def get_org_tags(self):
+        """
+            Whether Organidations, Office & Facilities should show a Tags tab
+        """
+        return self.org.get("tags", False)
+
     # -------------------------------------------------------------------------
     # Persons
     #
@@ -3385,6 +3403,12 @@ class S3Config(Storage):
             Manage Community Volunteers in Projects
         """
         return self.project.get("community_volunteers", False)
+
+    def get_project_demographics(self):
+        """
+            Use Demographics in Projects
+        """
+        return self.project.get("demographics", False)
 
     def get_project_details_tab(self):
         """

@@ -1191,6 +1191,10 @@ def cr_shelter_rheader(r, tabs=[]):
             tabs = [(T("Basic Details"), None),
                     (T("Status Reports"), "status"),
                     ]
+            if settings.get_L10n_translate_org_site():
+                tabs.append((T("Local Names"), "name"))
+            if settings.get_cr_tags():
+                tabs.append((T("Tags"), "tag"))
             if settings.get_cr_shelter_people_registration():
                 tabs.extend([(T("People Reservation"), "shelter_allocation"),
                              (T("People Registration"), "shelter_registration"),

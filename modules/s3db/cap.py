@@ -626,11 +626,11 @@ class S3CAPModel(S3Model):
                                          _title="%s|%s" % (T("Name"),
                                                            T("The actual name for the warning priority, for eg. Typhoons in Philippines have five priority name (PSWS# 1, PSWS# 2, PSWS# 3, PSWS# 4 and PSWS# 5)"))),
                            ),
-                     Field("event_type",
-                           label = T("Event Type"),
-                           comment = DIV(_class="tooltip",
-                                         _title="%s|%s" % (T("Event Type"),
-                                                           T("The Event to which this priority is targeted for. The 'Event Type' is the name of the standard Eden Event Type . These are available at /eden/event/event_type (The 'Event Type' should be exactly same as in /eden/event/event_type - case sensitive). For those events which are not in /eden/event/event_type but having the warning priority, you can create the event type using /eden/event/event_type/create and they will appear in this list."))),
+                     self.event_type_id(empty=False,
+                                        label = T("Event Type"),
+                                        comment = DIV(_class="tooltip",
+                                                      _title="%s|%s" % (T("Event Type"),
+                                                                        T("The Event to which this priority is targeted for. The 'Event Type' is the name of the standard Eden Event Type . These are available at /eden/event/event_type (The 'Event Type' should be exactly same as in /eden/event/event_type - case sensitive). For those events which are not in /eden/event/event_type but having the warning priority, you can create the event type using /eden/event/event_type/create and they will appear in this list."))),
                            ),
                      Field("urgency",
                            label = T("Urgency"),
@@ -694,7 +694,7 @@ class S3CAPModel(S3Model):
             )
 
         configure(tablename,
-                  deduplicate = S3Duplicate(primary=("event_type", "name")),
+                  deduplicate = S3Duplicate(primary=("event_type_id", "name")),
                   )
 
         # ---------------------------------------------------------------------
@@ -763,8 +763,9 @@ class S3CAPModel(S3Model):
                             $.filterOptionsS3({
                              'trigger':'event_type_id',
                              'target':'priority',
-                             'lookupURL':S3.Ap.concat('/cap/priority_get/'),
-                             'lookupResource':'event_type'
+                             'lookupPrefix': 'cap',
+                             'lookupResource':'warning_priority',
+                             'lookupKey': 'event_type_id'
                              })'''
                      ),
                      Field("response_type", "list:string", # 0 or more allowed
@@ -1122,6 +1123,18 @@ class S3CAPModel(S3Model):
                                            _title="%s|%s" % (T("Information segment for this Area segment"),
                                                              T("To which Information segment is this Area segment related. Note an Information segment can have multiple Area segments."))),
                              ),
+                     # From which template area is the area assigned from
+                     # Used for internationalisation
+                     Field("template_area_id", "reference cap_area",
+                           ondelete = "RESTRICT",
+                           readable = False,
+                           requires = IS_EMPTY_OR(
+                                        IS_ONE_OF(db, "cap_area.id",
+                                                  filterby="is_template",
+                                                  filter_opts=(True,)
+                                                  )),
+                           widget = S3HiddenWidget(),
+                           ),
                      Field("is_template", "boolean",
                            default = False,
                            readable = False,
@@ -1154,8 +1167,9 @@ class S3CAPModel(S3Model):
                             $.filterOptionsS3({
                              'trigger':'event_type_id',
                              'target':'priority',
-                             'lookupURL':S3.Ap.concat('/cap/priority_get/'),
-                             'lookupResource':'event_type'
+                             'lookupPrefix': 'cap',
+                             'lookupResource': 'warning_priority',
+                             'lookupKey': 'event_type_id'
                              })'''
                      ),
                      # Only used for Templates
@@ -1223,7 +1237,7 @@ class S3CAPModel(S3Model):
 
         configure(tablename,
                   #create_next = URL(f="area", args=["[id]", "location"]),
-                  # Old: Shouldn't be required if all UI actions go through alert controller & XSLT configured appropriately
+                  create_onaccept = update_alert_id(tablename),
                   onvalidation = self.cap_area_onvalidation,
                   crud_form = crud_form,
                   )
@@ -1729,7 +1743,7 @@ def cap_rheader(r):
                             db = current.db
                             auth = current.auth
                             has_permission = auth.s3_has_permission
-                            
+
                             # For Alert Editor
                             if has_permission("update", "cap_alert",
                                               record_id=alert_id):
@@ -1747,7 +1761,7 @@ def cap_rheader(r):
                                         pe_append = pe_ids.append
                                         for user_id in user_ids:
                                             pe_append(user_pe_id(int(user_id)))
-    
+
                                     action_btn = A(T("Submit for Approval"),
                                                    _href = URL(f = "compose",
                                                                vars = {"cap_alert.id": record.id,
@@ -2422,6 +2436,7 @@ def add_area_from_template(area_id, alert_id):
         adata = {"is_template": False,
                  "alert_id": alert_id,
                  "info_id": row.id,
+                 "template_area_id": area_id,
                  }
         for field in afieldnames:
             adata[field] = atemplate[field]
@@ -2556,7 +2571,7 @@ class CAPImportFeed(S3Method):
             return output
 
         else:
-            raise HTTP(501, current.ERROR.BAD_METHOD)
+            raise HTTP(405, current.ERROR.BAD_METHOD)
 
 # -----------------------------------------------------------------------------
 class cap_AssignArea(S3Method):
@@ -2777,7 +2792,7 @@ class cap_AssignArea(S3Method):
                 return items
 
             else:
-                r.error(501, current.ERROR.BAD_FORMAT)
+                r.error(415, current.ERROR.BAD_FORMAT)
         else:
             r.error(405, current.ERROR.BAD_METHOD)
 

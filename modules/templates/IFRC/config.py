@@ -306,6 +306,7 @@ def config(settings):
     ARCS = "Afghan Red Crescent Society"
     AURC = "Australian Red Cross"
     BRCS = "Bangladesh Red Crescent Society"
+    CRMADA = "Malagasy Red Cross Society"
     CVTL = "Timor-Leste Red Cross Society (Cruz Vermelha de Timor-Leste)"
     IRCS = "Iraqi Red Crescent Society"
     NRCS = "Nepal Red Cross Society"
@@ -346,6 +347,10 @@ def config(settings):
             currencies["AUD"] = T("Australian Dollars")
         elif root_org == BRCS:
             currencies["BDT"] = T("Taka")
+        elif root_org == CRMADA:
+            currencies["CAD"] = T("Canadian Dollars")
+            currencies["MGA"] = T("Malagasy Ariary")
+            currencies["NOK"] = T("Norwegian Krone")
         elif root_org == IRCS:
             currencies["IQD"] = T("Iraqi Dinar"),
         elif root_org == NRCS:
@@ -375,6 +380,8 @@ def config(settings):
             default = "AUD"
         elif root_org == BRCS:
             default = "BDT"
+        elif root_org == CRMADA:
+            default = "MGA"
         elif root_org == IRCS:
             default = "IQD"
         elif root_org == NRCS:
@@ -549,6 +556,8 @@ def config(settings):
     settings.project.codes = True
     # Uncomment this to call project locations 'Communities'
     settings.project.community = True
+    # Uncomment this to enable Demographics in 3W projects
+    settings.project.demographics = True
     # Uncomment this to enable Hazards in 3W projects
     settings.project.hazards = True
     # Uncomment this to use multiple Budgets per project
@@ -2514,7 +2523,7 @@ def config(settings):
 
         # Special cases for different NS
         root_org = current.auth.root_org_name()
-        if root_org in (IRCS, AURC):
+        if root_org in (IRCS, AURC, CRMADA):
             # Australian  Iraqi RC use proper Logistics workflow
             settings.inv.direct_stock_edits = False
             current.s3db.configure("inv_inv_item",
@@ -2555,7 +2564,7 @@ def config(settings):
 
         # Special cases for different NS
         root_org = current.auth.root_org_name()
-        if root_org in (ARCS, AURC):
+        if root_org in (ARCS, AURC, CRMADA):
             # Australian & Iraqi RC use proper Logistics workflow
             settings.inv.direct_stock_edits = False
         if root_org != NRCS:

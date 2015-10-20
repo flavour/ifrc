@@ -461,7 +461,7 @@ class S3CRUD(S3Method):
             return results
 
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
         return output
 
@@ -785,7 +785,7 @@ class S3CRUD(S3Method):
             return exporter(resource, tooltip=tooltip)
 
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
         return output
 
@@ -972,7 +972,7 @@ class S3CRUD(S3Method):
             return self.import_url(r)
 
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
         return output
 
@@ -1340,7 +1340,7 @@ class S3CRUD(S3Method):
                 r.error(405, current.ERROR.BAD_METHOD)
 
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
     # -------------------------------------------------------------------------
     def _datatable(self, r, **attr):
@@ -1520,7 +1520,7 @@ class S3CRUD(S3Method):
                          '"data":[]}' % (totalrows, list_id, draw)
 
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
         return output
 
@@ -1550,7 +1550,10 @@ class S3CRUD(S3Method):
                                attr.get("list_id", "datalist"))
 
         # List fields
-        list_fields = resource.list_fields()
+        if hasattr(layout, "list_fields"):
+            list_fields = layout.list_fields
+        else:
+            list_fields = resource.list_fields()
 
         # Default orderby
         orderby = get_config("list_orderby",
@@ -1670,8 +1673,10 @@ class S3CRUD(S3Method):
             # Render the list (even if empty => Ajax-section is required
             # in any case to be able to Ajax-refresh e.g. after adding
             # new records or changing the filter)
+            if representation == "dl" or not limit:
+                limit = numrows
             dl = datalist.html(start = start if start else 0,
-                               limit = limit if limit else numrows,
+                               limit = limit,
                                pagesize = pagelength,
                                rowsize = rowsize,
                                ajaxurl = ajax_url)
@@ -1680,7 +1685,7 @@ class S3CRUD(S3Method):
             #    dl.insert(0, DIV(empty, _class="empty"))
             data = dl
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
 
         if representation == "html":
@@ -1890,7 +1895,7 @@ class S3CRUD(S3Method):
                          '"data": []}' % (totalrows, list_id, draw)
 
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
         return output
 
@@ -1987,7 +1992,7 @@ class S3CRUD(S3Method):
             current.response.view = "review.html"
 
         else:
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
         return output
 
@@ -2031,7 +2036,7 @@ class S3CRUD(S3Method):
         """
 
         if r.representation != "json":
-            r.error(501, current.ERROR.BAD_FORMAT)
+            r.error(415, current.ERROR.BAD_FORMAT)
 
         resource = self.resource
 
