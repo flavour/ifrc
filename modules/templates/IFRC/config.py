@@ -436,6 +436,17 @@ def config(settings):
     settings.gis.postcode_selector = postcode_selector
 
     # -----------------------------------------------------------------------------
+    def label_fullname(default):
+        """ NS-specific selection of label for the AddPersonWidget2's Name field """
+
+        if current.session.s3.language == "mg":
+            # Allow for better localisation
+            default = "Full Name"
+        return default
+
+    settings.pr.label_fullname = label_fullname
+
+    # -----------------------------------------------------------------------------
     # Enable this for a UN-style deployment
     #settings.ui.cluster = True
     # Enable this to use the label 'Camp' instead of 'Shelter'
@@ -494,7 +505,7 @@ def config(settings):
          "pr_person_details.mother_name"             : (BRCS, ),
          "pr_person_details.father_name"             : (ARCS, BRCS, IRCS),
          "pr_person_details.grandfather_name"        : (ARCS, IRCS),
-         "pr_person_details.year_of_birth"           : (ARCS, CRMADA),
+         "pr_person_details.year_of_birth"           : (ARCS, ),
          "pr_person_details.affiliations"            : (PRC, ),
          "pr_person_details.company"                 : (PRC, ),
          "vol_details.availability"                  : (CRMADA, VNRC),
@@ -1083,7 +1094,7 @@ def config(settings):
         """ Whether to use Skills """
 
         root_org = current.auth.root_org_name()
-        if root_org in (ARCS, IRCS, PMI, VNRC):
+        if root_org in (ARCS, CRMADA, IRCS, PMI, VNRC):
             return True
         return False
 
@@ -1117,9 +1128,14 @@ def config(settings):
 
         root_org = current.auth.root_org_name()
         if root_org in (ARCS, IRCS):
-            return True # Simple Checkbox
+            # Simple checkbox
+            return True
         elif root_org in (CVTL, PMI, PRC):
-            return vol_active # Use formula
+            # Use formula based on hrm_programme
+            return vol_programme_active
+        elif root_org in (CRMADA, ):
+            # Use formula based on vol_activity
+            return vol_activity_active
         return False
 
     settings.hrm.vol_active = hrm_vol_active
@@ -3025,7 +3041,7 @@ def config(settings):
     settings.customise_pr_group_controller = customise_pr_group_controller
 
     # =============================================================================
-    def vol_active(person_id):
+    def vol_programme_active(person_id):
         """
             Whether a Volunteer counts as 'Active' based on the number of hours
             they've done (both Trainings & Programmes) per month, averaged over
@@ -3074,10 +3090,39 @@ def config(settings):
             # Active?
             if average >= 8:
                 return True
-            else:
-                return False
-        else:
-            return False
+
+        return False
+
+    # =============================================================================
+    def vol_activity_active(person_id):
+        """
+            Whether a Volunteer counts as 'Active' based on the number of hours
+            they've done on Volunteer Activities (inc Trainings, but not Project Activities)
+            in the last month.
+        """
+
+        from dateutil.relativedelta import relativedelta
+        now = current.request.utcnow
+
+        # Time spent on Volunteer Activities in the last month
+        htable = current.s3db.vol_activity_hours
+        query = (htable.deleted == False) & \
+                (htable.person_id == person_id) & \
+                (htable.date >= (now - relativedelta(months=1)))
+        activities = current.db(query).select(htable.hours,
+                                              )
+        if activities:
+            # Total hours between start and end
+            hours = 0
+            for activity in activities:
+                if activity.hours:
+                    hours += activity.hours
+
+            # Active?
+            if hours >= 4:
+                return True
+
+        return False
 
     # -----------------------------------------------------------------------------
     def vnrc_cv_form(r):
@@ -3130,7 +3175,14 @@ def config(settings):
         arcs = False
         vnrc = False
         root_org = current.auth.root_org_name()
-        if root_org == IRCS:
+        if root_org == CRMADA:
+            table = s3db.pr_person
+            table.initials.readable = table.initials.writable = False
+            table.local_name.readable = table.local_name.writable = False
+            table.preferred_name.readable = table.preferred_name.writable = False
+            field = s3db.pr_person_details.religion
+            field.readable = field.writable = False
+        elif root_org == IRCS:
             settings.hrm.activity_types = None
             settings.hrm.use_id = False
             table = s3db.pr_person
@@ -3238,6 +3290,7 @@ def config(settings):
                     ctable = r.component.table
                     ctable.hours.readable = ctable.hours.writable = False
                     ctable.job_title_id.readable = ctable.job_title_id.writable = False
+
             elif component_name == "physical_description":
                 from gluon import DIV
                 ctable = r.component.table
@@ -3246,6 +3299,29 @@ def config(settings):
                 ctable.medical_conditions.comment = DIV(_class="tooltip",
                                                         _title="%s|%s" % (T("Medical Conditions"),
                                                                           T("Chronic Illness, Disabilities, Mental/Psychological Condition etc.")))
+
+            elif component_name == "identity":
+                if root_org == CRMADA:
+                    controller = r.controller
+                    table = r.component.table
+                    # Set default to National ID Card
+                    table.type.default = 2
+                    # Relabel
+                    table.valid_from.label = T("Date of Delivery")
+                    field = table.place
+                    field.label = T("Place of Delivery")
+                    field.readable = field.writable = True
+                    # Hide unneeded fields
+                    # @ToDo: Do this dynamically in JS based on Type
+                    hide_fields = ("description", "valid_until", "country_code", "ia_name")
+                    for fname in hide_fields:
+                        field = table[fname]
+                        field.readable = field.writable = False
+                    list_fields = s3db.get_config("pr_identity", "list_fields")
+                    hide_fields = set(hide_fields)
+                    list_fields = (fs for fs in list_fields if fs not in hide_fields)
+                    s3db.configure("pr_identity", list_fields = list_fields)
+
             elif method == "cv" or component_name == "education":
                 if vnrc:
                     etable = s3db.pr_education
@@ -3434,6 +3510,7 @@ def config(settings):
                     s3db.configure("pr_person",
                                    crud_form = S3SQLCustomForm(*crud_fields),
                                    )
+
                 if method == "record" or component_name == "human_resource":
                     # Hide unwanted fields in human_resource
                     htable = s3db.hrm_human_resource
