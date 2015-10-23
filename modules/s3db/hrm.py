@@ -700,8 +700,6 @@ class S3HRModel(S3Model):
                                            },
                         # Application for Deployment (RDRT)
                         deploy_application = "human_resource_id",
-                        # Availability
-                        #hrm_availability = "human_resource_id",
                         # Hours
                         #hrm_hours = "human_resource_id",
                         )
@@ -728,6 +726,15 @@ class S3HRModel(S3Model):
                                                   "fkey": "person_id",
                                                   "pkey": "person_id",
                                                   },
+                           # Availability
+                           pr_person_availability = {"link": "pr_person",
+                                                     "joinby": "id",
+                                                     "key": "id",
+                                                     "fkey": "person_id",
+                                                     "pkey": "person_id",
+                                                     # Will need tochange in future
+                                                     "multiple": False,
+                                                     },
                            # Volunteer Details
                            vol_details = {"joinby": "human_resource_id",
                                           "multiple": False,
@@ -772,11 +779,12 @@ class S3HRModel(S3Model):
             #location_context = "person_id$address.location_id" # When not using S3Track()
             if settings.get_hrm_vol_roles():
                 crud_fields.insert(2, "job_title_id")
-                report_fields.extend(("job_title_id"))
+                report_fields.append("job_title_id")
             if settings.get_hrm_vol_departments():
                 crud_fields.insert(4, "department_id")
-                report_fields.extend(("department_id"))
-            if settings.get_hrm_vol_experience() in ("programme", "both"):
+                report_fields.append("department_id")
+            vol_experience = settings.get_hrm_vol_experience()
+            if vol_experience in ("programme", "both"):
                 crud_fields.insert(2, S3SQLInlineComponent("programme_hours",
                                                            label = "",
                                                            fields = ["programme_id",
@@ -784,9 +792,12 @@ class S3HRModel(S3Model):
                                                            link = False,
                                                            multiple = False,
                                                            ))
+            elif vol_experience == "activity":
+                report_fields.append("person_id$activity_hours.activity_hours_activity_type.activity_type_id")
             crud_fields.append("details.volunteer_type")
-            if settings.get_hrm_vol_availability() is True:
-                crud_fields.append("details.availability")
+            if settings.get_hrm_vol_availability_tab() is False and \
+               settings.get_pr_person_availability_options() is not None:
+                crud_fields.append("person_availability.options")
             crud_fields.extend(("details.card",
                                 # @ToDo: Move these to the IFRC Template (PH RC only people to use this)
                                 "volunteer_cluster.vol_cluster_type_id",
@@ -6085,8 +6096,7 @@ def hrm_rheader(r, tabs=[], profile=False):
         else:
             description_tab = None
 
-        availability = settings.get_hrm_vol_availability()
-        if isinstance(availability, (list, tuple)):
+        if settings.get_hrm_vol_availability_tab():
             availability_tab = (T("Availability"), "availability")
         else:
             availability_tab = None
@@ -8868,7 +8878,7 @@ def hrm_human_resource_filters(resource_type=None,
                                    hidden = True,
                                    ))
 
-    # Active Filter / Programme filter (volunteer only)
+    # Active / Activity / Programme filters (volunteer only)
     if module == "vol" or resource_type == "volunteer":
         vol_active = settings.get_hrm_vol_active()
         if vol_active:
@@ -8891,6 +8901,12 @@ def hrm_human_resource_filters(resource_type=None,
                                           #options = lambda: \
                                           #  get_s3_filter_opts("hrm_programme",
                                           #                     org_filter=True),
+                                          hidden = True,
+                                          ))
+        elif vol_experience == "activity":
+            # Programme filter
+            append_filter(S3OptionsFilter("person_id$activity_hours.activity_hours_activity_type.activity_type_id",
+                                          label = T("Activity Types"),
                                           hidden = True,
                                           ))
 

@@ -30,7 +30,6 @@
 
 __all__ = ("S3VolunteerModel",
            "S3VolunteerActivityModel",
-           "S3VolunteerAvailabilityModel",
            "S3VolunteerAwardModel",
            "S3VolunteerClusterModel",
            "vol_service_record",
@@ -72,13 +71,6 @@ class S3VolunteerModel(S3Model):
         T = current.T
         UNKNOWN_OPT = current.messages.UNKNOWN_OPT
 
-        # VNRC Options
-        # @ToDo: Be able to pull options from settings & yet still have just a list not list of booleans
-        availability_opts = {1: T("No Restrictions"),
-                             2: T("Weekends only"),
-                             3: T("School Holidays only"),
-                             }
-
         # ---------------------------------------------------------------------
         # Volunteer Details
         # - extra details for volunteers
@@ -94,15 +86,6 @@ class S3VolunteerModel(S3Model):
                                 default = False,
                                 label = T("Active"),
                                 represent = self.vol_active_represent,
-                                ),
-                          Field("availability", "integer",
-                                label = T("Availability"),
-                                represent = lambda opt: \
-                                            availability_opts.get(opt,
-                                                          UNKNOWN_OPT),
-                                requires = IS_EMPTY_OR(
-                                             IS_IN_SET(availability_opts)
-                                           ),
                                 ),
                           Field("card", "boolean",
                                 default = False,
@@ -289,7 +272,7 @@ class S3VolunteerActivityModel(S3Model):
             msg_record_deleted = T("Activity deleted"),
             msg_list_empty = T("No Activities found"))
 
-        represent = S3Represent(lookup=tablename)
+        represent = S3Represent(lookup=tablename, show_link=True)
         activity_id = S3ReusableField("activity_id", "reference %s" % tablename,
                                       label = T("Activity"),
                                       requires = IS_ONE_OF(db,
@@ -331,9 +314,9 @@ class S3VolunteerActivityModel(S3Model):
                                                     #help_field = s3db.project_theme_help_fields,
                                                     cols = 4,
                                                     translate = True,
-                                                    # Filter Theme by Sector
+                                                    # Filter Activity Type by Sector
                                                     filterby = "activity_type_id:vol_activity_type_sector.sector_id",
-                                                    match = "activity_type_sector.sector_id",
+                                                    match = "sector_id",
                                                     script = '''
 $.filterOptionsS3({
  'trigger':'sector_id',
@@ -353,6 +336,13 @@ $.filterOptionsS3({
 
         configure(tablename,
                   crud_form = crud_form,
+                  list_fields = ["name",
+                                 "organisation_id",
+                                 "sector_id",
+                                 "activity_activity_type.activity_type_id",
+                                 "location_id",
+                                 "date",
+                                 ],
                   )
 
         # ---------------------------------------------------------------------
@@ -492,6 +482,13 @@ $.filterOptionsS3({
                   #crud_form = crud_form,
                   extra_fields = ["date"],
                   filter_widgets = filter_widgets,
+                  list_fields = ["activity_id",
+                                 "person_id",
+                                 "date",
+                                 "job_title_id",
+                                 "hours",
+                                 "activity_hours_activity_type.activity_type_id",
+                                 ],
                   onaccept = vol_activity_hours_onaccept,
                   ondelete = vol_activity_hours_onaccept,
                   orderby = "vol_activity_hours.date desc",
@@ -608,56 +605,6 @@ def vol_activity_hours_onaccept(form):
         if row:
             dtable.insert(human_resource_id = row.id,
                           active = active)
-
-# =============================================================================
-class S3VolunteerAvailabilityModel(S3Model):
-
-    names = ("vol_availability",)
-
-    def model(self):
-
-        #T = current.T
-
-        # List of Options for which only 1 can be selected
-        # Frequent, 1-2 times per week
-        # Once per month
-        # Exceptional Cases
-        # Sometimes, when needed
-        # Projects, 1-3 times per month
-        # Other
-
-        # ---------------------------------------------------------------------
-        # Volunteer Availability
-        #
-        tablename = "vol_availability"
-        self.define_table(tablename,
-                          self.pr_person_id(ondelete = "CASCADE"),
-                          s3_comments(),
-                          *s3_meta_fields())
-
-        self.add_components(tablename,
-                            availability_data = "availability_id",
-                            )
-
-        # @ToDo: Build options from settings
-        crud_form = None
-
-        self.configure(tablename,
-                       crud_form  = crud_form,
-                       )
-
-        # ---------------------------------------------------------------------
-        # Volunteer Availability Data
-        # - set of Boolean options for which any can be selected
-        #
-        tablename = "vol_availability_data"
-        self.define_table(tablename,
-                          Field("availability_id", "reference vol_availability",
-                                ondelete = "CASCADE",
-                                ),
-                          Field("slot"),
-                          Field("value", "boolean"),
-                          *s3_meta_fields())
 
 # =============================================================================
 class S3VolunteerAwardModel(S3Model):

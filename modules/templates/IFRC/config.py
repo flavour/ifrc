@@ -1140,20 +1140,39 @@ def config(settings):
 
     settings.hrm.vol_active = hrm_vol_active
 
-    def hrm_vol_availability(default):
-        """ Whether to track Volunteer Availability """
+    def pr_person_availability_options(default):
 
         root_org = current.auth.root_org_name()
         if root_org == VNRC:
-            # Simple inline field with dropdowns
-            return True
+            # Doesn't seem used anyway...perhaps a bug in hrm_Record?
+            return {1: T("No Restrictions"),
+                    2: T("Weekends only"),
+                    3: T("School Holidays only"),
+                    }
         elif root_org == CRMADA:
-            # Tab with list of Booleans
-            return vol_programme_active
-        # Default to Off
-        return False
+            return {1: "%s, %s" % (T("Frequent"), T("1-2 times per week")),
+                    2: "%s, %s" % (T("Sometimes"), T("When needed")),
+                    3: "%s, %s" % (T("Projects"), T("1-3 times per month")),
+                    4: T("Once per month"),
+                    5: T("Exceptional Cases"),
+                    6: T("Other"),
+                    }
 
-    settings.hrm.vol_availability = hrm_vol_availability
+        # Default to Off
+        return None
+
+    settings.pr.person_availability_options = pr_person_availability_options
+
+    def hrm_vol_availability_tab(default):
+        """ Whether to show Volunteer Availability Tab """
+
+        root_org = current.auth.root_org_name()
+        if root_org == CRMADA:
+            return True
+        # Default to Off
+        return None
+
+    settings.hrm.vol_availability_tab = hrm_vol_availability_tab
 
     def hrm_vol_departments(default):
         """ Whether to use Volunteer Departments """
@@ -2195,6 +2214,7 @@ def config(settings):
                                    (settings.get_ui_label_mobile_phone(), "phone.value"),
                                    (T("Trainings"), "training.course_id"),
                                    (T("Activity Types"), "person_id$activity_hours.activity_hours_activity_type.activity_type_id"),
+                                   (T("Activities"), "person_id$activity_hours.activity_id"),
                                    (T("Certificates"), "person_id$certification.certificate_id"),
                                    (T("Email"), "email.value"),
                                    "location_id",
@@ -3039,6 +3059,218 @@ def config(settings):
             address.readable = address.writable = True
 
     settings.customise_pr_contact_emergency_resource = customise_pr_contact_emergency_resource
+
+    # -----------------------------------------------------------------------------
+    def customise_pr_person_availability_resource(r, tablename):
+
+        s3db  = current.s3db
+        table = s3db.pr_slot
+        slots = current.db(table.deleted == False).select(table.name,
+                                                          table.id,
+                                                          ).as_dict(key="name")
+
+        # @ToDo: Make prettier
+        # - minimally put labels inline with chekboxes
+        # - ideally turn into a Grid (JS? GridWidget?)
+        from s3 import S3SQLCustomForm, S3SQLInlineComponent
+        crud_form = S3SQLCustomForm("options",
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "monday_morning",
+                                                         label = T("Monday Morning"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Monday Morning"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "monday_afternoon",
+                                                         label = T("Monday Afternoon"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Monday Afternoon"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "monday_evening",
+                                                         label = T("Monday Evening"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Monday Evening"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "tuesday_morning",
+                                                         label = T("Tuesday Morning"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Tuesday Morning"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "tuesday_afternoon",
+                                                         label = T("Tuesday Afternoon"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Tuesday Afternoon"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "tuesday_evening",
+                                                         label = T("Tuesday Evening"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Tuesday Evening"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "wednesday_morning",
+                                                         label = T("Wednesday Morning"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Wednesday Morning"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "wednesday_afternoon",
+                                                         label = T("Wednesday Afternoon"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Wednesday Afternoon"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "wednesday_evening",
+                                                         label = T("Wednesday Evening"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Wednesday Evening"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "thursday_morning",
+                                                         label = T("Thursday Morning"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Thursday Morning"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "thursday_afternoon",
+                                                         label = T("Thursday Afternoon"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Thursday Afternoon"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "thursday_evening",
+                                                         label = T("Thursday Evening"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Thursday Evening"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "friday_morning",
+                                                         label = T("Friday Morning"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Friday Morning"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "friday_afternoon",
+                                                         label = T("Friday Afternoon"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Friday Afternoon"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "friday_evening",
+                                                         label = T("Friday Evening"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Friday Evening"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "saturday_morning",
+                                                         label = T("Saturday Morning"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Saturday Morning"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "saturday_afternoon",
+                                                         label = T("Saturday Afternoon"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Saturday Afternoon"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "saturday_evening",
+                                                         label = T("Saturday Evening"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Saturday Evening"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "sunday_morning",
+                                                         label = T("Sunday Morning"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Sunday Morning"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "sunday_afternoon",
+                                                         label = T("Sunday Afternoon"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Sunday Afternoon"],
+                                                                         ),
+                                                         ),
+                                    S3SQLInlineComponent("person_availability_slot",
+                                                         multiple = False,
+                                                         name = "sunday_evening",
+                                                         label = T("Sunday Evening"),
+                                                         fields = [("", "available")],
+                                                         filterby = dict(field = "slot_id",
+                                                                         options = slots["Sunday Evening"],
+                                                                         ),
+                                                         ),
+                                    "comments",
+                                    )
+
+        s3db.configure("pr_person_availability",
+                       crud_form = crud_form,
+                       )
+
+    settings.customise_pr_person_availability_resource = customise_pr_person_availability_resource
 
     # -----------------------------------------------------------------------------
     def customise_pr_group_controller(**attr):
