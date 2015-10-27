@@ -3161,6 +3161,8 @@ class S3ProjectLocationModel(S3Model):
                      self.gis_location_id(
                         represent = self.gis_LocationRepresent(sep=", "),
                         requires = IS_LOCATION(),
+                        # S3LocationSelector doesn't support adding new locations dynamically
+                        # - if this isn't required, can set to use this widget in the template
                         widget = S3LocationAutocompleteWidget(),
                         comment = S3PopupLink(c = "gis",
                                               f = "location",
@@ -5280,8 +5282,8 @@ def project_indicator_summary_report(r, **attr):
     """
         Display the a Summary of the Indicator Statuses for the Project
 
-       @ToDo: PDF representation?
-       @ToDo: XLS representation?
+       @ToDo: PDF representation (CRMADA want)
+       @ToDo: XLS representation (HNRC want)
        @ToDo: Should we aggregate entries in the same Month?
        @ToDo: Handle deployments which miss a step
     """
@@ -5417,6 +5419,8 @@ def project_indicator_summary_report(r, **attr):
         dates = set(dates)
 
         # Sort
+        dates = [d for d in dates]
+        dates.sort()
         goals = OrderedDict(sorted(goals.items(), key=lambda x: x[1]["code"]))
         for goal in goals:
             outcomes = OrderedDict(sorted(goals[goal]["outcomes"].items(), key=lambda x: x[1]["code"]))

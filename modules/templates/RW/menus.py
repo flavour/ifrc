@@ -15,6 +15,15 @@ class S3MainMenu(default.S3MainMenu):
 
     # -------------------------------------------------------------------------
     @classmethod
+    def menu_help(cls, **attr):
+        """ Help Menu """
+
+        return [MM("About", f="about", right=True),
+                MM("Contact", f="contact", right=True),
+                ]
+
+    # -------------------------------------------------------------------------
+    @classmethod
     def menu_modules(cls):
         """ Custom Modules Menu """
 
@@ -22,8 +31,8 @@ class S3MainMenu(default.S3MainMenu):
             MM("News", c="cms", f="newsfeed", args="datalist",
                icon="icon-news",
                ),
-            MM("Current Needs", c="req", f="site_needs"),
-            MM("Facilities", c="org", f="facility"),
+            MM("Current Needs", c="req", f="site_needs", m="summary"),
+            MM("Facilities", c="org", f="facility", m="summary"),
             MM("Organizations", c="org", f="organisation"),
             homepage("gis"),
             MM("More", link=False)(
@@ -54,7 +63,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Create", m="create"),
                         M("Import", m="import")
                     ),
-                    M("Facilities", f="facility")(
+                    M("Facilities", f="facility", m="summary")(
                         M("Create", m="create"),
                         M("Map", m="map"),
                         M("Import", m="import"),
