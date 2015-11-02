@@ -565,8 +565,8 @@ class S3OrganisationModel(S3Model):
             default_row = "country"
         report_options = Storage(rows = report_fields,
                                  cols = report_fields,
-                                 fact = ["count(id)",
-                                         "list(name)",
+                                 fact = [(T("Number of Organizations"), "count(id)"),
+                                         (T("List of Organizations"), "list(name)"),
                                          ],
                                  defaults=Storage(rows = default_row,
                                                   cols = "organisation_organisation_type.organisation_type_id",
@@ -2645,7 +2645,7 @@ class S3OrganisationTagModel(S3Model):
         # Organisation Tags
         # - Key-Value extensions
         # - can be used to provide conversions to external systems, such as:
-        #   * HXL
+        #   * HXL, FTS
         # - can be a Triple Store for Semantic Web support
         # - can be used to add custom fields
         #
@@ -5759,6 +5759,7 @@ def org_organisation_controller():
             list_fields = s3db.get_config(r.tablename,
                                           "list_fields") or []
             s3db.configure(r.tablename, list_fields=list_fields + ["pe_id"])
+
         elif r.representation == "xls" and r.component_name == "branch":
             # Improve XLS export of Branches
             table = s3db.org_organisation_branch
@@ -5772,6 +5773,7 @@ def org_organisation_controller():
                                           #(T("SubBranch"), "branch_id$branch.branch_id"),
                                           ],
                            )
+
         elif r.interactive or r.representation == "aadata":
             gis = current.gis
             r.table.country.default = gis.get_default_country("code")

@@ -790,7 +790,10 @@ class S3OptionsMenu(object):
                         M("Create", m="create"),
                         M("Report", m="report"),
                     ),
-                    M("Needs", f="need")(
+                    M("Case Types", f="case_type")(
+                        M("Create", m="create"),
+                    ),
+                    M("Need Types", f="need")(
                         M("Create", m="create"),
                     ),
                 )

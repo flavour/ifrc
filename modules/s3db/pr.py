@@ -1019,6 +1019,15 @@ class S3PersonModel(S3Model):
                                                   # multiple instances for tracking reasons
                                                   "multiple": False,
                                                   },
+                       # Disaster Victim Registry
+                       dvr_case = {"name": "dvr_case",
+                                   "joinby": "person_id",
+                                   "multiple": False,
+                                   },
+                       dvr_case_activity = "person_id",
+                       dvr_housing = {"joinby": "person_id",
+                                      "multiple": False,
+                                      },
                        # Evacuee Registry
                        evr_case = {"joinby": "person_id",
                                    "multiple": False,
@@ -2801,6 +2810,13 @@ class S3AvailabilityModel(S3Model):
                      s3_comments(),
                      *s3_meta_fields())
 
+        configure(tablename,
+                  # @todo: adapt deduplicator once we allow multiple
+                  #        availability records per person (e.g. include
+                  #        start/end dates and location_id)
+                  deduplicate = S3Duplicate(primary=("person_id",)),
+                  )
+
         self.add_components(tablename,
                             # Inline Form added in customise to provide a list of slots
                             pr_person_availability_slot = "availability_id",
@@ -2818,8 +2834,11 @@ class S3AvailabilityModel(S3Model):
         define_table(tablename,
                      Field("availability_id", "reference pr_person_availability"),
                      slot_id(),
-                     Field("available", "boolean"),
                      *s3_meta_fields())
+
+        configure(tablename,
+                  deduplicate = S3Duplicate(primary=("availability_id", "slot_id")),
+                  )
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
