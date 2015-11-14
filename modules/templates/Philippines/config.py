@@ -31,7 +31,7 @@ def config(settings):
 
     # -----------------------------------------------------------------------------
     # Pre-Populate
-    settings.base.prepopulate = ("Philippines", "default/users")
+    settings.base.prepopulate += ("Philippines", "default/users")
 
     settings.base.system_name = T("Sahana")
     settings.base.system_name_short = T("Sahana")
@@ -128,11 +128,10 @@ def config(settings):
     # -----------------------------------------------------------------------------
     # Finance settings
     settings.fin.currencies = {
-        "PHP" : T("Philippine Pesos"),
-        #"EUR" : T("Euros"),
-        #"GBP" : T("Great British Pounds"),
-        #"CHF" : T("Swiss Francs"),
-        "USD" : T("United States Dollars"),
+        "PHP" : "Philippine Pesos"),
+        #"EUR" : "Euros",
+        #"GBP" : "Great British Pounds",
+        "USD" : "United States Dollars",
     }
     settings.fin.currency_default = "PHP"
 

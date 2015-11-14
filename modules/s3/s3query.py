@@ -223,7 +223,7 @@ class S3FieldSelector(object):
             try:
                 value = value()
             except:
-                current.log.error(sys.exc_info()[1])
+                current.log.error("%s.%s: %s" % (tname, fname, sys.exc_info()[1]))
                 value = None
 
         if hasattr(field, "expr"):
@@ -2148,7 +2148,10 @@ class S3URLQuery(object):
 
         for key, value in vars.iteritems():
 
-            if key == "$filter":
+            if not key:
+                continue
+
+            elif key == "$filter":
                 # Instantiate the advanced filter parser
                 parser = S3URLQueryParser()
                 if parser.parser is None:

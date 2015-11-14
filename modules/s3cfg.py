@@ -121,6 +121,8 @@ class S3Config(Storage):
         self.auth = Storage()
         self.auth.email_domains = []
         self.base = Storage()
+        # Allow templates to append rather than replace
+        self.base.prepopulate = ["default/base"]
         self.cap = Storage()
         self.cms = Storage()
         self.cr = Storage()
@@ -129,10 +131,14 @@ class S3Config(Storage):
         self.event = Storage()
         self.evr = Storage()
         self.fin = Storage()
+        # Allow templates to append rather than replace
+        self.fin.currencies = {}
         # @ToDo: Move to self.ui
         self.frontpage = Storage()
         self.frontpage.rss = []
         self.gis = Storage()
+        # Allow templates to append rather than replace
+        self.gis.countries = []
         self.hms = Storage()
         self.hrm = Storage()
         self.inv = Storage()
@@ -159,29 +165,20 @@ class S3Config(Storage):
         self._debug = None
         self._lazy_unwrapped = []
 
+        # Provide a minimal list of core modules
+        self.modules = {"default": Storage(name_nice = "Home",
+                                           ),      # Default
+                        "admin": Storage(name_nice = "Administration",
+                                         ),        # Admin
+                        "gis": Storage(name_nice = "Map",
+                                       ),          # GIS
+                        "pr": Storage(),           # Person Registry
+                        "org": Storage(name_nice = "Organizations",
+                                       ),          # Organization Registry
+                        }
+
     # -------------------------------------------------------------------------
-    # Template
-    def get_template(self):
-        """
-            Which deployment template to use for config.py, layouts.py, menus.py
-            http://eden.sahanafoundation.org/wiki/BluePrint/Templates
-        """
-        return self.base.get("template", "default")
-
-    def get_template_location(self):
-
-        return self.base.get("template_location", "modules")
-
-    def exec_template(self, path):
-        """
-            Legacy function, retained for backwards-compatibility with
-            existing 000_config.py instances => modern 000_config.py
-            should just call settings.import_template()
-
-            @todo: deprecate
-        """
-        self.import_template()
-
+    # Debug
     def check_debug(self):
         """
             (Lazy) check debug mode and activate the respective settings
@@ -204,34 +201,71 @@ class S3Config(Storage):
                 s3.debug = False
                 track_changes(False)
 
+    # -------------------------------------------------------------------------
+    # Template
+    def get_template(self):
+        """
+            Which deployment template to use for config.py, layouts.py, menus.py
+            http://eden.sahanafoundation.org/wiki/DeveloperGuidelines/Templates
+        """
+        return self.base.get("template", "default")
+
+    def get_template_location(self):
+
+        return self.base.get("template_location", "modules")
+
+    def exec_template(self, path):
+        """
+            Legacy function, retained for backwards-compatibility with
+            existing 000_config.py instances => modern 000_config.py
+            should just call settings.import_template()
+
+            @todo: deprecate
+        """
+        self.import_template()
+
     def import_template(self, config="config"):
         """
-            Import and invoke the template config (new module pattern)
+            Import and invoke the template config (new module pattern). Allows
+            to specify multiple templates like:
+
+                settings.template = ("default", "locations.US")
+
+            Configurations will be imported and executed in order of appearance
 
             @param config: name of the config-module
 
-            @todo: rewrite all config.py's with module pattern
             @todo: remove fallback when migration complete (+giving some
                    time for downstream projects to adapt)
         """
 
-        name = self.get_template()
-        package = "templates.%s" % name
+        names = self.get_template()
+        if not isinstance(names, (list, tuple)):
+            names = [names]
 
-        self.check_debug()
+        for name in names:
+            package = "templates.%s" % name
 
-        template = None
-        try:
-            # Import the template
-            template = getattr(__import__(package, fromlist=[config]), config)
-        except ImportError:
-            # Legacy template in "private"?
-            self.execute_template(name)
-        else:
-            template.config(self)
-            # Store location in response.s3 for compiled views
-            current.response.s3.template_location = "modules"
-        return template
+            self.check_debug()
+
+            template = None
+            try:
+                # Import the template
+                template = getattr(__import__(package, fromlist=[config]), config)
+            except ImportError:
+                # Legacy template in "private"?
+                if len(names) > 1:
+                    raise SyntaxError("Cascading templates not supported for script pattern")
+                self.execute_template(name)
+                break
+            else:
+                template.config(self)
+
+        # Store location in response.s3 for compiled views
+        # No longer supported
+        #current.response.s3.template_location = "modules"
+
+        return self
 
     def execute_template(self, name):
         """
@@ -253,7 +287,9 @@ class S3Config(Storage):
             print >> sys.stderr, "%s/config.py: script pattern deprecated." % name
             # Remember the non-standard location
             # (need to be in response.s3 for compiled views)
-            current.response.s3.template_location = self.base.template_location = location
+            # No longer supported
+            #current.response.s3.template_location =
+            self.base.template_location = location
             # Execute config.py
             from gluon.fileutils import read_file
             from gluon.restricted import restricted
@@ -269,9 +305,19 @@ class S3Config(Storage):
     # Theme
     def get_theme(self):
         """
-            Which templates folder to use for views/layout.html
+            Which template folder to use for views/layout.html
+
+            NB Only themes in modules/templates are supported now
         """
-        return self.base.get("theme", "default")
+
+        theme = self.base.get("theme", "default")
+        if "." in theme:
+            theme_location, theme = theme.split(".", 1)
+            # Result cached in response.s3 for compiled views
+            current.response.s3.theme_location = "%s/" % theme_location
+        else:
+            current.response.s3.theme_location = ""
+        return theme
 
     def get_base_xtheme(self):
         """
@@ -317,21 +363,9 @@ class S3Config(Storage):
     # -------------------------------------------------------------------------
     def has_module(self, module_name):
         """
-            List of Active Modules
+            Whether a Module is enabled in the current template
         """
-        if not self.modules:
-            # Provide a minimal list of core modules
-            _modules = [
-                "default",      # Default
-                "admin",        # Admin
-                "gis",          # GIS
-                "pr",           # Person Registry
-                "org"           # Organization Registry
-            ]
-        else:
-            _modules = self.modules
-
-        return module_name in _modules
+        return module_name in self.modules
 
     # -------------------------------------------------------------------------
     def is_cd_version(self):
@@ -904,13 +938,12 @@ class S3Config(Storage):
         """
             Which Currencies can the user select?
         """
-        currencies = self.__lazy("fin", "currencies")
-        if currencies is None:
-            T = current.T
+        currencies = self.__lazy("fin", "currencies", {})
+        if currencies == {}:
             currencies = {
-                "EUR" : T("Euros"),
-                "GBP" : T("Great British Pounds"),
-                "USD" : T("United States Dollars"),
+                "EUR" : "Euros",
+                "GBP" : "Great British Pounds",
+                "USD" : "United States Dollars",
             }
         return currencies
 
@@ -1001,7 +1034,7 @@ class S3Config(Storage):
 
     def get_gis_countries(self):
         """
-            Which country codes should be accessible to the location selector?
+            Which ISO2 country codes should be accessible to the location selector?
         """
         return self.gis.get("countries", [])
 
@@ -1352,8 +1385,8 @@ class S3Config(Storage):
                                                        ("km", "ភាសាខ្មែរ"),         # Khmer
                                                        ("ko", "한국어"),
                                                        ("mn", "Монгол хэл"),   # Mongolian
-                                                       #("my", "မြန်မာစာ"),        # Burmese
-                                                       ("ne", "नेपाली"),          # Nepali
+                                                       ("my", "မြန်မာစာ"),        # Burmese
+                                                       ("ne", "नेपाली"),           # Nepali
                                                        ("prs", "دری"),         # Dari
                                                        ("ps", "پښتو"),         # Pashto
                                                        ("pt", "Português"),
@@ -1508,7 +1541,7 @@ class S3Config(Storage):
             Whether to translate CAP Area names
         """
         return self.L10n.get("translate_cap_area", False)
-    
+
     def get_L10n_pootle_url(self):
         """ URL for Pootle server """
         return self.L10n.get("pootle_url", "http://pootle.sahanafoundation.org/")
@@ -2169,16 +2202,16 @@ class S3Config(Storage):
     def get_sync_upload_filename(self):
         """
             Filename for upload via FTP Sync
-            
+
             Available placeholders:
                 $S = System Name (long)
                 $s = System Name (short)
                 $r = Resource Name
             Use {} to separate the placeholder from immediately following
             identifier characters (like: ${placeholder}text).
-        """        
+        """
         return self.sync.get("upload_filename", "$s $r")
-    
+
     # =========================================================================
     # Modules
 
@@ -2306,12 +2339,12 @@ class S3Config(Storage):
         """
 
         return self.cap.get("authorisation", True)
-    
+
     def get_cap_restrict_fields(self):
         """
             Whether to restrict fields for update, cancel or error of alerts
         """
-        
+
         return self.cap.get("restrict_fields", False)
 
     # -------------------------------------------------------------------------
@@ -2558,6 +2591,7 @@ class S3Config(Storage):
     def get_hrm_email_required(self):
         """
             If set to True then Staff & Volunteers require an email address
+            NB Currently this also acts on Members!
         """
         return self.hrm.get("email_required", True)
 
@@ -2813,6 +2847,8 @@ class S3Config(Storage):
             Whether to use a 'Active' field for Volunteers &, if so, whether
             this is set manually or calculated by a function
             - options are: False, True or a function
+
+            NB If using a function, put this inside a Lazy lookup
         """
         return self.__lazy("hrm", "vol_active", default=False)
 
@@ -3126,6 +3162,12 @@ class S3Config(Storage):
             Whether Organisation Servics are Hierarchical or not
         """
         return self.org.get("services_hierarchical", False)
+
+    def get_org_service_locations(self):
+        """
+            Whether to expose the service locations tab for organisations
+        """
+        return self.__lazy("org", "service_locations", default=False)
 
     def get_org_site_code_len(self):
         """
@@ -3722,7 +3764,7 @@ class S3Config(Storage):
     def get_req_commit_people(self):
         """
             Whether Skills Requests should be Committed with Named Indviduals
-            or just Anonymous Skill 
+            or just Anonymous Skill
 
             @ToDo: Make this do something
         """

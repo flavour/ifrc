@@ -24,7 +24,7 @@ def config(settings):
 
     # -----------------------------------------------------------------------------
     # Pre-Populate
-    settings.base.prepopulate = ("CRMT", "default/users", "CRMT/Demo")
+    settings.base.prepopulate += ("CRMT", "default/users", "CRMT/Demo")
 
     settings.base.system_name = T("Sahana LA Community Resilience Mapping Tool")
     settings.base.system_name_short = T("CRMT")
@@ -282,7 +282,7 @@ def config(settings):
     # -----------------------------------------------------------------------------
     # Finance settings
     settings.fin.currencies = {
-        "USD" : T("United States Dollars"),
+        "USD" : "United States Dollars",
     }
 
     # =============================================================================

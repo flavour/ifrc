@@ -30,6 +30,7 @@
 __all__ = ("DVRCaseModel",
            "DVRNeedsModel",
            "DVRCaseActivityModel",
+           "DVRCaseBeneficiaryModel",
            "DVRHousingInformationModel",
            "dvr_rheader",
            )
@@ -128,6 +129,11 @@ class DVRCaseModel(S3Model):
                               (1, T("Low")),
                               )
 
+        # Case beneficiary options
+        case_beneficiary_opts = {"INDIVIDUAL": T("Individual"),
+                                 "HOUSEHOLD": T("Household"),
+                                 }
+
         SITE = current.deployment_settings.get_org_site_label()
         permitted_facilities = current.auth.permitted_facilities(redirect_on_error=False)
 
@@ -155,6 +161,14 @@ class DVRCaseModel(S3Model):
                                                            },
                                                    ),
                              ),
+                     Field("beneficiary",
+                           default = "INDIVIDUAL",
+                           label = T("Assistance for"),
+                           represent = S3Represent(options=case_beneficiary_opts),
+                           requires = IS_IN_SET(case_beneficiary_opts,
+                                                zero = None,
+                                                ),
+                           ),
                      s3_date(label = T("Registration Date"),
                              default = "now",
                              empty = False,
@@ -196,6 +210,32 @@ class DVRCaseModel(S3Model):
                         widget = S3AddPersonWidget2(controller="pr"),
                         ondelete = "CASCADE",
                         ),
+                     Field("head_of_household", "boolean",
+                           default = True,
+                           label = T("Head of Household"),
+                           represent = s3_yes_no_represent,
+                           # Enable in template if required
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("hoh_name",
+                           label = T("Head of Household Name"),
+                           # Enable in template if required
+                           readable = False,
+                           writable = False,
+                           ),
+                     self.pr_gender("hoh_gender",
+                                    label = T("Head of Household Gender"),
+                                    # Enable in template if required
+                                    readable = False,
+                                    writable = False,
+                                    ),
+                     Field("hoh_relationship",
+                           label = T("Head of Household Relationship"),
+                           # Enable in template if required
+                           readable = False,
+                           writable = False,
+                           ),
                      #Field("damage", "integer",
                      #      label= T("Damage Assessment"),
                      #      represent = lambda opt: \
@@ -233,6 +273,7 @@ class DVRCaseModel(S3Model):
                             dvr_housing = {"joinby": "case_id",
                                            "multiple": False,
                                            },
+                            dvr_beneficiary_data = "case_id",
                             # Not valid for write:
                             pr_address = ({"name": "current_address",
                                            "link": "pr_person",
@@ -258,6 +299,7 @@ class DVRCaseModel(S3Model):
         # CRUD form
         crud_form = S3SQLCustomForm("reference",
                                     "organisation_id",
+                                    "date",
                                     "status",
                                     "person_id",
                                     # Not valid for write:
@@ -310,6 +352,7 @@ class DVRCaseModel(S3Model):
         configure(tablename,
                   crud_form = crud_form,
                   report_options = report_options,
+                  onvalidation = self.case_onvalidation,
                   )
 
         # Reusable field
@@ -343,6 +386,78 @@ class DVRCaseModel(S3Model):
         return {"dvr_case_id": lambda **attr: dummy("case_id"),
                 "dvr_case_status_opts": {},
                 }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def case_onvalidation(form):
+        """
+            Ensure case numbers are unique within the organisation
+
+            @param form: the FORM
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        # Read form data
+        form_vars = form.vars
+        record_id = form_vars.id if "id" in form_vars else None
+        try:
+            reference = form_vars.reference
+        except AttributeError:
+            reference = None
+
+        if reference:
+            # Make sure the case reference is unique within the organisation
+
+            ctable = s3db.dvr_case
+            otable = s3db.org_organisation
+
+            # Get the organisation_id
+            if "organisation_id" not in form_vars:
+                if not record_id:
+                    # Create form with hidden organisation_id
+                    # => use default
+                    organisation_id = ctable.organisation_id.default
+                else:
+                    # Reload the record to get the organisation_id
+                    query = (ctable.id == record_id)
+                    row = db(query).select(ctable.organisation_id,
+                                           limitby = (0, 1)).first()
+                    if not row:
+                        return
+                    organisation_id = row.organisation_id
+            else:
+                # Use the organisation_id in the form
+                organisation_id = form_vars.organisation_id
+
+            # Case duplicate query
+            dquery = (ctable.reference == reference) & \
+                     (ctable.deleted != True)
+            if record_id:
+                dquery &= (ctable.id != record_id)
+            msg = current.T("This Case Number is already in use")
+
+            # Add organisation query to duplicate query
+            if current.deployment_settings.get_org_branches():
+                # Get the root organisation
+                query = (otable.id == organisation_id)
+                row = db(query).select(otable.root_organisation,
+                                    limitby = (0, 1)).first()
+                root_organisation = row.root_organisation \
+                                    if row else organisation_id
+                dquery &= (otable.root_organisation == root_organisation)
+                left = otable.on(otable.id == ctable.organisation_id)
+            else:
+                dquery &= (ctable.organisation_id == organisation_id)
+                left = None
+
+            # Is there a record with the same reference?
+            row = db(dquery).select(ctable.id,
+                                    left = left,
+                                    limitby = (0, 1)).first()
+            if row:
+                form.errors["reference"] = msg
 
 # =============================================================================
 class DVRNeedsModel(S3Model):
@@ -560,6 +675,163 @@ class DVRCaseActivityModel(S3Model):
         return {}
 
 # =============================================================================
+class DVRCaseBeneficiaryModel(S3Model):
+    """
+        Model for Case Beneficiary Data (=statistical data about beneficiaries
+        of the case besides the main beneficiary, e.g. household members)
+    """
+
+    names = ("dvr_beneficiary_type",
+             "dvr_beneficiary_data",
+             )
+
+    def model(self):
+
+        T = current.T
+        db = current.db
+
+        crud_strings = current.response.s3.crud_strings
+        define_table = self.define_table
+        configure = self.configure
+
+        # ---------------------------------------------------------------------
+        # Beneficiary Types (e.g. Age Groups)
+        #
+        tablename = "dvr_beneficiary_type"
+        define_table(tablename,
+                     Field("name",
+                           label = T("Type"),
+                           requires = IS_NOT_EMPTY(),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        ADD_BENEFICIARY_TYPE = T("Create Beneficiary Type")
+        crud_strings[tablename] = Storage(
+            label_create = ADD_BENEFICIARY_TYPE,
+            title_display = T("Beneficiary Type"),
+            title_list = T("Beneficiary Types"),
+            title_update = T("Edit Beneficiary Type"),
+            label_list_button = T("List Beneficiary Types"),
+            label_delete_button = T("Delete Beneficiary Type"),
+            msg_record_created = T("Beneficiary Type added"),
+            msg_record_modified = T("Beneficiary Type updated"),
+            msg_record_deleted = T("Beneficiary Type deleted"),
+            msg_list_empty = T("No Beneficiary Types currently registered")
+            )
+
+        # Reusable field
+        represent = S3Represent(lookup=tablename, translate=True)
+        beneficiary_type_id = S3ReusableField("beneficiary_type_id", "reference %s" % tablename,
+                                              label = T("Beneficiary Type"),
+                                              ondelete = "RESTRICT",
+                                              represent = represent,
+                                              requires = IS_EMPTY_OR(
+                                                            IS_ONE_OF(db, "dvr_beneficiary_type.id",
+                                                                      represent)),
+                                              )
+
+        # ---------------------------------------------------------------------
+        # Beneficiary data
+        #
+        show_third_gender = not current.deployment_settings.get_pr_hide_third_gender()
+
+        tablename = "dvr_beneficiary_data"
+        define_table(tablename,
+                     # Main Beneficiary (component link):
+                     # @todo: populate from case and hide in case perspective
+                     self.pr_person_id(empty = False,
+                                       ondelete = "CASCADE",
+                                       ),
+                     self.dvr_case_id(empty = False,
+                                      label = T("Case Number"),
+                                      ondelete = "CASCADE",
+                                      ),
+                     beneficiary_type_id(),
+                     Field("total", "integer",
+                           label = T("Number of Beneficiaries"),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           # Expose in templates when not using per-gender fields
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("female", "integer",
+                           label = T("Number Female"),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           ),
+                     Field("male", "integer",
+                           label = T("Number Male"),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           ),
+                     Field("other", "integer",
+                           label = T("Number Other Gender"),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           readable = show_third_gender,
+                           writable = show_third_gender,
+                           ),
+                     Field("in_school", "integer",
+                           label = T("Number in School"),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           ),
+                     Field("employed", "integer",
+                           label = T("Number Employed"),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Add Beneficiary Data"),
+            title_display = T("Beneficiary Data"),
+            title_list = T("Beneficiary Data"),
+            title_update = T("Edit Beneficiary Data"),
+            label_list_button = T("List Beneficiary Data"),
+            label_delete_button = T("Delete Beneficiary Data"),
+            msg_record_created = T("Beneficiary Data added"),
+            msg_record_modified = T("Beneficiary Data updated"),
+            msg_record_deleted = T("Beneficiary Data deleted"),
+            msg_list_empty = T("No Beneficiary Data currently registered"),
+            )
+
+        # List fields
+        list_fields = ["beneficiary_type_id",
+                       "female",
+                       "male",
+                       "in_school",
+                       "employed",
+                       "comments",
+                       ]
+        if show_third_gender:
+            list_fields.insert(3, "other")
+
+        # Table configuration
+        configure(tablename,
+                  list_fields = list_fields,
+                  )
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return {"dvr_beneficiary_type_id": beneficiary_type_id,
+                }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """ Safe defaults for names in case the module is disabled """
+
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False,
+                                )
+
+        return {"dvr_beneficiary_type_id": lambda **attr: dummy("beneficiary_type_id"),
+                }
+
+
+# =============================================================================
 class DVRHousingInformationModel(S3Model):
     """ Model for Housing Information """
 
@@ -702,6 +974,7 @@ def dvr_rheader(r, tabs=[]):
             if not tabs:
                 tabs = [(T("Basic Details"), ""),
                         (T("Activities"), "case_activity"),
+                        (T("Beneficiaries"), "beneficiary_data"),
                         (T("Housing"), "housing"),
                         ]
 

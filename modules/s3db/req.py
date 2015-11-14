@@ -162,6 +162,7 @@ class S3RequestModel(S3Model):
         ask_transport = settings.get_req_ask_transport()
         date_writable = settings.get_req_date_writable()
         recurring = settings.get_req_recurring()
+        transit_status =  settings.get_req_show_quantity_transit()
         requester_label = settings.get_req_requester_label()
         requester_is_author = settings.get_req_requester_is_author()
         if requester_is_author:
@@ -350,6 +351,8 @@ class S3RequestModel(S3Model):
                                      ),
                           req_status("transit_status",
                                      label = T("Transit Status"),
+                                     readable = transit_status,
+                                     writable = req_status_writable and transit_status,
                                      ),
                           req_status("fulfil_status",
                                      label = T("Fulfil. Status"),
@@ -400,12 +403,6 @@ class S3RequestModel(S3Model):
             #             label = T("Search")
             #             comment=T("Search for a commitment by Committer name, Request ID, Site or Organization."),
             #             ),
-            S3OptionsFilter("transit_status",
-                            # Better to default (easier to customise/consistency)
-                            #label = T("Transit Status"),
-                            options = req_status_opts,
-                            cols = 3,
-                            ),
             S3OptionsFilter("fulfil_status",
                             # Better to default (easier to customise/consistency)
                             #label = T("Fulfill Status"),
@@ -442,30 +439,45 @@ class S3RequestModel(S3Model):
                          ),
             ]
 
+        position = 1
+        if transit_status:
+            position += 1
+            filter_widgets.insert(0,
+                                  S3OptionsFilter("transit_status",
+                                                  # Better to default (easier to customise/consistency)
+                                                  #label = T("Transit Status"),
+                                                  options = req_status_opts,
+                                                  cols = 3,
+                                                  ))
+
         if not default_type:
-            filter_widgets.insert(2, S3OptionsFilter("type",
-                                                     label = T("Type"),
-                                                     cols = len(req_types),
-                                                     ))
+            filter_widgets.insert(position,
+                                  S3OptionsFilter("type",
+                                                  label = T("Type"),
+                                                  cols = len(req_types),
+                                                  ))
         if default_type == 1 or (not default_type and 1 in req_types):
-            filter_widgets.insert(4, S3OptionsFilter("req_item.item_id$item_category_id",
-                                                     label = T("Item Category"),
-                                                     hidden = True,
-                                                     ))
+            filter_widgets.insert(position + 2,
+                                  S3OptionsFilter("req_item.item_id$item_category_id",
+                                                  label = T("Item Category"),
+                                                  hidden = True,
+                                                  ))
         if default_type == 3 or (not default_type and 3 in req_types):
-            filter_widgets.insert(4, S3OptionsFilter("req_skill.skill_id",
-                                                     # Better to default (easier to customise/consistency)
-                                                     #label = T("Skill"),
-                                                     hidden = True,
-                                                     ))
+            filter_widgets.insert(position + 2,
+                                  S3OptionsFilter("req_skill.skill_id",
+                                                  # Better to default (easier to customise/consistency)
+                                                  #label = T("Skill"),
+                                                  hidden = True,
+                                                  ))
         if use_commit:
-            filter_widgets.insert(2, S3OptionsFilter("commit_status",
-                                                     # Better to default (easier to customise/consistency)
-                                                     #label = T("Commit Status"),
-                                                     options = req_status_opts,
-                                                     cols = 3,
-                                                     hidden = True,
-                                                     ))
+            filter_widgets.insert(position,
+                                  S3OptionsFilter("commit_status",
+                                                  # Better to default (easier to customise/consistency)
+                                                  #label = T("Commit Status"),
+                                                  options = req_status_opts,
+                                                  cols = 3,
+                                                  hidden = True,
+                                                  ))
 
         report_fields = ["priority",
                          "site_id$organisation_id",
@@ -515,13 +527,14 @@ class S3RequestModel(S3Model):
             list_fields.insert(1, "req_ref")
         list_fields.extend(("priority",
                             (T("Details"), "details"),
-                            (T("Drivers"), "drivers"),
                             ))
+        if 1 in req_types:
+            list_fields.append((T("Drivers"), "drivers"))
         if use_commit:
             list_fields.append("commit_status")
-        list_fields.extend(("transit_status",
-                            "fulfil_status",
-                            ))
+        if transit_status:
+            list_fields.append("transit_status")
+        list_fields.append("fulfil_status")
         if use_commit:
             list_fields.append((T("Committed By"), "commit.site_id"))
 
@@ -2053,6 +2066,8 @@ class S3RequestSummaryModel(S3Model):
     """
 
     names = ("req_organisation_needs",
+             "req_organisation_needs_item",
+             "req_organisation_needs_skill",
              "req_site_needs",
              )
 
@@ -2095,17 +2110,98 @@ class S3RequestSummaryModel(S3Model):
         # CRUD strings
         ADD_NEEDS = T("Add Organization Needs")
         crud_strings[tablename] = Storage(
+            label_create = ADD_NEEDS,
+            title_list = T("Organization Needs"),
             title_display=T("Organization Needs"),
             title_update=T("Edit Organization Needs"),
+            title_upload = T("Import Organization Needs"),
+            label_list_button = T("List Organization Needs"),
             label_delete_button=T("Delete Organization Needs"),
             msg_record_created=T("Organization Needs added"),
             msg_record_modified=T("Organization Needs updated"),
-            msg_record_deleted=T("Organization Needs deleted"))
+            msg_record_deleted=T("Organization Needs deleted"),
+            msg_list_empty = T("No Organization Needs currently registered"),
+            )
 
+        # Table configuration
         configure(tablename,
                   context = {"organisation": "organisation_id",
                              },
                   )
+
+        # Components
+        self.add_components(tablename,
+                            req_organisation_needs_skill = "organisation_needs_id",
+                            req_organisation_needs_item = "organisation_needs_id",
+                            )
+
+        # Reusable field (for component links)
+        organisation_needs_id = S3ReusableField("organisation_needs_id",
+                                    "reference %s" % tablename,
+                                    ondelete = "CASCADE",
+                                    requires = IS_ONE_OF(current.db,
+                                                         "req_organisation_needs.id",
+                                                         ),
+                                    )
+
+        # -----------------------------------------------------------------
+        # Demand options (numeric keys so can be sorted by)
+        #
+        demand_options = {1: T("Low"),
+                          2: T("Moderate"),
+                          3: T("High"),
+                          4: T("Urgent"),
+                          }
+
+        demand = S3ReusableField("demand", "integer",
+                                 label = T("Demand"),
+                                 requires = IS_IN_SET(demand_options,
+                                                      zero=None,
+                                                      sort=True,
+                                                      ),
+                                 represent = S3Represent(options=demand_options)
+                                 )
+
+        # -----------------------------------------------------------------
+        # Linktable Needs <=> Supply Items
+        #
+        item_id = self.supply_item_id
+        CREATE_ITEM = crud_strings["supply_item"].label_create
+
+        tablename = "req_organisation_needs_item"
+        define_table(tablename,
+                     organisation_needs_id(empty=False),
+                     item_id(comment = S3PopupLink(c = "supply",
+                                                   f = "item",
+                                                   label = CREATE_ITEM,
+                                                   tooltip = None,
+                                                   vars = {"prefix": "req"},
+                                                   ),
+                              widget = None,
+                             ),
+                     demand(),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # -----------------------------------------------------------------
+        # Linktable Needs <=> Skills
+        #
+        skill_id = self.hrm_skill_id
+        CREATE_SKILL = crud_strings["hrm_skill"].label_create
+
+        tablename = "req_organisation_needs_skill"
+        define_table(tablename,
+                     organisation_needs_id(empty=False),
+                     skill_id(comment = S3PopupLink(c = "hrm",
+                                                    f = "skill",
+                                                    label = CREATE_SKILL,
+                                                    tooltip = None,
+                                                    vars = {"prefix": "req"},
+                                                    ),
+                              ),
+                     demand(),
+                     s3_comments(),
+                     *s3_meta_fields())
 
         # -----------------------------------------------------------------
         # Summary of Needs for a site
@@ -4007,7 +4103,7 @@ class req_CheckMethod(S3Method):
                 qty_in_label = s3_unicode(T("Quantity in %s")) % org_name
             else:
                 qty_in_label = T("Quantity Available")
-            
+
             # Build the Output Representation
             row = TR(TH(table.skill_id.label),
                      TH(table.quantity.label),
@@ -4112,7 +4208,7 @@ class req_CheckMethod(S3Method):
                     s3.rfooter = TAG[""](commit_btn)
             else:
                 response.error = T("User has no Organization to check against!")
-                
+
             output["items"] = items
             s3.no_sspag = True # pag won't work
             s3.no_formats = True

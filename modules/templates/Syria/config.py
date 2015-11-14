@@ -27,7 +27,7 @@ def config(settings):
 
     # -----------------------------------------------------------------------------
     # Pre-Populate
-    settings.base.prepopulate = ("Syria", "default/users")
+    settings.base.prepopulate += ("Syria", "default/users")
 
     settings.base.system_name = T("IFRC MENA 4W Portal")
     settings.base.system_name_short = T("IFRC MENA 4W")
@@ -122,10 +122,10 @@ def config(settings):
     # -----------------------------------------------------------------------------
     # Finance settings
     settings.fin.currencies = {
-        "CHF" : T("Swiss Francs"),
-        "EUR" : T("Euros"),
-        "GBP" : T("Great British Pounds"),
-        "USD" : T("United States Dollars"),
+        "CHF" : "Swiss Francs",
+        "EUR" : "Euros",
+        "GBP" : "Great British Pounds",
+        "USD" : "United States Dollars",
     }
 
     # -----------------------------------------------------------------------------

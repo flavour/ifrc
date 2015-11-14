@@ -24,7 +24,7 @@ def config(settings):
     settings.base.system_name_short = "RGIMS"
 
     # Pre-Populate
-    settings.base.prepopulate = ("RGIMS", "default/users")
+    settings.base.prepopulate += ("RGIMS", "default/users")
 
     # Theme
     settings.base.theme = "RGIMS"
@@ -40,9 +40,9 @@ def config(settings):
 
     # Finance settings
     settings.fin.currencies = {
-        "USD" : T("United States Dollars"),
-        "EUR" : T("Euros"),
-        "PHP" : T("Philippine Pesos")
+        "USD" : "United States Dollars",
+        "EUR" : "Euros",
+        "PHP" : "Philippine Pesos",
     }
     settings.fin.currency_default = "PHP"
 

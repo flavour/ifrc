@@ -21,7 +21,7 @@ def config(settings):
     #settings.base.system_name_short = T("Sahana")
 
     # PrePopulate data
-    settings.base.prepopulate = ("HROpen", "default/users")
+    settings.base.prepopulate += ("HROpen", "default/users")
 
     # Theme (folder to use for views/layout.html)
     #settings.base.theme = "HROpen"
@@ -108,10 +108,10 @@ def config(settings):
     #settings.L10n.translate_org_organisation = True
     # Finance settings
     settings.fin.currencies = {
-       "HRK" : T("Kuna"),
-       "EUR" : T("Euros"),
-       #"GBP" : T("Great British Pounds"),
-       "USD" : T("United States Dollars"),
+       "HRK" : "Kuna",
+       "EUR" : "Euros",
+       #"GBP" : "Great British Pounds",
+       "USD" : "United States Dollars",
     }
     settings.fin.currency_default = "HRK"
 

@@ -21,7 +21,7 @@ def config(settings):
     #settings.base.system_name_short = T("Sahana")
 
     # PrePopulate data
-    settings.base.prepopulate = ("STL", "default/users", "STL/Demo")
+    settings.base.prepopulate += ("STL", "default/users", "STL/Demo")
 
     # Theme (folder to use for views/layout.html)
     #settings.base.theme = "STL"
@@ -77,10 +77,10 @@ def config(settings):
     settings.L10n.translate_org_organisation = True
     # Finance settings
     settings.fin.currencies = {
-        "EUR" : T("Euros"),
-        #"GBP" : T("Great British Pounds"),
-        "TRY" : T("Turkish Lira"),
-        "USD" : T("United States Dollars"),
+        "EUR" : "Euros",
+        #"GBP" : "Great British Pounds",
+        "TRY" : "Turkish Lira",
+        "USD" : "United States Dollars",
     }
     settings.fin.currency_default = "TRY"
 
@@ -278,9 +278,9 @@ def config(settings):
                 result = True
 
             if r.controller == "dvr" and not r.component:
+                ctable = s3db.dvr_case
                 root_org = current.auth.root_org()
                 if root_org:
-                    ctable = s3db.dvr_case
                     # Set default for organisation_id and hide the field
                     field = ctable.organisation_id
                     field.default = root_org
@@ -289,13 +289,53 @@ def config(settings):
                     list_fields = r.resource.get_config("list_fields")
                     if "dvr_case.organisation_id" in list_fields:
                         list_fields.remove("dvr_case.organisation_id")
+                    # Limit sites to root_org
+                    field = ctable.site_id
+                    requires = field.requires
+                    if requires:
+                        from gluon import IS_EMPTY_OR
+                        if isinstance(requires, IS_EMPTY_OR):
+                            requires = requires.other
+                        if hasattr(requires, "dbset"):
+                            stable = s3db.org_site
+                            query = (stable.organisation_id == root_org)
+                            requires.dbset = current.db(query)
+                else:
+                    # Inject filter script for sites (filter by selected org)
+                    script = '''$.filterOptionsS3({
+'trigger':'sub_dvr_case_organisation_id',
+'target':'sub_dvr_case_site_id',
+'lookupResource':'site',
+'lookupPrefix':'org',
+'lookupField':'site_id',
+'lookupKey':'organisation_id'
+})'''
+                    s3.jquery_ready.append(script)
+
+                # Hide Postcode in addresses (not used)
+                atable = s3db.pr_address
+                from s3 import S3LocationSelector
+                location_id = atable.location_id
+                location_id.widget = S3LocationSelector(show_address=True,
+                                                        show_postcode = False,
+                                                        )
+                # Expose Head of Household fields:
+                fields = ("head_of_household",
+                          "hoh_name",
+                          "hoh_gender",
+                          "hoh_relationship"
+                          )
+                for fname in fields:
+                    field = ctable[fname]
+                    field.readable = field.writable = True
+
+                # Inject script to toggle Head of Household form fields
+                path = "/%s/static/themes/STL/js/dvr.js" % current.request.application
+                if path not in s3.scripts:
+                    s3.scripts.append(path)
 
             return result
         s3.prep = custom_prep
-
-        # Custom RHeader
-        #if current.request.controller == "vol":
-        #    attr["rheader"] = vol_rheader
 
         return attr
 

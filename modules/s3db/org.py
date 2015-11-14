@@ -69,6 +69,7 @@ __all__ = ("S3OrganisationModel",
            "org_SiteRepresent",
            #"org_AssignMethod",
            #"org_CapacityReport",
+           "org_logo_represent",
            "org_customise_org_resource_fields",
            "org_organisation_list_layout",
            "org_resource_list_layout",
@@ -674,6 +675,8 @@ class S3OrganisationModel(S3Model):
                                       "key": "service_id",
                                       "actuate": "hide",
                                       },
+                       # Service Locations
+                       org_service_location = "organisation_id",
                        # Format for filter_widget
                        org_service_organisation = "organisation_id",
                        # Assets
@@ -2443,6 +2446,8 @@ class S3OrganisationServiceModel(S3Model):
 
     names = ("org_service",
              "org_service_organisation",
+             "org_service_location",
+             #"org_service_location_service",
              )
 
     def model(self):
@@ -2453,6 +2458,9 @@ class S3OrganisationServiceModel(S3Model):
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
+        super_link = self.super_link
+
+        organisation_id = self.org_organisation_id
 
         hierarchical_service_types = current.deployment_settings.get_org_services_hierarchical()
 
@@ -2534,7 +2542,7 @@ class S3OrganisationServiceModel(S3Model):
         tablename = "org_service_organisation"
         define_table(tablename,
                      service_id(),
-                     self.org_organisation_id(),
+                     organisation_id(),
                      *s3_meta_fields()
                      )
 
@@ -2554,7 +2562,153 @@ class S3OrganisationServiceModel(S3Model):
                   deduplicate = self.org_service_organisation_deduplicate,
                   )
 
+        # ---------------------------------------------------------------------
+        # Service status options
+        #
+        service_status_opts = (("PLANNED", T("Planned")),
+                               ("ACTIVE", T("Active")),
+                               ("SUSPENDED", T("Suspended")),
+                               ("DISCONTINUED", T("Discontinued")),
+                               )
+
+        # ---------------------------------------------------------------------
+        # Organisation Service Locations
+        #
+        SITE = current.deployment_settings.get_org_site_label()
+
+        tablename = "org_service_location"
+        define_table(tablename,
+                     super_link("doc_id", "doc_entity"),
+                     organisation_id(),
+                     # The site where the organisation provides services:
+                     # (component not instance)
+                     super_link("site_id", "org_site",
+                                label = SITE,
+                                readable = True,
+                                writable = True,
+                                represent = self.org_site_represent,
+                                ),
+                     # Alternative 1: bare location (e.g. Lx)
+                     # - can be enabled in template as required
+                     self.gis_location_id(readable = False,
+                                          writable = False,
+                                          ),
+                     # Alternative 2: free-text for location
+                     # - can be enabled in template as required
+                     Field("location",
+                           label = T("Location"),
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("description", "text",
+                           label = T("Description"),
+                           represent = s3_text_represent,
+                           widget = s3_comments_widget,
+                           ),
+                     s3_date("start_date",
+                             label = T("Start Date"),
+                             default = "now",
+                             set_min = "#org_service_location_end_date",
+                             ),
+                     s3_date("end_date",
+                             label = T("End Date"),
+                             set_max = "#org_service_location_start_date",
+                             ),
+                     Field("status",
+                           default = "ACTIVE",
+                           label = T("Status"),
+                           represent = S3Represent(options=dict(service_status_opts)),
+                           requires = IS_IN_SET(service_status_opts,
+                                                sort = False,
+                                                zero = None,
+                                                ),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Service Location"),
+            title_display = T("Service Location Details"),
+            title_list = T("Service Locations"),
+            title_update = T("Edit Service Location"),
+            title_upload = T("Import Service Locations"),
+            label_list_button = T("List Service Locations"),
+            label_delete_button = T("Delete Service Location"),
+            msg_record_created = T("Service Location added"),
+            msg_record_modified = T("Service Location updated"),
+            msg_record_deleted = T("Service Location deleted"),
+            msg_list_empty = T("No Service Locations currently registered"))
+
+        # CRUD form
+        service_widget = "hierarchy" if hierarchical_service_types else None
+        crud_form = S3SQLCustomForm(
+                        "organisation_id",
+                        "site_id",
+                        S3SQLInlineLink("service",
+                                        field = "service_id",
+                                        widget = service_widget,
+                                        ),
+                        "description",
+                        "status",
+                        "start_date",
+                        "end_date",
+                        "comments",
+                        )
+
+        # List fields
+        list_fields = ["organisation_id",
+                       "site_id",
+                       "service_location_service.service_id",
+                       "description",
+                       "status",
+                       "start_date",
+                       "end_date",
+                       "comments",
+                       ]
+
+        # Table configuration
+        configure(tablename,
+                  crud_form = crud_form,
+                  list_fields = list_fields,
+                  super_entity = "doc_entity",
+                  )
+
+        # Components
+        self.add_components(tablename,
+                            #org_service_location_service = "service_location_id",
+                            org_service = {"link": "org_service_location_service",
+                                           "joinby": "service_location_id",
+                                           "key": "service_id",
+                                           "actuate": "link",
+                                           "autodelete": False,
+                                           },
+                            )
+
+        # Reusable field
+        service_location_id = S3ReusableField("service_location_id",
+                                              "reference %s" % tablename,
+                                              ondelete = "CASCADE",
+                                              requires = IS_ONE_OF(current.db,
+                                                            "org_service_location.id",
+                                                         ),
+                                              )
+
+
+        # ---------------------------------------------------------------------
+        # Service types at service location
+        #
+        tablename = "org_service_location_service"
+        define_table(tablename,
+                     service_location_id(),
+                     service_id(),
+                     #s3_comments(),
+                     *s3_meta_fields()
+                     )
+
+        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
+        #
         return {}
 
     # -------------------------------------------------------------------------
@@ -2929,18 +3083,22 @@ class S3SiteModel(S3Model):
         #           method = "assign",
         #           action = self.hrm_AssignMethod(component="human_resource_site"))
 
+        list_fields = ["id",
+                       "code",
+                       "instance_type",
+                       "name",
+                       "organisation_id",
+                       "location_id",
+                       ]
+
         self.configure(tablename,
                        context = {"location": "location_id",
                                   "organisation": "organisation_id",
                                   "org_group": "organisation_id$group_membership.group_id",
                                   },
-                       list_fields = ["id",
-                                      "code",
-                                      "instance_type",
-                                      "name",
-                                      "organisation_id",
-                                      "location_id",
-                                      ],
+                       list_fields = list_fields,
+                       # Include site_id in JSON (for filterOptionsS3):
+                       json_fields = list_fields + ["site_id"],
                        onaccept = self.org_site_onaccept,
                        ondelete_cascade = self.org_site_ondelete_cascade,
                        )
@@ -5418,7 +5576,7 @@ class org_SiteRepresent(S3Represent):
 def org_site_has_assets(row, tablename="org_facility"):
     """ Whether a Site has Assets """
 
-    if not settings.has_module("asset"):
+    if not current.deployment_settings.has_module("asset"):
         return False
 
     if hasattr(row, tablename):
@@ -5448,7 +5606,7 @@ def org_site_has_assets(row, tablename="org_facility"):
 def org_site_has_inv(row, tablename="org_facility"):
     """ Whether a Site has Inventory """
 
-    if not settings.has_module("inv"):
+    if not current.deployment_settings.has_module("inv"):
         return False
 
     if hasattr(row, tablename):
@@ -5479,7 +5637,7 @@ def org_site_has_inv(row, tablename="org_facility"):
 def org_site_top_req_priority(row, tablename="org_facility"):
     """ Highest priority of open requests for a site """
 
-    if not settings.has_module("req"):
+    if not current.deployment_settings.has_module("req"):
         return None
 
     try:
@@ -5576,6 +5734,8 @@ def org_rheader(r, tabs=[]):
                     append_tab((T("Tags"), "tag"))
                 if settings.get_org_resources_tab():
                     tabs.insert(-1, (T("Resources"), "resource"))
+                if settings.get_org_service_locations():
+                    tabs.insert(-1, (T("Service Locations"), "service_location"))
 
             if settings.get_L10n_translate_org_organisation():
                     tabs.insert(1, (T("Local Names"), "name"))
@@ -7245,12 +7405,11 @@ class org_CapacityReport(S3Method):
         try:
             import xlwt
         except ImportError:
-            ERROR = S3XLS().ERROR
             if current.auth.permission.format in S3Request.INTERACTIVE_FORMATS:
-                current.session.error = ERROR.XLWT_ERROR
+                current.session.error = S3XLS.ERROR.XLWT_ERROR
                 redirect(URL(extension=""))
             else:
-                error = ERROR.XLWT_ERROR
+                error = S3XLS.ERROR.XLWT_ERROR
                 current.log.error(error)
                 return error
 
@@ -7348,6 +7507,74 @@ class org_CapacityReport(S3Method):
 
         output.seek(0)
         return output.read()
+
+# =============================================================================
+def org_logo_represent(org = None,
+                       fallback_org = None,
+                       width = 60,
+                       ):
+    """
+        Produce an Org Logo DIV
+
+        @param org: the name of the Org to use (or None to lookup root_org)
+        @param fallback_org: the name of the fallback Org to use (if root_org lookup fails)
+        @param width: the width of the image
+    """
+
+    logo = None
+
+    if not org:
+        # Lookup Root Organisation name
+        org = current.auth.root_org_name()
+
+    if org:
+        db = current.db
+        s3db = current.s3db
+        otable = s3db.org_organisation
+        query = (otable.name == org)
+        fields = [otable.logo,
+                  ]
+
+        language = current.session.s3.language
+        if language == current.deployment_settings.get_L10n_default_language():
+            left = None
+        else:
+            ltable = s3db.org_organisation_name
+            left = ltable.on((ltable.organisation_id == otable.id) & \
+                             (ltable.language == language))
+            fields += [ltable.name_l10n,
+                       #ltable.acronym_l10n,
+                       ]
+
+        record = db(query).select(left = left,
+                                  limitby = (0, 1),
+                                  cache = s3db.cache,
+                                  *fields).first()
+
+        if record:
+            if left:
+                org = record["org_organisation_name.name_l10n"] or org
+                logo = record["org_organisation.logo"]
+            else:
+                logo = record.logo
+
+            if logo:
+                # Select resized version if-available
+                size = (width, None)
+                image = s3db.pr_image_represent(logo, size=size)
+                url_small = URL(c="default", f="download", args=image)
+                alt = "%s logo" % org
+                logo = IMG(_src=url_small, _alt=alt, _width=width)
+
+    if not logo and fallback_org:
+        # Default to fallback org
+        logo = org_image_represent(org=fallback_org, width=width)
+
+    if not logo:
+        # Placeholder
+        logo = IMG(_src="", _alt="logo", _width=width)
+
+    return (org, logo)
 
 # =============================================================================
 def org_customise_org_resource_fields(method):

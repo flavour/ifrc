@@ -23,7 +23,7 @@ def config(settings):
 
     # -------------------------------------------------------------------------
     # Pre-Populate
-    settings.base.prepopulate = ("EVASS", "default/users")
+    settings.base.prepopulate += ("EVASS", "default/users")
     # Pre-Populate options, for use in 000_config.py e.g.
     #   settings.base.prepopulate = "template:demo" => Demo install
     #   settings.base.prepopulate = "template:prod" => Production install
@@ -74,11 +74,11 @@ def config(settings):
 
     # Finance settings
     settings.fin.currency_default = "EUR"
-    settings.fin.currencies = {
-        "EUR": T("Euros"),
-        "GBP": T("Great British Pounds"),
-        "USD": T("United States Dollars"),
-    }
+    #settings.fin.currencies = {
+    #    "EUR": "Euros",
+    #    "GBP": "Great British Pounds",
+    #    "USD": "United States Dollars",
+    #}
 
     # -------------------------------------------------------------------------
     # GIS (Map) settings

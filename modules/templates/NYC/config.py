@@ -23,7 +23,7 @@ def config(settings):
     T = current.T
 
     # Pre-Populate
-    settings.base.prepopulate = ("NYC",)
+    settings.base.prepopulate.append("NYC")
 
     settings.base.system_name = T("NYC Prepared")
     settings.base.system_name_short = T("NYC Prepared")
@@ -72,7 +72,7 @@ def config(settings):
     settings.gis.countries = ("US",)
 
     settings.fin.currencies = {
-        "USD" : T("United States Dollars"),
+        "USD" : "United States Dollars",
     }
 
     settings.L10n.languages = OrderedDict([

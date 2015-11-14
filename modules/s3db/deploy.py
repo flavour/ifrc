@@ -50,6 +50,7 @@ except ImportError:
 from gluon import *
 
 from ..s3 import *
+from s3layouts import S3PopupLink
 
 # =============================================================================
 class S3DeploymentModel(S3Model):
@@ -67,6 +68,7 @@ class S3DeploymentModel(S3Model):
 
         T = current.T
         db = current.db
+        settings = current.deployment_settings
 
         add_components = self.add_components
         configure = self.configure
@@ -205,7 +207,7 @@ class S3DeploymentModel(S3Model):
                                pagesize = None,
                                )
 
-        hr_label = current.deployment_settings.get_deploy_hr_label()
+        hr_label = settings.get_deploy_hr_label()
         if hr_label == "Member":
             label = "Members Deployed"
             label_create = "Deploy New Member"
@@ -253,6 +255,16 @@ class S3DeploymentModel(S3Model):
                            #list_layout = s3db.doc_document_list_layouts,
                            )
 
+        if settings.has_module("event"):
+            text_fields = ["name",
+                           "code",
+                           "event_type_id$name",
+                           ]
+        else:
+            text_fields = ["name",
+                           "code",
+                           ]
+
         # Table configuration
         profile = URL(c="deploy", f="mission", args=["[id]", "profile"])
         configure(tablename,
@@ -260,10 +272,7 @@ class S3DeploymentModel(S3Model):
                   crud_form = crud_form,
                   delete_next = URL(c="deploy", f="mission", args="summary"),
                   filter_widgets = [
-                    S3TextFilter(["name",
-                                  "code",
-                                  "event_type_id$name",
-                                  ],
+                    S3TextFilter(text_fields,
                                  label=T("Search")
                                  ),
                     S3LocationFilter("location_id",
@@ -334,8 +343,9 @@ class S3DeploymentModel(S3Model):
                        )
 
         # CRUD Strings
+        label_create = T("Create Mission")
         crud_strings[tablename] = Storage(
-            label_create = T("Create Mission"),
+            label_create = label_create,
             title_display = T("Mission"),
             title_list = T("Missions"),
             title_update = T("Edit Mission Details"),
@@ -360,6 +370,10 @@ class S3DeploymentModel(S3Model):
                                      requires = IS_ONE_OF(db,
                                                           "deploy_mission.id",
                                                           represent),
+                                     comment = S3PopupLink(c = "deploy",
+                                                           f = "mission",
+                                                           label = label_create,
+                                                           ),
                                      )
 
         # ---------------------------------------------------------------------
@@ -1167,14 +1181,22 @@ def deploy_rheader(r, tabs=[], profile=False):
                                TH("%s: " % table[f].label, **attr)
                 value = lambda f, table=table, record=record, **attr: \
                                TD(table[f].represent(record[f]), **attr)
+                if current.deployment_settings.has_module("event"):
+                    row1 = TR(label("event_type_id"),
+                              value("event_type_id"),
+                              label("location_id"),
+                              value("location_id"),
+                              label("code"),
+                              value("code"),
+                              )
+                else:
+                    row1 = TR(label("location_id"),
+                              value("location_id"),
+                              label("code"),
+                              value("code"),
+                              )
                 rheader = DIV(H2(title),
-                              TABLE(TR(label("event_type_id"),
-                                       value("event_type_id"),
-                                       label("location_id"),
-                                       value("location_id"),
-                                       label("code"),
-                                       value("code"),
-                                       ),
+                              TABLE(row1,
                                     TR(label("created_on"),
                                        value("created_on"),
                                        label("status"),

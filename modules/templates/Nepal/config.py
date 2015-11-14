@@ -26,7 +26,7 @@ def config(settings):
     #settings.base.system_name_short = T("Sahana")
 
     # PrePopulate data
-    settings.base.prepopulate = ("Nepal", "default/users")
+    settings.base.prepopulate += ("Nepal", "default/users")
 
     # Theme (folder to use for views/layout.html)
     #settings.base.theme = "Nepal"
@@ -103,9 +103,9 @@ def config(settings):
     #settings.L10n.translate_org_organisation = True
     # Finance settings
     #settings.fin.currencies = {
-    #    "EUR" : T("Euros"),
-    #    "GBP" : T("Great British Pounds"),
-    #    "USD" : T("United States Dollars"),
+    #    "EUR" : "Euros",
+    #    "GBP" : "Great British Pounds",
+    #    "USD" : "United States Dollars",
     #}
     #settings.fin.currency_default = "USD"
 

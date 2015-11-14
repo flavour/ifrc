@@ -1028,6 +1028,7 @@ class S3PersonModel(S3Model):
                        dvr_housing = {"joinby": "person_id",
                                       "multiple": False,
                                       },
+                       dvr_beneficiary_data = "person_id",
                        # Evacuee Registry
                        evr_case = {"joinby": "person_id",
                                    "multiple": False,
@@ -2924,7 +2925,7 @@ class S3PersonImageModel(S3Model):
 
         # CRUD Strings
         current.response.s3.crud_strings[tablename] = Storage(
-            label_create = T("Image"),
+            label_create = T("Add Image"),
             title_display = T("Image Details"),
             title_list = T("Images"),
             title_update = T("Edit Image Details"),
@@ -3733,11 +3734,13 @@ class S3SavedFilterModel(S3Model):
                                     label = T("Filter"),
                                     ondelete = "SET NULL",
                                     represent = represent,
-                                    requires = IS_EMPTY_OR(IS_ONE_OF(
-                                                    db, "pr_filter.id",
+                                    requires = IS_EMPTY_OR(
+                                                IS_ONE_OF(
+                                                    current.db, "pr_filter.id",
                                                     represent,
                                                     orderby="pr_filter.title",
-                                                    sort=True)),
+                                                    sort=True,
+                                                    )),
                                     )
 
         self.configure(tablename,
@@ -5349,19 +5352,10 @@ def pr_rheader(r, tabs=[]):
             s3db = current.s3db
 
             if tablename == "pr_person":
-                itable = s3db.pr_image
-                query = (itable.pe_id == record.pe_id) & \
-                        (itable.profile == True)
-                image = db(query).select(itable.image,
-                                         limitby=(0, 1)).first()
-                if image:
-                    image = TD(itable.image.represent(image.image),
-                               _rowspan=3)
-                else:
-                    image = ""
-
+                
+                record_id = record.id
                 pdtable = s3db.pr_person_details
-                query = (pdtable.person_id == record.id)
+                query = (pdtable.person_id == record_id)
                 details = db(query).select(pdtable.nationality,
                                            limitby=(0, 1)).first()
                 if details:
@@ -5369,23 +5363,33 @@ def pr_rheader(r, tabs=[]):
                 else:
                     nationality = None
 
-                rheader = DIV(TABLE(
-                    TR(TH("%s: " % T("Name")),
-                       s3_fullname(record),
-                       TH("%s: " % T("ID Tag Number")),
-                       "%(pe_label)s" % record,
-                       image),
-                    TR(TH("%s: " % T("Date of Birth")),
-                       "%s" % (record.date_of_birth or T("unknown")),
-                       TH("%s: " % T("Gender")),
-                       "%s" % s3db.pr_gender_opts.get(record.gender,
-                                                      T("unknown"))),
+                rheader = DIV(
+                    A(s3_avatar_represent(record_id,
+                                          "pr_person",
+                                          _class="rheader-avatar"),
+                      _href=URL(f="person", args=[record_id, "image"],
+                                vars = r.get_vars),
+                      ),
+                    TABLE(
+                        TR(TH("%s: " % T("Name")),
+                           s3_fullname(record),
+                           TH("%s: " % T("ID Tag Number")),
+                           "%(pe_label)s" % record
+                           ),
+                        TR(TH("%s: " % T("Date of Birth")),
+                           "%s" % (record.date_of_birth or T("unknown")),
+                           TH("%s: " % T("Gender")),
+                           "%s" % s3db.pr_gender_opts.get(record.gender,
+                                                          T("unknown"))
+                           ),
 
-                    TR(TH("%s: " % T("Nationality")),
-                       "%s" % (pdtable.nationality.represent(nationality)),
-                       TH("%s: " % T("Age")),
-                       record.age()),
-                    ), rheader_tabs)
+                        TR(TH("%s: " % T("Nationality")),
+                           "%s" % (pdtable.nationality.represent(nationality)),
+                           TH("%s: " % T("Age")),
+                           record.age()
+                           ),
+                        ), rheader_tabs)
+
                 return rheader
 
             elif tablename == "pr_group":
@@ -5402,12 +5406,15 @@ def pr_rheader(r, tabs=[]):
                                 TR(TH("%s: " % T("Name")),
                                    record.name,
                                    TH("%s: " % T("Leader")) if leader else "",
-                                   leader),
+                                   leader,
+                                   ),
                                 TR(TH("%s: " % T("Description")),
                                    record.description or "",
                                    TH(""),
-                                   "")
+                                   "",
+                                   )
                                 ), rheader_tabs)
+
                 return rheader
 
     return None

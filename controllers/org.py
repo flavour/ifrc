@@ -22,14 +22,8 @@ def index_alt():
         Module homepage for non-Admin users when no CMS content found
     """
 
-    # @ToDo: Move this to the Template (separate deployment_setting or else a customise for non-REST controllers)
-    template = settings.get_template()
-    if template == "SandyRelief":
-        # Just redirect to the Facilities
-        s3_redirect_default(URL(f="facility"))
-    else:
-        # Just redirect to the list of Organisations
-        s3_redirect_default(URL(f="organisation"))
+    # Just redirect to the list of Organisations
+    s3_redirect_default(URL(f="organisation"))
 
 # -----------------------------------------------------------------------------
 def group():
@@ -421,6 +415,12 @@ def resource_type():
 
 # -----------------------------------------------------------------------------
 def service():
+    """ RESTful CRUD controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def service_location():
     """ RESTful CRUD controller """
 
     return s3_rest_controller()

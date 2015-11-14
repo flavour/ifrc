@@ -75,7 +75,9 @@ def person():
                 crud_form = S3SQLCustomForm(
                                 "dvr_case.reference",
                                 "dvr_case.case_type_id",
+                                "dvr_case.beneficiary",
                                 "dvr_case.organisation_id",
+                                "dvr_case.site_id",
                                 "dvr_case.date",
                                 "dvr_case.priority",
                                 "dvr_case.status",
@@ -117,6 +119,10 @@ def person():
                                         link = False,
                                         multiple = False,
                                         ),
+                                "dvr_case.head_of_household",
+                                "dvr_case.hoh_name",
+                                "dvr_case.hoh_gender",
+                                "dvr_case.hoh_relationship",
                                 "dvr_case.comments",
                                 )
 
@@ -206,6 +212,18 @@ def housing():
 # -----------------------------------------------------------------------------
 def housing_type():
     """ Housing Types: RESTful CRUD Controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def beneficiary_data():
+    """ Beneficiary Data: RESTful CRUD Controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def beneficiary_type():
+    """ Beneficiary Types: RESTful CRUD Controller """
 
     return s3_rest_controller()
 

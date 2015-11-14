@@ -8,7 +8,7 @@ except:
     from gluon.contrib.simplejson.ordered_dict import OrderedDict
 
 from gluon import current
-from gluon.html import A, URL, TR, TD
+from gluon.html import A, DIV, LI, URL, TAG, TD, TR, UL
 from gluon.storage import Storage
 
 from s3 import s3_fullname, S3Represent, S3SQLInlineLink, S3SQLSubFormLayout
@@ -22,7 +22,7 @@ def config(settings):
     settings.base.system_name_short = "#RefugeesWelcome"
 
     # PrePopulate data
-    settings.base.prepopulate = ("RW", "default/users")
+    settings.base.prepopulate += ("RW", "default/users")
 
     # Theme (folder to use for views/layout.html)
     #settings.base.theme = "RW"
@@ -87,11 +87,11 @@ def config(settings):
     # Uncomment this to Translate Site Names
     settings.L10n.translate_org_site = True
     # Finance settings
-    settings.fin.currencies = {
-       "EUR" : T("Euros"),
-       "GBP" : T("Great British Pounds"),
-       "USD" : T("United States Dollars"),
-    }
+    #settings.fin.currencies = {
+    #   "EUR" : "Euros",
+    #   "GBP" : "Great British Pounds",
+    #   "USD" : "United States Dollars",
+    #}
     settings.fin.currency_default = "EUR"
 
     # Security Policy
@@ -141,6 +141,11 @@ def config(settings):
     # -------------------------------------------------------------------------
     # Organisations
     settings.org.tags = True
+    settings.org.service_locations = True
+
+    # -------------------------------------------------------------------------
+    # Human Resources
+    settings.hrm.skill_types = True
 
     # -------------------------------------------------------------------------
     # Project Module
@@ -211,25 +216,6 @@ def config(settings):
     settings.customise_cms_post_controller = customise_cms_post_controller
 
     # -------------------------------------------------------------------------
-    def customise_org_organisation_resource(r, tablename):
-
-        s3db = current.s3db
-
-        # List fields
-        list_fields = ["name",
-                       "acronym",
-                       "organisation_organisation_type.organisation_type_id",
-                       "website",
-                       "comments",
-                       ]
-
-        s3db.configure("org_organisation",
-                       list_fields = list_fields,
-                       )
-
-    settings.customise_org_organisation_resource = customise_org_organisation_resource
-
-    # -------------------------------------------------------------------------
     def customise_project_location_resource(r, tablename):
 
         s3db = current.s3db
@@ -294,7 +280,6 @@ def config(settings):
             S3OptionsFilter("organisation_id",
                             ),
             S3LocationFilter("location_id",
-                             levels = ("L2", "L3", "L4"),
                              ),
             ]
 
@@ -354,6 +339,11 @@ def config(settings):
                                        label = T("Type"),
                                        multiple = False,
                                        ),
+                       S3SQLInlineLink(
+                            "service",
+                            label = T("Services"),
+                            field = "service_id",
+                            ),
                        S3SQLInlineComponent(
                             "facility",
                             label = T("Main Facility"),
@@ -404,13 +394,20 @@ def config(settings):
                          ),
             S3LocationFilter("org_facility.location_id",
                              label = T("Location"),
-                             levels = ("L2", "L3", "L4"),
                              #hidden = True,
                              ),
+            S3OptionsFilter("organisation_organisation_type.organisation_type_id",
+                            label = T("Type"),
+                            #hidden = True,
+                            ),
+            S3OptionsFilter("service_organisation.service_id",
+                            #hidden = True,
+                            ),
             ]
 
         list_fields = ["name",
                        (T("Type"), "organisation_organisation_type.organisation_type_id"),
+                       (T("Services"), "service.name"),
                        (T("Adresse"), "main_facility.location_id"),
                        (T("Phone #"), "main_facility.phone1"),
                        (T("Email"), "main_facility.email"),
@@ -430,11 +427,12 @@ def config(settings):
     def customise_org_organisation_controller(**attr):
 
         tabs = [(T("Basic Details"), None),
+                (T("Service Locations"), "service_location"),
+                (T("Needs"), "needs"),
                 (T("Facilities"), "facility"),
                 (T("Warehouses"), "warehouse"),
                 (T("Offices"), "office"),
                 (T("Staff & Volunteers"), "human_resource"),
-                (T("Needs"), "needs"),
                 #(T("Assets"), "asset"),
                 #(T("Projects"), "project"),
                 #(T("User Roles"), "roles"),
@@ -445,6 +443,111 @@ def config(settings):
         return attr
 
     settings.customise_org_organisation_controller = customise_org_organisation_controller
+
+    # -------------------------------------------------------------------------
+    def customise_req_organisation_needs_resource(r, tablename):
+
+        s3db = current.s3db
+
+        CASH = T("Cash Donations needed")
+
+        if r.tablename == "req_organisation_needs":
+            # Allow only organisations which do not have a needs record
+            # yet (single component):
+            table = r.table
+            field = table.organisation_id
+            from s3 import IS_ONE_OF
+            dbset = current.db(table.id == None)
+            left = table.on(table.organisation_id == current.s3db.org_organisation.id)
+            field.requires = IS_ONE_OF(dbset, "org_organisation.id",
+                                       field.represent,
+                                       left = left,
+                                       orderby = "org_organisation.name",
+                                       sort = True,
+                                       )
+
+        if r.representation in ("html", "aadata", "iframe"):
+
+            # Structured lists for interactive views
+            from gluon import Field
+            table = current.s3db.req_organisation_needs
+            table.needs_skills = Field.Method(lambda row: \
+                                    organisation_needs(row, need_type="skills"))
+            table.needs_items = Field.Method(lambda row: \
+                                    organisation_needs(row, need_type="items"))
+            current.response.s3.stylesheets.append("../themes/RW/needs.css")
+
+            needs_skills = (T("Volunteers needed"), "needs_skills")
+            needs_items = (T("Supplies needed"), "needs_items")
+
+            # Filter widgets
+            from s3 import S3TextFilter, S3OptionsFilter
+            filter_widgets = [#S3TextFilter(["organisation_id$name",
+                              #              ],
+                              #              label = T("Search"),
+                              #             ),
+                              S3OptionsFilter("organisation_id"),
+                              S3OptionsFilter("organisation_needs_skill.skill_id",
+                                              label = T("Skills sought"),
+                                              ),
+                              S3OptionsFilter("organisation_needs_item.item_id",
+                                              label = T("Supplies sought"),
+                                              ),
+                              ]
+
+            # CRUD form
+            from s3 import S3SQLCustomForm, S3SQLInlineComponent
+            crud_form = S3SQLCustomForm(
+                            "organisation_id",
+                            S3SQLInlineComponent("organisation_needs_skill",
+                                                label = T("Volunteers needed"),
+                                                fields = ["skill_id",
+                                                        "demand",
+                                                        "comments",
+                                                        ],
+                                                ),
+                            S3SQLInlineComponent("organisation_needs_item",
+                                                label = T("Supplies needed"),
+                                                fields = ["item_id",
+                                                        "demand",
+                                                        "comments",
+                                                        ],
+                                                ),
+                            (CASH, "money"),
+                            "money_details",
+                            #"vol",
+                            #"vol_details",
+                            )
+
+            next_page = r.url(method="") \
+                        if r.tablename == "req_organisation_needs" else None
+
+            s3db.configure("req_organisation_needs",
+                           crud_form = crud_form,
+                           filter_widgets = filter_widgets,
+                           create_next = next_page,
+                           update_next = next_page,
+                           )
+        else:
+            # Simple fields for exports
+            needs_skills = (T("Volunteers needed"),
+                            "organisation_needs_skill.skill_id")
+            needs_items = (T("Supplies needed"),
+                           "organisation_needs_item.item_id")
+
+        # List fields (all formats)
+        list_fields = ["organisation_id",
+                       needs_skills,
+                       needs_items,
+                       (CASH, "money"),
+                       (T("Cash Donation Details"), "money_details"),
+                       ]
+
+        s3db.configure("req_organisation_needs",
+                       list_fields = list_fields,
+                       )
+
+    settings.customise_req_organisation_needs_resource = customise_req_organisation_needs_resource
 
     # -------------------------------------------------------------------------
     def customise_req_site_needs_resource(r, tablename):
@@ -746,5 +849,67 @@ class FacilitySubFormLayout(S3SQLSubFormLayout):
             for col_id, label, widget, comment in fields:
                 parent.append(formstyle(col_id, label, widget, comment))
             return TR(parent)
+
+# =============================================================================
+demand_options = {1: "Low Demand",
+                  2: "Moderate Demand",
+                  3: "High Demand",
+                  4: "Urgently needed",
+                  }
+
+# =============================================================================
+def organisation_needs(row, need_type=None):
+    """
+        Field.Method to render structured organisation needs (list views)
+
+        @param row: the row (passed from Field.Method)
+        @param need_type: the need type (skills|items)
+    """
+
+    NONE = current.messages["NONE"]
+
+    try:
+        needs = getattr(row, "req_organisation_needs")
+    except AttributeError:
+        return NONE
+    needs_id = needs.id
+
+    s3db = current.s3db
+    if need_type == "skills":
+        ltable = s3db.req_organisation_needs_skill
+        stable = s3db.hrm_skill
+        left = stable.on(stable.id == ltable.skill_id)
+    elif need_type == "items":
+        ltable = s3db.req_organisation_needs_item
+        stable = s3db.supply_item
+        left = stable.on(stable.id == ltable.item_id)
+
+    query = (ltable.organisation_needs_id == needs_id)
+    rows = current.db(query).select(ltable.demand,
+                                    stable.name,
+                                    left = left,
+                                    )
+    if not rows:
+        return NONE
+
+    needs = {}
+    dfield = str(ltable.demand)
+    nfield = str(stable.name)
+    for row in rows:
+        demand = row[dfield]
+        if demand not in needs:
+            needs[demand] = [row[nfield]]
+        else:
+            needs[demand].append(row[nfield])
+
+    T = current.T
+    output = DIV(_class="org-needs")
+    for demand in (4, 3, 2, 1):
+        if demand not in needs:
+            continue
+        title = "%s:" % T(demand_options[demand])
+        items = UL([LI(T(skill)) for skill in needs[demand]])
+        output.append(TAG[""](title, items))
+    return output
 
 # END =========================================================================

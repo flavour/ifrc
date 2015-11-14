@@ -31,7 +31,10 @@ class S3MainMenu(default.S3MainMenu):
             MM("News", c="cms", f="newsfeed", args="datalist",
                icon="icon-news",
                ),
-            MM("Current Needs", c="req", f="site_needs", m="summary"),
+            MM("Current Needs", link=False)(
+                MM("Facility Needs", c="req", f="site_needs", m="summary"),
+                MM("Organization Needs", c="req", f="organisation_needs"),
+            ),
             MM("Facilities", c="org", f="facility", m="summary"),
             MM("Organizations", c="org", f="organisation"),
             homepage("gis"),
@@ -41,6 +44,7 @@ class S3MainMenu(default.S3MainMenu):
                 homepage("hrm"),
                 homepage("vol"),
                 homepage("project"),
+                homepage("event"),
                 #MM("Missing Persons", c="mpr", f="person"),
             ),
         ]
@@ -78,6 +82,10 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Import", m="import")
                     ),
                     M("Organization Types", f="organisation_type",
+                      restrict=[ADMIN])(
+                        M("Create", m="create"),
+                    ),
+                    M("Service Types", f="service",
                       restrict=[ADMIN])(
                         M("Create", m="create"),
                     ),
