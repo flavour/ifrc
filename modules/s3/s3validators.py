@@ -2076,6 +2076,7 @@ class IS_ADD_PERSON_WIDGET2(Validator):
                  error_message = None,
                  allow_empty = False,
                  first_name_only = None,
+                 separate_name_fields = None,
                  ):
         """
             Constructor
@@ -2096,6 +2097,7 @@ class IS_ADD_PERSON_WIDGET2(Validator):
         self.error_message = error_message
         self.allow_empty = allow_empty
         self.first_name_only = first_name_only
+        self.separate_name_fields = separate_name_fields
 
         # Tell s3_mark_required that this validator doesn't accept NULL values
         self.mark_required = not allow_empty
@@ -2129,6 +2131,10 @@ class IS_ADD_PERSON_WIDGET2(Validator):
             db = current.db
             s3db = current.s3db
             settings = current.deployment_settings
+
+            separate_name_fields = self.separate_name_fields
+            if separate_name_fields is None:
+                separate_name_fields = settings.get_pr_separate_name_fields()
 
             ptable = db.pr_person
             ctable = s3db.pr_contact
@@ -2224,6 +2230,10 @@ class IS_ADD_PERSON_WIDGET2(Validator):
                 mobile, error = validator(mobile)
                 if error:
                     return (person_id, error)
+
+            dob = post_vars["date_of_birth"]
+            if not dob and settings.get_pr_dob_required():
+                return (person_id, T("Date of Birth is Required"))
 
             #if person_id:
             #    # Filter out location_id (location selector form values
@@ -2324,39 +2334,44 @@ class IS_ADD_PERSON_WIDGET2(Validator):
             post_vars = Storage([(k, post_vars[k])
                                  for k in post_vars if k != "location_id"])
 
-            fullname = post_vars["full_name"]
-            if not fullname and self.allow_empty:
-                return None, None
+            if not separate_name_fields:
+                fullname = post_vars["full_name"]
+                if not fullname and self.allow_empty:
+                    return None, None
 
             # Validate the email
             email, error = email_validate(post_vars.email, None)
             if error:
                 return (None, error)
 
-            # Separate the Name into components
-            if self.first_name_only is None:
-                # Activate if using RTL
-                if s3.rtl:
-                    first_name_only = True
+            if not separate_name_fields:
+                # Separate the Name into components
+                if self.first_name_only is None:
+                    # Activate if using RTL
+                    if s3.rtl:
+                        first_name_only = True
+                    else:
+                        first_name_only = False
                 else:
-                    first_name_only = False
-            else:
-                first_name_only = self.first_name_only
-            if first_name_only:
-                first_name = fullname
-                middle_name = last_name = None
-            else:
-                name_format = settings.get_pr_name_format()
-                if name_format == "%(last_name)s %(middle_name)s %(first_name)s":
-                    # Viet Nam style
-                    last_name, middle_name, first_name = name_split(fullname)
+                    first_name_only = self.first_name_only
+                if first_name_only:
+                    first_name = fullname
+                    middle_name = last_name = None
                 else:
-                    # Assume default: "%(first_name)s %(middle_name)s %(last_name)s"
-                    # @ToDo: Actually parse the format string
-                    first_name, middle_name, last_name = name_split(fullname)
-            post_vars["first_name"] = first_name
-            post_vars["middle_name"] = middle_name
-            post_vars["last_name"] = last_name
+                    name_format = settings.get_pr_name_format()
+                    if name_format == "%(last_name)s %(middle_name)s %(first_name)s":
+                        # Viet Nam style
+                        last_name, middle_name, first_name = name_split(fullname)
+                    #elif name_format == "%(last_name)s %(first_name)s":
+                    #    # DRK style (deprecated once we complete separation of widget fields)
+                    #    last_name, middle_name, first_name = name_split(fullname)
+                    else:
+                        # Assume default: "%(first_name)s %(middle_name)s %(last_name)s"
+                        # @ToDo: Actually parse the format string
+                        first_name, middle_name, last_name = name_split(fullname)
+                post_vars["first_name"] = first_name
+                post_vars["middle_name"] = middle_name
+                post_vars["last_name"] = last_name
 
             # Validate and add the person record
             for f in ptable._filter_fields(post_vars):
@@ -3253,6 +3268,7 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
                  multiple = False,
                  select = DEFAULT,
                  sort = False,
+                 translate = False,
                  zero = ""):
         """
             Constructor
@@ -3263,6 +3279,9 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
                            defaults to settings.L10n.languages,
                            set explicitly to None to allow all languages
             @param sort: sort options in selector
+            @param translate: translate the language options into
+                              the current UI language (only with
+                              explicit select=None)
             @param zero: use this label for the empty-option (default="")
         """
         super(IS_ISO639_2_LANGUAGE_CODE, self).__init__(
@@ -3277,6 +3296,7 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
             self._select = current.deployment_settings.get_L10n_languages()
         else:
             self._select = select
+        self.translate = translate
 
     # -------------------------------------------------------------------------
     def options(self, zero=True):
@@ -3292,7 +3312,11 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
             items = [(k, v) for k, v in self._select.items()
                             if k in language_codes_dict]
         else:
-            items = self.language_codes()
+            if self.translate:
+                T = current.T
+                items = [(k, T(v)) for k, v in self.language_codes()]
+            else:
+                items = self.language_codes()
         if self.sort:
             items.sort(options_sorter)
         if zero and not self.zero is None and not self.multiple:
@@ -3303,7 +3327,9 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
     @classmethod
     def represent(cls, code):
         """
-            Represent a language code by language name
+            Represent a language code by language name, uses the
+            representation from deployment_settings if available
+            rather than translation into current UI language.
 
             @param code: the language code
         """
@@ -3312,10 +3338,24 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
         if code in l10n_languages:
             name = l10n_languages[code]
         else:
-            all_languages = dict(cls.language_codes())
-            name = all_languages.get(code)
-            if name is None:
-                name = current.messages.UNKNOWN_OPT
+            name = cls.represent_local(code)
+        return name
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def represent_local(cls, code):
+        """
+            Represent a language code by language name, translated
+            into current UI language (preferrable for database fields).
+
+            @param code: the language code
+        """
+
+        name = dict(cls.language_codes()).get(code)
+        if name is None:
+            name = current.messages.UNKNOWN_OPT
+        else:
+            name = current.T(name)
         return name
 
     # -------------------------------------------------------------------------

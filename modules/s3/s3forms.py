@@ -826,6 +826,33 @@ class S3SQLCustomForm(S3SQLForm):
         self.subtables = subtables
         self.components = components
 
+        rcomponents = resource.components
+
+        # Customise subtables
+        if subtables:
+            if not request:
+                # Create dummy S3Request
+                from s3rest import S3Request
+                r = S3Request(resource.prefix,
+                              resource.name,
+                              # Current request args/vars could be in a different
+                              # resource context, so must override them here:
+                              args = [],
+                              get_vars = {},
+                              )
+            else:
+                r = request
+            customise_resource = current.deployment_settings.customise_resource
+            for alias in subtables:
+                # Get tablename
+                if alias not in rcomponents:
+                    continue
+                tablename = rcomponents[alias].tablename
+                # Run customise_resource
+                customise = customise_resource(tablename)
+                if customise:
+                    customise(r, tablename)
+
         # Mark required fields with asterisk
         if not readonly:
             mark_required = self._config("mark_required", default=[])
@@ -860,8 +887,6 @@ class S3SQLCustomForm(S3SQLForm):
         noupdate = []
         forbidden = []
         has_permission = current.auth.s3_has_permission
-
-        rcomponents = resource.components
 
         if record is not None:
 
@@ -1174,7 +1199,13 @@ class S3SQLCustomForm(S3SQLForm):
                 if not row:
                     return
                 main_data[pkey] = row[table[pkey]]
-            subdata[component.fkey] = main_data[pkey]
+            if component.link:
+                link = Storage(resource = component.link,
+                               master = main_data,
+                               )
+            else:
+                link = None
+                subdata[component.fkey] = main_data[pkey]
 
             # Do we already have a record for this component?
             # If yes, then get the subrecord ID
@@ -1195,8 +1226,10 @@ class S3SQLCustomForm(S3SQLForm):
             # Accept the subrecord
             self._accept(subid,
                          subdata,
-                         alias=alias,
-                         format=format)
+                         alias = alias,
+                         link = link,
+                         format = format,
+                         )
 
         # Accept components (e.g. Inline-Forms)
         for item in self.components:
@@ -3212,6 +3245,22 @@ class S3SQLInlineLink(S3SQLInlineComponent):
         self.resource = resource
         component, link = self.get_link()
 
+        # Customise resources
+        from s3rest import S3Request
+        r = S3Request(resource.prefix,
+                      resource.name,
+                      # Current request args/vars could be in a different
+                      # resource context, so must override them here:
+                      args=[],
+                      get_vars={},
+                      )
+        customise_resource = current.deployment_settings.customise_resource
+        for tablename in (component.tablename, link.tablename):
+            customise = customise_resource(tablename)
+            if customise:
+                customise(r, tablename)
+
+        self.initialized = True
         if record_id:
             rkey = component.rkey
             rows = link.select([rkey], as_rows=True)

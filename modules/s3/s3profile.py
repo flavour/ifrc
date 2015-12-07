@@ -1036,9 +1036,7 @@ class S3Profile(S3CRUD):
 
         # Card holder label and icon
         label = widget.get("label", "")
-        # Activate if-required
-        #if label and isinstance(label, basestring):
-        if label:
+        if label and isinstance(label, basestring):
             label = current.T(label)
         icon = widget.get("icon", "")
         if icon:
@@ -1105,13 +1103,20 @@ class S3Profile(S3CRUD):
 
         # Default to primary REST controller for the resource being added
         c, f = tablename.split("_", 1)
-        c = widget.get("create_controller", c)
-        f = widget.get("create_function", f)
+        create_controller = widget.get("create_controller")
+        if create_controller:
+            c = create_controller
+        create_function = widget.get("create_function")
+        if create_function:
+            f = create_function
 
         permit = current.auth.s3_has_permission
-        if permit("create", table, c=c, f=f) and \
-           permit("update", r.table, record_id=r.id, c=c, f=f):
-
+        create_ok = permit("create", table, c=c, f=f)
+        if create_ok:
+            if not create_controller or not create_function:
+                # Assume not component context
+                create_ok = permit("update", r.table, record_id=r.id, c=c, f=f)
+        if create_ok:
             #if tablename = "org_organisation":
                 # @ToDo: Special check for creating resources on Organisation profile
 
@@ -1142,6 +1147,8 @@ class S3Profile(S3CRUD):
 
             # CRUD string
             label_create = widget.get("label_create", None)
+            # Activate if-required
+            #if label_create and isinstance(label_create, basestring):
             if label_create:
                 label_create = current.T(label_create)
             else:

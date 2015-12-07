@@ -48,11 +48,27 @@ def maintenance(period="daily"):
 tasks["maintenance"] = maintenance
 
 # -----------------------------------------------------------------------------
+def org_site_check(site_id, user_id=None):
+    """ Check the Status for Sites """
+
+    if user_id:
+        # Authenticate
+        auth.s3_impersonate(user_id)
+
+    # Check for Template-specific processing
+    customise = settings.get("org_site_check")
+    if customise:
+        customise(site_id)
+        db.commit()
+
+tasks["org_site_check"] = org_site_check
+
+# -----------------------------------------------------------------------------
 if settings.has_module("cap"):
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def cap_ftp_sync(user_id=None):
-        """ Get all the ftp repository and synchronize them """
+        """ Get all the FTP repositories and synchronize them """
 
         if user_id:
             # Authenticate

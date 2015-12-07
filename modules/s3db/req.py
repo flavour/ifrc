@@ -906,6 +906,9 @@ $.filterOptionsS3({
                            crud_form = crud_form,
                            )
 
+        # Reset to standard submit button
+        s3.crud.submit_button = T("Save")
+
     # -------------------------------------------------------------------------
     @staticmethod
     def req_prep(r):
@@ -2177,7 +2180,8 @@ class S3RequestSummaryModel(S3Model):
                                                    tooltip = None,
                                                    vars = {"prefix": "req"},
                                                    ),
-                              widget = None,
+                             empty = None,
+                             widget = None,
                              ),
                      demand(),
                      s3_comments(),
@@ -2198,6 +2202,7 @@ class S3RequestSummaryModel(S3Model):
                                                     tooltip = None,
                                                     vars = {"prefix": "req"},
                                                     ),
+                              empty=None
                               ),
                      demand(),
                      s3_comments(),

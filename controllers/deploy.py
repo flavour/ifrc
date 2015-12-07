@@ -194,9 +194,10 @@ def application():
     settings.search.filter_manager = True
 
     def prep(r):
-        if not r.method and r.representation != "s3json":
-            r.method = "select"
-        if r.method == "select":
+        method = r.method
+        if not method and r.representation != "s3json":
+            r.method = method = "select"
+        if method == "select":
             r.custom_action = s3db.deploy_apply
         return True
     s3.prep = prep
@@ -418,12 +419,14 @@ def alert():
                     r.method = "select"
                 if r.method == "select":
                     r.custom_action = s3db.deploy_alert_select_recipients
+
             elif r.component_name == "response":
                 s3db.configure(r.component.tablename,
                                deletable = False,
                                editable = False,
                                insertable = False,
                                )
+
             elif r.component_name == "recipient":
                 settings.search.filter_manager = False
                 from s3.s3filter import S3TextFilter, S3OptionsFilter
@@ -493,6 +496,7 @@ def alert():
                                "_class": "action-btn read",
                                }
                               ]
+
             if r.component_name == "recipient":
                 # Open should open the HR profile, not the link
                 open_url = URL(f="human_resource",

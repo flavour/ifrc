@@ -21,7 +21,7 @@ class S3MainMenu(default.S3MainMenu):
         #sysname = current.deployment_settings.get_system_name_short()
         return [
             homepage(),
-            MM("Case Management", c="dvr", f="person"),
+            MM("Case Management", c=("dvr", "pr")),
             #homepage("gis"),
             homepage("org"),
             homepage("hrm"),
@@ -48,7 +48,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
         """ DVR / Disaster Victim Registry """
 
         return M(c="dvr")(
-                    M("Cases", f="person")(
+                    M("Cases", c=("dvr", "pr"), f="person")(
                         M("Create", m="create"),
                     ),
                     M("Case Types", f="case_type")(
@@ -59,6 +59,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     ),
                     M("Housing Types", f="housing_type")(
                        M("Create", m="create"),
+                    ),
+                    M("Income Sources", f="income_source")(
+                      M("Create", m="create"),
                     ),
                     M("Beneficiary Types", f="beneficiary_type")(
                        M("Create", m="create"),

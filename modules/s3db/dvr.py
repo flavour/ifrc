@@ -28,10 +28,17 @@
 """
 
 __all__ = ("DVRCaseModel",
+           "DVRCaseFlagModel",
            "DVRNeedsModel",
+           "DVRNotesModel",
            "DVRCaseActivityModel",
+           "DVRCaseAppointmentModel",
            "DVRCaseBeneficiaryModel",
-           "DVRHousingInformationModel",
+           "DVRCaseEconomyInformationModel",
+           "DVRCaseAllowanceModel",
+           "dvr_case_default_status",
+           "dvr_case_status_filter_opts",
+           "dvr_due_followups",
            "dvr_rheader",
            )
 
@@ -52,7 +59,8 @@ class DVRCaseModel(S3Model):
 
     names = ("dvr_case",
              "dvr_case_id",
-             "dvr_case_status_opts",
+             "dvr_case_language",
+             "dvr_case_status",
              "dvr_case_type",
              )
 
@@ -61,11 +69,12 @@ class DVRCaseModel(S3Model):
         T = current.T
         db = current.db
 
-        #UNKNOWN_OPT = current.messages.UNKNOWN_OPT
-
+        configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
-        configure = self.configure
+        settings = current.deployment_settings
+
+        person_id = self.pr_person_id
 
         # ---------------------------------------------------------------------
         # Case Types
@@ -105,21 +114,71 @@ class DVRCaseModel(S3Model):
                                           )
 
         # ---------------------------------------------------------------------
-        # Case
+        # Case Statuses
         #
-        #dvr_damage_opts = {
-        #    1: T("Very High"),
-        #    2: T("High"),
-        #    3: T("Medium"),
-        #    4: T("Low"),
-        #}
+        tablename = "dvr_case_status"
+        define_table(tablename,
+                     Field("workflow_position", "integer",
+                           default = 1,
+                           label = T("Workflow Position"),
+                           requires = IS_INT_IN_RANGE(1, None),
+                           ),
+                     Field("code", notnull=True, unique=True,
+                           label = T("Status Code"),
+                           length = 64,
+                           requires = IS_NOT_EMPTY(),
+                           ),
+                     Field("name",
+                           label = T("Status"),
+                           # Removed to allow single column imports of Cases
+                           #requires = IS_NOT_EMPTY(),
+                           ),
+                     Field("is_default", "boolean",
+                           default = False,
+                           label = T("Default Status"),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
 
-        # Case status options
-        # => tuple list to enforce widget order
-        case_status_opts = (("PENDING", T("Pending")),
-                            ("OPEN", T("Open")),
-                            ("CLOSED", T("Closed")),
-                            )
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Case Status"),
+            title_display = T("Case Status"),
+            title_list = T("Case Statuses"),
+            title_update = T("Edit Case Status"),
+            label_list_button = T("List Case Statuses"),
+            label_delete_button = T("Delete Case Status"),
+            msg_record_created = T("Case Status added"),
+            msg_record_modified = T("Case Status updated"),
+            msg_record_deleted = T("Case Status deleted"),
+            msg_list_empty = T("No Case Statuses currently registered")
+            )
+
+        # Table configuration
+        configure(tablename,
+                  # Automatic since unique=True
+                  #deduplicate = S3Duplicate(primary = ("code",)),
+                  onaccept = self.case_status_onaccept,
+                  )
+
+        # Reusable field
+        represent = S3Represent(lookup=tablename, translate=True)
+        status_id = S3ReusableField("status_id", "reference %s" % tablename,
+                                    label = T("Status"),
+                                    ondelete = "RESTRICT",
+                                    represent = represent,
+                                    requires = IS_EMPTY_OR(
+                                                IS_ONE_OF(db, "dvr_case_status.id",
+                                                          represent,
+                                                          orderby = "dvr_case_status.workflow_position",
+                                                          sort = False,
+                                                          )),
+                                    sortby = "workflow_position",
+                                    )
+
+        # ---------------------------------------------------------------------
+        # Cases
+        #
 
         # Case priority options
         # => tuple list to enforce widget order
@@ -134,15 +193,24 @@ class DVRCaseModel(S3Model):
                                  "HOUSEHOLD": T("Household"),
                                  }
 
-        SITE = current.deployment_settings.get_org_site_label()
+        SITE = settings.get_org_site_label()
+        default_organisation = settings.get_org_default_organisation()
+        default_site = settings.get_org_default_site()
         permitted_facilities = current.auth.permitted_facilities(redirect_on_error=False)
 
         tablename = "dvr_case"
         define_table(tablename,
+                     person_id(represent = self.pr_PersonRepresent(show_link=True),
+                               requires = IS_ADD_PERSON_WIDGET2(),
+                               widget = S3AddPersonWidget2(controller="dvr"),
+                               ),
                      # @ToDo: Option to autogenerate these, like Waybills, et al
                      Field("reference",
                            label = T("Case Number"),
                            ),
+                     person_id(empty = False,
+                               ondelete = "CASCADE",
+                               ),
                      FieldS3("case_type_id", "reference dvr_case_type",
                              label = T("Case Type"),
                              represent = case_type_represent,
@@ -168,20 +236,21 @@ class DVRCaseModel(S3Model):
                            requires = IS_IN_SET(case_beneficiary_opts,
                                                 zero = None,
                                                 ),
+                           # Enable in template if required
+                           readable = False,
+                           writable = False,
                            ),
                      s3_date(label = T("Registration Date"),
                              default = "now",
                              empty = False,
                              ),
-                     Field("status",
-                           default = "OPEN",
-                           label = T("Status"),
-                           represent = S3Represent(options=dict(case_status_opts)),
-                           requires = IS_IN_SET(case_status_opts,
-                                                sort = False,
-                                                zero = None,
-                                                ),
-                           ),
+                     s3_date("valid_until",
+                             label = T("Valid until"),
+                             # Enable in template if required
+                             readable = False,
+                             writable = False,
+                             ),
+                     status_id(),
                      Field("priority", "integer",
                            default = 2,
                            label = T("Priority"),
@@ -191,25 +260,30 @@ class DVRCaseModel(S3Model):
                                                 zero = None,
                                                 ),
                            ),
-                     self.org_organisation_id(),
+                     self.org_organisation_id(default = default_organisation,
+                                              readable = not default_organisation,
+                                              writable = not default_organisation,
+                                              ),
                      self.super_link("site_id", "org_site",
+                                     default = default_site,
                                      filterby = "site_id",
                                      filter_opts = permitted_facilities,
                                      label = SITE,
-                                     readable = True,
-                                     writable = True,
+                                     readable = not default_site,
+                                     writable = not default_site,
                                      represent = self.org_site_represent,
                                      updateable = True,
                                      ),
-                     self.pr_person_id(
-                        # @ToDo: Modify this to update location_id if the selected
-                        #        person has a Home Address already
-                        comment = None,
-                        represent = self.pr_PersonRepresent(show_link=True),
-                        requires = IS_ADD_PERSON_WIDGET2(),
-                        widget = S3AddPersonWidget2(controller="pr"),
-                        ondelete = "CASCADE",
-                        ),
+                     Field("archived", "boolean",
+                           default = False,
+                           label = T("Archived"),
+                           represent = s3_yes_no_represent,
+                           # Enable in template if required:
+                           readable = False,
+                           writable = False,
+                           ),
+                     # Simplified "head of household" fields:
+                     # (if not tracked as separate case beneficiaries)
                      Field("head_of_household", "boolean",
                            default = True,
                            label = T("Head of Household"),
@@ -236,16 +310,6 @@ class DVRCaseModel(S3Model):
                            readable = False,
                            writable = False,
                            ),
-                     #Field("damage", "integer",
-                     #      label= T("Damage Assessment"),
-                     #      represent = lambda opt: \
-                     #           dvr_damage_opts.get(opt, UNKNOWN_OPT),
-                     #      requires = IS_EMPTY_OR(IS_IN_SET(dvr_damage_opts)),
-                     #      ),
-                     #Field("insurance", "boolean",
-                     #      label = T("Insurance"),
-                     #      represent = s3_yes_no_represent,
-                     #      ),
                      s3_comments(),
                      *s3_meta_fields())
 
@@ -268,92 +332,42 @@ class DVRCaseModel(S3Model):
                             dvr_beneficiary_data = "case_id",
                             dvr_case_activity = "case_id",
                             dvr_case_service_contact = "case_id",
-                            dvr_housing = {"joinby": "case_id",
+                            dvr_economy = {"joinby": "case_id",
                                            "multiple": False,
                                            },
                             dvr_need =  {"link": "dvr_case_need",
                                          "joinby": "case_id",
                                          "key": "need_id",
                                          },
-                            # Not valid for write:
-                            pr_address = ({"name": "current_address",
-                                           "link": "pr_person",
-                                           "joinby": "id",
-                                           "key": "pe_id",
-                                           "fkey": "pe_id",
-                                           "pkey": "person_id",
-                                           "filterby": "type",
-                                           "filterfor": ("1",),
-                                           },
-                                          {"name": "permanent_address",
-                                           "link": "pr_person",
-                                           "joinby": "id",
-                                           "key": "pe_id",
-                                           "fkey": "pe_id",
-                                           "pkey": "person_id",
-                                           "filterby": "type",
-                                           "filterfor": ("2",),
-                                           },
-                                          ),
                             )
 
-        # CRUD form
-        crud_form = S3SQLCustomForm("reference",
-                                    "organisation_id",
-                                    "date",
-                                    "status",
-                                    "person_id",
-                                    # Not valid for write:
-                                    #S3SQLInlineComponent("current_address",
-                                    #                     label = T("Current Address"),
-                                    #                     fields = [("", "location_id"),
-                                    #                               ],
-                                    #                     default = {"type": 1}, # Current Home Address
-                                    #                     link = False,
-                                    #                     multiple = False,
-                                    #                     ),
-                                    #S3SQLInlineComponent("permanent_address",
-                                    #                     comment = T("If Displaced"),
-                                    #                     label = T("Normal Address"),
-                                    #                     fields = [("", "location_id"),
-                                    #                               ],
-                                    #                     default = {"type": 2}, # Permanent Home Address
-                                    #                     link = False,
-                                    #                     multiple = False,
-                                    #                     ),
-                                    S3SQLInlineLink("need",
-                                                    field = "need_id",
-                                                    ),
-                                    "comments",
-                                    )
-
-        # Report options
-        axes = ["organisation_id",
-                "case_need.need_id",
-                ]
-        levels = current.gis.get_relevant_hierarchy_levels()
-        for level in levels:
-            axes.append("current_address.location_id$%s" % level)
-        highest_lx = "current_address.location_id$%s" % levels[0]
-
-        facts = [(T("Number of Cases"), "count(id)"),
-                 ]
-
-        report_options = {"rows": axes,
-                          "cols": axes,
-                          "fact": facts,
-                          "defaults": {"rows": "case_need.need_id",
-                                       "cols": highest_lx,
-                                       "fact": facts[0],
-                                       "totals": True,
-                                       },
-                          }
+        # Report options FIXME
+        #axes = ["organisation_id",
+        #        "case_need.need_id",
+        #        ]
+        #levels = current.gis.get_relevant_hierarchy_levels()
+        #for level in levels:
+        #    axes.append("current_address.location_id$%s" % level)
+        #highest_lx = "current_address.location_id$%s" % levels[0]
+        #
+        #facts = [(T("Number of Cases"), "count(id)"),
+        #         ]
+        #
+        #report_options = {"rows": axes,
+        #                  "cols": axes,
+        #                  "fact": facts,
+        #                  "defaults": {"rows": "case_need.need_id",
+        #                               "cols": highest_lx,
+        #                               "fact": facts[0],
+        #                               "totals": True,
+        #                               },
+        #                  }
 
         # Table configuration
         configure(tablename,
-                  crud_form = crud_form,
-                  report_options = report_options,
+                  #report_options = report_options,
                   onvalidation = self.case_onvalidation,
+                  onaccept = self.case_onaccept,
                   )
 
         # Reusable field
@@ -368,10 +382,46 @@ class DVRCaseModel(S3Model):
                                   )
 
         # ---------------------------------------------------------------------
+        # Case Language: languages that can be used to communicate with
+        #                a case beneficiary
+        #
+
+        # Quality/Mode of communication:
+        lang_quality_opts = (("N", T("native")),
+                             ("F", T("fluent")),
+                             ("S", T("simplified/slow")),
+                             ("W", T("written-only")),
+                             ("I", T("interpreter required")),
+                             )
+
+        tablename = "dvr_case_language"
+        define_table(tablename,
+                     person_id(empty = False,
+                               ondelete = "CASCADE",
+                               ),
+                     Field("language",
+                           label = T("Language"),
+                           represent = IS_ISO639_2_LANGUAGE_CODE.represent_local,
+                           requires = IS_ISO639_2_LANGUAGE_CODE(select = None,
+                                                                translate = True,
+                                                                ),
+                           ),
+                     Field("quality",
+                           default = "N",
+                           label = T("Quality/Mode"),
+                           represent = S3Represent(options=dict(lang_quality_opts)),
+                           requires = IS_IN_SET(lang_quality_opts,
+                                                sort = False,
+                                                zero = None,
+                                                ),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
         return {"dvr_case_id": case_id,
-                "dvr_case_status_opts": case_status_opts,
                 }
 
     # -------------------------------------------------------------------------
@@ -385,14 +435,39 @@ class DVRCaseModel(S3Model):
                                 )
 
         return {"dvr_case_id": lambda **attr: dummy("case_id"),
-                "dvr_case_status_opts": {},
                 }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def case_status_onaccept(form):
+        """
+            Onaccept routine for case statuses:
+            - only one status can be the default
+
+            @param form: the FORM
+        """
+
+        form_vars = form.vars
+        try:
+            record_id = form_vars.id
+        except AttributeError:
+            record_id = None
+        if not record_id:
+            return
+
+        # If this status is the default, then set is_default-flag
+        # for all other statuses to False:
+        if "is_default" in form_vars and form_vars.is_default:
+            table = current.s3db.dvr_case_status
+            db = current.db
+            db(table.id != record_id).update(is_default = False)
 
     # -------------------------------------------------------------------------
     @staticmethod
     def case_onvalidation(form):
         """
-            Ensure case numbers are unique within the organisation
+            Case onvalidation:
+            - make sure case numbers are unique within the organisation
 
             @param form: the FORM
         """
@@ -402,7 +477,15 @@ class DVRCaseModel(S3Model):
 
         # Read form data
         form_vars = form.vars
-        record_id = form_vars.id if "id" in form_vars else None
+        if "id" in form_vars:
+            # Inline subtable update
+            record_id = form_vars.id
+        elif hasattr(form, "record_id"):
+            # Regular update form
+            record_id = form.record_id
+        else:
+            # New record
+            record_id = None
         try:
             reference = form_vars.reference
         except AttributeError:
@@ -459,6 +542,151 @@ class DVRCaseModel(S3Model):
                                     limitby = (0, 1)).first()
             if row:
                 form.errors["reference"] = msg
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def case_onaccept(form):
+        """
+            Case onaccept routine:
+            - auto-create active appointments
+
+            @param form: the FORM
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        # Read form data
+        form_vars = form.vars
+        if "id" in form_vars:
+            record_id = form_vars.id
+        elif hasattr(form, "record_id"):
+            record_id = form.record_id
+        else:
+            return
+
+        # Get the person ID
+        if "person_id" in form_vars:
+            person_id = form_vars.person_id
+        else:
+            table = s3db.dvr_case
+            query = (table.id == record_id)
+            row = db(query).select(table.person_id,
+                                   limitby = (0, 1)).first()
+            if not row:
+                return
+            person_id = row.person_id
+
+        atable = s3db.dvr_case_appointment
+        ttable = s3db.dvr_case_appointment_type
+        left = atable.on((atable.type_id == ttable.id) &
+                         (atable.person_id == person_id) &
+                         (atable.deleted != True))
+        query = (atable.id == None) & \
+                (ttable.active == True) & \
+                (ttable.deleted != True)
+        rows = db(query).select(ttable.id, left=left)
+        for row in rows:
+            atable.insert(case_id = record_id,
+                          person_id = person_id,
+                          type_id = row.id,
+                          )
+
+# =============================================================================
+class DVRCaseFlagModel(S3Model):
+    """ Model for Case Flags """
+
+    names = ("dvr_case_flag",
+             "dvr_case_flag_case",
+             )
+
+    def model(self):
+
+        T = current.T
+        db = current.db
+
+        crud_strings = current.response.s3.crud_strings
+        define_table = self.define_table
+        configure = self.configure
+
+        # ---------------------------------------------------------------------
+        # Case Flags
+        #
+        tablename = "dvr_case_flag"
+        define_table(tablename,
+                     Field("name",
+                           label = T("Name"),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        ADD_FLAG = T("Create Case Flag")
+        crud_strings[tablename] = Storage(
+            label_create = ADD_FLAG,
+            title_display = T("Case Flag Details"),
+            title_list = T("Case Flags"),
+            title_update = T("Edit Case Flag"),
+            label_list_button = T("List Case Flags"),
+            label_delete_button = T("Delete Case Flag"),
+            msg_record_created = T("Case Flag added"),
+            msg_record_modified = T("Case Flag updated"),
+            msg_record_deleted = T("Case Flag deleted"),
+            msg_list_empty = T("No Case Flags found"),
+            )
+
+        # Table configuration
+        configure(tablename,
+                  deduplicate = S3Duplicate(),
+                  )
+
+        # Reusable field
+        represent = S3Represent(lookup=tablename, translate=True)
+        flag_id = S3ReusableField("flag_id", "reference %s" % tablename,
+                                  label = T("Case Flag"),
+                                  ondelete = "RESTRICT",
+                                  represent = represent,
+                                  requires = IS_EMPTY_OR(
+                                                IS_ONE_OF(db, "dvr_case_flag.id",
+                                                          represent)),
+                                  comment=S3PopupLink(c = "dvr",
+                                                      f = "case_flag",
+                                                      title = ADD_FLAG,
+                                                      tooltip = T("Choose the flag from the drop-down, or click the link to create a new flag"),
+                                                      ),
+                                  )
+
+        # ---------------------------------------------------------------------
+        # Link table Case <=> Flag
+        #
+        tablename = "dvr_case_flag_case"
+        define_table(tablename,
+                     self.pr_person_id(empty = False,
+                                       ondelete = "CASCADE",
+                                       ),
+                     flag_id(empty = False,
+                             ondelete = "CASCADE",
+                             ),
+                     *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return {"dvr_case_flag_id": flag_id,
+                }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """ Safe defaults for names in case the module is disabled """
+
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False,
+                                )
+
+        return {"dvr_case_flag_id": lambda **attr: dummy("flag_id"),
+                }
 
 # =============================================================================
 class DVRNeedsModel(S3Model):
@@ -558,6 +786,105 @@ class DVRNeedsModel(S3Model):
                 }
 
 # =============================================================================
+class DVRNotesModel(S3Model):
+    """
+        Model for Notes
+    """
+
+    names = ("dvr_note_type",
+             "dvr_note",
+             )
+
+    def model(self):
+
+        T = current.T
+        db = current.db
+
+        crud_strings = current.response.s3.crud_strings
+        define_table = self.define_table
+
+        # ---------------------------------------------------------------------
+        # Note Types
+        #
+        tablename = "dvr_note_type"
+        define_table(tablename,
+                     Field("name", unique=True,
+                           label = T("Name"),
+                           length = 128,
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Note Type"),
+            title_display = T("Note Type Details"),
+            title_list = T("Note Types"),
+            title_update = T("Edit Note Type"),
+            label_list_button = T("List Note Types"),
+            label_delete_button = T("Delete Note Type"),
+            msg_record_created = T("Note Type added"),
+            msg_record_modified = T("Note Type updated"),
+            msg_record_deleted = T("Note Type deleted"),
+            msg_list_empty = T("No Note Types found"),
+            )
+
+        # Table configuration
+        #self.configure(tablename,
+        #               # Not needed as unique=True
+        #               deduplicate = S3Duplicate(),
+        #               )
+
+        # Reusable field
+        represent = S3Represent(lookup=tablename, translate=True)
+        note_type_id = S3ReusableField("note_type_id", "reference %s" % tablename,
+                                       label = T("Note Type"),
+                                       ondelete = "RESTRICT",
+                                       represent = represent,
+                                       requires = IS_EMPTY_OR(
+                                                    IS_ONE_OF(db, "dvr_note_type.id",
+                                                              represent)),
+                                       )
+
+        # ---------------------------------------------------------------------
+        # Notes
+        #
+        tablename = "dvr_note"
+        define_table(tablename,
+                     # Uncomment if needed for the Case perspective
+                     #self.dvr_case_id(empty = False,
+                     #                 ondelete = "CASCADE",
+                     #                 ),
+                     self.pr_person_id(empty = False,
+                                       ondelete = "CASCADE",
+                                       ),
+                     note_type_id(empty = False),
+                     s3_date(),
+                     s3_comments("note",
+                                 comment=None,
+                                 ),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Note"),
+            title_display = T("Note Details"),
+            title_list = T("Notes"),
+            title_update = T("Edit Note"),
+            label_list_button = T("List Notes"),
+            label_delete_button = T("Delete Note"),
+            msg_record_created = T("Note added"),
+            msg_record_modified = T("Note updated"),
+            msg_record_deleted = T("Note deleted"),
+            msg_list_empty = T("No Notes found"),
+            )
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return {}
+
+# =============================================================================
 class DVRCaseActivityModel(S3Model):
     """ Model for Case Activities """
 
@@ -581,15 +908,19 @@ class DVRCaseActivityModel(S3Model):
         #
         tablename = "dvr_case_activity"
         define_table(tablename,
-                     # Beneficiary (component link):
-                     # @todo: populate from case and hide in case perspective
-                     self.pr_person_id(empty = False,
-                                       ondelete = "CASCADE",
-                                       ),
-                     self.dvr_case_id(empty = False,
+                     self.dvr_case_id(comment = None,
+                                      empty = False,
                                       label = T("Case Number"),
                                       ondelete = "CASCADE",
+                                      writable = False,
                                       ),
+                     # Beneficiary (component link):
+                     # @todo: populate from case and hide in case perspective
+                     self.pr_person_id(comment = None,
+                                       empty = False,
+                                       ondelete = "CASCADE",
+                                       writable = False,
+                                       ),
                      s3_date("start_date",
                              label = T("Registered on"),
                              default = "now",
@@ -599,6 +930,11 @@ class DVRCaseActivityModel(S3Model):
                            label = T("Need Details"),
                            represent = s3_text_represent,
                            widget = s3_comments_widget,
+                           ),
+                     Field("emergency", "boolean",
+                           default = False,
+                           label = T("Emergency"),
+                           represent = s3_yes_no_represent,
                            ),
                      # Activate in template as needed:
                      self.org_organisation_id(label=T("Referral Agency"),
@@ -649,19 +985,86 @@ class DVRCaseActivityModel(S3Model):
             msg_list_empty = T("No Activities currently registered"),
             )
 
+        # List fields
         list_fields = ["start_date",
                        "need_id",
                        "need_details",
+                       "emergency",
                        "referral_details",
                        "followup",
                        "followup_date",
                        "completed",
                        ]
 
+        # Filter widgets
+        filter_widgets = [S3TextFilter(["person_id$pe_label",
+                                        "person_id$first_name",
+                                        "person_id$last_name",
+                                        "case_id$reference",
+                                        "need_details",
+                                        "referral_details",
+                                        ],
+                                        label = T("Search"),
+                                        ),
+                          S3OptionsFilter("emergency",
+                                          options = {True: T("Yes"),
+                                                     False: T("No"),
+                                                     },
+                                          cols = 2,
+                                          ),
+                          S3OptionsFilter("need_id",
+                                          options = lambda: s3_get_filter_opts("dvr_need",
+                                                                               translate = True,
+                                                                               ),
+                                          ),
+                          S3OptionsFilter("completed",
+                                          default = False,
+                                          options = {True: T("Yes"),
+                                                     False: T("No"),
+                                                     },
+                                          cols = 2,
+                                          ),
+                          S3OptionsFilter("followup",
+                                          label = T("Follow-up required"),
+                                          options = {True: T("Yes"),
+                                                     False: T("No"),
+                                                     },
+                                          cols = 2,
+                                          hidden = True,
+                                          ),
+                          S3DateFilter("followup_date",
+                                       cols = 2,
+                                       hidden = True,
+                                       ),
+                          ]
+
+        # Report options
+        axes = ["need_id",
+                (T("Case Status"), "case_id$status_id"),
+                "emergency",
+                "followup",
+                "completed",
+                ]
+        facts = [(T("Number of Activities"), "count(id)"),
+                 (T("Number of Cases"), "count(case_id)"),
+                 ]
+        report_options = {"rows": axes,
+                          "cols": axes,
+                          "fact": facts,
+                          "defaults": {"rows": "need_id",
+                                       "cols": "completed",
+                                       "fact": facts[0],
+                                       "totals": True,
+                                       "chart": "barchart:rows",
+                                       },
+                          }
+
         # Table configuration
         configure(tablename,
+                  filter_widgets = filter_widgets,
                   list_fields = list_fields,
                   orderby = "dvr_case_activity.start_date desc",
+                  report_options = report_options,
                   )
 
         # ---------------------------------------------------------------------
@@ -698,6 +1101,140 @@ class DVRCaseActivityModel(S3Model):
             msg_record_deleted = T("Service Contact deleted"),
             msg_list_empty = T("No Service Contacts currently registered"),
             )
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return {}
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """ Safe defaults for names in case the module is disabled """
+
+        return {}
+
+# =============================================================================
+class DVRCaseAppointmentModel(S3Model):
+    """ Model for Case Appointments """
+
+    names = ("dvr_case_appointment",
+             "dvr_case_appointment_type",
+             )
+
+    def model(self):
+
+        T = current.T
+        db = current.db
+
+        crud_strings = current.response.s3.crud_strings
+        define_table = self.define_table
+        configure = self.configure
+
+        # ---------------------------------------------------------------------
+        # Case Appointment Type
+        #
+        tablename = "dvr_case_appointment_type"
+        define_table(tablename,
+                     Field("name", length=64, notnull=True, unique=True,
+                           requires = IS_NOT_EMPTY(),
+                           ),
+                     Field("active", "boolean",
+                           default = True,
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Appointment Type"),
+            title_display = T("Appointment Type Details"),
+            title_list = T("Appointment Types"),
+            title_update = T("Edit Appointment Types"),
+            label_list_button = T("List Appointment Types"),
+            label_delete_button = T("Delete Appointment Type"),
+            msg_record_created = T("Appointment Type added"),
+            msg_record_modified = T("Appointment Type updated"),
+            msg_record_deleted = T("Appointment Type deleted"),
+            msg_list_empty = T("No Appointment Types currently registered"),
+            )
+
+        # Reusable Field
+        represent = S3Represent(lookup=tablename, translate=True)
+        appointment_type_id = S3ReusableField("type_id", "reference %s" % tablename,
+                                              label = T("Appointment Type"),
+                                              ondelete = "RESTRICT",
+                                              represent = represent,
+                                              requires = IS_EMPTY_OR(
+                                                              IS_ONE_OF(db, "dvr_case_appointment_type.id",
+                                                                        represent,
+                                                                        )),
+                                              )
+
+        # ---------------------------------------------------------------------
+        # Case Appointments
+        #
+        appointment_status_opts = {1: T("Planning"),
+                                   2: T("Planned"),
+                                   3: T("In Progress"),
+                                   4: T("Completed"),
+                                   5: T("Missed"),
+                                   6: T("Cancelled"),
+                                   }
+
+        tablename = "dvr_case_appointment"
+        define_table(tablename,
+                     self.dvr_case_id(comment = None,
+                                      # @ToDo: Populate this onaccept from imports
+                                      #empty = False,
+                                      label = T("Case Number"),
+                                      ondelete = "CASCADE",
+                                      writable = False,
+                                      ),
+                     # Beneficiary (component link):
+                     # @todo: populate from case and hide in case perspective
+                     self.pr_person_id(comment = None,
+                                       empty = False,
+                                       ondelete = "CASCADE",
+                                       writable = False,
+                                       ),
+                     appointment_type_id(empty = False,
+                                         ),
+                     s3_date(label = T("Planned on"),
+                             ),
+                     Field("status", "integer",
+                           default = 1, # Planning
+                           requires = IS_IN_SET(appointment_status_opts,
+                                                zero = None,
+                                                ),
+                           represent = S3Represent(options=appointment_status_opts,
+                                                   ),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Appointment"),
+            title_display = T("Appointment Details"),
+            title_list = T("Appointments"),
+            title_update = T("Edit Appointment"),
+            label_list_button = T("List Appointments"),
+            label_delete_button = T("Delete Appointment"),
+            msg_record_created = T("Appointment added"),
+            msg_record_modified = T("Appointment updated"),
+            msg_record_deleted = T("Appointment deleted"),
+            msg_list_empty = T("No Appointments currently registered"),
+            )
+
+        # Custom methods
+        self.set_method("dvr", "case_appointment",
+                        method = "manage",
+                        action = dvr_ManageAppointments,
+                        )
+
+        # @todo: onaccept to change status "planning" to "planned" if a date
+        #        has been entered, and vice versa
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
@@ -869,10 +1406,12 @@ class DVRCaseBeneficiaryModel(S3Model):
 
 
 # =============================================================================
-class DVRHousingInformationModel(S3Model):
-    """ Model for Housing Information """
+class DVRCaseEconomyInformationModel(S3Model):
+    """ Model for Household Economy Information """
 
-    names = ("dvr_housing",
+    names = ("dvr_economy",
+             "dvr_income_source",
+             "dvr_income_source_economy",
              "dvr_housing_type",
              )
 
@@ -909,7 +1448,7 @@ class DVRHousingInformationModel(S3Model):
             msg_record_created = T("Housing Type added"),
             msg_record_modified = T("Housing Type updated"),
             msg_record_deleted = T("Housing Type deleted"),
-            msg_list_empty = T("No Housing Types currently registered")
+            msg_list_empty = T("No Housing Types currently defined")
             )
 
         # Represent for reference
@@ -918,9 +1457,53 @@ class DVRHousingInformationModel(S3Model):
                                              )
 
         # ---------------------------------------------------------------------
-        # Housing Information
+        # Income sources
         #
-        tablename = "dvr_housing"
+        tablename = "dvr_income_source"
+        define_table(tablename,
+                     Field("name",
+                           requires = IS_NOT_EMPTY(),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        ADD_INCOME_SOURCE = T("Create Income Source")
+        crud_strings[tablename] = Storage(
+            label_create = ADD_INCOME_SOURCE,
+            title_display = T("Income Source"),
+            title_list = T("Income Sources"),
+            title_update = T("Edit Income Source"),
+            label_list_button = T("List Income Sources"),
+            label_delete_button = T("Delete Income Source"),
+            msg_record_created = T("Income Source added"),
+            msg_record_modified = T("Income Source updated"),
+            msg_record_deleted = T("Income Source deleted"),
+            msg_list_empty = T("No Income Sources currently defined")
+            )
+
+        # Reusable field
+        represent = S3Represent(lookup=tablename, translate=True)
+        income_source_id = S3ReusableField("income_source_id", "reference %s" % tablename,
+                                           label = T("Income Source"),
+                                           ondelete = "RESTRICT",
+                                           represent = represent,
+                                           requires = IS_EMPTY_OR(
+                                                        IS_ONE_OF(db,
+                                                                  "dvr_income_source.id",
+                                                                  represent,
+                                                                  )),
+                                           )
+
+        # Table configuration
+        configure(tablename,
+                  deduplicate = S3Duplicate(),
+                  )
+
+        # ---------------------------------------------------------------------
+        # Household Economy Information
+        #
+        tablename = "dvr_economy"
         define_table(tablename,
                      # Beneficiary (component link):
                      # @todo: populate from case and hide in case perspective
@@ -949,33 +1532,78 @@ class DVRHousingInformationModel(S3Model):
                            label = T("Monthly Costs"),
                            requires = IS_EMPTY_OR(IS_FLOAT_IN_RANGE(0.0, None)),
                            ),
+                     Field("average_weekly_income", "double",
+                           label = T("Average Weekly Income"),
+                           requires = IS_EMPTY_OR(IS_FLOAT_IN_RANGE(0.0, None)),
+                           ),
                      s3_currency(),
                      s3_comments(),
                      *s3_meta_fields())
 
+        # Components
+        self.add_components(tablename,
+                            dvr_income_source = {"link": "dvr_income_source_economy",
+                                                 "joinby": "economy_id",
+                                                 "key": "income_source_id",
+                                                 "actuate": "link",
+                                                 "autodelete": False,
+                                                 },
+                            )
+
         # CRUD Strings
         crud_strings[tablename] = Storage(
-            label_create = T("Create Housing Information"),
-            title_display = T("Housing Information"),
-            title_list = T("Housing Information"),
-            title_update = T("Edit Housing Information"),
-            label_list_button = T("List Housing Information"),
-            label_delete_button = T("Delete Housing Information"),
-            msg_record_created = T("Housing Information added"),
-            msg_record_modified = T("Housing Information updated"),
-            msg_record_deleted = T("Housing Information deleted"),
-            msg_list_empty = T("No Housing Information currently registered"),
+            label_create = T("Create Economy Information"),
+            title_display = T("Economy Information"),
+            title_list = T("Economy Information"),
+            title_update = T("Edit Economy Information"),
+            label_list_button = T("List Economy Information"),
+            label_delete_button = T("Delete Economy Information"),
+            msg_record_created = T("Economy Information added"),
+            msg_record_modified = T("Economy Information updated"),
+            msg_record_deleted = T("Economy Information deleted"),
+            msg_list_empty = T("No Economy Information currently registered"),
             )
 
+        # CRUD Form
+        crud_form = S3SQLCustomForm("housing_type_id",
+                                    "monthly_costs",
+                                    S3SQLInlineLink("income_source",
+                                                    field = "income_source_id",
+                                                    label = T("Income Sources"),
+                                                    cols = 3,
+                                                    ),
+                                    "average_weekly_income",
+                                    "currency",
+                                    "comments",
+                                    )
+
+        # List fields
         list_fields = ["housing_type_id",
                        "monthly_costs",
+                       "income_source_economy.income_source_id",
+                       "average_weekly_income",
                        "comments",
                        ]
 
         # Table configuration
         configure(tablename,
+                  crud_form = crud_form,
                   list_fields = list_fields,
                   )
+
+        # ---------------------------------------------------------------------
+        # Link table Economy Information <=> Income Sources
+        #
+        tablename = "dvr_income_source_economy"
+        define_table(tablename,
+                     Field("economy_id", "reference dvr_economy",
+                           ondelete = "CASCADE",
+                           requires = IS_ONE_OF(db, "dvr_economy.id"),
+                           ),
+                     income_source_id(),
+                     s3_comments(),
+                     *s3_meta_fields())
+
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
@@ -990,6 +1618,357 @@ class DVRHousingInformationModel(S3Model):
         return {}
 
 # =============================================================================
+class DVRCaseAllowanceModel(S3Model):
+    """ Model for Allowance Management """
+
+    names = ("dvr_allowance",
+             )
+
+    def model(self):
+
+        T = current.T
+        db = current.db
+
+        crud_strings = current.response.s3.crud_strings
+        define_table = self.define_table
+        configure = self.configure
+
+        # ---------------------------------------------------------------------
+        # Allowance Information
+        #
+        allowance_status_opts = {1: T("pending"),
+                                 2: T("paid"),
+                                 3: T("refused"),
+                                 }
+
+        tablename = "dvr_allowance"
+        define_table(tablename,
+                     # Beneficiary (component link):
+                     # @todo: populate from case and hide in case perspective
+                     self.pr_person_id(empty = False,
+                                       ondelete = "CASCADE",
+                                       ),
+                     self.dvr_case_id(empty = False,
+                                      label = T("Case Number"),
+                                      ondelete = "CASCADE",
+                                      ),
+                     s3_date(default="now"),
+                     Field("amount", "double",
+                           ),
+                     s3_currency(),
+                     Field("status", "integer",
+                           requires = IS_IN_SET(allowance_status_opts,
+                                                zero = None,
+                                                ),
+                           represent = S3Represent(options=allowance_status_opts,
+                                                   ),
+                           widget = S3GroupedOptionsWidget(cols = 3,
+                                                           multiple = False,
+                                                           ),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Allowance Information"),
+            title_display = T("Allowance Information"),
+            title_list = T("Allowance Information"),
+            title_update = T("Edit Allowance Information"),
+            label_list_button = T("List Allowance Information"),
+            label_delete_button = T("Delete Allowance Information"),
+            msg_record_created = T("Allowance Information added"),
+            msg_record_modified = T("Allowance Information updated"),
+            msg_record_deleted = T("Allowance Information deleted"),
+            msg_list_empty = T("No Allowance Information currently registered"),
+            )
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return {"dvr_allowance_status_opts": allowance_status_opts,
+                }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """ Safe defaults for names in case the module is disabled """
+
+        return {"dvr_allowance_status_opts": {},
+                }
+
+# =============================================================================
+def dvr_case_default_status():
+    """
+        Helper to get/set the default status for case records
+
+        @return: the default status_id
+    """
+
+    s3db = current.s3db
+
+    ctable = s3db.dvr_case
+    field = ctable.status_id
+
+    default = field.default
+    if default:
+        # Already set
+        return default
+
+    # Look up the default status
+    stable = s3db.dvr_case_status
+    query = (stable.is_default == True) & \
+            (stable.deleted != True)
+    row = current.db(query).select(stable.id, limitby=(0, 1)).first()
+
+    if row:
+        # Set as field default in case table
+        ctable = s3db.dvr_case
+        default = field.default = row.id
+
+    return default
+
+# =============================================================================
+def dvr_case_status_filter_opts():
+    """
+        Get filter options for case status, ordered by workflow position
+
+        @return: OrderedDict of options
+
+        @note: set sort=False for filter widget to retain this order
+    """
+
+    table = current.s3db.dvr_case_status
+    query = (table.deleted != True)
+    rows = current.db(query).select(table.id,
+                                    table.name,
+                                    orderby = "workflow_position",
+                                    )
+
+    if not rows:
+        return {}
+
+    T = current.T
+    return OrderedDict((row.id, T(row.name)) for row in rows)
+
+# =============================================================================
+def dvr_due_followups():
+    """ Number of due follow-ups """
+
+    query = (FS("followup") == True) & \
+            (FS("followup_date") <= datetime.datetime.utcnow().date()) & \
+            (FS("completed") != True) & \
+            (FS("person_id$dvr_case.archived") == False)
+    resource = current.s3db.resource("dvr_case_activity", filter=query)
+
+    return resource.count()
+
+# =============================================================================
+class dvr_ManageAppointments(S3Method):
+    """ Custom method to bulk-manage appointments """
+
+    def apply_method(self, r, **attr):
+
+        T = current.T
+        s3db = current.s3db
+
+        get_vars = r.get_vars
+        response = current.response
+
+        if r.http == "POST" and r.representation != "aadata":
+
+            count = 0
+
+            base_query = (FS("person_id$case.archived") == None) | \
+                         (FS("person_id$case.archived") == False)
+
+            post_vars = r.post_vars
+            if "selected" in post_vars and "mode" in post_vars and \
+               any([n in post_vars for n in ("completed", "cancelled")]):
+
+                selected = post_vars.selected
+                if selected:
+                    selected = selected.split(",")
+                else:
+                    selected = []
+
+                db = current.db
+                atable = s3db.dvr_case_appointment
+
+                # Handle exclusion filter
+                if post_vars.mode == "Exclusive":
+                    if "filterURL" in post_vars:
+                        filters = S3URLQuery.parse_url(post_vars.filterURL)
+                    else:
+                        filters = None
+                    query = ~(FS("id").belongs(selected)) & base_query
+
+                    aresource = s3db.resource("dvr_case_appointment",
+                                              filter = query,
+                                              vars =  filters,
+                                              )
+                    rows = aresource.select(["id"], as_rows=True)
+                    selected = [str(row.id) for row in rows]
+
+                if selected:
+                    query = (atable.id.belongs(selected)) & \
+                            (atable.deleted != True)
+                    if "completed" in post_vars:
+                        count = db(query).update(status=4) # Completed
+                    elif "cancelled" in post_vars:
+                        count = db(query).update(status=6) # Cancelled
+
+            current.session.confirmation = T("%(count)s Appointments updated") % \
+                                           {"count": count}
+            redirect(URL(f="case_appointment", args=["manage"], vars={}))
+
+        elif r.http == "GET" or r.representation == "aadata":
+            resource = r.resource
+
+            # Filter widgets
+            filter_widgets = resource.get_config("filter_widgets")
+
+            # List fields
+            list_fields = ["id",
+                           (T("ID"), "person_id$label"),
+                           "person_id",
+                           "type_id",
+                           "date",
+                           "status",
+                           ]
+
+            # Data table
+            totalrows = resource.count()
+            if "pageLength" in get_vars:
+                display_length = get_vars["pageLength"]
+                if display_length == "None":
+                    display_length = None
+                else:
+                    display_length = int(display_length)
+            else:
+                display_length = 25
+            if display_length:
+                limit = 4 * display_length
+            else:
+                limit = None
+
+            # Sorting by person_id requires introspection => use datatable_filter
+            if r.representation != "aadata":
+                get_vars = dict(get_vars)
+                dt_sorting = {"iSortingCols": "1",
+                              "bSortable_0": "false",
+                              "iSortCol_0": "1",
+                              "sSortDir_0": "asc",
+                              }
+                get_vars.update(dt_sorting)
+            filter, orderby, left = resource.datatable_filter(list_fields, get_vars)
+            resource.add_filter(filter)
+            data = resource.select(list_fields,
+                                   start = 0,
+                                   limit = limit,
+                                   orderby = orderby,
+                                   left = left,
+                                   count = True,
+                                   represent = True,
+                                   )
+            filteredrows = data["numrows"]
+            dt = S3DataTable(data["rfields"], data["rows"], orderby=orderby)
+            dt_id = "datatable"
+
+            # Bulk actions
+            dt_bulk_actions = [(T("Completed"), "completed"),
+                               (T("Cancelled"), "cancelled"),
+                               ]
+
+            if r.representation == "html":
+                # Page load
+                resource.configure(deletable = False)
+
+                dt.defaultActionButtons(resource)
+                response.s3.no_formats = True
+
+                # Data table (items)
+                items = dt.html(totalrows,
+                                filteredrows,
+                                dt_id,
+                                dt_pageLength=display_length,
+                                dt_ajax_url=URL(c="dvr",
+                                                f="case_appointment",
+                                                args=["manage"],
+                                                vars={},
+                                                extension="aadata",
+                                                ),
+                                dt_searching="false",
+                                dt_pagination="true",
+                                dt_bulk_actions=dt_bulk_actions,
+                                )
+
+                # Filter form
+                if filter_widgets:
+
+                    # Where to retrieve filtered data from:
+                    _vars = resource.crud._remove_filters(r.get_vars)
+                    filter_submit_url = r.url(vars=_vars)
+
+                    # Where to retrieve updated filter options from:
+                    filter_ajax_url = URL(f="case_appointment",
+                                          args=["filter.options"],
+                                          vars={},
+                                          )
+
+                    get_config = resource.get_config
+                    filter_clear = get_config("filter_clear", True)
+                    filter_formstyle = get_config("filter_formstyle", None)
+                    filter_submit = get_config("filter_submit", True)
+                    filter_form = S3FilterForm(filter_widgets,
+                                               clear = filter_clear,
+                                               formstyle = filter_formstyle,
+                                               submit = filter_submit,
+                                               ajax = True,
+                                               url = filter_submit_url,
+                                               ajaxurl = filter_ajax_url,
+                                               _class = "filter-form",
+                                               _id = "datatable-filter-form",
+                                               )
+                    fresource = current.s3db.resource(resource.tablename)
+                    alias = resource.alias if r.component else None
+                    ff = filter_form.html(fresource,
+                                          r.get_vars,
+                                          target = "datatable",
+                                          alias = alias,
+                                          )
+                else:
+                    ff = ""
+
+                output = dict(items = items,
+                              title = T("Manage Appointments"),
+                              list_filter_form = ff,
+                              )
+
+                response.view = "list_filter.html"
+                return output
+
+            elif r.representation == "aadata":
+
+                # Ajax refresh
+                if "draw" in get_vars:
+                    echo = int(get_vars["draw"])
+                else:
+                    echo = None
+                items = dt.json(totalrows,
+                                filteredrows,
+                                dt_id,
+                                echo,
+                                dt_bulk_actions=dt_bulk_actions)
+                response.headers["Content-Type"] = "application/json"
+                return items
+
+            else:
+                r.error(415, current.ERROR.BAD_FORMAT)
+        else:
+            r.error(405, current.ERROR.BAD_METHOD)
+
+# =============================================================================
 def dvr_rheader(r, tabs=[]):
     """ DVR module resource headers """
 
@@ -997,8 +1976,11 @@ def dvr_rheader(r, tabs=[]):
         # Resource headers only used in interactive views
         return None
 
-    tablename = r.tablename
-    record = r.record
+    tablename, record = s3_rheader_resource(r)
+    if tablename != r.tablename:
+        resource = current.s3db.resource(tablename, id=record.id)
+    else:
+        resource = r.resource
 
     rheader = None
     rheader_fields = []
@@ -1009,22 +1991,27 @@ def dvr_rheader(r, tabs=[]):
         if tablename == "pr_person":
 
             if not tabs:
-                tabs = [(T("Basic Details"), ""),
+                tabs = [(T("Basic Details"), None),
                         (T("Activities"), "case_activity"),
                         (T("Beneficiaries"), "beneficiary_data"),
-                        (T("Housing"), "housing"),
+                        (T("Economy"), "economy"),
                         (T("Service Contacts"), "case_service_contact"),
+                        (T("Identity"), "identity"),
                         ]
 
-            case = r.resource.select(["dvr_case.reference",
-                                      "dvr_case.case_type_id",
-                                      ],
-                                      represent=True,
-                                      ).rows[0]
-
-            case_number = lambda row: case["dvr_case.reference"]
-            case_type = lambda row: case["dvr_case.case_type_id"]
-            name = lambda row: s3_fullname(row)
+            case = resource.select(["dvr_case.reference",
+                                    "dvr_case.case_type_id",
+                                    ],
+                                    represent=True,
+                                    ).rows
+            if case:
+                case = case[0]
+                case_number = lambda row: case["dvr_case.reference"]
+                case_type = lambda row: case["dvr_case.case_type_id"]
+                name = lambda row: s3_fullname(row)
+            else:
+                # Target record exists, but doesn't match filters
+                return None
 
             rheader_fields = [[(T("Case Number"), case_number)],
                               [(T("Case Type"), case_type)],
@@ -1032,7 +2019,21 @@ def dvr_rheader(r, tabs=[]):
                               ["date_of_birth"],
                               ]
 
-        rheader = S3ResourceHeader(rheader_fields, tabs)(r)
+        elif tablename == "dvr_case":
+
+            if not tabs:
+                tabs = [(T("Basic Details"), None),
+                        (T("Activities"), "case_activity"),
+                        ]
+
+            rheader_fields = [["reference"],
+                              ["status_id"],
+                              ]
+
+        rheader = S3ResourceHeader(rheader_fields, tabs)(r,
+                                                         table=resource.table,
+                                                         record=record,
+                                                         )
 
     return rheader
 

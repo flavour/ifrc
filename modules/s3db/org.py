@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 """ Sahana Eden Organisation Model
 
@@ -67,6 +67,7 @@ __all__ = ("S3OrganisationModel",
            "org_update_affiliations",
            "org_OrganisationRepresent",
            "org_SiteRepresent",
+           "org_SiteCheckInMethod",
            #"org_AssignMethod",
            #"org_CapacityReport",
            "org_logo_represent",
@@ -195,8 +196,7 @@ class S3OrganisationModel(S3Model):
             ondelete = "SET NULL",
             represent = type_represent,
             requires = IS_EMPTY_OR(
-                        IS_ONE_OF(db,
-                                  "org_organisation_type.id",
+                        IS_ONE_OF(db, "org_organisation_type.id",
                                   type_represent,
                                   sort = True
                                   )),
@@ -544,7 +544,7 @@ class S3OrganisationModel(S3Model):
             if use_sector:
                 append(S3OptionsFilter("sector_organisation.sector_id",
                                        options = lambda: \
-                                           get_s3_filter_opts("org_sector",
+                                           s3_get_filter_opts("org_sector",
                                                               location_filter=True,
                                                               none=True,
                                                               translate=True),
@@ -676,7 +676,15 @@ class S3OrganisationModel(S3Model):
                                       "actuate": "hide",
                                       },
                        # Service Locations
-                       org_service_location = "organisation_id",
+                       org_service_location = ({"name": "service_location",
+                                                "joinby": "organisation_id",
+                                                },
+                                               {"name": "active_service_location",
+                                                "joinby": "organisation_id",
+                                                "filterby": "status",
+                                                "filterfor": "ACTIVE",
+                                                },
+                                               ),
                        # Format for filter_widget
                        org_service_organisation = "organisation_id",
                        # Assets
@@ -1450,7 +1458,7 @@ class S3OrganisationCapacityModel(S3Model):
         #
         tablename = "org_capacity_assessment"
         define_table(tablename,
-                     self.org_organisation_id(empty=False),
+                     self.org_organisation_id( empty = False),
                      s3_date(future=0),
                      self.pr_person_id(label = T("Lead Facilitator")),
                      s3_comments(),
@@ -3846,9 +3854,8 @@ class S3FacilityModel(S3Model):
                      *s3_meta_fields())
 
         # CRUD strings
-        ADD_FAC = T("Create Facility")
         crud_strings[tablename] = Storage(
-            label_create = ADD_FAC,
+            label_create = T("Create Facility"),
             title_display = T("Facility Details"),
             title_list = T("Facilities"),
             title_update = T("Edit Facility"),
@@ -4132,14 +4139,16 @@ class S3FacilityModel(S3Model):
         data = item.data
         name = data.get("name")
         org = data.get("organisation_id")
-        address = data.get("address")
+        #address = data.get("address")
 
         table = item.table
         query = (table.name.lower() == name.lower())
         if org:
-            query = query & (table.organisation_id == org)
-        if address:
-            query = query & (table.address == address)
+            # Either same Org or no Org defined yet
+            query = query & ((table.organisation_id == org) | \
+                             (table.organisation_id == None))
+        #if address:
+        #    query = query & (table.address == address)
         duplicate = current.db(query).select(table.id,
                                              limitby=(0, 1)).first()
         if duplicate:
@@ -4486,7 +4495,7 @@ class S3OfficeModel(S3Model):
                                                   represent,
                                                   sort=True,
                                                   filterby="organisation_id",
-                                                  filter_opts=filter_opts
+                                                  filter_opts=filter_opts,
                                                   )),
                             sortby = "name",
                             comment = S3PopupLink(c = "org",
@@ -5129,6 +5138,8 @@ def org_organisation_requires(required = False,
                        belonging to a list of realm entities
         @param updateable: Whether the list should be filtered to just those
                            which the user has Write access to
+        @ToDo: Option to remove Branches
+        @ToDo: Option to only include Branches
     """
 
     requires = IS_ONE_OF(current.db, "org_organisation.id",
@@ -5226,7 +5237,6 @@ class org_OrganisationRepresent(S3Represent):
             @param values: the organisation IDs
         """
 
-        db = current.db
         s3db = current.s3db
         otable = s3db.org_organisation
 
@@ -5238,8 +5248,7 @@ class org_OrganisationRepresent(S3Represent):
         show_parent = self.parent
         if show_parent:
             btable = s3db.org_organisation_branch
-            ptable = db.org_organisation \
-                       .with_alias("org_parent_organisation")
+            ptable = otable.with_alias("org_parent_organisation")
 
             fields.append(ptable.name)
 
@@ -5260,8 +5269,7 @@ class org_OrganisationRepresent(S3Represent):
             fields.extend([ltable.name_l10n, ltable.acronym_l10n])
 
             if show_parent:
-                lptable = db.org_organisation_name \
-                            .with_alias("org_parent_organisation_name")
+                lptable = ltable.with_alias("org_parent_organisation_name")
                 fields.append(lptable.name_l10n)
 
                 left.append(lptable.on(lptable.organisation_id == btable.organisation_id))
@@ -5272,7 +5280,7 @@ class org_OrganisationRepresent(S3Represent):
         else:
             query = (otable.id.belongs(values))
 
-        rows = db(query).select(left=left, limitby=(0, count), *fields)
+        rows = current.db(query).select(left=left, limitby=(0, count), *fields)
         self.queries += 1
 
         return rows
@@ -5571,6 +5579,192 @@ class org_SiteRepresent(S3Represent):
                     name = "%s (%s)" % (name, instance_type)
 
         return s3_unicode(name)
+
+# =============================================================================
+class org_SiteCheckInMethod(S3Method):
+    """
+        Custom Method to allow a trackable resource to check-in/out to a Site
+        e.g. using a Barcode scanner (for the person's pe_label)
+    """
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def apply_method(r, **attr):
+        """
+            Apply method.
+
+            @param r: the S3Request
+            @param attr: controller options for this request
+        """
+
+        representation = r.representation
+        if representation == "json":
+            # AJAX lookup to see if a person is checked-in or not
+            pe_label = r.get_vars.get("pe")
+            if not pe_label:
+                return current.xml.json_message(False, 400, "Label not Provided")
+            s3db = current.s3db
+            ptable = s3db.pr_person
+            person = current.db(ptable.pe_label == pe_label).select(ptable.id,
+                                                                    ptable.first_name,
+                                                                    limitby=(0, 1),
+                                                                    ).first()
+            if not person:
+                return current.xml.json_message(False, 404, "Person not Found")
+            else:
+                result = dict(n=person.first_name)
+                from ..s3.s3track import S3Trackable
+                tracker = S3Trackable(ptable, record_id=person.id)
+                locations = tracker.get_location(_fields=[s3db.gis_location.id])
+                if locations:
+                    if locations[0].id == r.record.location_id:
+                        # Checked-in
+                        result.update(c=1)
+                    else:
+                        # Checked-out
+                        result.update(c=2)
+                else:
+                    # Unknown
+                    result.update(c=3)
+                return current.xml.json_message(True, 200, result)
+
+        elif representation != "html":
+            raise HTTP(415, current.ERROR.BAD_FORMAT)
+
+        T = current.T
+        s3db = current.s3db
+        response = current.response
+
+        # Give the user a form to check-in/out
+
+        # Test the formstyle
+        formstyle = current.deployment_settings.get_ui_formstyle()
+        row = formstyle("test", "test", "test", "test")
+        if isinstance(row, tuple):
+            # Formstyle with separate row for label (e.g. default Eden formstyle)
+            tuple_rows = True
+        else:
+            # Formstyle with just a single row (e.g. Bootstrap, Foundation or DRRPP)
+            tuple_rows = False
+
+        form_rows = []
+        comment = ""
+
+        # @ToDo: Hide this & populate from barcode scanner
+        # (deployment_setting to allow manual entering of code?)
+        _id = "pe_label"
+        label = LABEL("%s:" % s3db.pr_person.pe_label.label)
+        widget = INPUT(_name=_id, _id=_id)
+        row = formstyle("%s__row" % _id, label, widget, comment)
+        if tuple_rows:
+            form_rows.append(row[0])
+            form_rows.append(row[1])
+        else:
+            form_rows.append(row)
+
+        # @ToDo: Hide these buttons until scanned (or entered manually)
+        # @ToDo: Only show relevant button (see whether we are already checked-in via AJAX call)
+        _id = "check-in"
+        label = ""
+        widget = INPUT(_type="submit",
+                       _class="btn crud-submit-button",
+                       _name=_id,
+                       _value=T("Check-In"))
+        row = formstyle("%s__row" % _id, label, widget, comment)
+        if tuple_rows:
+            form_rows.append(row[0])
+            form_rows.append(row[1])
+        else:
+            form_rows.append(row)
+
+        _id = "check-out"
+        widget = INPUT(_type="submit",
+                       _class="btn crud-submit-button",
+                       _name=_id,
+                       _value=T("Check-Out"))
+        row = formstyle("%s__row" % _id, label, widget, comment)
+        if tuple_rows:
+            form_rows.append(row[0])
+            form_rows.append(row[1])
+        else:
+            form_rows.append(row)
+
+        if tuple_rows:
+            # Assume TRs
+            form = FORM(TABLE(*form_rows))
+        else:
+            form = FORM(*form_rows)
+
+        if form.accepts(current.request.vars, current.session):
+            db = current.db
+            s3db = current.s3db
+            pe_label = form.vars.pe_label
+            ptable = s3db.pr_person
+            person = db(ptable.pe_label == pe_label).select(ptable.id,
+                                                            ptable.location_id,
+                                                            limitby=(0, 1),
+                                                            ).first()
+            if not person:
+                response.error = T("Person not found!")
+            else:
+                from ..s3.s3track import S3Trackable
+                person_id = person.id
+                tracker = S3Trackable(ptable, record_id=person_id)
+                if "check-in" in r.post_vars:
+                    # We're not Checking-in in S3Track terms (that's about interlocking with another object)
+                    #tracker.check_in()
+                    record = r.record
+                    # @ToDo: Check if we are already checked-in?
+                    tracker.set_location(record.location_id)
+                    # Check for Hook (e.g. to be able to update cr_shelter_registration)
+                    postprocess = s3db.get_config(r.tablename, "site_check_in")
+                    if postprocess:
+                        error, warning = postprocess(record.site_id, person_id)
+                        if warning:
+                            response.warning = warning
+                        if error:
+                            response.error = error
+                        else:
+                            response.confirmation = T("Checked-in successfully!")
+                    else:
+                        response.confirmation = T("Checked-in successfully!")
+                elif "check-out" in r.post_vars:
+                    # Check-Out
+                    # We're not Checking-out in S3Track terms (that's about removing an interlock with another object)
+                    # What we're doing is saying that we're now back at our base location
+                    #tracker.check_out()
+                    # @ToDo: Check if we are already checked-out?
+                    tracker.set_location(person.location_id)
+                    # Check for Hook (e.g. to be able to update cr_shelter_registration)
+                    postprocess = s3db.get_config(r.tablename, "site_check_out")
+                    if postprocess:
+                        error, warning = postprocess(r.record.site_id, person_id)
+                        if warning:
+                            response.warning = warning
+                        if error:
+                            response.error = error
+                        else:
+                            response.confirmation = T("Checked-out successfully!")
+                    else:
+                        response.confirmation = T("Checked-out successfully!")
+
+        # @ToDo: Allow configuring the special chars via Web UI?
+        # NB  small tilde  char not visible in Notepad++ using default font, switch to Consolas!
+        success = T("Scan succesful: check In or Out?")
+        # @ToDo: Personalise with Name from AJAX call too?
+        #checked_in = T("You are currently Checked-In, would you like to Check-Out?")
+        #checked_out = T("You are currently Checked-Out, would you like to Check-In?")
+        #s3 = response.s3
+        #if s3.debug:
+        #    s3.scripts.append("/%s/static/scripts/jquery.barcodelistener-1.1.js" % r.application)
+        #else:
+        #    s3.scripts.append("/%s/static/scripts/jquery.barcodelistener-1.1-min.js" % r.application)
+        #s3.jquery_ready.append('''$(document).BarcodeListener([['§','32'],['˜','732']],function(code){$('#pe_label').val(code);S3.showAlert('%(success)s')})''' % success)
+        response.view = "check-in.html"
+        output = dict(form = form,
+                      title = T("Check-In"),
+                      )
+        return output
 
 # =============================================================================
 def org_site_has_assets(row, tablename="org_facility"):
@@ -6279,6 +6473,7 @@ def org_facility_controller():
         multiple controllers for unified menus
     """
 
+    db = current.db
     s3db = current.s3db
     s3 = current.response.s3
 
@@ -6288,7 +6483,74 @@ def org_facility_controller():
         s3db.gis_location_filter(r)
 
         if r.interactive:
-            if r.component:
+            if not r.component:
+                method = r.method
+                get_vars = r.get_vars
+                type_filter = get_vars.get("facility_type.name", None)
+                if type_filter:
+                    type_names = [name.lower().strip()
+                                  for name in type_filter.split(",")]
+                    field = s3db.org_site_facility_type.facility_type_id
+                    field.comment = None # Don't want to create new types here
+                    if len(type_names) == 1:
+                        # Strip Type from list_fields
+                        list_fields = s3db.get_config("org_facility",
+                                                      "list_fields")
+                        try:
+                            list_fields.remove("site_facility_type.facility_type_id")
+                        except ValueError:
+                            # Already removed
+                            pass
+                        if not method or method == "create":
+                            # Default the Type
+                            type_table = s3db.org_facility_type
+                            query = (type_table.name == type_filter)
+                            row = db(query).select(type_table.id,
+                                                   limitby=(0, 1)).first()
+                            type_id = row and row.id
+                            if type_id:
+                                field.default = type_id
+                                field.writable = False
+                                crud_form = s3db.get_config("org_facility",
+                                                            "crud_form")
+                                for e in crud_form.elements:
+                                    if e.selector == "facility_type":
+                                        e.options.label = ""
+
+                if r.id:
+                    table = r.table
+                    field = table.obsolete
+                    field.readable = field.writable = True
+                    if method == "update" and \
+                       r.representation == "popup" and \
+                       get_vars.get("profile") == "org_organisation":
+                            # Coming from organisation profile
+                            # Don't allow change of organisation_id in this case
+                            field = table.organisation_id
+                            field.writable = False
+                            field.readable = False
+
+                elif method == "create":
+                    table = r.table
+                    name = get_vars.get("name")
+                    if name:
+                        table.name.default = name
+                    if r.representation == "popup" and \
+                       get_vars.get("profile") == "org_organisation":
+                        # Coming from organisation profile
+                        organisation_id = None
+                        for k in ("~.organisation_id", "(organisation)", "~.(organisation)"):
+                            if k in get_vars:
+                                organisation_id = get_vars[k]
+                                break
+                        if organisation_id is not None:
+                            # Don't allow change of organisation_id in this case
+                            field = table.organisation_id
+                            field.default = organisation_id
+                            field.writable = False
+                            field.readable = False
+
+            else:
                 cname = r.component_name
                 if cname in ("inv_item", "recv", "send"):
                     # Filter out items which are already in this inventory
@@ -6325,40 +6587,6 @@ def org_facility_controller():
                                    create_next = None,
                                    )
 
-            elif r.id:
-                table = r.table
-                field = table.obsolete
-                field.readable = field.writable = True
-                if r.method == "update" and \
-                   r.representation == "popup" and \
-                   r.get_vars.get("profile") == "org_organisation":
-                        # Coming from organisation profile
-                        # Don't allow change of organisation_id in this case
-                        field = table.organisation_id
-                        field.writable = False
-                        field.readable = False
-
-            elif r.method == "create":
-                table = r.table
-                get_vars = r.get_vars
-                name = get_vars.get("name")
-                if name:
-                    table.name.default = name
-                if r.representation == "popup" and \
-                   get_vars.get("profile") == "org_organisation":
-                    # Coming from organisation profile
-                    organisation_id = None
-                    for k in ("~.organisation_id", "(organisation)", "~.(organisation)"):
-                        if k in get_vars:
-                            organisation_id = get_vars[k]
-                            break
-                    if organisation_id is not None:
-                        # Don't allow change of organisation_id in this case
-                        field = table.organisation_id
-                        field.default = organisation_id
-                        field.writable = False
-                        field.readable = False
-
         elif r.representation == "geojson":
             # Load these models now as they'll be needed when we encode
             mtable = s3db.gis_marker
@@ -6386,7 +6614,6 @@ def org_facility_controller():
             site_id = record.site_id
 
             # Type(s)
-            db = current.db
             ttable = db.org_facility_type
             ltable = db.org_site_facility_type
             query = (ltable.site_id == site_id) & \

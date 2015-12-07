@@ -278,31 +278,164 @@ def config(settings):
                 result = True
 
             if r.controller == "dvr" and not r.component:
+
                 ctable = s3db.dvr_case
+
+                # Mandatory Fields
+                from s3 import IS_NOT_EMPTY
+                from gluon import IS_EMPTY_OR
+
+                # Require a case number
+                ctable.reference.requires = IS_NOT_EMPTY()
+
+                # Require organisation, site and status
+                for fn in ("organisation_id",
+                           "site_id",
+                           "status_id",
+                           ):
+                    field = ctable[fn]
+                    requires = field.requires
+                    if isinstance(requires, IS_EMPTY_OR):
+                        field.requires = requires.other
+
                 root_org = current.auth.root_org()
+
                 if root_org:
                     # Set default for organisation_id and hide the field
                     field = ctable.organisation_id
                     field.default = root_org
                     field.readable = field.writable = False
+
                     # Hide organisation_id in list_fields, too
                     list_fields = r.resource.get_config("list_fields")
                     if "dvr_case.organisation_id" in list_fields:
                         list_fields.remove("dvr_case.organisation_id")
+
                     # Limit sites to root_org
                     field = ctable.site_id
                     requires = field.requires
                     if requires:
-                        from gluon import IS_EMPTY_OR
                         if isinstance(requires, IS_EMPTY_OR):
                             requires = requires.other
                         if hasattr(requires, "dbset"):
                             stable = s3db.org_site
                             query = (stable.organisation_id == root_org)
                             requires.dbset = current.db(query)
-                else:
+
+
+                resource = r.resource
+                if r.interactive:
+                    # Custom CRUD form
+                    from s3 import S3SQLCustomForm, S3SQLInlineComponent
+                    crud_form = S3SQLCustomForm(
+                                "dvr_case.reference",
+                                "dvr_case.date",
+                                "dvr_case.organisation_id",
+                                "dvr_case.site_id",
+                                "dvr_case.priority",
+                                "dvr_case.case_type_id",
+                                "dvr_case.beneficiary",
+                                "dvr_case.status_id",
+                                "first_name",
+                                "middle_name",
+                                "last_name",
+                                "date_of_birth",
+                                "gender",
+                                "person_details.marital_status",
+                                S3SQLInlineComponent(
+                                        "contact",
+                                        fields = [("", "value"),
+                                                  ],
+                                        filterby = {"field": "contact_method",
+                                                    "options": "EMAIL",
+                                                    },
+                                        label = T("Email"),
+                                        multiple = False,
+                                        name = "email",
+                                        ),
+                                S3SQLInlineComponent(
+                                        "contact",
+                                        fields = [("", "value"),
+                                                  ],
+                                        filterby = {"field": "contact_method",
+                                                    "options": "SMS",
+                                                    },
+                                        label = T("Mobile Phone"),
+                                        multiple = False,
+                                        name = "phone",
+                                        ),
+                                "person_details.nationality",
+                                "person_details.literacy",
+                                S3SQLInlineComponent(
+                                        "case_language",
+                                        fields = ["language",
+                                                  "quality",
+                                                  "comments",
+                                                  ],
+                                        label = T("Language / Communication Mode"),
+                                        ),
+                                S3SQLInlineComponent(
+                                        "contact_emergency",
+                                        fields = ["name",
+                                                  "relationship",
+                                                  "phone",
+                                                  ],
+                                        label = T("Emergency Contact"),
+                                        multiple = False,
+                                        ),
+                                S3SQLInlineComponent(
+                                        "identity",
+                                        fields = ["type",
+                                                  "description",
+                                                  "value",
+                                                  ],
+                                        ),
+                                S3SQLInlineComponent(
+                                        "address",
+                                        label = T("Current Address"),
+                                        fields = [("", "location_id"),
+                                                  ],
+                                        filterby = {"field": "type",
+                                                    "options": "1",
+                                                    },
+                                        link = False,
+                                        multiple = False,
+                                        ),
+                                "dvr_case.head_of_household",
+                                "dvr_case.hoh_name",
+                                "dvr_case.hoh_gender",
+                                "dvr_case.hoh_relationship",
+                                "dvr_case.comments",
+                                )
+
+                    # Extend filter widgets
+                    filter_widgets = resource.get_config("filter_widgets")
+                    if filter_widgets is not None:
+                        from s3 import s3_get_filter_opts, S3OptionsFilter
+                        filter_widgets.extend([
+                            S3OptionsFilter("dvr_case.case_type_id",
+                                            options = lambda: s3_get_filter_opts("dvr_case_type"),
+                                            ),
+                            S3OptionsFilter("dvr_case_activity.need_id",
+                                            options = lambda: s3_get_filter_opts("dvr_need"),
+                                            hidden = True,
+                                            ),
+                            ])
+
+                    resource.configure(crud_form = crud_form,
+                                       filter_widgets = filter_widgets,
+                                       )
+                    # Hide Postcode in addresses (not used)
+                    atable = s3db.pr_address
+                    from s3 import S3LocationSelector
+                    location_id = atable.location_id
+                    location_id.widget = S3LocationSelector(show_address=True,
+                                                            show_postcode = False,
+                                                            )
+
                     # Inject filter script for sites (filter by selected org)
-                    script = '''$.filterOptionsS3({
+                    if not root_org:
+                        script = '''$.filterOptionsS3({
 'trigger':'sub_dvr_case_organisation_id',
 'target':'sub_dvr_case_site_id',
 'lookupResource':'site',
@@ -310,30 +443,40 @@ def config(settings):
 'lookupField':'site_id',
 'lookupKey':'organisation_id'
 })'''
-                    s3.jquery_ready.append(script)
+                        s3.jquery_ready.append(script)
 
-                # Hide Postcode in addresses (not used)
-                atable = s3db.pr_address
-                from s3 import S3LocationSelector
-                location_id = atable.location_id
-                location_id.widget = S3LocationSelector(show_address=True,
-                                                        show_postcode = False,
-                                                        )
-                # Expose Head of Household fields:
-                fields = ("head_of_household",
-                          "hoh_name",
-                          "hoh_gender",
-                          "hoh_relationship"
-                          )
-                for fname in fields:
-                    field = ctable[fname]
-                    field.readable = field.writable = True
+                    # Expose additional case fields:
+                    fields = ("beneficiary",
+                              "head_of_household",
+                              "hoh_name",
+                              "hoh_gender",
+                              "hoh_relationship"
+                              )
+                    for fname in fields:
+                        field = ctable[fname]
+                        field.readable = field.writable = True
 
-                # Inject script to toggle Head of Household form fields
-                path = "/%s/static/themes/STL/js/dvr.js" % current.request.application
-                if path not in s3.scripts:
-                    s3.scripts.append(path)
+                    # Inject script to toggle Head of Household form fields
+                    path = "/%s/static/themes/STL/js/dvr.js" % current.request.application
+                    if path not in s3.scripts:
+                        s3.scripts.append(path)
 
+                # Custom list fields (must be outside of r.interactive)
+                list_fields = ["dvr_case.reference",
+                               "dvr_case.case_type_id",
+                               "dvr_case.priority",
+                               "first_name",
+                               "middle_name",
+                               "last_name",
+                               "date_of_birth",
+                               "gender",
+                               #"dvr_case.organisation_id",
+                               "dvr_case.date",
+                               "dvr_case.status_id",
+                               ]
+                resource.configure(list_fields = list_fields,
+                                   #orderby = "dvr_case.priority desc",
+                                   )
             return result
         s3.prep = custom_prep
 

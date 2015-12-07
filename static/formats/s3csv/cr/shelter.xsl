@@ -17,6 +17,9 @@
          L1.............................optional.....L1
          L2.............................optional.....L2
          L3.............................optional.....L3
+         L4.............................optional.....L4
+         L5.............................optional.....L5
+         Building.......................optional.....Building
          Address........................optional.....Address
          Postcode.......................optional.....Postcode
          Lat............................optional.....Latitude
@@ -203,12 +206,6 @@
         <xsl:variable name="ShelterName" select="col[@field='Name']/text()"/>
         <xsl:variable name="Type" select="col[@field='Type']/text()"/>
         <xsl:variable name="Status" select="col[@field='Status']/text()"/>
-
-        <xsl:variable name="postcode">
-            <xsl:call-template name="GetColumnValue">
-                <xsl:with-param name="colhdrs" select="$Postcode"/>
-            </xsl:call-template>
-        </xsl:variable>
 
         <resource name="cr_shelter">
             <data field="name"><xsl:value-of select="$ShelterName"/></data>
