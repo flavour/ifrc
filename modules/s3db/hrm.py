@@ -2563,13 +2563,11 @@ class S3HRSkillModel(S3Model):
                            ),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
+                     # @ToDo: Option to see multiple Training Centers even as non_admin
                      organisation_id(default = root_org,
                                      readable = is_admin,
                                      writable = is_admin,
                                      ),
-                     # Training Center
-                     # Not normally used: enable in template as-required
-                     self.org_site_id,
                      Field("external", "boolean",
                            default = False,
                            label = T("External"),
@@ -6252,11 +6250,11 @@ def hrm_rheader(r, tabs=[], profile=False):
             record_method = None
         elif record_tab == "record":
             record_method = "record"
-            record_label = settings.get_hrm_record_label()
         else:
             # Default
             record_method = "human_resource"
-            record_label = settings.get_hrm_record_label()
+
+        record_label = settings.get_hrm_record_label()
 
         if profile:
             # Configure for personal mode

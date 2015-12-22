@@ -124,7 +124,7 @@ def config(settings):
     #
     settings.pr.hide_third_gender = False
     settings.pr.separate_name_fields = 2
-    settings.pr.name_format= "%(last_name)s %(first_name)s"
+    settings.pr.name_format= "%(last_name)s, %(first_name)s"
 
     # -------------------------------------------------------------------------
     # Project Module Settings
@@ -485,23 +485,6 @@ def config(settings):
             else:
                 result = True
 
-            from s3 import FS
-            resource = r.resource
-
-            # Filter to current/archived cases
-            if not r.record:
-                archived = r.get_vars.get("archived")
-                if archived in ("1", "true", "yes"):
-                    query = FS("dvr_case.archived") == True
-                    s3.crud_strings["pr_person"]["title_list"] = T("Archived Cases")
-                else:
-                    query = (FS("dvr_case.archived") == False) | \
-                            (FS("dvr_case.archived") == None)
-                resource.add_filter(query)
-
-            # Should not be able to delete records in this view
-            resource.configure(deletable = False)
-
             if r.controller == "security":
                 # Restricted view for Security staff
                 if r.component:
@@ -633,7 +616,7 @@ def config(settings):
                                                      },
                                     )
 
-                from gluon import IS_EMPTY_OR, IS_NOT_EMPTY
+                from gluon import IS_EMPTY_OR, IS_IN_SET, IS_NOT_EMPTY
 
                 #default_organisation = current.auth.root_org()
                 default_organisation = settings.get_org_default_organisation()
@@ -644,10 +627,6 @@ def config(settings):
                 field = ctable.valid_until
                 from dateutil.relativedelta import relativedelta
                 field.default = r.utcnow + relativedelta(years=5)
-                field.readable = field.writable = True
-
-                # Case can be set to archived
-                field = ctable.archived
                 field.readable = field.writable = True
 
                 if default_organisation:
@@ -705,37 +684,27 @@ def config(settings):
                 resource = r.resource
                 if r.interactive and r.method != "import":
 
-                    # Set mandatory case fields
+                    # Configure person_details fields
                     ctable = s3db.pr_person_details
-                    for fn in (#"nationality",
-                               "marital_status",
-                               ):
-                        field = ctable[fn]
-                        requires = field.requires
-                        if not requires:
-                            field.requires = IS_NOT_EMPTY
-                        elif isinstance(requires, IS_EMPTY_OR):
-                            field.requires = requires.other
 
-                    # Set mandatory person fields
+                    field = ctable.marital_status
+                    options = dict(s3db.pr_marital_status_opts)
+                    del options[9] # Remove "other"
+                    field.requires = IS_IN_SET(options, zero=None)
+
+                    # Configure person fields
                     table = resource.table
-                    from s3 import IS_PERSON_GENDER
-                    gender_opts = dict(s3db.pr_gender_opts)
 
                     field = table.gender
                     field.default = None
-                    del gender_opts[1] # "unknown" option not allowed
-                    field.requires = IS_PERSON_GENDER(gender_opts,
-                                                      sort = True,
-                                                      )
+                    from s3 import IS_PERSON_GENDER
+                    options = dict(s3db.pr_gender_opts)
+                    del options[1] # Remove "unknown"
+                    field.requires = IS_PERSON_GENDER(options, sort = True)
 
                     # Last name is required
                     field = table.last_name
                     field.requires = IS_NOT_EMPTY()
-
-                    # Expose "archived"-flag?
-                    archived_flag = "dvr_case.archived" \
-                                    if r.record and r.method != "read" else None
 
                     # Custom CRUD form
                     from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink
@@ -799,7 +768,7 @@ def config(settings):
                                         label = T("Language / Communication Mode"),
                                         ),
                                 "dvr_case.comments",
-                                archived_flag,
+                                "dvr_case.archived",
                                 )
                     resource.configure(crud_form = crud_form,
                                        )
@@ -837,8 +806,7 @@ def config(settings):
                         filter_widgets.append(reg_filter)
 
                 # Custom list fields (must be outside of r.interactive)
-                list_fields = [#"dvr_case.reference",
-                               (T("ID"), "pe_label"),
+                list_fields = [(T("ID"), "pe_label"),
                                (T("EasyOpt No."), "eo_number.value"),
                                "last_name",
                                "first_name",

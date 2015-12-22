@@ -1493,6 +1493,14 @@ class S3Config(Storage):
     def get_L10n_mandatory_lastname(self):
         return self.__lazy("L10n", "mandatory_lastname", False)
 
+    def get_L10n_mandatory_middlename(self):
+        """
+            e.g. Apellido Paterno in Hispanic names
+
+            Setting this means that auth_user.last_name matches with pr_person.middle_name
+        """
+        return self.__lazy("L10n", "mandatory_middlename", False)
+
     def get_L10n_decimal_separator(self):
         """
             What should the decimal separator be in formatted numbers?
@@ -3526,7 +3534,7 @@ class S3Config(Storage):
         """
             Whether the AddPersonWidget2 provides separate name fields or not
             Options:
-                False (single field
+                False (single field)
                 2 (first/last)
                 3 (first/middle/last)
         """
@@ -3651,9 +3659,25 @@ class S3Config(Storage):
 
     def get_project_hazards(self):
         """
-            Use Hazards in 3W Projects
+            Use Hazards in DRR Projects
         """
-        return self.project.get("hazards", False)
+        use_hazards = self.project.get("hazards")
+        if use_hazards is None:
+            # Default to True if mode_drr
+            use_hazards = self.get_project_mode_drr()
+
+        return use_hazards
+
+    def get_project_hfa(self):
+        """
+            Use HFA Priorities in DRR Projects
+        """
+        use_hfa = self.project.get("hfa")
+        if use_hfa is None:
+            # Default to True if mode_drr
+            use_hfa = self.get_project_mode_drr()
+
+        return use_hfa
 
     def get_project_indicators(self):
         """

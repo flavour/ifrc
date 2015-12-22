@@ -2482,17 +2482,25 @@ $.filterOptionsS3({
         else:
             query = (utable.id != None)
 
-        rows = db(query).select(utable.id,
-                                utable.first_name,
-                                utable.last_name,
-                                utable.email,
-                                ltable.pe_id,
-                                ptable.id,
-                                ptable.first_name,
-                                ptable.last_name,
-                                ttable.home,
-                                ttable.mobile,
-                                ttable.image,
+        fields = [utable.id,
+                  utable.first_name,
+                  utable.last_name,
+                  utable.email,
+                  ltable.pe_id,
+                  ptable.id,
+                  ptable.first_name,
+                  ttable.home,
+                  ttable.mobile,
+                  ttable.image,
+                  ]
+        middle_name = current.deployment_settings.get_L10n_mandatory_middlename()
+        if middle_name:
+            # e.g. Hispanic names' Apellido Paterno
+            fields.append(ptable.middle_name)
+        else:
+            fields.append(ptable.last_name)
+
+        rows = db(query).select(*fields,
                                 left=left, distinct=True)
 
         person_ids = [] # Collect the person IDs
@@ -2523,11 +2531,17 @@ $.filterOptionsS3({
 
                 # Update the person names if changed
                 if user.first_name != person.first_name or \
-                   user.last_name != person.first_name:
-
+                   (not middle_name and user.last_name != person.last_name) or \
+                   (middle_name and user.last_name != person.middle_name):
                     query = (ptable.pe_id == pe_id)
-                    db(query).update(first_name = user.first_name,
-                                     last_name = user.last_name)
+                    if middle_name:
+                        db(query).update(first_name = user.first_name,
+                                         last_name = user.last_name,
+                                         )
+                    else:
+                        db(query).update(first_name = user.first_name,
+                                         middle_name = user.last_name,
+                                         )
 
                 # Add the user's email address to the person record if missing
                 query = (ctable.pe_id == pe_id) & \
@@ -2538,7 +2552,8 @@ $.filterOptionsS3({
                 if item is None:
                     ctable.insert(pe_id = pe_id,
                                   contact_method = "EMAIL",
-                                  value = user.email)
+                                  value = user.email,
+                                  )
 
                 # Add the user's mobile_phone to the person record if missing
                 if tuser.mobile:
@@ -2550,7 +2565,8 @@ $.filterOptionsS3({
                     if item is None:
                         ctable.insert(pe_id = pe_id,
                                       contact_method = "SMS",
-                                      value = tuser.mobile)
+                                      value = tuser.mobile,
+                                      )
 
                 #@ToDo: Also update home phone? profile image? Groups?
 
@@ -2565,8 +2581,12 @@ $.filterOptionsS3({
                 last_name = user.last_name
                 email = user.email.lower()
                 if email:
+                    if middle_name:
+                        mquery = (ptable.middle_name == last_name)
+                    else:
+                        mquery = (ptable.last_name == last_name)
                     query = (ptable.first_name == first_name) & \
-                            (ptable.last_name == last_name) & \
+                             mquery & \
                             (ctable.pe_id == ptable.pe_id) & \
                             (ctable.contact_method == "EMAIL") & \
                             (ctable.value.lower() == email)
@@ -2582,7 +2602,7 @@ $.filterOptionsS3({
 
                 if person:
                     other = db(ltable.pe_id == person.pe_id).select(ltable.id,
-                                                                    limitby=(0, 1)
+                                                                    limitby=(0, 1),
                                                                     ).first()
                 if person and not other:
                     # Match found, and it isn't linked to another user account
@@ -2622,11 +2642,18 @@ $.filterOptionsS3({
                     # => create a new person record (+link to it)
 
                     # Create a new person record
-                    person_id = ptable.insert(first_name = first_name,
-                                              last_name = last_name,
-                                              opt_in = opt_in,
-                                              modified_by = user.id,
-                                              **owner)
+                    if middle_name:
+                        person_id = ptable.insert(first_name = first_name,
+                                                  middle_name = last_name,
+                                                  opt_in = opt_in,
+                                                  modified_by = user.id,
+                                                  **owner)
+                    else:
+                        person_id = ptable.insert(first_name = first_name,
+                                                  last_name = last_name,
+                                                  opt_in = opt_in,
+                                                  modified_by = user.id,
+                                                  **owner)
                     if person_id:
 
                         # Update the super-entities
@@ -2669,7 +2696,8 @@ $.filterOptionsS3({
                             else:
                                 team_id = team_rec.id
                             mtable.insert(group_id = team_id,
-                                          person_id = person_id)
+                                          person_id = person_id,
+                                          )
 
                         person_ids.append(person_id)
 

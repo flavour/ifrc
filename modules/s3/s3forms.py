@@ -30,6 +30,7 @@
 __all__ = ("S3SQLCustomForm",
            "S3SQLDefaultForm",
            "S3SQLSubFormLayout",
+           "S3SQLVerticalSubFormLayout",
            "S3SQLInlineComponent",
            "S3SQLInlineComponentCheckbox",
            "S3SQLInlineComponentMultiSelectWidget",
@@ -1144,6 +1145,11 @@ class S3SQLCustomForm(S3SQLForm):
                     dummy = "sub_%s_%s" % (alias, fn)
                     form.errors[dummy] = subform.errors[fn]
 
+        # Validate components (e.g. Inline-Forms)
+        for component in self.components:
+            if hasattr(component, "validate"):
+                component.validate(form)
+
         return
 
     # -------------------------------------------------------------------------
@@ -1235,8 +1241,9 @@ class S3SQLCustomForm(S3SQLForm):
         for item in self.components:
             if hasattr(item, "accept"):
                 item.accept(form,
-                            master_id=master_id,
-                            format=format)
+                            master_id = master_id,
+                            format = format,
+                            )
 
         # Update form with master form_vars
         form_vars = form.vars
@@ -1267,7 +1274,6 @@ class S3SQLCustomForm(S3SQLForm):
             form_vars = form.vars
             for k in form_vars:
                 if k[:4] == "sub_" and \
-                   form_vars[k] != None and \
                    k[4:4 + alias_length + 1] == "%s_" % alias:
                     fn = k[4 + alias_length + 1:]
                     subform[fn] = form_vars[k]
@@ -1294,13 +1300,16 @@ class S3SQLCustomForm(S3SQLForm):
             @param undelete: reinstate a previously deleted record
         """
 
-        if not data:
-            if alias is not None:
-                # Component, no data to create or update => skip
+        if alias is not None:
+            # Subtable
+            if not data or \
+               not record_id and all(value is None for value in data.values()):
+                # No data => skip
                 return None, Storage()
-            elif record_id:
-                # Existing master record, no data to update => skip
-                return record_id, Storage()
+        elif record_id and not data:
+            # Existing master record, no data => skip, but return
+            # record_id to allow update of inline-components:
+            return record_id, Storage()
 
         s3db = current.s3db
 
@@ -1385,7 +1394,8 @@ class S3SQLCustomForm(S3SQLForm):
                 update_realm = get_config(table, "update_realm")
                 if update_realm:
                     current.auth.set_realm_entity(table, form_vars,
-                                                  force_update=True)
+                                                  force_update = True,
+                                                  )
 
             # Store session vars
             component.lastid = str(accept_id)
@@ -2030,6 +2040,65 @@ class S3SQLSubFormLayout(object):
 
         # No custom JS in the default layout
         return
+
+# =============================================================================
+class S3SQLVerticalSubFormLayout(S3SQLSubFormLayout):
+    """
+        Vertical layout for inline-components
+
+        - renders an vertical layout for edit-rows
+        - standard horizontal layout for read-rows
+        - hiding header row if there are no visible read-rows
+    """
+
+    # -------------------------------------------------------------------------
+    def headers(self, data, readonly=False):
+        """
+            Header-row layout: same as default, but non-static (i.e. hiding
+            if there are no visible read-rows, because edit-rows have their
+            own labels)
+        """
+
+        headers = super(S3SQLVerticalSubFormLayout, self).headers
+
+        header_row = headers(data, readonly = readonly)
+        element = header_row.element('tr');
+        if hasattr(element, "remove_class"):
+            element.remove_class("static")
+        return header_row
+
+    # -------------------------------------------------------------------------
+    def rowstyle_read(self, form, fields, *args, **kwargs):
+        """
+            Formstyle for subform read-rows, same as standard
+            horizontal layout.
+        """
+
+        rowstyle = super(S3SQLVerticalSubFormLayout, self).rowstyle
+        return rowstyle(form, fields, *args, **kwargs)
+
+    # -------------------------------------------------------------------------
+    def rowstyle(self, form, fields, *args, **kwargs):
+        """
+            Formstyle for subform edit-rows, using a vertical
+            formstyle because multiple fields combined with
+            location-selector are too complex for horizontal
+            layout.
+        """
+
+        # Use standard foundation formstyle
+        from s3theme import formstyle_foundation as formstyle
+        if args:
+            col_id = form
+            label = fields
+            widget, comment = args
+            hidden = kwargs.get("hidden", False)
+            return formstyle(col_id, label, widget, comment, hidden)
+        else:
+            parent = TD(_colspan = len(fields))
+            for col_id, label, widget, comment in fields:
+                parent.append(formstyle(col_id, label, widget, comment))
+            return TR(parent)
 
 # =============================================================================
 class S3SQLInlineComponent(S3SQLSubForm):
@@ -2915,6 +2984,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
             @param deletable: whether the record can be deleted
             @param multiple: whether multiple records can be added
             @param index: the row index
+            @param layout: the subform layout (S3SQLSubFormLayout)
             @param attributes: HTML attributes for the row
         """
 
@@ -2923,13 +2993,17 @@ class S3SQLInlineComponent(S3SQLSubForm):
         rowtype = readonly and "read" or "edit"
         pkey = table._id.name
 
-        data = dict()
+        data = {}
         formfields = []
         formname = self._formname()
         widgets = self.widgets
         for f in fields:
+
+            # Construct a row-specific field name
             fname = f["name"]
             idxname = "%s_i_%s_%s_%s" % (formname, fname, rowtype, index)
+
+            # Parent and caller for add-popup
             if not readonly:
                 parent = table._tablename.split("_", 1)[1]
                 caller = "sub_%s_%s" % (formname, idxname)
@@ -2937,16 +3011,22 @@ class S3SQLInlineComponent(S3SQLSubForm):
             else:
                 popup = None
 
+            # Custom label and widget
+            label = f.get("label", DEFAULT)
+            widget = widgets.get(fname, DEFAULT)
+
+            # Get a Field instance for SQLFORM.factory
             formfield = self._rename_field(table[fname],
                                            idxname,
-                                           comments=False,
-                                           popup=popup,
-                                           skip_post_validation=True,
-                                           widget=widgets.get(fname, DEFAULT),
+                                           comments = False,
+                                           label = label,
+                                           popup = popup,
+                                           skip_post_validation = True,
+                                           widget = widget,
                                            )
 
+            # Reduced options set?
             if "filterby" in self.options:
-                # Get reduced options set
                 options = self._filterby_options(fname)
                 if options:
                     if len(options) < 2:
@@ -2961,6 +3041,7 @@ class S3SQLInlineComponent(S3SQLSubForm):
                 default = defaults[fname]["value"]
                 formfield.default = default
 
+            # Add the data for this field (for existing rows)
             if index is not None and item and fname in item:
                 if formfield.type == "upload":
                     filename = item[fname]["value"]
@@ -3378,6 +3459,27 @@ class S3SQLInlineLink(S3SQLInlineComponent):
             current.response.s3.jquery_ready.append(script)
 
         return widget
+
+    # -------------------------------------------------------------------------
+    def validate(self, form):
+        """
+            Validate this link, currently only checking whether it has
+            a value when required=True
+
+            @param form: the form
+        """
+
+        required = self.options.required
+        if not required:
+            return
+
+        fname = self._formname(separator="_")
+        values = form.vars.get(fname)
+
+        if not values:
+            error = current.T("Value Required") \
+                    if required is True else required
+            form.errors[fname] = error
 
     # -------------------------------------------------------------------------
     def accept(self, form, master_id=None, format=None):

@@ -41,8 +41,7 @@ class S3MainMenu(default.S3MainMenu):
             # @todo:
             MM("Newsfeed", link=False),
             MM("Organizations", c="org", f="organisation"),
-            # @todo:
-            MM("Activities", link=False),
+            MM("Projects", c="project", f="project"),
             # @todo:
             MM("Aid Requests", link=False),
             # @todo:
@@ -137,39 +136,37 @@ class S3OptionsMenu(default.S3OptionsMenu):
         INDIVIDUALS = current.deployment_settings.get_hrm_staff_label()
 
         return M()(
-                    #M("Networks", c="org", f="group")(
-                    #    M("Search"),
-                    #    M("Create", m="create"),
-                    #),
-                    #M("Groups", c="hrm", f="group")(
-                    #    M("Search"),
-                    #    M("Create", m="create"),
-                    #),
                     M("Organizations", c="org", f="organisation")(
                         #M("Search", m="summary"),
                         M("Create", m="create",
                           restrict=[AUTHENTICATED]),
                     ),
-                    M(INDIVIDUALS, c="hrm", f="staff", t="hrm_human_resource")(
-                        M("Search"),
+                    M(INDIVIDUALS, c="hrm", f=("staff", "person"), t="hrm_human_resource")(
+                        #M("Search"),
                         M("Create", m="create"),
                     ),
-                    #M("Your Personal Profile", c="default", f="person",
-                    #  m="update")(
+                    M("Service Locations", c="org", f="service_location", m="summary")(
+                        M("Search", m="summary"),
+                    ),
+                    M("Administration", c=("org", "hrm"),
+                      link = False, restrict = [ADMIN])(
+                        M("Organisation Types", c="org", f="organisation_type"),
+                        M("Sectors", c="org", f="sector"),
+                        M("Service Types", c="org", f="service"),
+                    ),
+                    #M("Import", link=False,
+                    #  restrict=[ADMIN])(
+                    #    M("Import Contacts", c="hrm", f="person", m="import",
+                    #      vars={"group":"staff"}),
+                    #   M("Import Organizations", c="org", f="organisation",
+                    #      m="import"),
+                    #    #M("Import Groups", c="hrm", f="group", m="import"),
                     #),
-                    M("Import", link=False,
-                      restrict=[ADMIN])(
-                        M("Import Contacts", c="hrm", f="person", m="import",
-                          vars={"group":"staff"}),
-                        M("Import Organizations", c="org", f="organisation",
-                          m="import"),
-                        #M("Import Groups", c="hrm", f="group", m="import"),
-                    ),
-                    M("Organization Types", c="org", f="organisation_type",
-                      restrict=[ADMIN])(
-                        M("View"),
-                        M("Create", m="create"),
-                    ),
+                    #M("Organization Types", c="org", f="organisation_type",
+                    #  restrict=[ADMIN])(
+                    #    M("View"),
+                    #    M("Create", m="create"),
+                    #),
                     #M("Job Title Catalog", c="hrm", f="job_title",
                     #  restrict=[ADMIN])(
                     #    M("View"),

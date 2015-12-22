@@ -18,9 +18,15 @@ class S3MainMenu(default.S3MainMenu):
     def menu_help(cls, **attr):
         """ Help Menu """
 
-        return [MM("About", f="about", right=True),
-                MM("Contact", f="contact", right=True),
-                ]
+        return MM("About", link=False, right=True)(
+                    MM("About this Site", f="about", right=True),
+                    MM("User Manual", c="default", f="index",
+                        args=["docs"],
+                        vars={"name": "UserManual"},
+                        ),
+                    MM("Contact us", f="contact", right=True),
+                    )
+
 
     # -------------------------------------------------------------------------
     @classmethod
@@ -175,6 +181,10 @@ class S3OptionsMenu(default.S3OptionsMenu):
         req_skills = lambda i: "People" in types
 
         return M(c="req")(
+                    M("Current Needs", f="organisation_needs")(
+                        M("Create", m="create"),
+                        M("Import", m="import", restrict=[ADMIN]),
+                    ),
                     M("Needs at Facilities", f="site_needs", m="summary")(
                         M("Create", m="create"),
                     ),

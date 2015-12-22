@@ -11,7 +11,7 @@ from gluon import current
 from gluon.html import A, DIV, LI, URL, TAG, TD, TR, UL
 from gluon.storage import Storage
 
-from s3 import s3_fullname, S3Represent, S3SQLInlineLink, S3SQLSubFormLayout
+from s3 import s3_fullname, S3Represent, S3SQLInlineLink
 
 def config(settings):
     """ RefugeesWelcome Template """
@@ -108,6 +108,9 @@ def config(settings):
     # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
     #
     settings.security.policy = 7 # Organisation-ACLs
+
+    # Represent user IDs by names rather than email
+    settings.ui.auth_user_represent = "name"
 
     # -------------------------------------------------------------------------
     # Custom icon classes
@@ -264,7 +267,7 @@ def config(settings):
                         ]
 
         # CRUD Form
-        from s3 import S3SQLCustomForm, S3SQLInlineLink
+        from s3 import S3SQLCustomForm
         crud_form = S3SQLCustomForm("project_id",
                                     "name",
                                     "location_id",
@@ -336,9 +339,9 @@ def config(settings):
                        S3LocationSelector, \
                        S3MultiSelectWidget, \
                        S3SQLCustomForm, \
-                       S3SQLInlineLink, \
                        S3SQLInlineComponent, \
-                       S3SQLInlineComponentMultiSelectWidget
+                       S3SQLInlineComponentMultiSelectWidget, \
+                       S3SQLVerticalSubFormLayout
 
         s3db = current.s3db
 
@@ -377,7 +380,7 @@ def config(settings):
                                       "email",
                                       "location_id",
                                       ],
-                            layout = FacilitySubFormLayout,
+                            layout = S3SQLVerticalSubFormLayout,
                             filterby = {"field": "main_facility",
                                         "options": True,
                                         },
@@ -473,15 +476,17 @@ def config(settings):
     def customise_req_organisation_needs_resource(r, tablename):
 
         s3db = current.s3db
+        table = current.s3db.req_organisation_needs
 
         CASH = T("Cash Donations needed")
 
         if r.tablename == "req_organisation_needs":
+
+            from s3 import IS_ONE_OF, S3DateTime
+
             # Allow only organisations which do not have a needs record
             # yet (single component):
-            table = r.table
             field = table.organisation_id
-            from s3 import IS_ONE_OF
             dbset = current.db(table.id == None)
             left = table.on(table.organisation_id == current.s3db.org_organisation.id)
             field.requires = IS_ONE_OF(dbset, "org_organisation.id",
@@ -491,11 +496,14 @@ def config(settings):
                                        sort = True,
                                        )
 
+            # Format modified_on as date
+            field = table.modified_on
+            field.represent = lambda d: S3DateTime.date_represent(d, utc=True)
+
         if r.representation in ("html", "aadata", "iframe"):
 
             # Structured lists for interactive views
             from gluon import Field
-            table = current.s3db.req_organisation_needs
             table.needs_skills = Field.Method(lambda row: \
                                     organisation_needs(row, need_type="skills"))
             table.needs_items = Field.Method(lambda row: \
@@ -504,7 +512,6 @@ def config(settings):
 
             needs_skills = (T("Volunteers needed"), "needs_skills")
             needs_items = (T("Supplies needed"), "needs_items")
-
 
             # Filter widgets
             from s3 import S3LocationFilter, S3OptionsFilter, S3TextFilter
@@ -569,6 +576,7 @@ def config(settings):
                        needs_items,
                        (CASH, "money"),
                        (T("Cash Donation Details"), "money_details"),
+                       (T("Last Update"), "modified_on"),
                        ]
 
         s3db.configure("req_organisation_needs",
@@ -817,66 +825,6 @@ def config(settings):
            module_type = None,
         )),
     ])
-
-# =============================================================================
-class FacilitySubFormLayout(S3SQLSubFormLayout):
-    """
-        Custom layout for facility inline-component in org/organisation
-
-        - allows embedding of multiple fields besides the location selector
-        - renders an vertical layout for edit-rows
-        - standard horizontal layout for read-rows
-        - hiding header row if there are no visible read-rows
-    """
-
-    # -------------------------------------------------------------------------
-    def headers(self, data, readonly=False):
-        """
-            Header-row layout: same as default, but non-static (i.e. hiding
-            if there are no visible read-rows, because edit-rows have their
-            own labels)
-        """
-
-        headers = super(FacilitySubFormLayout, self).headers
-
-        header_row = headers(data, readonly = readonly)
-        element = header_row.element('tr');
-        if hasattr(element, "remove_class"):
-            element.remove_class("static")
-        return header_row
-
-    # -------------------------------------------------------------------------
-    def rowstyle_read(self, form, fields, *args, **kwargs):
-        """
-            Formstyle for subform read-rows, same as standard
-            horizontal layout.
-        """
-
-        rowstyle = super(FacilitySubFormLayout, self).rowstyle
-        return rowstyle(form, fields, *args, **kwargs)
-
-    # -------------------------------------------------------------------------
-    def rowstyle(self, form, fields, *args, **kwargs):
-        """
-            Formstyle for subform edit-rows, using a vertical
-            formstyle because multiple fields combined with
-            location-selector are too complex for horizontal
-            layout.
-        """
-
-        # Use standard foundation formstyle
-        from s3theme import formstyle_foundation as formstyle
-        if args:
-            col_id = form
-            label = fields
-            widget, comment = args
-            hidden = kwargs.get("hidden", False)
-            return formstyle(col_id, label, widget, comment, hidden)
-        else:
-            parent = TD(_colspan = len(fields))
-            for col_id, label, widget, comment in fields:
-                parent.append(formstyle(col_id, label, widget, comment))
-            return TR(parent)
 
 # =============================================================================
 demand_options = {1: "Low Demand",
