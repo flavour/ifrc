@@ -188,17 +188,17 @@ class WorkJobModel(S3Model):
                            ),
                      Field("workers_min", "integer",
                            default = 1,
-                           label = T("Workers needed"),
+                           label = T("Helpers needed"),
                            requires = IS_INT_IN_RANGE(1, None),
                            ),
                      # @todo: onvalidation to check max>=min
                      Field("workers_max", "integer",
-                           label = T("Workers needed (max)"),
+                           label = T("Helpers needed (max)"),
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(1, None)),
                            ),
                      Field("workers_assigned", "integer",
                            default = 0,
-                           label = T("Workers assigned"),
+                           label = T("Helpers assigned"),
                            requires = IS_INT_IN_RANGE(0, None),
                            writable = False,
                            ),
@@ -292,8 +292,7 @@ class WorkJobModel(S3Model):
         tablename = "work_assignment"
         define_table(tablename,
                      job_id(),
-                     # @todo: move default into job controller
-                     self.pr_person_id(default = auth.s3_logged_in_person()),
+                     self.pr_person_id(),
                      *s3_meta_fields())
 
         # CRUD strings
@@ -310,11 +309,10 @@ class WorkJobModel(S3Model):
         )
 
         # Table configuration
-        # @todo: add onvalidation to check that the same person has not
-        #        yet been assigned to the same job
         configure(tablename,
                   onaccept = self.assignment_onaccept,
                   ondelete = self.assignment_ondelete,
+                  onvalidation = self.assignment_onvalidation,
                   )
 
         # ---------------------------------------------------------------------
@@ -334,6 +332,70 @@ class WorkJobModel(S3Model):
 
         return {"work_job_id": lambda **attr: dummy("job_id"),
                 }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def assignment_onvalidation(form):
+        """
+            Validation callback for work assignments:
+            - a worker can only be assigned once to the same job
+
+            @param form: the FORM
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        table = s3db.work_assignment
+
+        form_vars = form.vars
+        if "id" in form_vars:
+            record_id = form_vars.id
+        elif hasattr(form, "record_id"):
+            record_id = form.record_id
+        else:
+            record_id = None
+
+        # Get job_id and person_id
+        try:
+            job_id = form_vars.job_id
+        except AttributeError:
+            job_id = None
+        try:
+            person_id = form_vars.person_id
+        except AttributeError:
+            person_id = None
+
+        if (job_id is None or person_id is None):
+            if record_id:
+                # Reload the record
+                query = (table.id == record_id) & \
+                        (table.deleted != True)
+                record = db(query).select(table.job_id,
+                                          table.person_id,
+                                          limitby = (0, 1)).first()
+                if record:
+                    job_id = record.job_id
+                    person_id = record.person_id
+            else:
+                # Check for defaults (e.g. component link)
+                if job_id is None:
+                    job_id = table.job_id.default
+                if person_id is None:
+                    person_id = table.person_id.default
+
+        if job_id and person_id:
+            # Verify this person is not already assigned to this job
+            query = (table.job_id == job_id) & \
+                    (table.person_id == person_id) & \
+                    (table.deleted != True)
+            if record_id:
+                query = (table.id != record_id) & query
+
+            duplicate = db(query).select(table.id, limitby=(0, 1)).first()
+            if duplicate:
+                msg = current.T("This person is already assigned to the job")
+                form.errors["person_id"] = msg
 
     # -------------------------------------------------------------------------
     @classmethod
@@ -783,17 +845,29 @@ class work_JobListLayout(S3DataListLayout):
                                _class="delete-btn-ajax job-cancel",
                                )
                 elif status != "ONHOLD":
-                    workers_needed = raw["work_job.workers_max"]
-                    if not workers_needed:
-                        workers_needed = raw["work_job.workers_min"]
-                    workers_assigned = raw["work_job.workers_assigned"]
-                    if workers_assigned < workers_needed:
-                        button = A(T("Sign me up"),
-                                   _class="action-btn job-signup",
-                                   )
-                    else:
-                        actionable = False
-                        button_text = T("No more workers needed")
+                    start_date = raw["work_job.start_date"]
+                    duration = raw["work_job.duration"]
+                    if start_date:
+                        # Calculate hours before end of planned time window
+                        delta = (start_date - current.request.utcnow)
+                        hours = (delta.days * 86400 + delta.seconds) / 3600
+                        hours += duration if duration else 1
+                        if hours < 0:
+                            # Can no longer sign up
+                            actionable = False
+                            button_text = T("Job date has passed")
+                    if actionable:
+                        workers_needed = raw["work_job.workers_max"]
+                        if not workers_needed:
+                            workers_needed = raw["work_job.workers_min"]
+                        workers_assigned = raw["work_job.workers_assigned"]
+                        if workers_assigned < workers_needed:
+                            button = A(T("Sign me up"),
+                                       _class="action-btn job-signup",
+                                       )
+                        else:
+                            actionable = False
+                            button_text = T("No more helpers needed")
                 else:
                     actionable = False
                     button_text = T("Job is on hold")

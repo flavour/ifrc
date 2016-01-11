@@ -68,6 +68,8 @@ def index():
     auth.settings.register_onvalidation = register_validation
     auth.configure_user_fields()
 
+    current.menu.oauth = S3MainMenu.menu_oauth()
+
     page = None
     if len(request.args):
         # Use the first non-numeric argument as page name
@@ -359,7 +361,7 @@ google.setOnLoadCallback(LoadDynamicFeedControl)'''))
                   login_form=login_form,
                   login_div=login_div,
                   register_form=register_form,
-                  register_div=register_div
+                  register_div=register_div,
                   )
 
     if get_vars.tour:
@@ -509,6 +511,8 @@ def user():
     self_registration = settings.get_security_self_registration()
     login_form = register_form = None
 
+    current.menu.oauth = S3MainMenu.menu_oauth()
+
     # Check for template-specific customisations
     customise = settings.customise_auth_user_controller
     if customise:
@@ -585,11 +589,12 @@ def user():
                 else:
                     break
 
-    return dict(title=title,
-                form=form,
-                login_form=login_form,
-                register_form=register_form,
-                self_registration=self_registration)
+    return dict(title = title,
+                form = form,
+                login_form = login_form,
+                register_form = register_form,
+                self_registration = self_registration,
+                )
 
 # -----------------------------------------------------------------------------
 def person():
@@ -921,7 +926,7 @@ def facebook():
     auth.settings.login_form = FaceBookAccount(channel)
     form = auth()
 
-    return dict(form=form)
+    return {"form": form}
 
 # -----------------------------------------------------------------------------
 def google():
@@ -936,7 +941,22 @@ def google():
     auth.settings.login_form = GooglePlusAccount(channel)
     form = auth()
 
-    return dict(form=form)
+    return {"form": form}
+
+# -----------------------------------------------------------------------------
+def humanitarian_id():
+    """ Login using Humanitarian.ID """
+
+    channel = settings.get_auth_humanitarian_id()
+
+    if not channel:
+        redirect(URL(f="user", args=request.args, vars=get_vars))
+
+    from s3oauth import HumanitarianIDAccount
+    auth.settings.login_form = HumanitarianIDAccount(channel)
+    form = auth()
+
+    return {"form": form}
 
 # -----------------------------------------------------------------------------
 # About Sahana

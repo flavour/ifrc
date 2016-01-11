@@ -68,16 +68,15 @@ from s3error import S3PermissionError
 from s3fields import S3Represent, s3_uid, s3_timestamp, s3_deletion_status, s3_comments
 from s3rest import S3Method, S3Request
 from s3track import S3Tracker
-from s3utils import s3_addrow, s3_get_extension, s3_mark_required
+from s3utils import s3_addrow, s3_get_extension, s3_mark_required #, S3ModuleDebug
 
 #DEBUG = False
 #if DEBUG:
 #   import sys
 #   print >> sys.stderr, "S3AAA: DEBUG MODE"
-#   def _debug(m):
-#       print >> sys.stderr, m
+#   _debug = S3ModuleDebug.on
 #else:
-#   _debug = lambda m: None
+#   _debug = S3ModuleDebug.off
 
 # =============================================================================
 class AuthS3(Auth):
@@ -3100,6 +3099,9 @@ $.filterOptionsS3({
             Send a welcome mail to newly-registered users
             - especially suitable for users from Facebook/Google who don't
               verify their emails
+
+            @param user: the user dict, must contain "email", and can
+                         contain "language" for translation of the message
         """
 
         messages = self.messages
@@ -3108,33 +3110,36 @@ $.filterOptionsS3({
             current.response.error = messages.unable_send_email
             return
 
-        #if "name" in user:
-        #    user["first_name"] = user["name"]
-        #if "family_name" in user:
-        #    # Facebook
-        #    user["last_name"] = user["family_name"]
-
-        # Ensure that we send out the mails in the language that the recipient wants
+        # Ensure that we send out the mails in the language that
+        # the recipient wants (if we know it)
         T = current.T
-        T.force(user["language"])
+        if "language" in user:
+            T.force(user["language"])
+
+        # Compose the message
         system_name = settings.get_system_name()
         subject = messages.welcome_email_subject % \
-            dict(system_name=system_name)
+                        {"system_name": system_name}
         message = messages.welcome_email % \
-            dict(system_name = system_name,
-                 url = settings.get_base_public_url(),
-                 profile = URL("default", "user", args=["profile"])
-                 )
+                        {"system_name": system_name,
+                         "url": settings.get_base_public_url(),
+                         "profile": URL("default", "user", args=["profile"])
+                         }
 
         # Restore language for UI
         T.force(current.session.s3.language)
 
-        to = user["email"]
+        recipient = user["email"]
         if settings.has_module("msg"):
-            results = current.msg.send_email(to, subject=subject,
-                                             message=message)
+            results = current.msg.send_email(recipient,
+                                             subject = subject,
+                                             message = message,
+                                             )
         else:
-            results = current.mail.send(to, subject=subject, message=message)
+            results = current.mail.send(recipient,
+                                        subject = subject,
+                                        message = message,
+                                        )
         if not results:
             current.response.error = messages.unable_send_email
 
@@ -5869,8 +5874,6 @@ class S3Permission(object):
             @param record: the record or record ID (None for any record)
         """
 
-        #_debug = current.log.debug
-
         # Multiple methods?
         if isinstance(method, (list, tuple)):
             for m in method:
@@ -5882,11 +5885,14 @@ class S3Permission(object):
 
         if record == 0:
             record = None
-        #_debug("\nhas_permission('%s', c=%s, f=%s, t=%s, record=%s)" % \
-        #       ("|".join(method),
-        #        c or current.request.controller,
-        #        f or current.request.function,
-        #        t, record))
+
+        #_debug("\nhas_permission('%s', c=%s, f=%s, t=%s, record=%s)",
+        #       "|".join(method),
+        #       c or current.request.controller,
+        #       f or current.request.function,
+        #       t,
+        #       record,
+        #       )
 
         # Auth override, system roles and login
         auth = self.auth
@@ -5900,7 +5906,7 @@ class S3Permission(object):
 
         # Required ACL
         racl = self.required_acl(method)
-        #_debug("==> required ACL: %04X" % racl)
+        #_debug("==> required ACL: %04X", racl)
 
         # Get realms and delegations
         if not logged_in:
@@ -5990,7 +5996,7 @@ class S3Permission(object):
             else:
                 uacl, oacl = self.most_permissive(acls.values())
 
-            #_debug("==> uacl: %04X, oacl: %04X" % (uacl, oacl))
+            #_debug("==> uacl: %04X, oacl: %04X", uacl, oacl)
 
             if permitted is None:
                 if uacl & racl == racl:
@@ -6035,7 +6041,7 @@ class S3Permission(object):
                                 self.has_permission("review", t=table, record=record)
                     #if not permitted:
                     #    _debug("==> Record not approved")
-                    #    _debug("==> is owner: %s" % is_owner)
+                    #    _debug("==> is owner: %s", is_owner)
             else:
                 # Approval not possible for this table => no change
                 pass
@@ -6073,7 +6079,7 @@ class S3Permission(object):
         if not isinstance(method, (list, tuple)):
             method = [method]
 
-        #_debug("\naccessible_query(%s, '%s')" % (table, ",".join(method)))
+        #_debug("\naccessible_query(%s, '%s')", table, ",".join(method))
 
         # Defaults
         ALL_RECORDS = (table._id > 0)
@@ -6159,7 +6165,7 @@ class S3Permission(object):
 
         # Required ACL
         racl = self.required_acl(method)
-        #_debug("==> required permissions: %04X" % racl)
+        #_debug("==> required permissions: %04X", racl)
 
         # Use ACLs?
         if not self.use_cacls:
@@ -6225,7 +6231,7 @@ class S3Permission(object):
                 query = ALL_RECORDS
                 check_owner_acls = False
             else:
-                #_debug("==> permitted for records owned by entities %s" % str(uacls))
+                #_debug("==> permitted for records owned by entities %s", str(uacls))
                 no_realm = uacls
 
         if check_owner_acls:
@@ -6239,13 +6245,13 @@ class S3Permission(object):
                                            )
 
             if owner_query is not None:
-                #_debug("==> permitted for owned records (limit to realms=%s)" % use_realm)
+                #_debug("==> permitted for owned records (limit to realms=%s)", use_realm)
                 if query is not None:
                     query |= owner_query
                 else:
                     query = owner_query
             elif use_realm:
-                #_debug("==> permitted for any records owned by entities %s" % str(uacls+oacls))
+                #_debug("==> permitted for any records owned by entities %s", str(uacls+oacls))
                 query = self.realm_query(table, uacls+oacls)
 
             if query is not None and requires_approval:
@@ -6891,8 +6897,13 @@ class S3Audit(object):
             return True
 
         #if DEBUG:
-        #    _debug("Audit %s: %s_%s record=%s representation=%s" % \
-        #           (method, prefix, name, record, representation))
+        #    _debug("Audit %s: %s_%s record=%s representation=%s",
+        #           method,
+        #           prefix,
+        #           name,
+        #           record,
+        #           representation,
+        #           )
 
         if method in ("list", "read"):
             audit = current.deployment_settings.get_security_audit_read()

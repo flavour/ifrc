@@ -148,6 +148,72 @@ def config(settings):
     #
     settings.search.filter_manager = False
     settings.ui.label_postcode = "Postal Code"
+    settings.ui.summary = ({"common": True,
+                            "name": "add",
+                            "widgets": [{"method": "create"}],
+                            },
+                           {"name": "table",
+                            "label": "Table",
+                            "widgets": [{"method": "datatable"}],
+                            },
+                           {"name": "charts",
+                            "label": "Report",
+                            "widgets": [{"method": "report", "ajax_init": True}],
+                            },
+                           {"name": "map",
+                            "label": "Map",
+                            "widgets": [{"method": "map", "ajax_init": True}],
+                            },
+                           )
+
+    # =========================================================================
+    # CMS Options
+    #
+    settings.cms.filter_open = True
+    settings.cms.location_click_filters = True
+
+    settings.cms.hide_index = True
+
+    # =========================================================================
+    # Documents
+    #
+    def customise_doc_document_resource(r, tablename):
+
+        s3db = current.s3db
+        table = s3db.doc_document
+
+        # Document date defaults to today
+        field = table.date
+        field.default = current.request.utcnow.date()
+
+        # Label name as "Title"
+        field = table.name
+        field.label = T("Title")
+
+        # CRUD Form
+        if r.interactive:
+            from s3 import S3SQLCustomForm
+            crud_form = S3SQLCustomForm("name",
+                                        "file",
+                                        "url",
+                                        "date",
+                                        "comments",
+                                        )
+        else:
+            crud_form = None
+
+        list_fields = ["name",
+                       "file",
+                       "url",
+                       "date",
+                       "comments",
+                       ]
+        s3db.configure("doc_document",
+                       crud_form = crud_form,
+                       list_fields = list_fields,
+                       )
+
+    settings.customise_doc_document_resource = customise_doc_document_resource
 
     # =========================================================================
     # Organisations
@@ -232,12 +298,24 @@ def config(settings):
                                     (T("About"), "comments"),
                                     "website",
                                     S3SQLInlineComponent(
+                                            "contact",
+                                            name = "email",
+                                            label = T("Email"),
+                                            #multiple = False,
+                                            fields = [("", "value"),
+                                                      ],
+                                            filterby = [{"field": "contact_method",
+                                                         "options": "EMAIL",
+                                                         },
+                                                        ],
+                                            ),
+                                    S3SQLInlineComponent(
                                             "facility",
                                             label = T("Main Office"),
                                             fields = ["name",
-                                                      (T("Phone"), "phone1"),
-                                                      #"phone2",
-                                                      "email",
+                                                      "phone1",
+                                                      "phone2",
+                                                      #"email",
                                                       "location_id",
                                                       ],
                                             layout = S3SQLVerticalSubFormLayout,
@@ -246,6 +324,30 @@ def config(settings):
                                                         },
                                             multiple = False,
                                             ),
+                                    S3SQLInlineComponent(
+                                        "document",
+                                        fields = [(T("Title"), "name"),
+                                                  "file",
+                                                  ],
+                                        filterby = {"field": "file",
+                                                    "options": "",
+                                                    "invert": True,
+                                                    },
+                                        label = T("Files"),
+                                        name = "file",
+                                        ),
+                                    S3SQLInlineComponent(
+                                        "document",
+                                        fields = [(T("Title"), "name"),
+                                                  "url",
+                                                  ],
+                                        filterby = {"field": "url",
+                                                    "options": None,
+                                                    "invert": True,
+                                                    },
+                                        label = T("Links"),
+                                        name = "url",
+                                        ),
                                     )
 
         s3db.configure("org_organisation",
@@ -294,7 +396,7 @@ def config(settings):
                        "opening_times",
                        "contact",
                        "phone1",
-                       #"phone2",
+                       "phone2",
                        "email",
                        #"website",
                        "obsolete",
@@ -324,14 +426,6 @@ def config(settings):
 
         # Not using facility code
         field = table.code
-        field.readable = field.writable = False
-
-        # Relabel "Phone 1" as just "Phone"
-        field = table.phone1
-        field.label = T("Phone")
-
-        # Not using phone2
-        field = table.phone2
         field.readable = field.writable = False
 
     settings.customise_org_facility_resource = customise_org_facility_resource
@@ -450,8 +544,31 @@ def config(settings):
                                         "job_title_id",
                                         "department_id",
                                         )
+
+            # Custom filter widgets
+            from s3 import S3TextFilter, S3OptionsFilter, s3_get_filter_opts
+            filter_widgets = [
+                S3TextFilter(["person_id$first_name",
+                              "person_id$middle_name",
+                              "person_id$last_name",
+                              "person_id$email.value",
+                              ],
+                              label = T("Search"),
+                              comment = T("You can search by name or email address."),
+                             ),
+                S3OptionsFilter("organisation_id",
+                                filter = True,
+                                header = "",
+                                ),
+                S3OptionsFilter("job_title_id",
+                                options = s3_get_filter_opts("hrm_job_title"),
+                                hidden = True,
+                                ),
+                ]
+
             s3db.configure("hrm_human_resource",
                            crud_form = crud_form,
+                           filter_widgets = filter_widgets,
                            )
 
         # Configure table
@@ -476,8 +593,6 @@ def config(settings):
                 result = standard_prep(r)
             else:
                 result = True
-
-            # @todo: customise filter widgets
 
             list_fields = ["organisation_id"] + human_resource_list_fields
 
@@ -540,7 +655,7 @@ def config(settings):
                                             "contact",
                                             name = "email",
                                             label = T("Email"),
-                                            multiple = False,
+                                            #multiple = False,
                                             fields = [("", "value"),
                                                       ],
                                             filterby = [{"field": "contact_method",
@@ -552,7 +667,7 @@ def config(settings):
                                             "contact",
                                             name = "phone",
                                             label = MOBILE,
-                                            multiple = False,
+                                            #multiple = False,
                                             fields = [("", "value"),
                                                       ],
                                             filterby = [{"field": "contact_method",
@@ -564,6 +679,10 @@ def config(settings):
                     resource.configure(crud_form = crud_form)
             return result
         s3.prep = custom_prep
+
+        # Custom rheader and tabs
+        attr = dict(attr)
+        attr["rheader"] = mavc_rheader
 
         return attr
 
@@ -649,7 +768,9 @@ def config(settings):
                 ]
 
             # Custom CRUD form
-            from s3 import S3SQLCustomForm, S3SQLInlineLink
+            from s3 import S3SQLCustomForm, \
+                           S3SQLInlineComponent, \
+                           S3SQLInlineLink
             crud_form = S3SQLCustomForm(
                 "organisation_id",
                 "name",
@@ -676,6 +797,30 @@ def config(settings):
                 ),
                 "objectives",
                 "human_resource_id",
+                S3SQLInlineComponent(
+                    "document",
+                    fields = [(T("Title"), "name"),
+                              "file",
+                              ],
+                    filterby = {"field": "file",
+                                "options": "",
+                                "invert": True,
+                                },
+                    label = T("Files"),
+                    name = "file",
+                    ),
+                S3SQLInlineComponent(
+                    "document",
+                    fields = [(T("Title"), "name"),
+                              "url",
+                              ],
+                    filterby = {"field": "url",
+                                "options": None,
+                                "invert": True,
+                                },
+                    label = T("Links"),
+                    name = "url",
+                    ),
                 "comments",
                 )
 
@@ -701,6 +846,56 @@ def config(settings):
 
 
     settings.customise_project_project_resource = customise_project_project_resource
+
+    # -------------------------------------------------------------------------
+    def customise_project_project_controller(**attr):
+
+        # Custom rheader and tabs
+        attr = dict(attr)
+        attr["rheader"] = mavc_rheader
+
+        return attr
+
+    settings.customise_project_project_controller = customise_project_project_controller
+
+    # -------------------------------------------------------------------------
+    def customise_project_location_resource(r, tablename):
+
+        s3db = current.s3db
+        table = s3db.project_location
+
+        # Hide name in create-form
+        field = table.name
+        if r.tablename == tablename and not r.id or \
+           r.component.tablename == tablename and not r.component_id:
+            field.readable = False
+
+        # Hide budget percentage
+        field = table.percentage
+        field.readable = field.writable = False
+
+        # Use location selector
+        field = table.location_id
+        from s3 import S3LocationSelector
+        field.widget = S3LocationSelector(show_address = False,
+                                          show_postcode = False,
+                                          show_map = False,
+                                          )
+
+        # Custom list fields
+        list_fields = ["project_id",
+                       "location_id",
+                       "comments",
+                       ]
+
+        s3db.configure("project_location",
+                       # Don't redirect to beneficiaries after create:
+                       create_next = None,
+                       list_fields = list_fields,
+                       )
+
+
+    settings.customise_project_location_resource = customise_project_location_resource
 
     # =========================================================================
     # Requests
@@ -890,6 +1085,7 @@ def mavc_rheader(r, tabs=None):
                     (T("Services"), "service_location"),
                     (T("Facilities"), "facility"),
                     (T("Projects"), "project"),
+                    (T("Attachments"), "document"),
                     ]
 
         # Use OrganisationRepresent for title to get L10n name if available
@@ -922,10 +1118,84 @@ def mavc_rheader(r, tabs=None):
         # Website
         website = row["org_organisation.website"]
 
-        # Compile the rheader
+        # Compose the rheader
         rheader = DIV(DIV(H1(title),
                           H2(subtitle),
                           website if record.website else "",
+                          _class="rheader-details",
+                          ),
+                      )
+
+    elif tablename == "project_project":
+
+        if not tabs:
+            tabs = [(T("About"), None),
+                    (T("Locations"), "location"),
+                    (T("Attachments"), "document"),
+                    ]
+
+        # Retrieve details for the rheader
+        data = resource.select(["name",
+                                "organisation_id",
+                                ],
+                               represent = True,
+                               )
+        row = data.rows[0]
+
+        # Title and Subtitle
+        title = row["project_project.name"]
+        subtitle = row["project_project.organisation_id"]
+
+        # Compose the rheader
+        rheader = DIV(DIV(H1(title),
+                          H2(subtitle),
+                          _class="rheader-details",
+                          ),
+                      )
+
+    elif tablename == "pr_person":
+
+        if not tabs:
+            tabs = [(T("Person Details"), None),
+                    ]
+
+        from s3 import s3_fullname
+        title = s3_fullname(record)
+
+        # Link organisation_id representation to staff tab
+        linkto = URL(c = "org",
+                     f = "organisation",
+                     args = ["[id]", "human_resource"],
+                     )
+        htable = s3db.hrm_human_resource
+        field = htable.organisation_id
+        field.represent = s3db.org_OrganisationRepresent(show_link = True,
+                                                         linkto = linkto,
+                                                         )
+
+        # Retrieve details for the rheader
+        data = resource.select(["human_resource.job_title_id",
+                                "human_resource.organisation_id",
+                                ],
+                               raw_data = True,
+                               represent = True,
+                               )
+        row = data.rows[0]
+        raw = row["_row"]
+
+        # Construct subtitle
+        organisation_id = raw["hrm_human_resource.organisation_id"]
+        if organisation_id:
+            subtitle = row["hrm_human_resource.organisation_id"]
+            job_title_id = raw["hrm_human_resource.job_title_id"]
+            if job_title_id:
+                subtitle = TAG[""]("%s, " % row["hrm_human_resource.job_title_id"],
+                                   subtitle,
+                                   )
+
+        # Compose the rheader
+        rheader = DIV(DIV(H1(title),
+                          H2(subtitle),
                           _class="rheader-details",
                           ),
                       )
