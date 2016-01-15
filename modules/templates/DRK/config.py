@@ -365,7 +365,7 @@ def config(settings):
             warning = None
 
         # Update the Shelter Registration
-        registration.update_record(checked_in_date = current.request.utcnow,
+        registration.update_record(check_in_date = current.request.utcnow,
                                    registration_status = 2,
                                    )
 
@@ -406,7 +406,7 @@ def config(settings):
             warning = None
 
         # Update the Shelter Registration
-        registration.update_record(checked_out_date = current.request.utcnow,
+        registration.update_record(check_out_date = current.request.utcnow,
                                    registration_status = 3)
 
         onaccept = s3db.get_config("cr_shelter_registration", "onaccept")
@@ -716,7 +716,7 @@ def config(settings):
                                 "dvr_case.organisation_id",
                                 # Will always default & be hidden
                                 "dvr_case.site_id",
-                                "dvr_case.date",
+                                (T("BFV Arrival"), "dvr_case.date"),
                                 (T("Case Status"), "dvr_case.status_id"),
                                 # Will always default & be hidden
                                 #"cr_shelter_registration.site_id",
