@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -701,7 +701,6 @@ class S3AddPersonWidget2(FormWidget):
             #else:
             #    foundation = False
 
-        controller = self.controller or request.controller
         settings = current.deployment_settings
 
         separate_name_fields = self.separate_name_fields
@@ -713,8 +712,8 @@ class S3AddPersonWidget2(FormWidget):
         date_of_birth = None
         year_of_birth = self.year_of_birth
 
-        dtable = None
         ptable = s3db.pr_person
+        dtable = s3db.pr_person_details
         first_name_field = ptable.first_name
         middle_name_field = ptable.middle_name
         last_name_field = ptable.last_name
@@ -723,7 +722,6 @@ class S3AddPersonWidget2(FormWidget):
             # Use Global deployment_setting
             year_of_birth = settings.get_pr_request_year_of_birth()
         if year_of_birth:
-            dtable = s3db.pr_person_details
             year_of_birth = dtable.year_of_birth
 
         if settings.get_pr_request_dob():
@@ -739,38 +737,42 @@ class S3AddPersonWidget2(FormWidget):
 
         req_email = settings.get_pr_request_email()
         req_home_phone = settings.get_pr_request_home_phone()
+        req_mobile_phone = settings.get_pr_request_mobile_phone()
 
         emailRequired = settings.get_hrm_email_required()
-        occupation = None
+
+        # Determine controller for autocomplete
+        controller = self.controller
+        if not controller:
+            controller = request.controller
+            if controller not in ("hrm", "vol"):
+                if hrm:
+                    # Always use hrm for human_resource_id
+                    controller = "hrm"
+                else:
+                    # Always use pr for person_id
+                    controller = "pr"
+                    emailRequired = False
+
+        # Widget-Options for additional fields
         father_name = self.father_name
         grandfather_name = self.grandfather_name
 
-        if controller == "hrm":
-            pass
+        if father_name is None:
+            # Use Global deployment_setting
+            father_name = settings.get_pr_request_father_name()
+        if father_name:
+            father_name = dtable.father_name
+        if grandfather_name is None:
+            # Use Global deployment_setting
+            grandfather_name  = settings.get_pr_request_grandfather_name()
+        if grandfather_name:
+            grandfather_name = dtable.grandfather_name
 
-        elif controller == "vol":
-            dtable = s3db.pr_person_details
+        if controller == "vol":
             occupation = dtable.occupation
-            if father_name is None:
-                # Use Global deployment_setting
-                father_name = settings.get_pr_request_father_name()
-            if father_name:
-                father_name = dtable.father_name
-            if grandfather_name is None:
-                # Use Global deployment_setting
-                grandfather_name  = settings.get_pr_request_grandfather_name()
-            if grandfather_name:
-                grandfather_name = dtable.grandfather_name
-
-        elif controller == "patient":
-            controller = "pr"
-
-        elif hrm:
-            controller = "hrm"
-
         else:
-            controller = "pr"
-            emailRequired = False
+            occupation = None
 
         if value:
             db = current.db
@@ -845,31 +847,34 @@ class S3AddPersonWidget2(FormWidget):
                 values["gender"] = person.gender
 
             # Contacts as separate query as we can't easily limitby
-            ctable = s3db.pr_contact
-            contact_methods = ["SMS"]
+            contact_methods = []
             if req_email:
                 contact_methods.append("EMAIL")
             if req_home_phone:
                 contact_methods.append("HOME_PHONE")
-            query = (ctable.pe_id == person.pe_id) & \
-                    (ctable.deleted == False) & \
-                    (ctable.contact_method.belongs(contact_methods))
-            contacts = db(query).select(ctable.contact_method,
-                                        ctable.value,
-                                        orderby=ctable.priority,
-                                        )
+            if req_mobile_phone:
+                contact_methods.append("SMS")
             email = mobile_phone = home_phone = ""
-            for contact in contacts:
-                if req_email and not email and contact.contact_method == "EMAIL":
-                    email = contact.value
-                elif not mobile_phone and contact.contact_method == "SMS":
-                    mobile_phone = contact.value
-                elif req_home_phone and not home_phone and contact.contact_method == "HOME_PHONE":
-                    home_phone = contact.value
-                if mobile_phone and \
-                   ((req_email and email) or (not req_email)) and \
-                   ((req_home_phone and home_phone) or (not req_home_phone)):
-                    break
+            if contact_methods:
+                ctable = s3db.pr_contact
+                query = (ctable.pe_id == person.pe_id) & \
+                        (ctable.deleted == False) & \
+                        (ctable.contact_method.belongs(contact_methods))
+                contacts = db(query).select(ctable.contact_method,
+                                            ctable.value,
+                                            orderby=ctable.priority,
+                                            )
+                for contact in contacts:
+                    if req_email and not email and contact.contact_method == "EMAIL":
+                        email = contact.value
+                    elif not mobile_phone and contact.contact_method == "SMS":
+                        mobile_phone = contact.value
+                    elif req_home_phone and not home_phone and contact.contact_method == "HOME_PHONE":
+                        home_phone = contact.value
+                    if mobile_phone and \
+                       ((req_email and email) or (not req_email)) and \
+                       ((req_home_phone and home_phone) or (not req_home_phone)):
+                        break
             values["home_phone"] = home_phone
             values["email"] = email
             values["mobile_phone"] = mobile_phone
@@ -992,7 +997,8 @@ class S3AddPersonWidget2(FormWidget):
         if req_email:
             fappend(("email", T("Email"), INPUT(), emailRequired))
 
-        fappend(("mobile_phone", settings.get_ui_label_mobile_phone(), INPUT(), False))
+        if req_mobile_phone:
+            fappend(("mobile_phone", settings.get_ui_label_mobile_phone(), INPUT(), False))
 
         if req_home_phone:
             fappend(("home_phone", T("Home Phone"), INPUT(), False))
@@ -2848,8 +2854,11 @@ class S3GroupedOptionsWidget(FormWidget):
 
         # Add tooltips
         items = []
+        T = current.T
         for key, label in group_items:
-            tooltip = helptext.get(key, None)
+            tooltip = helptext.get(key)
+            if tooltip:
+                tooltip = s3_str(T(tooltip))
             item = (key, label, key in values, tooltip)
             items.append(item)
 
@@ -4803,7 +4812,7 @@ class S3LocationSelector(S3Selector):
     """
 
     keys = ("L0", "L1", "L2", "L3", "L4", "L5",
-            "address", "postcode", "lat", "lon", "wkt", "specific", "id")
+            "address", "postcode", "lat", "lon", "wkt", "specific", "id", "radius")
 
     def __init__(self,
                  levels = None,
@@ -4821,6 +4830,7 @@ class S3LocationSelector(S3Selector):
                  lines = False,
                  points = True,
                  polygons = False,
+                 circles = False,
                  color_picker = False,
                  catalog_layers = False,
                  min_bbox = None,
@@ -4852,6 +4862,7 @@ class S3LocationSelector(S3Selector):
             @param lines: use a line draw tool
             @param points: use a point draw tool
             @param polygons: use a polygon draw tool
+            @param circles: use a circle draw tool
             @param color_picker: display a color-picker to set per-feature styling
                                  (also need to enable in the feature layer to show on map)
             @param catalog_layers: display catalogue layers or just the default base layer
@@ -4890,9 +4901,9 @@ class S3LocationSelector(S3Selector):
 
         if feature_required:
             show_map = True
-            if not any((points,lines, polygons)):
+            if not any((points,lines, polygons, circles)):
                 points = True
-            if lines or polygons:
+            if lines or polygons or circles:
                 required = "wkt" if not points else "any"
             else:
                 required = "latlon"
@@ -4907,11 +4918,12 @@ class S3LocationSelector(S3Selector):
         self.lines = lines
         self.points = points
         self.polygons = polygons
+        self.circles = circles
 
         self.color_picker = color_picker
         self.catalog_layers = catalog_layers
 
-        self.min_bbox = min_bbox
+        self.min_bbox = min_bbox or settings.get_gis_bbox_min_size()
 
         self.labels = labels
         self.placeholders = placeholders
@@ -5196,6 +5208,7 @@ class S3LocationSelector(S3Selector):
         # then we need to launch the client-side JS as a callback to the
         # MapJS loader
         wkt = values.get("wkt")
+        radius = values.get("radius")
         if lat is not None or lon is not None or wkt is not None:
             use_callback = True
         else:
@@ -5246,6 +5259,7 @@ class S3LocationSelector(S3Selector):
                                  lat,
                                  lon,
                                  wkt,
+                                 radius,
                                  callback = callback,
                                  geocoder = geocoder,
                                  tablename = field.tablename,
@@ -5772,6 +5786,7 @@ class S3LocationSelector(S3Selector):
              lat,
              lon,
              wkt,
+             radius,
              callback = None,
              geocoder = False,
              tablename = None):
@@ -5782,6 +5797,7 @@ class S3LocationSelector(S3Selector):
             @param lat: the Latitude of the current point location
             @param lon: the Longitude of the current point location
             @param wkt: the WKT
+            @param radius: the radius of the location
             @param callback: the script to initialize the widget, if to be
                              initialized as callback of the MapJS loader
             @param geocoder: use a geocoder
@@ -5798,7 +5814,8 @@ class S3LocationSelector(S3Selector):
         lines = self.lines
         points = self.points
         polygons = self.polygons
-        use_wkt = polygons or lines
+        circles = self.circles
+        use_wkt = polygons or lines or circles
 
         db = current.db
         gis = current.gis
@@ -5812,7 +5829,7 @@ class S3LocationSelector(S3Selector):
         settings = current.deployment_settings
 
         # Toolbar options
-        add_points_active = add_polygon_active = add_line_active = False
+        add_points_active = add_polygon_active = add_line_active = add_circle_active = False
         if points and lines:
             # Allow selection between drawing a point or a line
             toolbar = True
@@ -5832,6 +5849,13 @@ class S3LocationSelector(S3Selector):
                 add_polygon_active = True
             else:
                 add_points_active = True
+        elif points and circles:
+            # Allow selection between drawing a point or a circle
+            toolbar = True
+            if wkt:
+                add_circle_active = True
+            else:
+                add_points_active = True
         elif points:
             # No toolbar needed => always drawing points
             toolbar = False
@@ -5846,14 +5870,38 @@ class S3LocationSelector(S3Selector):
                     add_polygon_active = True
             else:
                 add_polygon_active = True
+        elif lines and circles:
+            # Allow selection between drawing a line or a circle
+            toolbar = True
+            if wkt:
+                if wkt.startswith("LINE"):
+                    add_line_active = True
+                else:
+                    add_circle_active = True
+            else:
+                add_circle_active = True
         elif lines:
             # No toolbar needed => always drawing lines
             toolbar = False
             add_line_active = True
+        elif polygons and circles:
+            # Allow selection between drawing a polygon or a circle
+            toolbar = True
+            if wkt:
+                if radius is not None:
+                    add_circle_active = True
+                else:
+                    add_polygon_active = True
+            else:
+                add_polygon_active = True
         elif polygons:
             # No toolbar needed => always drawing polygons
             toolbar = False
             add_polygon_active = True
+        elif circles:
+            # No toolbar needed => always drawing circles
+            toolbar = False
+            add_circle_active = True
         else:
             # No Valid options!
             raise SyntaxError
@@ -5910,6 +5958,8 @@ class S3LocationSelector(S3Selector):
                             add_line_active = add_line_active,
                             add_polygon = polygons,
                             add_polygon_active = add_polygon_active,
+                            add_circle = circles,
+                            add_circle_active = add_circle_active,
                             catalogue_layers = self.catalog_layers,
                             color_picker = colorpicker,
                             toolbar = toolbar,
@@ -6038,7 +6088,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         # Initialize the values dict
         if values is None:
             values = {}
-        for key in ("L0", "L1", "L2", "L3", "L4", "L5", "specific", "parent"):
+        for key in ("L0", "L1", "L2", "L3", "L4", "L5", "specific", "parent", "radius"):
             if key not in values:
                 values[key] = None
 
@@ -6055,6 +6105,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         lat = values.get("lat")
         lon = values.get("lon")
         wkt = values.get("wkt")
+        radius = values.get("radius")
         address = values.get("address")
         postcode = values.get("postcode")
 
@@ -6068,6 +6119,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                                                   table.lat,
                                                   table.lon,
                                                   table.wkt,
+                                                  table.radius,
                                                   table.addr_street,
                                                   table.addr_postcode,
                                                   limitby=(0, 1)).first()
@@ -6123,11 +6175,13 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                 else:
                     lat = None
                     lon = None
-                if self.lines or self.polygons:
+                if self.lines or self.polygons or self.circles:
                     if not wkt:
                         if record.gis_feature_type != 1:
                             # Only use WKT for non-Points
                             wkt = record.wkt
+                            if record.radius is not None:
+                                radius = record.radius
                         else:
                             wkt = None
                 else:
@@ -6154,10 +6208,11 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         values["address"] = address
         values["postcode"] = postcode
 
-        # Lat/Lon/WKT
+        # Lat/Lon/WKT/Radius
         values["lat"] = lat
         values["lon"] = lon
         values["wkt"] = wkt
+        values["radius"] = radius
 
         return values
 
@@ -6185,6 +6240,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         lat = value.get("lat")
         lon = value.get("lon")
         wkt = value.get("wkt")
+        radius = value.get("radius")
         address = value.get("address")
         postcode = value.get("postcode")
 
@@ -6268,7 +6324,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         else:
             text = represent(record)
 
-        return s3_unicode(text)
+        return s3_str(text)
 
     # -------------------------------------------------------------------------
     def validate(self, value, requires=None):
@@ -6297,34 +6353,43 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
 
         msg = self.error_message
 
-        # Check for valid Lat/Lon/WKT (if any)
+        # Check for valid Lat/Lon/WKT/Radius (if any)
         lat = values.get("lat")
-        if lat == "":
-            lat = None
         if lat:
             try:
                 lat = float(lat)
             except ValueError:
                 errors["lat"] = current.T("Latitude is Invalid!")
+        elif lat == "":
+            lat = None
 
         lon = values.get("lon")
-        if lon == "":
-            lon = None
         if lon:
             try:
                 lon = float(lon)
             except ValueError:
                 errors["lon"] = current.T("Longitude is Invalid!")
+        elif lon == "":
+            lon = None
 
         wkt = values.get("wkt")
-        if wkt == "":
-            wkt = None
         if wkt:
             try:
                 from shapely.wkt import loads as wkt_loads
                 wkt_loads(wkt)
             except:
                 errors["wkt"] = current.T("WKT is Invalid!")
+        elif wkt == "":
+            wkt = None
+
+        radius = values.get("radius")
+        if radius:
+            try:
+                radius = float(radius)
+            except ValueError:
+                errors["radius"] = current.T("Radius is Invalid!")
+        elif radius == "":
+            radius = None
 
         if errors:
             error = "\n".join(errors[fn] for fn in errors)
@@ -6338,7 +6403,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
             # Currently not possible
             #   => widget always retains specific
             #   => must take care of orphaned specific locations otherwise
-            lat = lon = wkt = None
+            lat = lon = wkt = radius = None
         else:
             # Read other details
             parent = values.get("parent")
@@ -6348,7 +6413,8 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         if parent or address or postcode or \
            wkt is not None or \
            lat is not None or \
-           lon is not None:
+           lon is not None or \
+           radius is not None:
 
             # Specific location with details
             if specific:
@@ -6422,10 +6488,11 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                                       addr_postcode=postcode,
                                       parent=parent,
                                       )
-                    if any(detail is not None for detail in (lat, lon, wkt)):
+                    if any(detail is not None for detail in (lat, lon, wkt, radius)):
                         feature.lat = lat
                         feature.lon = lon
                         feature.wkt = wkt
+                        feature.radius = radius
                         feature.inherited = False
                     onvalidation = current.s3db.gis_location_onvalidation
 
@@ -6458,10 +6525,11 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                                   parent=parent,
                                   inherited=True,
                                   )
-                if any(detail is not None for detail in (lat, lon, wkt)):
+                if any(detail is not None for detail in (lat, lon, wkt, radius)):
                     feature.lat = lat
                     feature.lon = lon
                     feature.wkt = wkt
+                    feature.radius = radius
                     feature.inherited = False
                 onvalidation = current.s3db.gis_location_onvalidation
 
@@ -6570,7 +6638,12 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         # Read the values
         lat = values.get("lat")
         lon = values.get("lon")
+        lat_min = values.get("lat_min") # Values brought in by onvalidation
+        lon_min = values.get("lon_min")
+        lat_max = values.get("lat_max")
+        lon_max = values.get("lon_max")
         wkt = values.get("wkt")
+        radius = values.get("radius")
         the_geom = values.get("the_geom")
         address = values.get("address")
         postcode = values.get("postcode")
@@ -6586,7 +6659,12 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
 
             feature = Storage(lat=lat,
                               lon=lon,
+                              lat_min=lat_min,
+                              lon_min=lon_min,
+                              lat_max=lat_max,
+                              lon_max=lon_max,
                               wkt=wkt,
+                              radius=radius,
                               inherited=inherited,
                               addr_street=address,
                               addr_postcode=postcode,
@@ -6609,14 +6687,19 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
             # specific is None for Lx locations
             if specific and specific == location_id:
                 # Update specific location
-                feature = Storage(addr_street=values.get("address"),
-                                  addr_postcode=values.get("postcode"),
-                                  parent=values.get("parent"),
+                feature = Storage(addr_street=address,
+                                  addr_postcode=postcode,
+                                  parent=parent,
                                   )
-                if any(detail is not None for detail in (lat, lon, wkt)):
+                if any(detail is not None for detail in (lat, lon, wkt, radius)):
                     feature.lat = lat
                     feature.lon = lon
+                    feature.lat_min = lat_min
+                    feature.lon_min = lon_min
+                    feature.lat_max = lat_max
+                    feature.lon_max = lon_max
                     feature.wkt = wkt
+                    feature.radius = radius
                     feature.inherited = False
 
                 # These could have been added during validate:
@@ -8061,21 +8144,34 @@ def s3_comments_widget(field, value, **attr):
 # =============================================================================
 def s3_richtext_widget(field, value):
     """
-        A larger-than-normal textarea to be used by the CMS Post Body field
+        A Rich Text field to be used by the CMS Post Body, etc
+        - uses CKEditor
+        - requires doc module loaded to be able to upload/browse Images
     """
 
     s3 = current.response.s3
     id = "%s_%s" % (field._tablename, field.name)
 
     # Load the scripts
+    sappend = s3.scripts.append
     ckeditor = URL(c="static", f="ckeditor", args="ckeditor.js")
-    s3.scripts.append(ckeditor)
+    sappend(ckeditor)
     adapter = URL(c="static", f="ckeditor", args=["adapters",
                                                   "jquery.js"])
-    s3.scripts.append(adapter)
+    sappend(adapter)
 
-    # Toolbar options: http://docs.cksource.com/CKEditor_3.x/Developers_Guide/Toolbar
-    js = '''var ck_config={toolbar:[['Format','Bold','Italic','-','NumberedList','BulletedList','-','Link','Unlink','-','Image','Table','-','PasteFromWord','-','Source','Maximize']],toolbarCanCollapse:false,removePlugins:'elementspath'}'''
+    table = current.s3db.table("doc_ckeditor")
+    if table:
+        # Doc module enabled: can upload/browse images
+        url = '''filebrowserUploadUrl:'/%(appname)s/doc/ck_upload',filebrowserBrowseUrl:'/%(appname)s/doc/ck_browse',''' \
+                % dict(appname=current.request.application)
+    else:
+        # Doc module not enabled: cannot upload/browse images
+        url = ""
+
+    # Toolbar options: http://docs.ckeditor.com/#!/guide/dev_toolbar
+    js = '''var ck_config={toolbar:[['Format','Bold','Italic','-','NumberedList','BulletedList','-','Link','Unlink','-','Image','Table','-','PasteFromWord','-','Source','Maximize']],toolbarCanCollapse:false,%sremovePlugins:'elementspath'}''' \
+            % url
     s3.js_global.append(js)
 
     js = '''$('#%s').ckeditor(ck_config)''' % id
@@ -8653,6 +8749,7 @@ class ICON(I):
             "responsibility": "icon-briefcase",
             "rss": "icon-rss",
             "sent": "icon-ok",
+            "settings": "icon-wrench",
             "site": "icon-home",
             "skype": "icon-skype",
             "star": "icon-star",
@@ -8722,6 +8819,7 @@ class ICON(I):
             #"responsibility": "fa-briefcase",
             #"rss": "fa-rss",
             #"sent": "fa-check",
+            #"settings": "fa-wrench",
             #"site": "fa-home",
             #"skype": "fa-skype",
             #"star": "fa-star",
@@ -8788,6 +8886,7 @@ class ICON(I):
             "responsibility": "fi-sheriff-badge",
             "rss": "fi-rss",
             "sent": "fi-check",
+            "settings": "fi-wrench",
             "site": "fi-home",
             "skype": "fi-social-skype",
             "star": "fi-star",

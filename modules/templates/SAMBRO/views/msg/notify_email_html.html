@@ -1,0 +1,5 @@
+{{if new is not None:}}<html>
+{{new_title=T("The following Alert has been added") if new == 1 else T("The following %(number)s Alerts have been added") % dict(number=new)}}
+{{=XML(new_title)}}
+{{=XML(new_records)}}
+</html>{{pass}}

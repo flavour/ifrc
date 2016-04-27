@@ -73,15 +73,16 @@ def project():
                 r.resource.add_component_filter("human_resource", query)
 
         if r.interactive:
-            htable = s3db.hrm_human_resource
-            htable.person_id.comment = DIV(_class="tooltip",
-                                           _title="%s|%s" % (T("Person"),
-                                                             T("Select the person assigned to this role for this project."),
-                                                             )
-                                           )
+            htable = s3db.table("hrm_human_resource")
+            if htable:
+                htable.person_id.comment = DIV(_class="tooltip",
+                                               _title="%s|%s" % (T("Person"),
+                                                                 T("Select the person assigned to this role for this project."),
+                                                                 )
+                                               )
 
-            if not component or component_name == "activity":
-                # Filter Themes/Activity Types based on Sector
+            if not component:
+                # Filter Themes based on Sector
                 if r.record:
                     table = s3db.project_sector_project
                     query = (table.project_id == r.id) & \
@@ -90,7 +91,6 @@ def project():
                     sector_ids = [row.sector_id for row in rows]
                     set_theme_requires(sector_ids)
 
-            if not component:
                 if r.method in ("create", "update"):
                     # Context from a Profile page?"
                     location_id = get_vars.get("(location)", None)
@@ -161,8 +161,14 @@ def project():
                     otable.role.requires = IS_EMPTY_OR(IS_IN_SET(allowed_roles))
 
             elif component_name == "activity":
-                # Filter Activity Type based on Sector
+                # Filter Activity Types/Themes based on Sector
+                table = s3db.project_sector_project
+                query = (table.project_id == r.id) & \
+                        (table.deleted == False)
+                rows = db(query).select(table.sector_id)
+                sector_ids = [row.sector_id for row in rows]
                 set_activity_type_requires("project_activity_activity_type", sector_ids)
+                set_theme_requires(sector_ids)
 
             elif component_name == "goal":
                 # Not working for embedded create form
@@ -358,7 +364,7 @@ def project():
                 #    field.readable = field.writable = True
                 #    field.requires = S3Represent(lookup="budget_budget", key="budget_entity_id")
                 #    field.requires = IS_ONE_OF()
-                #    
+                #
                 #    crud_form = S3SQLCustomForm("project_id",
                 #                                "human_resource_id",
                 #                                "status",
@@ -487,15 +493,16 @@ def set_theme_requires(sector_ids):
     theme_ids = [row.project_theme.id for row in rows
                  if not row.project_theme_sector.sector_id or
                     row.project_theme_sector.sector_id in sector_ids]
+
     table = s3db.project_theme_project
-    table.theme_id.requires = IS_EMPTY_OR(
-                                IS_ONE_OF(db, "project_theme.id",
-                                          s3base.S3Represent(lookup="project_theme"),
-                                          filterby="id",
-                                          filter_opts=theme_ids,
-                                          sort=True,
-                                          )
-                                )
+    field = table.theme_id
+    field.requires = IS_EMPTY_OR(IS_ONE_OF(db, "project_theme.id",
+                                           field.represent,
+                                           filterby="id",
+                                           filter_opts=theme_ids,
+                                           sort=True,
+                                           )
+                                 )
 
 # -----------------------------------------------------------------------------
 def set_activity_type_requires(tablename, sector_ids):

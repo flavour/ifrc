@@ -1,7 +1,7 @@
 /**
  * jQuery UI LocationSelector Widget
  *
- * @copyright 2015 (c) Sahana Software Foundation
+ * @copyright 2015-2016 (c) Sahana Software Foundation
  * @license MIT
  *
  * requires jQuery 1.9.1+
@@ -597,6 +597,9 @@
                 var lat = data.lat,
                     lon = data.lon,
                     wkt = data.wkt;
+                if ('radius' in data) {
+                    var radius = data.radius;
+                }
                 if (!address && !postcode && !lat && !lon && !wkt) {
                     // No specific data, so point directly to the Lowest-set Lx
                     data.id = parent;
@@ -1196,7 +1199,7 @@
                                 data.lon = centerPoint.lon;
 
                                 // Reverse Geocode the Point
-                                if (!data.address && this.useGeocoder) {
+                                if (!data.address && self.useGeocoder) {
                                     self._geocodeReverse();
                                 }
                             } else {
@@ -1205,8 +1208,35 @@
                                     'internalProjection': map.getProjectionObject(),
                                     'externalProjection': gis.proj4326
                                     };
-                                wkt = new OpenLayers.Format.WKT(out_options).write(feature);
+                                    
+                                data.radius = null;
+                                var linearRing = new OpenLayers.Geometry.LinearRing(feature.geometry.components[0].components);
+                                var polygon = new OpenLayers.Geometry.Polygon([linearRing]);
+                                if (polygon.getVertices().length == 1000) {
+                                    // Circle
+                                    var polygonFeature = new OpenLayers.Feature.Vector(polygon, null);
+                                    var polygonBounds = polygonFeature.geometry.getBounds();
+                                    var minX = polygonBounds.left;
+                                    var minY = polygonBounds.bottom;
+                                    var maxX = polygonBounds.right;
+                                    var maxY = polygonBounds.top;
 
+                                    // Calculate the center coordinates
+                                    var startX = (minX + maxX) / 2;
+                                    var startY = (minY + maxY) / 2;
+
+                                    // Calculate Radius
+                                    var startPoint = new OpenLayers.Geometry.Point(startX, startY);
+                                    var endPoint = new OpenLayers.Geometry.Point(maxX, startY);
+                                    var radius = new OpenLayers.Geometry.LineString([startPoint, endPoint]);
+                                    var lengthMeter = parseFloat(radius.getLength() * 0.001); // in kilometer
+                                    //var lengthMeter = parseFloat(radius.getGeodesicLength());
+
+                                    // Store radius
+                                    data.radius = lengthMeter;
+                                }
+
+                                wkt = new OpenLayers.Format.WKT(out_options).write(feature);
                                 // Store the data
                                 data.wkt = wkt;
                                 data.lat = null;
@@ -1218,6 +1248,11 @@
                             self._collectData();
                             // Remove all errors
                             self._removeErrors();
+
+                            if (fieldname.substring(0, 4) == 'sub_') {
+                                // Inline form needs marking that field has changed
+                                realInput.parent().find('div.map_wrapper').trigger('change');
+                            }
                         };
                         //control.events.register('featureadded', null, pointPlaced);
                     }

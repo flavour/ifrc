@@ -2,7 +2,7 @@
 
 """ Sahana Eden Event Model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -105,6 +105,7 @@ class S3EventModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, length=64,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("parent", "reference event_event_type", # This form of hierarchy may not work on all Databases
                            label = T("SubType of"),
@@ -174,7 +175,7 @@ class S3EventModel(S3Model):
                                         )
 
         configure(tablename,
-                  deduplicate = self.event_type_duplicate,
+                  deduplicate = S3Duplicate(),
                   hierarchy = hierarchy,
                   )
 
@@ -320,7 +321,12 @@ class S3EventModel(S3Model):
         configure(tablename,
                   context = {"location": "event_location.location_id",
                              },
-                  deduplicate = self.event_duplicate,
+                  deduplicate = S3Duplicate(primary = ("name",
+                                                       "start_date",
+                                                       ),
+                                            secondary = ("event_type_id",
+                                                         ),
+                                            ),
                   extra_fields = ["start_date"],
                   filter_widgets = filter_widgets,
                   list_fields = ["id",
@@ -405,7 +411,10 @@ class S3EventModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.event_event_tag_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("event_id",
+                                                       "tag",
+                                                       ),
+                                            ),
                   )
 
         # ---------------------------------------------------------------------
@@ -481,83 +490,6 @@ class S3EventModel(S3Model):
             for row in rows:
                 db(table.id == row.post_id).update(expired=True)
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_duplicate(item):
-        """
-            Deduplication of Events
-        """
-
-        table = item.table
-        data = item.data
-        query = None
-        # Mandatory checks: Name &/or Start Date
-        for field in ("name", "start_date"):
-            value = data.get(field, None)
-            if value:
-                q = (table[field] == value)
-                if query:
-                    query &= q
-                else:
-                    query = q
-
-        if not query:
-            return
-
-        # Optional check: Include Type
-        event_type_id = data.get("event_type_id", None)
-        if event_type_id:
-            query &= (table.event_type_id == event_type_id)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_type_duplicate(item):
-        """
-            Deduplication of Event Types
-        """
-
-        data = item.data
-        name = data.get("name", None)
-        if not name:
-            return
-
-        table = item.table
-        query = (table.name == name)
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_event_tag_deduplicate(item):
-        """
-           Deduplication of Event Tags
-        """
-
-        data = item.data
-        tag = data.get("tag", None)
-        event = data.get("event_id", None)
-        if not tag or not event:
-            return
-
-        table = item.table
-        query = (table.tag.lower() == tag.lower()) & \
-                (table.event_id == event)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
 # =============================================================================
 class S3IncidentModel(S3Model):
     """
@@ -598,6 +530,7 @@ class S3IncidentModel(S3Model):
                           Field("name", notnull=True, # Name could be a code
                                 length = 64,
                                 label = T("Name"),
+                                requires = IS_NOT_EMPTY(),
                                 ),
                           Field("exercise", "boolean",
                                 label = T("Exercise?"),
@@ -680,7 +613,9 @@ class S3IncidentModel(S3Model):
         self.configure(tablename,
                        create_next = create_next_url,
                        create_onaccept = self.incident_create_onaccept,
-                       deduplicate = self.incident_duplicate,
+                       deduplicate = S3Duplicate(primary = ("name",),
+                                                 secondary = ("event_id",),
+                                                 ),
                        list_fields = ["id",
                                       "name",
                                       "incident_type_id",
@@ -937,29 +872,6 @@ class S3IncidentModel(S3Model):
             for row in rows:
                 db(table.id == row.post_id).update(expired=True)
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def incident_duplicate(item):
-        """
-            Deduplication of Incidents
-        """
-
-        data = item.data
-        name = data.get("name", None)
-        event_id = data.get("event_id", None)
-
-        table = item.table
-        query = (table.name == name)
-        if event_id:
-            query = query & ((table.event_id == event_id) | \
-                             (table.event_id == None))
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
 # =============================================================================
 class S3IncidentReportModel(S3Model):
     """
@@ -991,6 +903,7 @@ class S3IncidentReportModel(S3Model):
                           s3_datetime(default="now"),
                           Field("name", notnull=True,
                                 label = T("Title"),
+                                requires = IS_NOT_EMPTY(),
                                 ),
                           self.event_incident_type_id(),
                           self.gis_location_id(),
@@ -1310,6 +1223,7 @@ class S3IncidentTypeModel(S3Model):
         self.define_table(tablename,
                           Field("name", notnull=True, length=64,
                                 label = T("Name"),
+                                requires = IS_NOT_EMPTY(),
                                 ),
                           Field("parent", "reference event_incident_type", # This form of hierarchy may not work on all Databases
                                 label = T("SubType of"),
@@ -1379,7 +1293,7 @@ class S3IncidentTypeModel(S3Model):
                                            comment = incident_type_comment,
                                            )
         self.configure(tablename,
-                       deduplicate = self.incident_type_duplicate,
+                       deduplicate = S3Duplicate(),
                        hierarchy = hierarchy,
                        )
 
@@ -1400,26 +1314,6 @@ class S3IncidentTypeModel(S3Model):
 
         return dict(event_incident_type_id = lambda **attr: dummy("incident_type_id"),
                     )
-
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def incident_type_duplicate(item):
-        """
-            Deduplication of Incident Types
-        """
-
-        data = item.data
-        name = data.get("name", None)
-        if not name:
-            return
-
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3IncidentTypeTagModel(S3Model):
@@ -1648,7 +1542,10 @@ class S3EventAssetModel(S3Model):
 
         self.configure(tablename,
                        crud_form = crud_form,
-                       deduplicate = self.event_asset_duplicate,
+                       deduplicate = S3Duplicate(primary = ("incident_id",
+                                                            "asset_id",
+                                                            ),
+                                                 ),
                        list_fields = [#"incident_id", # Not being dropped in component view
                                       "asset_id",
                                       "status",
@@ -1662,27 +1559,6 @@ class S3EventAssetModel(S3Model):
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_asset_duplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        incident_id = data.get("incident_id")
-        asset_id = data.get("asset_id")
-
-        if incident_id and asset_id:
-            table = item.table
-
-            query = (table.incident_id == incident_id) & \
-                    (table.asset_id == asset_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
-        return
 
 # =============================================================================
 class S3EventCMSModel(S3Model):
@@ -1814,7 +1690,10 @@ class S3EventHRModel(S3Model):
 
         self.configure(tablename,
                        crud_form = crud_form,
-                       deduplicate = self.event_human_resource_duplicate,
+                       deduplicate = S3Duplicate(primary = ("incident_id",
+                                                            "human_resource_id",
+                                                            ),
+                                                 ),
                        list_fields = [#"incident_id", # Not being dropped in component view
                                       "human_resource_id",
                                       "status",
@@ -1828,27 +1707,6 @@ class S3EventHRModel(S3Model):
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_human_resource_duplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        incident_id = data.get("incident_id")
-        human_resource_id = data.get("human_resource_id")
-
-        if incident_id and human_resource_id:
-            table = item.table
-
-            query = (table.incident_id == incident_id) & \
-                    (table.human_resource_id == human_resource_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
-        return
 
 # =============================================================================
 class S3EventTeamModel(S3Model):
@@ -2277,7 +2135,10 @@ class S3EventSiteModel(S3Model):
 
         self.configure(tablename,
                        crud_form = crud_form,
-                       deduplicate = self.event_site_duplicate,
+                       deduplicate = S3Duplicate(primary = ("incident_id",
+                                                            "site_id",
+                                                            ),
+                                                 ),
                        list_fields = [#"incident_id", # Not being dropped in component view
                                       "site_id",
                                       "status",
@@ -2291,27 +2152,6 @@ class S3EventSiteModel(S3Model):
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_site_duplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        incident_id = data.get("incident_id")
-        site_id = data.get("site_id")
-
-        if incident_id and site_id:
-            table = item.table
-
-            query = (table.incident_id == incident_id) & \
-                    (table.site_id == site_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
-        return
 
 # =============================================================================
 class S3EventSitRepModel(S3Model):
@@ -2356,32 +2196,14 @@ class S3EventSitRepModel(S3Model):
         #    msg_list_empty = T("No SitReps currently registered in this incident"))
 
         self.configure(tablename,
-                       deduplicate = self.event_sitrep_duplicate,
+                       deduplicate = S3Duplicate(primary = ("incident_id",
+                                                            "sitrep_id",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_sitrep_duplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        incident_id = data.get("incident_id")
-        sitrep_id = data.get("sitrep_id")
-
-        if incident_id and sitrep_id:
-            table = item.table
-
-            query = (table.incident_id == incident_id) & \
-                    (table.sitrep_id == sitrep_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
-        return
 
 # =============================================================================
 class S3EventTaskModel(S3Model):
@@ -2427,32 +2249,14 @@ class S3EventTaskModel(S3Model):
         #    msg_list_empty = T("No Tasks currently registered in this incident"))
 
         self.configure(tablename,
-                       deduplicate = self.event_task_duplicate,
+                       deduplicate = S3Duplicate(primary = ("incident_id",
+                                                            "task_id",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def event_task_duplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        incident_id = data.get("incident_id")
-        task_id = data.get("task_id")
-
-        if incident_id and task_id:
-            table = item.table
-
-            query = (table.incident_id == incident_id) & \
-                    (table.task_id == task_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
-        return
 
 # =============================================================================
 class S3EventShelterModel(S3Model):

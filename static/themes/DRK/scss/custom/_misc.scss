@@ -64,7 +64,71 @@
     }
     float: right;
 }
+.overdue {
+    color: red;
+}
+.invalid-case {
+    border: 1px solid red;
+    color: red;
+    font-size: 1.25rem;
+    font-weight: bold;
+    line-height: 1.6rem;
+    margin-bottom: 0.25rem;
+    padding: 0.2rem;
+    text-transform: uppercase;
+}
+.checkpoint-advise {
+    background: #fff0f0 none repeat scroll 0 0;
+    border: 2px solid red;
+    margin-bottom: 1rem;
+    padding: 0.6rem;
+    p {
+        white-space: pre-wrap;
+    }
+}
+.checkpoint-person {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+.event-top {
+    margin-top: 0.3rem!important;
+}
+.event-type-header {
+    text-align: right;
+}
+.event-type-setting {
+    color: black;
+    font-size: 1.1rem;
+    margin-left: 0.8rem;
+    vertical-align: text-top;
+}
+.event-type-toggle {
+    cursor: pointer;
+}
+.controls.has-flaginfo,
+.controls.has-details {
+    width: 100%;
+    table {
+        width: 100%;
+        border: none;
+    }
+}
+.payment-amount {
+    color: darkgreen;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+#payment-form {
+    #allowance_date__row,
+    #allowance_comments__row {
+        display: none;
+    }
+}
+.dashboard-action {
+    margin-bottom: 1.0rem;
+}
 
+// Overrides for right-to-left orientation
 body.rtl {
     .personal-menu {
         clear: left;
@@ -82,5 +146,7 @@ body.rtl {
         }
         float: left;
     }
+    .event-type-header {
+        text-align: left;
+    }
 }
-

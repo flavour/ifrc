@@ -1,7 +1,7 @@
 /**
  * jQuery UI Widget for S3GroupedItemsReport
  *
- * @copyright 2015 (c) Sahana Software Foundation
+ * @copyright 2015-2016 (c) Sahana Software Foundation
  * @license MIT
  *
  * requires jQuery 1.9.1+
@@ -468,6 +468,7 @@
 
             var update = {},
                 remove = {},
+                subquery,
                 i, len, k, v, q;
 
             // Check filters to update/remove
@@ -484,10 +485,11 @@
                         if (remove[k]) {
                             remove[k] = false;
                         }
+                        subquery = k + '=' + encodeURIComponent(v);
                         if (update[k]) {
-                            update[k].push(k + '=' + v);
+                            update[k].push(subquery);
                         } else {
-                            update[k] = [k + '=' + v];
+                            update[k] = [subquery];
                         }
                     }
                 }

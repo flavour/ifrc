@@ -1049,6 +1049,11 @@ Thank you"""
         deployment_settings = current.deployment_settings
         T = current.T
 
+        # Customise the resource
+        customise = deployment_settings.customise_resource("auth_user")
+        if customise:
+            customise(request, "auth_user")
+
         utable = self.settings.table_user
         utablename = utable._tablename
         passfield = settings.password_field
@@ -1378,8 +1383,14 @@ Thank you"""
 
         settings = self.settings
         messages = self.messages
+        request = current.request
 
-        key = current.request.args[-1]
+        # Customise the resource
+        customise = current.deployment_settings.customise_resource("auth_user")
+        if customise:
+            customise(request, "auth_user")
+
+        key = request.args[-1]
         utable = settings.table_user
         query = (utable.registration_key == key)
         user = current.db(query).select(limitby=(0, 1)).first()
@@ -2954,7 +2965,6 @@ $.filterOptionsS3({
                 # Customise the resource
                 customise = settings.customise_resource(htablename)
                 if customise:
-                    #import pydevd;pydevd.settrace()
                     request = S3Request("hrm", "human_resource",
                                         current.request,
                                         args=[str(hr_id)])
@@ -4139,6 +4149,24 @@ $.filterOptionsS3({
                                                           limitby=(0, 1),
                                                           ).first()
         return row.pe_id if row else None
+
+    # -------------------------------------------------------------------------
+    def s3_bulk_user_pe_id(self, user_ids):
+        """
+            Get the list of person pe_id for list of user_ids
+
+            @param user_id: list of user IDs
+        """
+
+        table = current.s3db.pr_person_user
+        if not isinstance(user_ids, list):
+            user_ids = [user_ids]
+        rows = current.db(table.user_id.belongs([user_id for user_id in user_ids])).\
+                                                            select(table.pe_id,
+                                                                   table.user_id)
+        if rows:
+            return {row.user_id: row.pe_id for row in rows}
+        return None
 
     # -------------------------------------------------------------------------
     def s3_logged_in_person(self):

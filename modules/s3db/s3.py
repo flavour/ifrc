@@ -2,7 +2,7 @@
 
 """ S3 Framework Tables
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -45,10 +45,10 @@ class S3HierarchyModel(S3Model):
         #
         tablename = "s3_hierarchy"
         self.define_table(tablename,
-                          Field("tablename",
-                                length=64),
+                          Field("tablename", length=64),
                           Field("dirty", "boolean",
-                                default=False),
+                                default = False,
+                                ),
                           Field("hierarchy", "json"),
                           *s3_timestamp())
 

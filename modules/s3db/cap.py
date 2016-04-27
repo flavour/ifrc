@@ -2,7 +2,7 @@
 
 """ Sahana Eden Common Alerting Protocol (CAP) Model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -74,6 +74,8 @@ class S3CAPModel(S3Model):
              "cap_area_location",
              "cap_area_tag",
              "cap_info_category_opts",
+             "cap_expiry_date",
+             "cap_sender_name",
              "cap_template_represent",
              )
 
@@ -87,6 +89,7 @@ class S3CAPModel(S3Model):
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
+        set_method = self.set_method
         UNKNOWN_OPT = current.messages.UNKNOWN_OPT
 
         # ---------------------------------------------------------------------
@@ -245,12 +248,15 @@ class S3CAPModel(S3Model):
             ("Draft", T("Draft - not actionable in its current form")),
         ])
         # CAP alert message type (msgType)
+        # NB AllClear is not in msgType as of CAP 1.2, but they target to move it to
+        # msgType instead of responseType in CAP 2.0
         cap_alert_msgType_code_opts = OrderedDict([
             ("Alert", T("Alert: Initial information requiring attention by targeted recipients")),
             ("Update", T("Update: Update and supercede earlier message(s)")),
             ("Cancel", T("Cancel: Cancel earlier message(s)")),
             ("Ack", T("Ack: Acknowledge receipt and acceptance of the message(s)")),
             ("Error", T("Error: Indicate rejection of the message(s)")),
+            ("AllClear", T("AllClear - The subject event no longer poses a threat")),
         ])
         # CAP alert scope
         cap_alert_scope_code_opts = OrderedDict([
@@ -280,6 +286,22 @@ class S3CAPModel(S3Model):
                            readable = False,
                            writable = True,
                            ),
+                     self.event_type_id(empty = False,
+                                        label = T("Event Type"),
+                                        comment = DIV(_class="tooltip",
+                                                      _title="%s|%s" % (T("Event Type of the alert message"),
+                                                                        T("Event Type is classification of event."))),
+                                        script = '''
+$.filterOptionsS3({
+    'trigger':'event_type_id',
+    'target':'template_id',
+    'lookupPrefix': 'cap',
+    'lookupResource':'template',
+    'fncRepresent': function(record,PrepResult){return record.template_title},
+    'optional': true,
+    'lookupURL': S3.Ap.concat('/cap/template.json?~.event_type_id=')
+})'''
+                     ),
                      Field("template_id", "reference cap_alert",
                            label = T("Template"),
                            ondelete = "RESTRICT",
@@ -306,19 +328,34 @@ class S3CAPModel(S3Model):
                            default = self.generate_identifier,
                            label = T("Identifier"),
                            requires = IS_MATCH('^[^,<&\s]+$',
-                                               error_message=current.T("Cannot be empty and Must not include spaces, commas, or restricted characters (< and &).")),
+                                               error_message=T("Cannot be empty and Must not include spaces, commas, or restricted characters (< and &).")),
                            # Dont Allow to change the identifier
                            readable = True,
                            writable = False,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("A unique identifier of the alert message"),
-                                                           T("A number or string uniquely identifying this message, assigned by the sender. Must notnclude spaces, commas or restricted characters (< and &)."))),
+                                                           T("A number or string uniquely identifying this message, assigned by the sender. Must not include spaces, commas or restricted characters (< and &)."))),
+                           ),
+                     # @ToDo: Switch to using event_incident_type_id
+                     Field("incidents", "list:string",
+                           label = T("Incidents"),
+                           represent = S3Represent(options = cap_incident_type_opts,
+                                                   multiple = True),
+                           requires = IS_EMPTY_OR(
+                                        IS_IN_SET(cap_incident_type_opts,
+                                                  multiple = True,
+                                                  sort = True,
+                                                  )),
+                           widget = S3MultiSelectWidget(selectedList = 10),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("A list of incident(s) referenced by the alert message"),
+                                                           T("Used to collate multiple messages referring to different aspects of the same incident. If multiple incident identifiers are referenced, they SHALL be separated by whitespace.  Incident names including whitespace SHALL be surrounded by double-quotes."))),
                            ),
                      Field("sender",
                            label = T("Sender"),
                            default = self.generate_sender,
                            requires = IS_MATCH('^[^,<&\s]+$',
-                                               error_message=current.T("Cannot be empty and Must not include spaces, commas, or restricted characters (< and &).")),
+                                               error_message=T("Cannot be empty and Must not include spaces, commas, or restricted characters (< and &).")),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("The identifier of the sender of the alert message"),
                                                            T("This is guaranteed by assigner to be unique globally; e.g., may be based on an Internet domain name. Must not include spaces, commas or restricted characters (< and &)."))),
@@ -376,14 +413,20 @@ class S3CAPModel(S3Model):
                            ),
                      Field("addresses", "list:string",
                            label = T("Recipients"),
-                           represent = self.list_string_represent,
+                           requires = IS_EMPTY_OR(
+                                        IS_IN_SET(get_cap_alert_addresses_opts(),
+                                                  multiple = True,
+                                                  sort = True,
+                                                  )
+                                        ),
+                           represent = S3Represent(lookup="pr_group",
+                                                   fields = ["name"],
+                                                   multiple = True,
+                                                   ),
+                           widget = S3MultiSelectWidget(),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("The group listing of intended recipients of the alert message"),
                                                            T("Required when scope is 'Private', optional when scope is 'Public' or 'Restricted'. Each recipient shall be identified by an identifier or an address."))),
-                           #@ToDo: provide a better way to add multiple addresses,
-                           #       do not ask the user to delimit it themselves
-                           #       this should eventually use the CAP contacts
-                           #widget = S3CAPAddressesWidget,
                            ),
                      Field("codes", "list:string",
                            default = settings.get_cap_codes(),
@@ -417,21 +460,6 @@ class S3CAPModel(S3Model):
                            #                           one_to_many=True,
                            #                           allow_create=False),
                            ),
-                     # @ToDo: Switch to using event_incident_type_id
-                     Field("incidents", "list:string",
-                           label = T("Incidents"),
-                           represent = S3Represent(options = cap_incident_type_opts,
-                                                   multiple = True),
-                           requires = IS_EMPTY_OR(
-                                        IS_IN_SET(cap_incident_type_opts,
-                                                  multiple = True,
-                                                  sort = True,
-                                                  )),
-                           widget = S3MultiSelectWidget(selectedList = 10),
-                           comment = DIV(_class="tooltip",
-                                         _title="%s|%s" % (T("A list of incident(s) referenced by the alert message"),
-                                                           T("Used to collate multiple messages referring to different aspects of the same incident. If multiple incident identifiers are referenced, they SHALL be separated by whitespace.  Incident names including whitespace SHALL be surrounded by double-quotes."))),
-                           ),
                      # approved_on field for recording when the alert was approved
                      s3_datetime("approved_on",
                                  readable = False,
@@ -440,6 +468,7 @@ class S3CAPModel(S3Model):
                      *s3_meta_fields())
 
         list_fields = [(T("Sent"), "sent"),
+                       (T("Expires"), "info.expires"),
                        "scope",
                        "info.priority",
                        "info.event_type_id",
@@ -485,17 +514,22 @@ class S3CAPModel(S3Model):
             S3OptionsFilter("info.category",
                             label = T("Category"),
                             options = cap_info_category_opts,
+                            hidden = True,
                             ),
             S3OptionsFilter("info.event_type_id",
+                            hidden = True,
                             ),
             S3OptionsFilter("info.priority",
+                            hidden = True,
                             ),
             S3LocationFilter("location.location_id",
                              label = T("Location(s)"),
                              # options = gis.get_countries().keys(),
+                             hidden = True,
                              ),
             S3OptionsFilter("info.language",
                             label = T("Language"),
+                            hidden = True,
                             ),
             ]
 
@@ -526,17 +560,17 @@ class S3CAPModel(S3Model):
                        cap_resource = "alert_id",
                        )
 
-        self.set_method("cap", "alert",
-                        method = "import_feed",
-                        action = CAPImportFeed())
+        set_method("cap", "alert",
+                   method = "import_feed",
+                   action = CAPImportFeed())
 
-        self.set_method("cap", "alert",
-                        method = "assign",
-                        action = self.cap_AssignArea())
-        
-        self.set_method("cap", "alert",
-                        method = "clone",
-                        action = self.cap_CloneAlert())
+        set_method("cap", "alert",
+                   method = "assign",
+                   action = self.cap_AssignArea())
+
+        set_method("cap", "alert",
+                   method = "clone",
+                   action = self.cap_CloneAlert())
 
         if crud_strings["cap_template"]:
             crud_strings[tablename] = crud_strings["cap_template"]
@@ -586,18 +620,18 @@ class S3CAPModel(S3Model):
         ])
 
         cap_info_urgency_opts = OrderedDict([
-            ("Immediate", T("Response action should be taken immediately")),
-            ("Expected", T("Response action should be taken soon (within next hour)")),
-            ("Future", T("Responsive action should be taken in the near future")),
-            ("Past", T("Responsive action is no longer required")),
+            ("Immediate", T("Immediate - Response action should be taken immediately")),
+            ("Expected", T("Expected - Response action should be taken soon (within next hour)")),
+            ("Future", T("Future - Responsive action should be taken in the near future")),
+            ("Past", T("Past - Responsive action is no longer required")),
             ("Unknown", T("Unknown")),
         ])
 
         cap_info_severity_opts = OrderedDict([
-            ("Extreme", T("Extraordinary threat to life or property")),
-            ("Severe", T("Significant threat to life or property")),
-            ("Moderate", T("Possible threat to life or property")),
-            ("Minor", T("Minimal to no known threat to life or property")),
+            ("Extreme", T("Extreme - Extraordinary threat to life or property")),
+            ("Severe", T("Severe - Significant threat to life or property")),
+            ("Moderate", T("Moderate - Possible threat to life or property")),
+            ("Minor", T("Minor - Minimal to no known threat to life or property")),
             ("Unknown", T("Severity unknown")),
         ])
 
@@ -605,7 +639,7 @@ class S3CAPModel(S3Model):
             ("Observed", T("Observed: determined to have occurred or to be ongoing")),
             ("Likely", T("Likely (p > ~50%)")),
             ("Possible", T("Possible but not likely (p <= ~50%)")),
-            ("Unlikely", T("Not expected to occur (p ~ 0)")),
+            ("Unlikely", T("Unlikely - Not expected to occur (p ~ 0)")),
             ("Unknown", T("Certainty unknown")),
         ])
 
@@ -627,17 +661,20 @@ class S3CAPModel(S3Model):
                                          _title="%s|%s" % (T("Event Code"),
                                                            T("Code (key) for the event like for eg. (2001, Typhoon), (2002, Flood)"))),
                            ),
-                     Field("name", notnull=True, length=64,
+                     Field("name", notnull=True, length=64, unique=True,
                            label = T("Name"),
+                           requires = [IS_NOT_ONE_OF(db, "%s.name" % tablename),
+                                       IS_MATCH('^[^"\']+$',
+                                               error_message=T('Name cannot be empty and Must not include " or (\')'))],
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Name"),
-                                                           T("The actual name for the warning priority, for eg. Typhoons in Philippines have five priority name (PSWS# 1, PSWS# 2, PSWS# 3, PSWS# 4 and PSWS# 5)"))),
+                                                           T("The actual name for the warning priority, for eg. Typhoons in Philippines have five priority names (PSWS# 1, PSWS# 2, PSWS# 3, PSWS# 4 and PSWS# 5)"))),
                            ),
                      self.event_type_id(empty=False,
                                         label = T("Event Type"),
                                         comment = DIV(_class="tooltip",
                                                       _title="%s|%s" % (T("Event Type"),
-                                                                        T("The Event to which this priority is targeted for. The 'Event Type' is the name of the standard Eden Event Type . These are available at /eden/event/event_type (The 'Event Type' should be exactly same as in /eden/event/event_type - case sensitive). For those events which are not in /eden/event/event_type but having the warning priority, you can create the event type using /eden/event/event_type/create and they will appear in this list."))),
+                                                                        T("The Event to which this priority is targeted for."))),
                            ),
                      Field("urgency",
                            label = T("Urgency"),
@@ -677,14 +714,16 @@ class S3CAPModel(S3Model):
                            ),
                      Field("color_code",
                            label = T("Color Code"),
-                           widget = S3ColorPickerWidget(),
+                           widget = S3ColorPickerWidget(options = {
+                                        "showPaletteOnly": False,
+                                    }),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("The color code for this priority"),
                                                            T("Pick from the color widget the color that is associated to this priority of the event. The color code is in hex format"))),
                            ),
                      *s3_meta_fields())
 
-        priority_represent = S3Represent(lookup=tablename)
+        priority_represent = S3Represent(lookup=tablename, translate=True)
 
         crud_strings[tablename] = Storage(
             label_create = T("Create Warning Priority"),
@@ -701,7 +740,9 @@ class S3CAPModel(S3Model):
             )
 
         configure(tablename,
-                  deduplicate = S3Duplicate(primary=("event_type_id", "name")),
+                  create_onaccept = self.cap_warning_priority_onaccept,
+                  # Not needed since unique=True
+                  #deduplicate = S3Duplicate(primary=("event_type_id", "name")),
                   )
 
         # ---------------------------------------------------------------------
@@ -762,6 +803,7 @@ class S3CAPModel(S3Model):
                                                            T("If not specified, will the same as the Event Type."))),
                            ),
                      self.event_type_id(empty = False,
+                                        readable = False,
                                         label = T("Event Type"),
                                         comment = DIV(_class="tooltip",
                                                       _title="%s|%s" % (T("Event Type of the alert message"),
@@ -878,13 +920,14 @@ class S3CAPModel(S3Model):
                      s3_datetime("expires",
                                  label = T("Expires at"),
                                  past = 0,
-                                 default = self.get_expirydate,
+                                 default = self.cap_expirydate,
                                  comment = DIV(_class="tooltip",
                                                _title="%s|%s" % (T("The expiry time of the information of the alert message"),
                                                                  T("If this item is not provided, each recipient is free to enforce its own policy as to when the message is no longer in effect."))),
                                  ),
                      Field("sender_name",
                            label = T("Sender's name"),
+                           default = self.cap_sendername,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("The text naming the originator of the alert message"),
                                                            T("The human-readable name of the agency or authority issuing this alert."))),
@@ -990,7 +1033,11 @@ class S3CAPModel(S3Model):
         define_table(tablename,
                      alert_id(writable = False,
                               ),
-                     info_id(),
+                     # Only used for imports
+                     # in CAP, resource are linked to alert
+                     info_id(readable = False,
+                             writable = False,
+                             ),
                      Field("is_template", "boolean",
                            default = False,
                            readable = False,
@@ -1003,20 +1050,41 @@ class S3CAPModel(S3Model):
                                          _title="%s|%s" % (T("The type and content of the resource file"),
                                                            T("The human-readable text describing the type and content, such as 'map' or 'photo', of the resource file."))),
                            ),
+                     # Using image field instead of doc_id because the CropWidget doesn't work in inline forms
+                     Field("image", "upload",
+                           label = T("Image"),
+                           length = current.MAX_FILENAME_LENGTH,
+                           represent = self.doc_image_represent,
+                           requires = IS_EMPTY_OR(IS_IMAGE(maxsize=(800, 800),
+                                                           error_message=\
+T("Upload an image file(bmp, gif, jpeg or png), max. 800x800 pixels!"))),
+                           uploadfolder = os.path.join(current.request.folder,
+                                                       "uploads", "images"),
+                           widget = S3ImageCropWidget((800, 800)),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Image"),
+                                                           T("Attach an image that provides extra information about the event"))),
+                           ),
                      Field("mime_type",
                            requires = IS_NOT_EMPTY(),
+                           readable = False,
+                           writable = False,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("The identifier of the MIME content type and sub-type describing the resource file"),
                                                            T("MIME content type and sub-type as described in [RFC 2046]. (As of this document, the current IANA registered MIME types are listed at http://www.iana.org/assignments/media-types/)"))),
                            ),
                      Field("size", "integer",
+                           label = T("Size in Bytes"),
+                           readable = False,
                            writable = False,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("The integer indicating the size of the resource file"),
                                                            T("Approximate size of the resource file in bytes."))),
                            ),
                      Field("uri",
-                           # needs a special validation
+                           label = T("Link to any resources"),
+                           requires = IS_EMPTY_OR(IS_URL()),
+                           readable = False,
                            writable = False,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("The identifier of the hyperlink for the resource file"),
@@ -1057,27 +1125,36 @@ class S3CAPModel(S3Model):
                                     "info_id",
                                     "is_template",
                                     "resource_desc",
-                                    S3SQLInlineComponent("image",
-                                                         label = T("Image"),
-                                                         fields = ["file",
-                                                                  ],
-                                                         comment = DIV(_class="tooltip",
-                                                                       _title="%s|%s" % (T("Image"),
-                                                                                         T("Attach an image that provides extra information about the event."))),
-                                                         ),
+                                    "image",
+                                    "mime_type",
+                                    "size",
+                                    # The CropWidget doesn't work in inline forms
+                                    #S3SQLInlineComponent("image",
+                                    #                     label = T("Image"),
+                                    #                     fields = [("", "file")],
+                                    #                     comment = DIV(_class="tooltip",
+                                    #                                   _title="%s|%s" % (T("Image"),
+                                    #                                                     T("Attach an image that provides extra information about the event."))),
+                                    #                     ),
                                     S3SQLInlineComponent("document",
                                                          label = T("Document"),
-                                                         fields = ["file",
-                                                                   ],
+                                                         fields = [("", "file")],
                                                          comment = DIV(_class="tooltip",
                                                                        _title="%s|%s" % (T("Document"),
                                                                                          T("Attach document that provides extra information about the event."))),
                                                          ),
                                     )
+
+        list_fields = ["resource_desc",
+                       "image",
+                       "document",
+                       ]
+
         configure(tablename,
-                  # Shouldn't be required if all UI actions go through alert controller & XSLT configured appropriately
-                  create_onaccept = update_alert_id(tablename),
                   crud_form = crud_form,
+                  list_fields = list_fields,
+                  onaccept = self.cap_resource_onaccept,
+                  onvalidation = self.cap_resource_onvalidation,
                   super_entity = "doc_entity",
                   )
 
@@ -1126,9 +1203,10 @@ class S3CAPModel(S3Model):
         tablename = "cap_area"
         define_table(tablename,
                      alert_id(),
-                     info_id(comment = DIV(_class="tooltip",
-                                           _title="%s|%s" % (T("Information segment for this Area segment"),
-                                                             T("To which Information segment is this Area segment related. Note an Information segment can have multiple Area segments."))),
+                     # Only used for imports
+                     # in CAP, area are linked to alert
+                     info_id(readable = False,
+                             writable = False,
                              ),
                      # From which template area is the area assigned from
                      # Used for internationalisation
@@ -1214,10 +1292,8 @@ class S3CAPModel(S3Model):
                                     "info_id",
                                     "is_template",
                                     "name",
-                                    "info_id",
                                     S3SQLInlineComponent("location",
                                                          name = "location",
-                                                         label = "",
                                                          multiple = False,
                                                          fields = [("", "location_id")],
                                                          comment = DIV(_class="tooltip",
@@ -1226,7 +1302,6 @@ class S3CAPModel(S3Model):
                                                          ),
                                     S3SQLInlineComponent("tag",
                                                          name = "tag",
-                                                         label = "",
                                                          fields = ["tag",
                                                                    "value",
                                                                    ],
@@ -1243,10 +1318,13 @@ class S3CAPModel(S3Model):
         area_represent = cap_AreaRepresent(show_link=True)
 
         configure(tablename,
+                  context = {"location": "location.location_id",
+                             },
                   #create_next = URL(f="area", args=["[id]", "location"]),
-                  create_onaccept = update_alert_id(tablename),
-                  onvalidation = self.cap_area_onvalidation,
                   crud_form = crud_form,
+                  deduplicate = self.cap_area_duplicate,
+                  onaccept = self.cap_area_onaccept,
+                  onvalidation = self.cap_area_onvalidation,
                   )
 
         # Components
@@ -1285,13 +1363,14 @@ class S3CAPModel(S3Model):
                      self.gis_location_id(
                         widget = S3LocationSelector(points = False,
                                                     polygons = True,
+                                                    circles = True,
                                                     show_map = True,
                                                     catalog_layers = True,
                                                     show_address = False,
                                                     show_postcode = False,
                                                     ),
                         ),
-                     )
+                     *s3_meta_fields())
 
         # CRUD Strings
         crud_strings[tablename] = Storage(
@@ -1308,8 +1387,8 @@ class S3CAPModel(S3Model):
             msg_list_empty = T("No locations currently defined for this alert"))
 
         configure(tablename,
-                  # Shouldn't be required if all UI actions go through alert controller & XSLT configured appropriately
-                  create_onaccept = update_alert_id(tablename),
+                  deduplicate = S3Duplicate(primary=("area_id", "location_id")),
+                  onaccept = self.cap_area_location_onaccept
                   )
 
         # ---------------------------------------------------------------------
@@ -1353,8 +1432,8 @@ class S3CAPModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  create_onaccept = update_alert_id(tablename),
-        #         deduplicate = self.cap_area_tag_deduplicate,
+                  onaccept = self.cap_area_tag_onaccept,
+                  deduplicate = S3Duplicate(primary=("area_id", "tag", "value")),
                   )
 
         # ---------------------------------------------------------------------
@@ -1366,6 +1445,8 @@ class S3CAPModel(S3Model):
                     cap_area_represent = area_represent,
                     cap_info_represent = info_represent,
                     cap_info_category_opts = cap_info_category_opts,
+                    cap_expiry_date = self.cap_expirydate,
+                    cap_sender_name = self.cap_sendername,
                     cap_template_represent = self.cap_template_represent,
                     )
 
@@ -1421,7 +1502,7 @@ class S3CAPModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def get_expirydate():
+    def cap_expirydate():
         """
             Default Expiry date based on the expire offset
         """
@@ -1429,6 +1510,27 @@ class S3CAPModel(S3Model):
         return current.request.utcnow + \
                datetime.timedelta(days = current.deployment_settings.\
                                   get_cap_expire_offset())
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_sendername():
+        """
+            Default Sender name for the alert
+            Sendername is the name of the organisation if user is associated
+            else None
+        """
+
+        db = current.db
+        utable = db.auth_user
+        otable = current.s3db.org_organisation
+        query = (utable.id == current.auth.user.id) & \
+                (utable.organisation_id == otable.id) & \
+                (otable.deleted != True)
+        row = db(query).select(otable.name,
+                               limitby=(0, 1)).first()
+        if row:
+            return row.name
+        return None
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1492,10 +1594,20 @@ class S3CAPModel(S3Model):
                 multi-field level
         """
 
-        form_vars = form.vars
-        if form_vars.get("scope") == "Private" and not form_vars.get("addresses"):
-            form.errors["addresses"] = \
-                current.T("'Recipients' field mandatory in case of 'Private' scope")
+        form_vars_get = form.vars.get
+        if not form_vars_get("is_template"):
+            # For non templates
+            if form_vars_get("scope") == "Private" and not form_vars_get("addresses"):
+                form.errors["addresses"] = \
+                    current.T("'Recipients' field mandatory in case of 'Private' scope")
+    
+            if form_vars_get("scope") == "Restricted" and not form_vars_get("restriction"):
+                form.errors["restriction"] = \
+                    current.T("'Restriction' field mandatory in case of 'Restricted' scope")
+    
+            if form_vars_get("addresses") and not form_vars_get("scope"):
+                form.errors["scope"] = \
+                    current.T("'Scope' field mandatory in case using 'Recipients' field")
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1545,6 +1657,28 @@ class S3CAPModel(S3Model):
                 fstring = json_formatter(parameter)
                 set_.update(parameter = fstring)
 
+            web = "%s%s" % (current.deployment_settings.get_base_public_url(),
+                            URL(c="cap", f="alert", args=[alert_id]))
+            form_vars_get = form_vars.get
+            idata = {"priority"       : form_vars_get("priority", None),
+                     "urgency"        : form_vars_get("urgency", None),
+                     "severity"       : form_vars_get("severity", None),
+                     "certainty"      : form_vars_get("certainty", None),
+                     "effective"      : form_vars_get("effective", None),
+                     "onset"          : form_vars_get("onset", None),
+                     "expires"        : form_vars_get("expires", None),
+                     "web"            : web,
+                     "event_type_id"  : form_vars_get("event_type_id", None),
+                     }
+            query = (itable.deleted != True) & \
+                    (itable.alert_id == alert_id)
+            rows = db(query).select(itable.id)
+            for row in rows:
+                if int(row.id) == int(info_id):
+                    row.update_record(web=web)
+                else:
+                    row.update_record(**idata)
+
     # -------------------------------------------------------------------------
     @staticmethod
     def cap_info_onvalidation(form):
@@ -1579,6 +1713,8 @@ class S3CAPModel(S3Model):
         alert_id = record["id"]
 
         # Update approved_on at the time the alert is approved
+        # @ToDo: update approved_on when approval is not required
+        # i.e. we allow editors to be self approver
         if alert_id:
             db = current.db
             approved_on = record["approved_on"]
@@ -1600,15 +1736,241 @@ class S3CAPModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def cap_area_duplicate(item):
+
+        data = item.data
+        name = data.get("name")
+
+        if name is not None:
+            table = item.table
+            event_type_id = data.get("event_type_id", None)
+            if event_type_id is not None:
+                # This is a template
+                query = (table.name == name) & \
+                        (table.event_type_id == event_type_id)
+            else:
+                alert_id = data.get("alert_id", None)
+                info_id = data.get("info_id", None)
+                query_ = (table.name == name)
+                if alert_id is not None:
+                    # Real Alert, not template
+                    query = query_ & (table.alert_id == alert_id)
+                elif info_id is not None:
+                    # CAP XML Import
+                    query = query_ & (table.info_id == info_id)
+                else:
+                    # Nothing we can use
+                    return
+
+                duplicate = current.db(query).select(table.id,
+                                                     limitby=(0, 1)).first()                
+                if duplicate:
+                    item.id = duplicate.id
+                    item.method = item.METHOD.UPDATE
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_area_onaccept(form):
+        """
+            Link alert_id for CAP XML import 
+        """
+
+        form_vars = form.vars
+
+        if form_vars.get("event_type_id"):
+            # Predefined Area
+            return
+
+        info_id = form_vars.get("info_id", None)
+        if info_id:
+            # CAP XML
+            # Add the alert_id to this component of component
+            # to make it a direct component for UI purposes
+            db = current.db
+            itable = db.cap_info
+            item = db(itable.id == info_id).select(itable.alert_id,
+                                                   limitby=(0, 1)).first()
+            alert_id = item.alert_id
+
+            if alert_id:
+                db(db.cap_area.id == form_vars.id).update(alert_id = alert_id)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def cap_area_onvalidation(form):
-        """
-            Custom Form Validation
-        """
 
         form_vars = form.vars
         if form_vars.get("ceiling") and not form_vars.get("altitude"):
             form.errors["altitude"] = \
-            current.T("'Altitude' field is mandatory if using 'Ceiling' field.")
+                current.T("'Altitude' field is mandatory if using 'Ceiling' field.")
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_area_location_onaccept(form):
+        """
+            Link alert_id for non-template area 
+        """
+
+        form_vars = form.vars
+
+        area_id = form_vars.get("area_id", None)
+        if not area_id:
+            # comes from assign method
+            return
+
+        db = current.db
+        atable = db.cap_area
+
+        row = db(atable.id == area_id).select(atable.alert_id,
+                                              limitby=(0, 1)).first()
+        alert_id = row.alert_id
+        if alert_id:
+            # This is not template area
+            # NB Template area are not linked with alert_id
+            db(db.cap_area_location.id == form_vars.id).update(alert_id = alert_id)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_area_tag_onaccept(form):
+        """
+            Link location if area_tag has SAME code
+            Link alert_id for non-template area 
+        """
+
+        form_vars = form.vars
+
+        area_id = form_vars.get("area_id", None)
+        if not area_id:
+            # comes from assign method
+            return
+
+        db = current.db
+        atable = db.cap_area
+        same_code = current.deployment_settings.get_cap_same_code()
+        tag = form_vars.get("tag")
+
+        arow = db(atable.id == area_id).select(atable.alert_id,
+                                               limitby=(0, 1)).first()
+        alert_id = arow.alert_id
+
+        if tag and same_code:
+            if tag == "SAME":
+                # SAME tag referes to some location_id in CAP
+                ttable = current.s3db.gis_location_tag
+
+                tquery = (ttable.tag == same_code) & \
+                         (ttable.value == form_vars.get("value")) & \
+                         (ttable.deleted != True)
+                trow = db(tquery).select(ttable.location_id,
+                                         limitby=(0, 1)).first()
+                if trow:
+                    # Match
+                    ltable = db.cap_area_location
+                    ldata = {"area_id": area_id,
+                             "alert_id": alert_id or None,
+                             "location_id": trow.location_id,
+                             }
+                    lid = ltable.insert(**ldata)
+                    current.auth.s3_set_record_owner(ltable, lid)
+                    # Uncomment this when required
+                    #ldata["id"] = lid
+                    #s3db.onaccept(ltable, ldata)
+
+        if alert_id:
+            # This is not template area
+            db(db.cap_area_tag.id == form_vars.id).update(alert_id = alert_id)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_resource_onaccept(form):
+        """
+            Link alert_id for CAP XML import 
+        """
+
+        form_vars = form.vars
+
+        info_id = form_vars.get("info_id", None)
+        if info_id:
+            # CAP XML
+            # Add the alert_id to this component of component
+            # to make it a direct component for UI purposes
+            db = current.db
+            itable = db.cap_info
+            item = db(itable.id == info_id).select(itable.alert_id,
+                                                   limitby=(0, 1)).first()
+            alert_id = item.alert_id
+
+            if alert_id:
+                db(db.cap_resource.id == form_vars.id).update(alert_id = alert_id)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_resource_onvalidation(form):
+        """ 
+            For Image Upload
+             NB not using document_onvalidation here because we are extracting
+             other values from the file like size and mime type 
+        """
+        
+        form_vars = form.vars
+        image = form_vars.image
+        if image is None:
+            encoded_file = form_vars.get("imagecrop-data", None)
+            if encoded_file:
+                import base64
+                import uuid
+                import cStringIO
+                metadata, encoded_file = encoded_file.split(",")
+                filename, datatype, enctype = metadata.split(";")
+                f = Storage()
+                f.filename = uuid.uuid4().hex + filename
+                f.file = cStringIO.StringIO(base64.decodestring(encoded_file))
+                form_vars.image = image = f
+                stream = image.file
+                stream.seek(0, os.SEEK_END)
+                file_size = stream.tell()
+                stream.seek(0)
+                
+                # extract mime_type
+                if image is not None:        
+                    data, mime_type = datatype.split(":")
+                    form_vars.size = file_size
+                    form_vars.mime_type = mime_type
+                
+        elif isinstance(image, str):
+            # Image = String => Update not a create, so file not in form
+            return
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cap_warning_priority_onaccept(form):
+
+        form_vars = form.vars
+        color_code = form_vars.color_code
+        if color_code:
+            db = current.db
+            s3db = current.s3db
+            stable = s3db.gis_style
+            ftable = s3db.gis_layer_feature
+            query = (ftable.controller == "cap") & \
+                    (ftable.layer_id == stable.layer_id)
+            rows = db(query).select(stable.id, stable.style)
+            if rows:
+                name = form_vars.name
+                for row in rows:
+                    style = row.style
+                    if style:
+                        if isinstance(style, basestring):
+                            style = json.loads(style)
+                        sdata = dict(prop = "priority",
+                                     fill = color_code,
+                                     fillOpacity = 0.4,
+                                     cat = name,
+                                     )
+                        if sdata not in style:
+                            style.append(sdata)
+                            style = IS_JSONS3()(json.dumps(style))[0]
+                            db(stable.id == row.id).update(style = style)
 
 # =============================================================================
 class S3CAPAreaNameModel(S3Model):
@@ -1673,6 +2035,16 @@ def json_formatter(fstring):
     return fstring
 
 # =============================================================================
+def get_cap_alert_addresses_opts():
+    """ Get the pr_group.id required for cap_alert.addresses field"""
+
+    T = current.T
+    gtable = current.s3db.pr_group
+    rows = current.db(gtable.deleted != True).select(gtable.id,
+                                                     gtable.name)
+    return [(row.id, s3_str(T(row.name))) for row in rows]
+
+# =============================================================================
 def cap_alert_is_template(alert_id):
     """
         Tell whether an alert entry is a template
@@ -1697,20 +2069,33 @@ def cap_rheader(r):
         record = r.record
         if record:
             T = current.T
+            db = current.db
             s3db = current.s3db
             tablename = r.tablename
             if tablename == "cap_alert":
                 alert_id = record.id
                 itable = s3db.cap_info
-                row = current.db(itable.alert_id == alert_id).\
-                                        select(itable.id,
-                                               limitby=(0, 1)).first()
+                row = db(itable.alert_id == alert_id).select(itable.id,
+                                                             limitby=(0, 1)).first()
                 if record.is_template:
-                    if not (row and row.id):
+                    if not row:
                         error = DIV(T("An alert needs to contain at least one info item."),
                                     _class="error")
                     else:
                         error = ""
+
+                    if r.component_name == "info" and r.component_id:
+                        # Display "Copy" Button to copy record from the opened info
+                        copy_btn = A(T("Copy Info Segment"),
+                                     _href = URL(f = "template",
+                                                 args = [r.id, "info", "create",],
+                                                 vars = {"from_record": r.component_id,
+                                                         },
+                                                 ),
+                                     _class = "action-btn"
+                                     )
+                    else:
+                        copy_btn = None
 
                     tabs = [(T("Alert Details"), None),
                             (T("Information"), "info"),
@@ -1729,10 +2114,12 @@ def cap_rheader(r):
                                   rheader_tabs,
                                   error
                                   )
+                    if copy_btn is not None:
+                        rheader.insert(1, TR(TD(copy_btn)))
                 else:
                     action_btn = None
                     msg_type_buttons = None
-                    if not (row and row.id):
+                    if not row:
                         error = DIV(T("You need to create at least one alert information item in order to be able to broadcast this alert!"),
                                     _class="error")
                         export_btn = ""
@@ -1743,73 +2130,77 @@ def cap_rheader(r):
                                        _target="_blank",
                                        )
 
+                        has_permission = current.auth.s3_has_permission
                         # Display 'Submit for Approval', 'Publish Alert' or
                         # 'Review Alert' based on permission and deployment settings
                         if not current.request.get_vars.get("_next") and \
                            current.deployment_settings.get_cap_authorisation() and \
                            record.approved_by is None:
-                            db = current.db
                             auth = current.auth
-                            has_permission = auth.s3_has_permission
-
-                            # For Alert Editor
-                            if has_permission("update", "cap_alert",
-                                              record_id=alert_id):
-                                # Get the user ids for the role alert_approver
-                                agtable = db.auth_group
-                                group_rows = db(agtable.role == "Alert Approver").\
-                                               select(agtable.id)
-                                if group_rows:
-                                    group_members = auth.s3_group_members
-                                    user_pe_id = auth.s3_user_pe_id
-                                    for group_row in group_rows:
-                                        group_id = group_row.id
-                                        user_ids = group_members(group_id) # List of user_ids
-                                        pe_ids = [] # List of pe_ids
-                                        pe_append = pe_ids.append
-                                        for user_id in user_ids:
-                                            pe_append(user_pe_id(int(user_id)))
-
-                                    action_btn = A(T("Submit for Approval"),
-                                                   _href = URL(f = "compose",
-                                                               vars = {"cap_alert.id": record.id,
-                                                                       "pe_ids": pe_ids,
-                                                                       },
-                                                               ),
-                                                   _class = "action-btn confirm-btn"
-                                                   )
-                                    current.response.s3.jquery_ready.append(
+                            # Show these buttons only if there is atleast one area segment
+                            area_table = s3db.cap_area
+                            area_row = db(area_table.alert_id == alert_id).\
+                                                select(area_table.id,
+                                                       limitby=(0, 1)).first()
+                            if area_row and has_permission("update", "cap_alert",
+                                                           record_id=record.id):
+                                action_btn = A(T("Submit for Approval"),
+                                               _href = URL(f = "notify_approver",
+                                                           vars = {"cap_alert.id": record.id,
+                                                                   },
+                                                           ),
+                                               _class = "action-btn confirm-btn"
+                                               )
+                                current.response.s3.jquery_ready.append(
 '''S3.confirmClick('.confirm-btn','%s')''' % T("Do you want to submit the alert for approval?"))
 
-                            # For Alert Approver
-                            if has_permission("approve", "cap_alert"):
-                                action_btn = A(T("Review Alert"),
-                                               _href = URL(args = [record.id,
-                                                                   "review"
-                                                                   ],
-                                                           ),
-                                               _class = "action-btn",
-                                               )
+                                # For Alert Approver
+                                if has_permission("approve", "cap_alert"):
+                                    action_btn = A(T("Review Alert"),
+                                                   _href = URL(args = [record.id,
+                                                                       "review"
+                                                                       ],
+                                                               ),
+                                                   _class = "action-btn",
+                                                   )
 
-                        if record.approved_by is not None:                            
-                            if current.auth.s3_has_permission("create", "cap_alert"):
-                                msg_type_buttons = TAG[""](
-                                        TR(TD(A(T("Update Alert"),
-                                                _id = record.id,
-                                                _data = "Update",
+                        if record.approved_by is not None:
+                            if has_permission("create", "cap_alert"):
+                                relay_alert = A(T("Relay Alert"),
+                                                _data = "%s/%s" % (record.msg_type, r.id),
                                                 _class = "action-btn cap-clone-update",
-                                                ))),
-                                        TR(TD(A(T("Cancel Alert"),
-                                                _id = record.id,
-                                                _data = "Cancel",
-                                                _class = "action-btn cap-clone-update",
-                                                ))),
-                                        TR(TD(A(T("Error Alert"),
-                                                _id = record.id,
-                                                _data = "Error",
-                                                _class = "action-btn cap-clone-update",
-                                                ))),
-                                        )
+                                                )
+                                if record.created_by:
+                                    utable = db.auth_user
+                                    row = db(utable.id == record.created_by).select(\
+                                                            utable.organisation_id,
+                                                            limitby=(0, 1)).first()
+                                    row_ = db(utable.id == current.auth.user.id).select(\
+                                                            utable.organisation_id,
+                                                            limitby=(0, 1)).first()
+                                    if row.organisation_id == row_.organisation_id:
+                                        msg_type_buttons = TAG[""](
+                                                TR(TD(A(T("Update Alert"),
+                                                        _data = "Update/%s" % r.id,
+                                                        _class = "action-btn cap-clone-update",
+                                                        ))),
+                                                TR(TD(A(T("Cancel Alert"),
+                                                        _data = "Cancel/%s" % r.id,
+                                                        _class = "action-btn cap-clone-update",
+                                                        ))),
+                                                TR(TD(A(T("Error Alert"),
+                                                        _data = "Error/%s" % r.id,
+                                                        _class = "action-btn cap-clone-update",
+                                                        ))),
+                                                TR(TD(A(T("All Clear"),
+                                                        _data = "AllClear/%s" % r.id,
+                                                        _class = "action-btn cap-clone-update",
+                                                        ))),
+                                                )
+                                    else:
+                                        msg_type_buttons = relay_alert
+                                else:
+                                    msg_type_buttons = relay_alert
 
                     tabs = [(T("Alert Details"), None),
                             (T("Information"), "info"),
@@ -1819,32 +2210,20 @@ def cap_rheader(r):
 
                     if r.representation == "html" and \
                        current.auth.s3_has_permission("update", "cap_alert",
-                                                      record_id=alert_id):
-                        # Check to see if 'Predefined Areas' tab need to be added
-                        artable = s3db.cap_area
-                        query = (artable.is_template == True) & \
-                                (artable.deleted == False)
-
-                        template_area_rows = current.db(query)._select(artable.id,
-                                                                       limitby=(0, 1))
-                        if template_area_rows:
-                            tabs.insert(2, (T("Predefined Areas"), "assign"))
-
-                        # Display "Copy" Button to copy record from the opened info
-                        if r.component_name == "info" and \
-                           r.component_id:
-                            copy_btn = A(T("Copy"),
-                                         _href = URL(f = "alert",
-                                                     args = [r.id, "info", "create",],
-                                                     vars = {"from_record": r.component_id,
-                                                             },
-                                                     ),
-                                         _class = "action-btn"
-                                         )
-                        else:
-                            copy_btn = None
-                    else:
-                        copy_btn = None
+                                                      record_id=alert_id) and \
+                       r.record.approved_by is None:
+                        # Show predefined areas tab if we have some defined for this event_type
+                        row_ = db(itable.alert_id == alert_id).select(itable.event_type_id,
+                                                                      limitby=(0, 1)).first()
+                        if row_ is not None:
+                            artable = s3db.cap_area
+                            query = (artable.deleted != True) & \
+                                    (artable.is_template == True) & \
+                                    (artable.event_type_id == row_.event_type_id)
+                            template_area_row = db(query).select(artable.id,
+                                                                 limitby=(0, 1)).first()
+                            if template_area_row:
+                                tabs.insert(2, (T("Predefined Areas"), "assign"))
 
                     rheader_tabs = s3_rheader_tabs(r, tabs)
 
@@ -1858,8 +2237,6 @@ def cap_rheader(r):
                                   rheader_tabs,
                                   error
                                   )
-                    if copy_btn:
-                        rheader.insert(1, TR(TD(copy_btn)))
 
                     if action_btn:
                         rheader.insert(1, TR(TD(action_btn)))
@@ -1876,17 +2253,7 @@ def cap_rheader(r):
                     tabs.insert(1, (T("Local Names"), "name"))
 
                 rheader_tabs = s3_rheader_tabs(r, tabs)
-                rheader = DIV(TABLE(TR(TH("%s: " % T("Alert")),
-                                       TD(A(s3db.cap_alert_represent(record.alert_id),
-                                            _href=URL(c="cap", f="alert",
-                                                      args=[record.alert_id, "update"])))
-                                       ),
-                                    TR(TH("%s: " % T("Information")),
-                                       TD(A(s3db.cap_info_represent(record.info_id),
-                                            _href=URL(c="cap", f="info",
-                                                      args=[record.info_id, "update"]))),
-                                       ),
-                                    TR(TH("%s: " % T("Area")),
+                rheader = DIV(TABLE(TR(TH("%s: " % T("Area")),
                                        TD(A(s3db.cap_area_represent(record.id, record),
                                             _href=URL(c="cap", f="area",
                                                       args=[record.id, "update"]))),
@@ -1939,89 +2306,6 @@ def cap_rheader(r):
                                   )
 
     return rheader
-
-# =============================================================================
-def update_alert_id(tablename):
-    """ On-accept for area and resource records """
-
-    def func(form):
-        if "vars" in form:
-            form_vars = form.vars
-        elif "id" in form:
-            form_vars = form
-        elif hasattr(form, "vars"):
-            form_vars = form.vars
-        else:
-            form_vars = form
-
-        if form_vars.get("alert_id", None):
-            # Nothing to do
-            return
-
-        # Look up from the info/area
-        _id = form_vars.id
-        if not _id:
-            return
-
-        db = current.db
-        table = db[tablename]
-
-        if tablename == "cap_area_location" or tablename == "cap_area_tag":
-            area_id = form_vars.get("area_id", None)
-            if not area_id:
-                # Get the full record
-                item = db(table.id == _id).select(table.alert_id,
-                                                  table.area_id,
-                                                  limitby=(0, 1)).first()
-                try:
-                    alert_id = item.alert_id
-                    area_id = item.area_id
-                except:
-                    # Nothing we can do
-                    return
-                if alert_id:
-                    # Nothing to do
-                    return
-
-            atable = db.cap_area
-            area = db(atable.id == area_id).select(atable.alert_id,
-                                                   limitby=(0, 1)).first()
-            try:
-                alert_id = area.alert_id
-            except:
-                # Nothing we can do
-                return
-        else:
-            # cap_area or cap_resource
-            info_id = form_vars.get("info_id", None)
-            if not info_id:
-                # Get the full record
-                item = db(table.id == _id).select(table.alert_id,
-                                                  table.info_id,
-                                                  limitby=(0, 1)).first()
-                try:
-                    alert_id = item.alert_id
-                    info_id = item.info_id
-                except:
-                    # Nothing we can do
-                    return
-                if alert_id:
-                    # Nothing to do
-                    return
-
-            itable = db.cap_info
-            info = db(itable.id == info_id).select(itable.alert_id,
-                                                   limitby=(0, 1)).first()
-            try:
-                alert_id = info.alert_id
-            except:
-                # Nothing we can do
-                return
-
-        if alert_id:
-            db(table.id == _id).update(alert_id = alert_id)
-
-    return func
 
 # =============================================================================
 def cap_gis_location_xml_post_parse(element, record):
@@ -2314,7 +2598,7 @@ def cap_alert_list_layout(list_id, item_id, resource, rfields, record):
     #raw = record._row
     # @ToDo: handle the case where we have multiple info segments &/or areas
     headline = record["cap_info.headline"]
-    location = record["cap_area.name"]
+    location = s3_str(record["cap_area.name"])
     priority = record["cap_info.priority"]
     status = record["cap_alert.status"]
     scope = record["cap_alert.scope"]
@@ -2383,14 +2667,10 @@ def cap_alert_list_layout(list_id, item_id, resource, rfields, record):
     else:
         if priority == current.messages["NONE"]:
             priority = T("Unknown")
-        certainty = record["cap_info.certainty"]
-        severity = record["cap_info.severity"]
-        urgency = record["cap_info.urgency"]
-        msg_type = record["cap_alert.msg_type"]
         sender_name = record["cap_info.sender_name"]
         sent = record["cap_alert.sent"]
 
-        headline = "%s; %s, %s" % (msg_type, headline, location)
+        headline = "%s" % (headline)
 
         sub_heading = "%s %s" % (priority, event)
 
@@ -2402,17 +2682,17 @@ def cap_alert_list_layout(list_id, item_id, resource, rfields, record):
         if priority_row:
             sub_headline["_style"] = "color: #%s" % (priority_row.color_code)
 
-        para = T("It is %(certainty)s and %(urgency)s with %(severity)s threat to life and property.") \
-                % dict(certainty=certainty, urgency=urgency, severity=severity)
+        para = T("%(status)s alert for %(area_description)s.") \
+                % dict(status=status, area_description=location)
 
         issuer = "%s: %s" % (T("Issued by"), sender_name)
         issue_date = "%s: %s" % (T("Issued on"), sent)
 
         item = DIV(headline,
                    BR(),
-                   sub_headline,
-                   BR(),
                    para,
+                   BR(),
+                   sub_headline,
                    BR(),
                    issuer,
                    BR(),
@@ -2444,6 +2724,8 @@ def add_area_from_template(area_id, alert_id):
 
     db = current.db
     s3db = current.s3db
+    set_record_owner = current.auth.s3_set_record_owner
+    onaccept = s3db.onaccept
     atable = s3db.cap_area
     itable = s3db.cap_info
     ltable = s3db.cap_area_location
@@ -2452,45 +2734,43 @@ def add_area_from_template(area_id, alert_id):
     # Create Area Record from Template
     atemplate = db(atable.id == area_id).select(*afieldnames,
                                                 limitby=(0, 1)).first()
-    rows = db(itable.alert_id == alert_id).select(itable.id)
 
-    area_ids = []
-    for row in rows:
-        # @ToDo set_record_owner, update_super and/or onaccept
-        # Currently not required by SAMBRO template
-        adata = {"is_template": False,
+    # @ToDo set_record_owner, update_super and/or onaccept
+    # Currently not required by SAMBRO template
+    adata = {"is_template": False,
+             "alert_id": alert_id,
+             "template_area_id": area_id,
+             }
+    for field in afieldnames:
+        adata[field] = atemplate[field]
+
+    aid = atable.insert(**adata)
+    set_record_owner(atable, aid)
+    onaccept(atable, dict(id=aid))
+
+    # Add Area Location Components of Template
+    ltemplate = db(ltable.area_id == area_id).select(*lfieldnames)
+    for lrow in ltemplate:
+        ldata = {"area_id": aid,
                  "alert_id": alert_id,
-                 "info_id": row.id,
-                 "template_area_id": area_id,
                  }
-        for field in afieldnames:
-            adata[field] = atemplate[field]
+        for field in lfieldnames:
+            ldata[field] = lrow[field]
+        lid = ltable.insert(**ldata)
+        set_record_owner(ltable, lid)
+        onaccept(ltable, dict(id=lid))
 
-        aid = atable.insert(**adata)
+    # Add Area Tag Components of Template
+    ttemplate = db(ttable.area_id == area_id).select(*tfieldnames)
+    for trow in ttemplate:
+        tdata = {"area_id": aid,
+                 "alert_id": alert_id,
+                 }
+        for field in tfieldnames:
+            tdata[field] = trow[field]
+        tid = ttable.insert(**tdata)
 
-        # Add Area Location Components of Template
-        ltemplate = db(ltable.area_id == area_id).select(*lfieldnames)
-        for rows in ltemplate:
-            ldata = {"area_id": aid,
-                     "alert_id": alert_id,
-                     }
-            for field in lfieldnames:
-                ldata[field] = rows[field]
-            lid = ltable.insert(**ldata)
-
-        # Add Area Tag Components of Template
-        ttemplate = db(ttable.area_id == area_id).select(*tfieldnames)
-        for row in ttemplate:
-            tdata = {"area_id": aid,
-                     "alert_id": alert_id,
-                     }
-            for field in tfieldnames:
-                tdata[field] = row[field]
-            tid = ttable.insert(**tdata)
-
-        area_ids.append(aid)
-
-    return area_ids
+    return aid
 
 # =============================================================================
 class CAPImportFeed(S3Method):
@@ -2511,7 +2791,6 @@ class CAPImportFeed(S3Method):
         if r.representation == "html":
 
             T = current.T
-            request = current.request
             response = current.response
 
             title = T("Import from Feed URL")
@@ -2551,16 +2830,16 @@ class CAPImportFeed(S3Method):
             output = dict(title=title,
                           form=form)
 
-            if form.accepts(request.vars, current.session):
+            if form.accepts(r.post_vars, current.session):
 
-                form_vars = form.vars
-                url = form_vars.get("url", None)
+                form_vars_get = form.vars.get
+                url = form_vars_get("url", None)
                 if not url:
                     response.error = T("URL is required")
                     return output
                 # @ToDo:
-                username = form_vars.get("username", None)
-                password = form_vars.get("password", None)
+                #username = form_vars_get("username", None)
+                #password = form_vars_get("password", None)
                 try:
                     file = fetch(url)
                 except urllib2.URLError:
@@ -2571,7 +2850,7 @@ class CAPImportFeed(S3Method):
                     return output
 
                 File = StringIO(file)
-                stylesheet = os.path.join(request.folder, "static", "formats",
+                stylesheet = os.path.join(r.folder, "static", "formats",
                                           "cap", "import.xsl")
                 xml = current.xml
                 tree = xml.parse(File)
@@ -2581,7 +2860,7 @@ class CAPImportFeed(S3Method):
                                       name=resource.name)
                 try:
                     resource.import_xml(s3xml,
-                                        ignore_errors=form_vars.get("ignore_errors", None))
+                                        ignore_errors=form_vars_get("ignore_errors", None))
                 except:
                     response.error = str(sys.exc_info()[1])
                 else:
@@ -2628,8 +2907,13 @@ class cap_AssignArea(S3Method):
         s3db = current.s3db
         response = current.response
 
+        # Get the event_type_id to filter by
+        itable = s3db.cap_info
+        row = current.db(itable.alert_id == alert_id).\
+                    select(itable.event_type_id, limitby=(0, 1)).first()
+
         # Filter to limit the selection of areas
-        area_filter = (FS("is_template") == True)
+        area_filter = (FS("is_template") == True) & (FS("event_type_id") == row.event_type_id)
 
         if r.http == "POST":
             # Template areas have been selected
@@ -2665,8 +2949,11 @@ class cap_AssignArea(S3Method):
                     area_id = int(area_id.strip())
                     add_area_from_template(area_id, alert_id)
                     added += 1
-            current.session.confirmation = T("%(number)s assigned") % \
-                                                            {"number": added}
+            if added == 1:
+                confirm_text = T("1 area assigned")
+            elif added > 1:
+                confirm_text = T("%(number)s areas assigned") % {"number": added}
+            current.session.confirmation = confirm_text
             if added > 0:
                 # Redirect to the list of areas of this alert
                 redirect(URL(args=[r.id, "area"], vars={}))
@@ -2826,7 +3113,7 @@ class cap_CloneAlert(S3Method):
     """
         Clone the cap_alert
     """
-    
+
     # -------------------------------------------------------------------------
     def apply_method(self, r, **attr):
         """
@@ -2834,7 +3121,7 @@ class cap_CloneAlert(S3Method):
             @param r: the S3Request
             @param attr: controller options for this request
         """
-        
+
         output = {}
         if r.http == "POST":
             if r.method == "clone":
@@ -2844,7 +3131,7 @@ class cap_CloneAlert(S3Method):
         else:
             r.error(405, current.ERROR.BAD_METHOD)
         return output
-    
+
     # -------------------------------------------------------------------------
     def clone(self, r, **attr):
         """
@@ -2853,9 +3140,9 @@ class cap_CloneAlert(S3Method):
             @param r: the S3Request instance
             @param attr: controller attributes
         """
-        
+
         s3db = current.s3db
-        
+
         # Get the alert ID
         alert_id = self.record_id
         if not alert_id:
@@ -2868,13 +3155,13 @@ class cap_CloneAlert(S3Method):
         person_id = auth.s3_logged_in_person()
         if not person_id or not auth.s3_has_permission("create", alert_table):
             auth.permission.fail()
-        
-        msg_type_options = ["Update", "Cancel", "Error"]
+
+        msg_type_options = ["Alert", "Update", "Cancel", "Error", "AllClear"]
         msg_type = current.request._get_vars["msg_type"]
-        
+
         if msg_type is None or msg_type not in msg_type_options:
             r.error(400, current.ERROR.BAD_REQUEST)
-        
+
         # Start of clone
         db = current.db
         info_table = s3db.cap_info
@@ -2890,13 +3177,13 @@ class cap_CloneAlert(S3Method):
         audit = current.audit
         set_record_owner = auth.s3_set_record_owner
         onaccept = s3db.onaccept
-        
+
         # Copy the alert segment
         alert_fields = [alert_table[f] for f in alert_table.fields
                         if f not in unwanted_fields]
         alert_query = (alert_table.id == alert_id) & \
                       accessible_query("read", alert_table)
-        alert_row = db(alert_query).select(*alert_fields, limitby=(0, 1)).first()  
+        alert_row = db(alert_query).select(*alert_fields, limitby=(0, 1)).first()
         alert_row_clone = alert_row.as_dict()
         del alert_row_clone["identifier"]
         alert_row_clone["msg_type"] = msg_type
@@ -2911,7 +3198,7 @@ class cap_CloneAlert(S3Method):
         audit("create", "cap", "alert", record=new_alert_id)
         set_record_owner(alert_table, new_alert_id)
         onaccept(alert_table, alert_row_clone)
-        
+
         if has_permission("create", info_table):
             # Copy the info segment
             unwanted_fields_ = list(unwanted_fields)
@@ -2922,27 +3209,12 @@ class cap_CloneAlert(S3Method):
                          accessible_query("read", info_table)
             info_rows = db(info_query).select(*info_fields)
             if info_rows:
-                has_area_permission = has_permission("create", area_table)
-                has_location_permission = has_permission("create", location_table)
-                has_tag_permission = has_permission("create", tag_table)
-                has_resource_permission = has_permission("create", resource_table)
-                area_fields = [area_table[f] for f in area_table.fields
-                               if f not in unwanted_fields_]
-                location_fields = [location_table[f] for f in location_table.fields
-                                   if f not in unwanted_fields]
-                tag_fields = [tag_table[f] for f in tag_table.fields
-                              if f not in unwanted_fields]
-                resource_fields = [resource_table[f] for f in resource_table.fields
-                                   if f not in unwanted_fields]
-                area_accessible = accessible_query("read", area_table)
-                location_accessible = accessible_query("read", location_table)
-                tag_accessible = accessible_query("read", tag_table)
-                resource_accessible = accessible_query("read", resource_table)
-                
                 for info_row in info_rows:
                     info_id = info_row.id
                     info_row_clone = info_row.as_dict()
                     del info_row_clone["id"]
+                    if msg_type == "AllClear":
+                        info_row_clone["response_type"] = "AllClear"
                     info_row_clone["alert_id"] = new_alert_id
                     new_info_id = info_table.insert(**info_row_clone)
                     # Post-process create
@@ -2950,94 +3222,102 @@ class cap_CloneAlert(S3Method):
                     audit("create", "cap", "info", record=new_info_id)
                     set_record_owner(info_table, new_info_id)
                     onaccept(info_table, info_row_clone)
-                    
-                    if has_area_permission:
-                        # Copy the area segment
-                        area_query = (area_table.info_id == info_id) &\
-                                     (area_table.alert_id == alert_id) & \
-                                     area_accessible
-                        area_rows = db(area_query).select(*area_fields)
-                        if area_rows:   
-                            for area_row in area_rows:
-                                area_id = area_row.id
-                                area_row_clone = area_row.as_dict()
-                                del area_row_clone["id"]
-                                area_row_clone["alert_id"] = new_alert_id
-                                area_row_clone["info_id"] = new_info_id
-                                
-                                new_area_id = area_table.insert(**area_row_clone)
-                                # Post-process create
-                                area_row_clone["id"] = new_area_id
-                                audit("create", "cap", "area", record=new_area_id)
-                                set_record_owner(area_table, new_area_id)
-                                onaccept(area_table, area_row_clone)
-                                
-                                if has_location_permission:
-                                    # Copy the area_location
-                                    location_query = (location_table.area_id == area_id) &\
-                                                     location_accessible
-                                    location_rows = db(location_query).\
-                                                        select(*location_fields)
-                                    if location_rows:
-                                        for location_row in location_rows:
-                                            location_row_clone = location_row.as_dict()
-                                            location_row_clone["alert_id"] = new_alert_id
-                                            location_row_clone["area_id"] = new_area_id
-                                            s3db.onvalidation(s3db.gis_location,
-                                                              location_row_clone)
-                                            new_location_id = location_table.\
-                                                            insert(**location_row_clone)
-                                            # Post-process create
-                                            location_row_clone["id"] = new_location_id
-                                            audit("create", "cap", "area_location",
-                                                  record=new_location_id)
-                                            set_record_owner(location_table,
-                                                             new_location_id)
-                                            onaccept(location_table,
-                                                     location_row_clone)
-                                
-                                if has_tag_permission:        
-                                    # Copy the area_tag
-                                    tag_query = (tag_table.area_id == area_id) &\
-                                                tag_accessible
-                                    tag_rows = db(tag_query).select(*tag_fields)
-                                    if tag_rows:
-                                        for tag_row in tag_rows:
-                                            tag_row_clone = tag_row.as_dict()
-                                            tag_row_clone["alert_id"] = new_alert_id
-                                            tag_row_clone["area_id"] = new_area_id
-                                            
-                                            new_tag_id = tag_table.insert(**tag_row_clone)
-                                            # Post-process create
-                                            tag_row_clone["id"] = new_tag_id
-                                            audit("create", "cap", "area_tag",
-                                                  record=new_tag_id)
-                                            set_record_owner(tag_table, new_tag_id)
-                                            onaccept(tag_table, tag_row_clone)
-                        
-                        if has_resource_permission:
-                            # Copy the resource segment
-                            resource_query = (resource_table.info_id == info_id) &\
-                                        (resource_table.alert_id == alert_id) &\
-                                        resource_accessible    
-                            resource_rows = db(resource_query).\
-                                                        select(*resource_fields)
-                            if resource_rows:
-                                for resource_row in resource_rows:
-                                    resource_row_clone = resource_row.as_dict()
-                                    resource_row_clone["info_id"] = new_info_id
-                                    resource_row_clone["alert_id"] = new_alert_id
-                                    rid = resource_table.insert(**resource_row_clone)
-                                    resource_row_clone["id"] = rid
-                                    # Post-process create
-                                    audit("create", "cap", "resource", record=rid)
-                                    s3db.update_super(resource_table,
-                                                      resource_row_clone)
-                                    set_record_owner(resource_table, rid)
-                                    onaccept(resource_table, resource_row_clone)
+        if has_permission("create", area_table):
+            # Copy the area segment
+            area_fields = [area_table[f] for f in area_table.fields
+                           if f not in unwanted_fields_]
+            area_query = (area_table.alert_id == alert_id) & \
+                         accessible_query("read", area_table)
+            area_rows = db(area_query).select(*area_fields)
+            if area_rows:
+                gtable = s3db.gis_location
+                onvalidation = s3db.onvalidation
+                area_table_insert = area_table.insert
+
+                location_table_insert = location_table.insert
+                location_accessible = accessible_query("read", location_table)
+                location_fields = [location_table[f] for f in location_table.fields
+                                   if f not in unwanted_fields]
+
+                tag_table_insert = tag_table.insert
+                tag_accessible = accessible_query("read", tag_table)
+                tag_fields = [tag_table[f] for f in tag_table.fields
+                              if f not in unwanted_fields]
+
+                for area_row in area_rows:
+                    area_id = area_row.id
+                    area_row_clone = area_row.as_dict()
+                    del area_row_clone["id"]
+                    area_row_clone["alert_id"] = new_alert_id
+
+                    new_area_id = area_table_insert(**area_row_clone)
+                    # Post-process create
+                    area_row_clone["id"] = new_area_id
+                    audit("create", "cap", "area", record=new_area_id)
+                    set_record_owner(area_table, new_area_id)
+                    onaccept(area_table, area_row_clone)
+
+                    # Copy the area_location
+                    location_query = (location_table.area_id == area_id) &\
+                                     location_accessible
+                    location_rows = db(location_query).\
+                                        select(*location_fields)
+                    if location_rows:
+                        for location_row in location_rows:
+                            location_row_clone = location_row.as_dict()
+                            location_row_clone.update(alert_id = new_alert_id,
+                                                      area_id = new_area_id)
+                            onvalidation(gtable, location_row_clone)
+                            new_location_id = location_table_insert(**location_row_clone)
+                            # Post-process create
+                            location_row_clone["id"] = new_location_id
+                            audit("create", "cap", "area_location",
+                                  record=new_location_id)
+                            set_record_owner(location_table,
+                                             new_location_id)
+                            onaccept(location_table,
+                                     location_row_clone)
+
+                    # Copy the area_tag
+                    tag_query = (tag_table.area_id == area_id) &\
+                                tag_accessible
+                    tag_rows = db(tag_query).select(*tag_fields)
+                    for tag_row in tag_rows:
+                        tag_row_clone = tag_row.as_dict()
+                        tag_row_clone.update(alert_id = new_alert_id,
+                                             area_id = new_area_id)
+
+                        new_tag_id = tag_table_insert(**tag_row_clone)
+                        # Post-process create
+                        tag_row_clone["id"] = new_tag_id
+                        audit("create", "cap", "area_tag",
+                              record=new_tag_id)
+                        set_record_owner(tag_table, new_tag_id)
+                        onaccept(tag_table, tag_row_clone)
+        if has_permission("create", resource_table):
+            # Copy the resource segment
+            resource_fields = [resource_table[f] for f in resource_table.fields
+                               if f not in unwanted_fields]
+            resource_query = (resource_table.alert_id == alert_id) &\
+                             accessible_query("read", resource_table)
+            resource_rows = db(resource_query).select(*resource_fields)
+            if resource_rows:
+                resource_table_insert = resource_table.insert
+                update_super = s3db.update_super
+                for resource_row in resource_rows:
+                    resource_row_clone = resource_row.as_dict()
+                    resource_row_clone["alert_id"] = new_alert_id
+                    rid = resource_table_insert(**resource_row_clone)
+                    resource_row_clone["id"] = rid
+                    # Post-process create
+                    audit("create", "cap", "resource", record=rid)
+                    update_super(resource_table, resource_row_clone)
+                    set_record_owner(resource_table, rid)
+                    onaccept(resource_table, resource_row_clone)
+            
 
         output = current.xml.json_message(message=new_alert_id)
-        current.response.headers["Content-Type"] = "application/json"      
+        current.response.headers["Content-Type"] = "application/json"
         return output
 
 # -----------------------------------------------------------------------------
@@ -3119,6 +3399,6 @@ class cap_AreaRepresent(S3Represent):
         if not name:
             return self.default
 
-        return s3_unicode(name)
+        return s3_str(name)
 
 # END =========================================================================

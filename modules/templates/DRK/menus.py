@@ -36,27 +36,49 @@ class S3MainMenu(default.S3MainMenu):
     def menu_modules(cls):
         """ Custom Modules Menu """
 
-        default_site = current.deployment_settings.get_org_default_site()
-        if default_site:
-            args = [default_site, "profile"]
-        else:
-            args = None
+        from config import drk_default_shelter
+        shelter_id = drk_default_shelter()
 
         has_role = current.auth.s3_has_role
-        if has_role("SECURITY") and not has_role("ADMIN"):
+        not_admin = not has_role("ADMIN")
+
+        if not_admin and has_role("SECURITY"):
             return [
                 MM("Residents", c="security", f="person"),
                 #MM("ToDo", c="project", f="task"),
-                MM("Check-In / Check-Out", c="cr", f="shelter", args=[default_site, "check-in"]),
+                MM("Check-In / Check-Out", c="cr", f="shelter",
+                   args = [shelter_id, "check-in"],
+                   check = shelter_id is not None,
+                   ),
             ]
+
+        elif not_admin and has_role("QUARTIER"):
+            return [
+                MM("Residents", c=("dvr", "cr"), f=("person", "shelter_registration")),
+            ]
+
         else:
             return [
                 MM("Residents", c=("dvr", "pr")),
+                MM("Event Registration", c="dvr", f="case_event",
+                   m = "register",
+                   p = "create",
+                   # Show only if not authorized to see "Residents"
+                   # (=the last preceding item)
+                   check = lambda this: not this.preceding()[-1].check_permission(),
+                   ),
                 MM("ToDo", c="project", f="task"),
                 #homepage("req"),
                 homepage("inv"),
-                MM("Dashboard", c="cr", f="shelter", args=args),
-                MM("Housing Units", c="cr", f="shelter", args=[default_site, "shelter_unit"]), # @ToDO: Move to Dashboard Widget?
+                MM("Dashboard", c="cr", f="shelter",
+                   args = [shelter_id, "profile"],
+                   check = shelter_id is not None,
+                   ),
+                # @ToDO: Move to Dashboard Widget?
+                MM("Housing Units", c="cr", f="shelter",
+                   args = [shelter_id, "shelter_unit"],
+                   check = shelter_id is not None,
+                   ),
                 homepage("vol"),
                 homepage("hrm"),
             ]
@@ -131,11 +153,12 @@ class S3MainMenu(default.S3MainMenu):
     @classmethod
     def menu_about(cls):
 
+        ADMIN = current.auth.get_system_roles().ADMIN
+
         menu_about = MA(c="default")(
-            MA("About", f="about"),
-            MA("Contact", f="contact"),
             MA("Help", f="help"),
-            #MA("Privacy", f="privacy"),
+            #MA("Contact", f="contact"),
+            MA("Version", f="about", restrict = ADMIN),
         )
         return menu_about
 
@@ -156,27 +179,55 @@ class S3OptionsMenu(default.S3OptionsMenu):
         ADMIN = current.auth.get_system_roles().ADMIN
 
         return M(c="dvr")(
-                    M("Cases", c=("dvr", "pr"), f="person")(
+                    M("Current Cases", c=("dvr", "pr"), f="person",
+                      vars = {"closed": "0"})(
                         M("Create", m="create"),
-                        M("Suspended Cases", vars={"case_flag.name": "Suspended"}),
-                        M("Archived Cases", vars={"archived": "1"}),
-                    ),
+                        M("All Cases", vars = {}),
+                        ),
+                    M("Reports", link=False)(
+                        M("Check-in overdue", c=("dvr", "pr"), f="person",
+                          vars = {"closed": "0", "overdue": "1"},
+                          ),
+                        ),
                     M("Activities", f="case_activity")(
-                        M("Emergencies", vars = {"~.emergency": "True"}),
+                        M("Emergencies",
+                          vars = {"~.emergency": "True"},
+                          ),
                         M(follow_up_label, f="due_followups"),
                         M("All Activities"),
                         M("Report", m="report"),
-                    ),
+                        ),
                     M("Appointments", f="case_appointment")(
-                        M("Bulk Status Update", m="manage"),
-                    ),
+                        M("Overview"),
+                        M("Import Updates", m="import", p="create"),
+                        M("Bulk Status Update", m="manage", p="update"),
+                        ),
                     M("Allowances", f="allowance")(
-                    ),
+                        M("Overview"),
+                        M("Payment Registration", m="register", p="update"),
+                        M("Status Update", m="manage", p="update"),
+                        M("Import", m="import", p="create"),
+                        ),
+                    M("Event Registration", c="dvr", f="case_event", m="register", p="create")(
+                        ),
+                    M("Archive", link=False)(
+                        M("Closed Cases", f="person",
+                          vars={"closed": "1"},
+                          ),
+                        M("Invalid Cases", f="person",
+                          vars={"archived": "1"},
+                          ),
+                        ),
                     M("Administration", restrict=ADMIN)(
                         M("Flags", f="case_flag"),
                         M("Case Status", f="case_status"),
-                    ),
-                )
+                        M("Appointment Types", f="case_appointment_type"),
+                        M("Event Types", f="case_event_type"),
+                        M("Check Transferability", c="default", f="index",
+                          args = ["transferability"],
+                          ),
+                        ),
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod

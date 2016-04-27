@@ -2,7 +2,7 @@
 
 """ Sahana Eden Menu Structure and Layout
 
-    @copyright: 2011-2015 (c) Sahana Software Foundation
+    @copyright: 2011-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -700,6 +700,9 @@ class S3OptionsMenu(object):
     def deploy():
         """ Deployments """
 
+        deploy_team = current.deployment_settings.get_deploy_team_label()
+        team_menu = "%(team)s Members" % dict(team=deploy_team)
+
         return M()(M("Missions",
                      c="deploy", f="mission", m="summary")(
                         M("Create", m="create"),
@@ -723,13 +726,13 @@ class S3OptionsMenu(object):
                    M("Job Titles",
                      c="deploy", f="job_title"
                    ),
-                   M("Human Resources",
+                   M(team_menu,
                      c="deploy", f="human_resource", m="summary")(
-                        M("Add Deployables",
+                        M("Add Member",
                           c="deploy", f="application", m="select",
                           p="create", t="deploy_application",
                           ),
-                        M("Import Human Resources",
+                        M("Import Members",
                           c="deploy", f="person", m="import"),
                    ),
                   )
@@ -1427,13 +1430,15 @@ class S3OptionsMenu(object):
     def member():
         """ Membership Management """
 
+        types = lambda i: current.deployment_settings.get_member_membership_types()
+
         return M(c="member")(
                     M("Members", f="membership", m="summary")(
                         M("Create", m="create"),
                         #M("Report", m="report"),
                         M("Import", f="person", m="import"),
                     ),
-                    M("Membership Types", f="membership_type")(
+                    M("Membership Types", f="membership_type", check=types)(
                         M("Create", m="create"),
                         #M("Import", m="import"),
                     ),
@@ -1501,9 +1506,11 @@ class S3OptionsMenu(object):
     def org():
         """ ORG / Organization Registry """
 
+        settings = current.deployment_settings
         ADMIN = current.session.s3.system_roles.ADMIN
-        SECTORS = "Clusters" if current.deployment_settings.get_ui_label_cluster() \
+        SECTORS = "Clusters" if settings.get_ui_label_cluster() \
                              else "Sectors"
+        stats = lambda i: settings.has_module("stats")
 
         return M(c="org")(
                     M("Organizations", f="organisation")(
@@ -1519,11 +1526,8 @@ class S3OptionsMenu(object):
                         M("Create", m="create"),
                         M("Import", m="import"),
                     ),
-                    M("Resource Inventory", f="resource")(
-                        M("Create", m="create"),
-                        M("Import", m="import")
-                    ),
-                    M("Resources", f="resource", m="summary")(
+                    M("Resources", f="resource", m="summary",
+                      check=stats)(
                         M("Create", m="create"),
                         M("Import", m="import")
                     ),

@@ -1,11 +1,5 @@
-Position,Code,Status,Default,Comments
-1,STATUS1,BEA Registration,true,
-2,STATUS2,BÜMA,false,
-3,STATUS3,GU Done,false,
-4,STATUS4,X-Ray Done,false,
-5,STATUS5,BAMF Registration,false,
-6,STATUS7,Legally Departed,false,
-7,STATUS8,Disappeared,false,
-8,STATUS9,Hospital,false,"In Hospital, still entitled to benefits, cannot be transferred"
-9,STATUS9A,Police,false,"With the police, still entitled to benefits, cannot be transferred"
-10,STATUS10,AFA/UMF,false,"AFA=Without Parents pending Youth Service,UMF=Visiting pending Decision"
+Position,Code,Status,Default,Closed,Not Transferable,Comments
+1,OPEN,In Progress,true,false,false,Case in progress
+2,TRANSFERRED,Transfer Completed,false,true,false,"Transferred to other destination, case closed"
+3,INACTIVE,Inactive/Disappeared,false,true,false,"Confirmed disappeared, no longer entitled to benefits, case closed"
+4,DEPARTED,Left Voluntarily,false,true,false,"Returned to country of origin, case closed"

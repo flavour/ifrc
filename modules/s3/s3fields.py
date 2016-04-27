@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -45,9 +45,9 @@ from gluon.languages import lazyT
 from s3dal import Query, SQLCustomType
 from s3datetime import S3DateTime
 from s3navigation import S3ScriptItem
-from s3utils import s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode, S3MarkupStripper
+from s3utils import s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode, s3_str, S3MarkupStripper
 from s3validators import IS_ONE_OF, IS_UTC_DATE, IS_UTC_DATETIME
-from s3widgets import S3CalendarWidget, S3DateWidget, S3DateTimeWidget
+from s3widgets import S3CalendarWidget, S3DateWidget
 
 try:
     db = current.db
@@ -330,6 +330,8 @@ class S3Represent(object):
 
         labels = self.labels
 
+        translated = False
+
         if self.slabels:
             # String Template
             v = labels % row
@@ -339,12 +341,22 @@ class S3Represent(object):
         else:
             # Default
             values = [row[f] for f in self.fields if row[f] not in (None, "")]
-            if values:
+
+            if len(values) > 1:
+                # Multiple values => concatenate with separator
+                if self.translate:
+                    # Translate items individually before concatenating
+                    T = current.T
+                    values = [T(v) if not type(v) is lazyT else v for v in values]
+                    translated = True
                 sep = self.field_sep
-                v = sep.join([s3_unicode(v) for v in values])
+                v = sep.join([s3_str(v) for v in values])
+            elif values:
+                v = s3_str(values[0])
             else:
                 v = self.none
-        if self.translate and not type(v) is lazyT:
+
+        if not translated and self.translate and not type(v) is lazyT:
             output = current.T(v)
         else:
             output = v
@@ -372,7 +384,7 @@ class S3Represent(object):
         """
 
         if self.linkto:
-            k = s3_unicode(k)
+            k = s3_str(k)
             return A(v, _href=self.linkto.replace("[id]", k) \
                                          .replace("%5Bid%5D", k))
         else:
@@ -452,7 +464,7 @@ class S3Represent(object):
             if show_link:
                 link = self.link
                 rows = self.rows
-                labels = [[link(k, s3_unicode(items[k]), row=rows.get(k)), ", "]
+                labels = [[link(k, s3_str(items[k]), row=rows.get(k)), ", "]
                           if k in items else [default, ", "]
                           for k in values]
                 if labels:
@@ -460,7 +472,7 @@ class S3Represent(object):
                 else:
                     return ""
             else:
-                labels = [s3_unicode(items[k])
+                labels = [s3_str(items[k])
                           if k in items else default for k in values]
                 if labels:
                     return ", ".join(labels)
@@ -548,7 +560,7 @@ class S3Represent(object):
             else:
                 return ""
         else:
-            return ", ".join([s3_unicode(labels[v])
+            return ", ".join([s3_str(labels[v])
                               if v in labels else self.default
                               for v in value])
 
@@ -564,7 +576,7 @@ class S3Represent(object):
         # Default representations
         messages = current.messages
         if self.default is None:
-            self.default = s3_unicode(messages.UNKNOWN_OPT)
+            self.default = s3_str(messages.UNKNOWN_OPT)
         if self.none is None:
             self.none = messages["NONE"]
 
@@ -606,7 +618,6 @@ class S3Represent(object):
             self.htemplate = "%s > %s"
 
         self.setup = True
-        return
 
     # -------------------------------------------------------------------------
     def _lookup(self, values, rows=None):
@@ -714,6 +725,7 @@ class S3Represent(object):
                     lookup.pop(k, None)
                     items[keys.get(k, k)] = theset[k] = represent_row(row)
 
+        # Anything left gets set to default
         if lookup:
             for k in lookup:
                 items[keys.get(k, k)] = self.default
@@ -736,8 +748,6 @@ class S3Represent(object):
 
         if value in theset:
             return theset[value]
-
-        represent_row = self.represent_row
 
         prefix = None
         parent = hierarchy.parent(value)
@@ -779,7 +789,7 @@ class S3RepresentLazy(object):
     # -------------------------------------------------------------------------
     def __repr__(self):
 
-        return s3_unicode(self.represent())
+        return s3_str(self.represent())
 
     # -------------------------------------------------------------------------
     def represent(self):
@@ -840,8 +850,7 @@ class S3RepresentLazy(object):
         """
 
         # Render value
-        text = self.represent()
-        text = s3_unicode(text)
+        text = s3_unicode(self.represent())
 
         # Strip markup + XML-escape
         if text and "<" in text:

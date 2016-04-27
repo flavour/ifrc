@@ -5,7 +5,7 @@
 
     Template-specific Message Parsers are defined here.
 
-    @copyright: 2014-15 (c) Sahana Software Foundation
+    @copyright: 2014-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -79,7 +79,7 @@ class S3Parser(object):
                                                                    table.author,
                                                                    limitby=(0, 1)
                                                                    ).first()
-        if not record:
+        if not record or not record.body:
             return
 
         post_table = s3db.cms_post

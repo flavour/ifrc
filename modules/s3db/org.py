@@ -2,7 +2,7 @@
 
 """ Sahana Eden Organisation Model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -103,7 +103,11 @@ class S3OrganisationModel(S3Model):
     names = ("org_organisation_type",
              "org_organisation_type_id",
              "org_region",
+             "org_region_country",
+             "org_region_id",
+             "org_region_represent",
              "org_organisation",
+             "org_organisation_crud_fields",
              "org_organisation_id",
              "org_organisation_organisation_type",
              "org_organisation_user",
@@ -134,6 +138,7 @@ class S3OrganisationModel(S3Model):
         define_table(tablename,
                      Field("name", length=128, notnull=True, unique=True,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("parent", "reference org_organisation_type", # This form of hierarchy may not work on all Databases
                            label = T("SubType of"),
@@ -213,7 +218,7 @@ class S3OrganisationModel(S3Model):
         configure(tablename,
                   # Not needed since unique=True but would be
                   # if we removed to make these variable by Org
-                  #deduplicate = self.organisation_type_duplicate,
+                  #deduplicate = S3Duplicate(),
                   hierarchy = hierarchy,
                   )
 
@@ -287,7 +292,7 @@ class S3OrganisationModel(S3Model):
                             IS_ONE_OF(db, "org_region.id",
                                       region_represent,
                                       sort=True,
-                                      # Only show the Regions, not the Zones
+                                      # IFRC: Only show the Regions, not the Zones
                                       not_filterby="parent",
                                       not_filter_opts=(None,)
                                       )),
@@ -301,9 +306,29 @@ class S3OrganisationModel(S3Model):
                 )
 
             configure(tablename,
-                      deduplicate = self.org_region_duplicate,
+                      deduplicate = S3Duplicate(),
                       hierarchy = hierarchy,
                       )
+
+            if settings.get_org_region_countries():
+                # Components
+                add_components(tablename,
+                               # Tags
+                               org_region_country = {"name": "country",
+                                                     "joinby": "region_id",
+                                                     },
+                               )
+
+                # ---------------------------------------------------------------------
+                # Region countries
+                #
+                tablename = "org_region_country"
+                define_table(tablename,
+                             region_id(),
+                             self.gis_country_id(),
+                             s3_comments(),
+                             *s3_meta_fields())
+
         else:
             region_represent = None
             region_id = S3ReusableField("region_id", "integer",
@@ -325,6 +350,7 @@ class S3OrganisationModel(S3Model):
                      Field("name", notnull=True,
                            length=128, # Mayon Compatibility
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      # http://hxl.humanitarianresponse.info/#abbreviation
                      Field("acronym", length=16,
@@ -756,6 +782,16 @@ class S3OrganisationModel(S3Model):
                            project_project = "organisation_id",
                            )
 
+        if settings.get_project_activities():
+            add_components(tablename,
+                           project_activity = {"link": "project_activity_organisation",
+                                               "joinby": "organisation_id",
+                                               "key": "activity_id",
+                                               "actuate": "replace",
+                                               "autodelete": False,
+                                               },
+                           )
+
         # Organisation Summary data
         if settings.get_org_summary():
             add_components(tablename,
@@ -800,8 +836,10 @@ class S3OrganisationModel(S3Model):
         # Pass names back to global scope (s3.*)
         #
         return dict(org_organisation_type_id = organisation_type_id,
+                    org_organisation_crud_fields = form_fields,
                     org_organisation_id = organisation_id,
                     org_organisation_represent = org_organisation_represent,
+                    org_region_id = region_id,
                     org_region_represent = region_represent,
                     )
 
@@ -985,34 +1023,6 @@ class S3OrganisationModel(S3Model):
                 # Note this sets only the default, so won't override existing or explicit values
                 record._organisation_type_id = row.id
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def organisation_type_duplicate(item):
-        """ Import item de-duplication """
-
-        name = item.data.get("name", None)
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_region_duplicate(item):
-        """ Import item de-duplication """
-
-        name = item.data.get("name", None)
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
     # -----------------------------------------------------------------------------
     @staticmethod
     def org_search_ac(r, **attr):
@@ -1179,35 +1189,14 @@ class S3OrganisationNameModel(S3Model):
                           *s3_meta_fields())
 
         self.configure(tablename,
-                       deduplicate = self.org_organisation_name_deduplicate,
+                       deduplicate = S3Duplicate(primary = ("organisation_id",
+                                                            "language",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_organisation_name_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method to update
-        """
-
-        data = item.data
-        language = data.get("language", None)
-        org = data.get("organisation_id", None)
-
-        if not language or not org:
-            return
-
-        table = item.table
-        query = (table.language == language) & \
-                (table.organisation_id == org)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3OrganisationBranchModel(S3Model):
@@ -1251,28 +1240,12 @@ class S3OrganisationBranchModel(S3Model):
             msg_list_empty = T("No Branch Organizations currently registered"))
 
         self.configure(tablename,
-                       deduplicate = self.org_branch_duplicate,
+                       # An Organisation can only be a branch of one Organisation:
+                       deduplicate = S3Duplicate(primary = ("branch_id",)),
                        onaccept = self.org_branch_onaccept,
                        ondelete = self.org_branch_ondelete,
                        onvalidation = self.org_branch_onvalidation,
                        )
-
-    # -----------------------------------------------------------------------------
-    @staticmethod
-    def org_branch_duplicate(item):
-        """
-            An Organisation can only be a branch of one Organisation
-        """
-
-        branch_id = item.data.get("branch_id")
-        if branch_id:
-            table = item.table
-            query = (table.branch_id == branch_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1556,6 +1529,7 @@ class S3OrganisationGroupModel(S3Model):
                      super_link("pe_id", "pr_pentity"),
                      Field("name", notnull=True, unique=True, length=128,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("mission",
                            label = T("Mission"),
@@ -1667,6 +1641,7 @@ class S3OrganisationGroupModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, unique=True, length=128,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      s3_comments(),
                      *s3_meta_fields()
@@ -1784,6 +1759,7 @@ class S3OrganisationGroupPersonModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, unique=True, length=128,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      s3_comments(),
                      *s3_meta_fields()
@@ -1939,30 +1915,14 @@ class S3OrganisationLocationModel(S3Model):
             msg_list_empty = T("No Locations found for this Organization"))
 
         self.configure(tablename,
-                       deduplicate = self.org_organisation_location_deduplicate,
+                       deduplicate = S3Duplicate(primary = ("organisation_id",
+                                                            "location_id",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_organisation_location_deduplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        organisation_id = data.get("organisation_id")
-        location_id = data.get("location_id")
-        if organisation_id and location_id:
-            table = item.table
-            query = (table.organisation_id == organisation_id) & \
-                    (table.location_id == location_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3OrganisationResourceModel(S3Model):
@@ -2067,7 +2027,7 @@ class S3OrganisationResourceModel(S3Model):
 
         # CRUD strings
         crud_strings[tablename] = Storage(
-            label_create = T("Create Resource"),
+            label_create = T("Add Resource"),
             title_display = T("Resource Details"),
             title_list = T("Resource Inventory"),
             title_update = T("Edit Resource"),
@@ -2166,6 +2126,7 @@ class S3OrganisationSectorModel(S3Model):
                            label = T("Name"),
                            represent = lambda v: T(v) if v is not None \
                                                     else NONE,
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("abrv", length=64, #notnull=True,
                            label = T("Abbreviation"),
@@ -2344,7 +2305,10 @@ class S3OrganisationSectorModel(S3Model):
             msg_list_empty = T("No Sectors found for this Organization"))
 
         configure(tablename,
-                  deduplicate = self.org_sector_organisation_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("organisation_id",
+                                                       "sector_id",
+                                                       ),
+                                            ),
                   )
 
         # Pass names back to global scope (s3.*)
@@ -2427,25 +2391,6 @@ class S3OrganisationSectorModel(S3Model):
     #    except:
     #        return current.messages.UNKNOWN_OPT
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_sector_organisation_deduplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        organisation_id = data.get("organisation_id")
-        sector_id = data.get("sector_id")
-        if organisation_id and sector_id:
-            table = item.table
-            query = (table.organisation_id == organisation_id) & \
-                    (table.sector_id == sector_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
-
 # =============================================================================
 class S3OrganisationServiceModel(S3Model):
     """
@@ -2482,6 +2427,7 @@ class S3OrganisationServiceModel(S3Model):
                            # service at different locations in hierarchy
                            unique = True,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("parent", "reference org_service", # This form of hierarchy may not work on all Databases
                            label = T("SubType of"),
@@ -2574,7 +2520,8 @@ class S3OrganisationServiceModel(S3Model):
         configure(tablename,
                   deduplicate = S3Duplicate(primary = ("organisation_id",
                                                        "service_id",
-                                                       )),
+                                                       ),
+                                            ),
                   )
 
         # ---------------------------------------------------------------------
@@ -2725,7 +2672,8 @@ class S3OrganisationServiceModel(S3Model):
         configure(tablename,
                   deduplicate = S3Duplicate(primary = ("service_location_id",
                                                        "service_id",
-                                                       )),
+                                                       ),
+                                            ),
                   )
 
         # ---------------------------------------------------------------------
@@ -2834,38 +2782,14 @@ class S3OrganisationTagModel(S3Model):
                           *s3_meta_fields())
 
         self.configure(tablename,
-                       deduplicate = self.org_organisation_tag_deduplicate,
+                       deduplicate = S3Duplicate(primary = ("organisation_id",
+                                                            "tag",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_organisation_tag_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method
-           to update
-
-           @param item: the S3ImportItem
-        """
-
-        data = item.data
-        tag = data.get("tag", None)
-        organisation_id = data.get("organisation_id", None)
-
-        if not tag or not organisation_id:
-            return
-
-        table = item.table
-        query = (table.tag.lower() == tag.lower()) & \
-                (table.organisation_id == organisation_id)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3OrganisationTeamModel(S3Model):
@@ -2964,38 +2888,14 @@ class S3OrganisationTypeTagModel(S3Model):
                           *s3_meta_fields())
 
         self.configure(tablename,
-                       deduplicate = self.org_organisation_type_tag_deduplicate,
+                       deduplicate = S3Duplicate(primary = ("organisation_type_id",
+                                                            "tag",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_organisation_type_tag_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method
-           to update
-
-           @param item: the S3ImportItem
-        """
-
-        data = item.data
-        tag = data.get("tag", None)
-        organisation_type_id = data.get("organisation_type_id", None)
-
-        if not tag or not organisation_type_id:
-            return
-
-        table = item.table
-        query = (table.tag.lower() == tag.lower()) & \
-                (table.organisation_type_id == organisation_type_id)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3SiteModel(S3Model):
@@ -3043,6 +2943,7 @@ class S3SiteModel(S3Model):
                                 length = 64, # Mayon compatibility
                                 #unique=True,
                                 label = T("Name"),
+                                requires = IS_NOT_EMPTY(),
                                 ),
                           self.gis_location_id(),
                           self.org_organisation_id(),
@@ -3593,7 +3494,8 @@ class S3SiteNameModel(S3Model):
         self.configure(tablename,
                        deduplicate = S3Duplicate(primary = ("language",
                                                             "site_id",
-                                                            )),
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
@@ -3633,38 +3535,14 @@ class S3SiteTagModel(S3Model):
                           *s3_meta_fields())
 
         self.configure(tablename,
-                       deduplicate = self.org_site_tag_deduplicate,
+                       deduplicate = S3Duplicate(primary=("site_id",
+                                                          "tag",
+                                                          ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_site_tag_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method
-           to update
-
-           @param item: the S3ImportItem
-        """
-
-        data = item.data
-        tag = data.get("tag", None)
-        site_id = data.get("site_id", None)
-
-        if not tag or not site_id:
-            return
-
-        table = item.table
-        query = (table.tag.lower() == tag.lower()) & \
-                (table.site_id == site_id)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3FacilityModel(S3Model):
@@ -3779,7 +3657,7 @@ class S3FacilityModel(S3Model):
             )
 
         configure(tablename,
-                  deduplicate = self.org_facility_type_duplicate,
+                  deduplicate = S3Duplicate(),
                   hierarchy = hierarchy,
                   list_fields = list_fields,
                   )
@@ -3803,6 +3681,7 @@ class S3FacilityModel(S3Model):
                      Field("name", notnull=True,
                            length = 64, # Mayon Compatibility
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("code", length=10, # Mayon compatibility
                            #notnull=True,
@@ -4164,25 +4043,6 @@ class S3FacilityModel(S3Model):
             item.id = duplicate.id
             item.method = item.METHOD.UPDATE
 
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def org_facility_type_duplicate(item):
-        """
-            Deduplication of Facility Types
-        """
-
-        name = item.data.get("name")
-        if not name:
-            return
-
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
     # -----------------------------------------------------------------------------
     @staticmethod
     def org_facility_geojson(jsonp=True,
@@ -4361,6 +4221,7 @@ class S3RoomModel(S3Model):
                           self.org_site_id, # site_id
                           Field("name", length=128, notnull=True,
                                 label = T("Name"),
+                                requires = IS_NOT_EMPTY(),
                                 ),
                           *s3_meta_fields())
 
@@ -4409,26 +4270,12 @@ class S3RoomModel(S3Model):
                                   )
 
         self.configure(tablename,
-                       deduplicate = self.org_room_duplicate,
+                       deduplicate = S3Duplicate(),
                        )
 
         # Pass names back to global scope (s3.*)
         return dict(org_room_id = room_id,
                     )
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_room_duplicate(item):
-        """ Import item de-duplication """
-
-        name = item.data.get("name")
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3OfficeModel(S3Model):
@@ -4470,6 +4317,7 @@ class S3OfficeModel(S3Model):
         define_table(tablename,
                      Field("name", length=128, notnull=True,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
@@ -4516,7 +4364,9 @@ class S3OfficeModel(S3Model):
                             )
 
         configure(tablename,
-                  deduplicate = self.office_type_duplicate,
+                  deduplicate = S3Duplicate(primary = ("name",),
+                                            secondary = ("organisation_id",),
+                                            ),
                   )
 
         # Components
@@ -4545,6 +4395,7 @@ class S3OfficeModel(S3Model):
                      Field("name", notnull=True,
                            length=64, # Mayon Compatibility
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("code", length=10, # Mayon compatibility
                            label = T("Code"),
@@ -4711,7 +4562,9 @@ class S3OfficeModel(S3Model):
                              "org_group": "organisation_id$group_membership.group_id",
                              },
                   crud_form = crud_form,
-                  deduplicate = self.org_office_duplicate,
+                  deduplicate = S3Duplicate(primary = ("name",),
+                                            secondary = ("organisation_id",),
+                                            ),
                   filter_widgets = filter_widgets,
                   list_fields = list_fields,
                   onaccept = self.org_office_onaccept,
@@ -4748,24 +4601,6 @@ class S3OfficeModel(S3Model):
         return dict(org_office_type_id = office_type_id,
                     )
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def office_type_duplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        name = data.get("name")
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        organisation_id = data.get("organisation_id")
-        if organisation_id:
-            query &= (table.organisation_id == organisation_id)
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
     # ---------------------------------------------------------------------
     @staticmethod
     def org_office_onaccept(form):
@@ -4800,51 +4635,6 @@ class S3OfficeModel(S3Model):
                              national_staff = national_staff,
                              international_staff = international_staff
                              )
-
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def org_office_duplicate(item):
-        """
-            Import item deduplication:
-                - match by name
-                - match org, if defined
-                (Adding location_id doesn't seem to be a good idea)
-
-            @param item: the S3ImportItem instance
-        """
-
-        data = item.data
-        name = data.get("name")
-        if not name:
-            return
-
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        #location_id = data.get("location_id")
-        #if location_id:
-        #    # This doesn't find deleted records:
-        #    query = query & (table.location_id == location_id)
-
-        org = data.get("organisation_id")
-        if org:
-            query &= (table.organisation_id == org)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        # if duplicate is None and location_id:
-            ## Search for deleted offices with this name
-            # query = (table.name.lower() == name.lower()) & \
-                    # (table.deleted == True)
-            # row = db(query).select(table.id, table.deleted_fk,
-                                # limitby=(0, 1)).first()
-            # if row:
-                # fkeys = json.loads(row.deleted_fk)
-                # if "location_id" in fkeys and \
-                # str(fkeys["location_id"]) == str(location_id):
-                    # duplicate = row
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3OfficeSummaryModel(S3Model):
@@ -4919,38 +4709,14 @@ class S3OfficeTypeTagModel(S3Model):
 
 
         self.configure(tablename,
-                       deduplicate = self.org_office_type_tag_deduplicate,
+                       deduplicate = S3Duplicate(primary = ("office_type_id",
+                                                            "tag",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def org_office_type_tag_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method
-           to update
-
-           @param item: the S3ImportItem
-        """
-
-        data = item.data
-        tag = data.get("tag", None)
-        office_type_id = data.get("office_type_id", None)
-
-        if not tag or not office_type_id:
-            return
-
-        table = item.table
-        query = (table.tag.lower() == tag.lower()) & \
-                (table.office_type_id == office_type_id)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 def org_organisation_address(row):
@@ -5330,7 +5096,7 @@ class org_OrganisationRepresent(S3Represent):
         if show_parent and parent:
             name = "%s > %s" % (parent, name)
 
-        return s3_unicode(name)
+        return s3_str(name)
 
     # -------------------------------------------------------------------------
     def dt_orderby(self, field, direction, orderby, left):
@@ -5587,7 +5353,7 @@ class org_SiteRepresent(S3Represent):
                 if instance_type:
                     name = "%s (%s)" % (name, instance_type)
 
-        return s3_unicode(name)
+        return s3_str(name)
 
 # =============================================================================
 class org_SiteCheckInMethod(S3Method):
@@ -5719,47 +5485,81 @@ class org_SiteCheckInMethod(S3Method):
                 from ..s3.s3track import S3Trackable
                 person_id = person.id
                 tracker = S3Trackable(ptable, record_id=person_id)
-                if "check-in" in r.post_vars:
-                    # We're not Checking-in in S3Track terms (that's about interlocking with another object)
+
+                post_vars = r.post_vars
+                postprocess = None
+                record = r.record
+                callback = None
+
+                if "check-in" in post_vars:
+
+                    # We're not Checking-in in S3Track terms (that's
+                    # about interlocking with another object)
                     #tracker.check_in()
-                    record = r.record
+
                     # @ToDo: Check if we are already checked-in?
                     tracker.set_location(record.location_id)
+
                     # Check for Hook (e.g. to be able to update cr_shelter_registration)
                     postprocess = s3db.get_config(r.tablename, "site_check_in")
-                    if postprocess:
-                        error, warning = postprocess(record.site_id, person_id)
-                        if warning:
-                            response.warning = warning
-                        if error:
-                            response.error = error
-                        else:
-                            response.confirmation = T("Checked-in successfully!")
-                    else:
-                        response.confirmation = T("Checked-in successfully!")
-                elif "check-out" in r.post_vars:
+                    action = "check-in"
+                    confirmation = T("Checked-in successfully!")
+
+                elif "check-out" in post_vars:
                     # Check-Out
-                    # We're not Checking-out in S3Track terms (that's about removing an interlock with another object)
-                    # What we're doing is saying that we're now back at our base location
+
+                    # We're not Checking-out in S3Track terms (that's
+                    # about removing an interlock with another object)
+                    # What we're doing is saying that we're now back at
+                    # our base location
                     #tracker.check_out()
+
                     # @ToDo: Check if we are already checked-out?
                     tracker.set_location(person.location_id)
+
                     # Check for Hook (e.g. to be able to update cr_shelter_registration)
                     postprocess = s3db.get_config(r.tablename, "site_check_out")
-                    if postprocess:
-                        error, warning = postprocess(r.record.site_id, person_id)
-                        if warning:
-                            response.warning = warning
-                        if error:
-                            response.error = error
-                        else:
-                            response.confirmation = T("Checked-out successfully!")
+                    action = "check-out"
+                    confirmation = T("Checked-out successfully!")
+
+                else:
+                    # Form was not submitted by any of the submit buttons,
+                    # this must be a client-side error. Raise a status so
+                    # the client can recover (i.e. reload the JS)
+                    r.error(400, current.ERROR.BAD_REQUEST, next=r.url())
+
+                if postprocess is not None:
+
+                    result = postprocess(record.site_id, person_id)
+                    if isinstance(result, tuple):
+                        if len(result) == 2:
+                            error, warning = result
+                        elif len(result) == 3:
+                            error, warning, callback = result
                     else:
-                        response.confirmation = T("Checked-out successfully!")
+                        # Ignore return value
+                        error, warning = None, None
+
+                    if warning:
+                        response.warning = warning
+                    if error:
+                        response.error = error
+                    else:
+                        response.confirmation = confirmation
+                else:
+                    response.confirmation = confirmation
+
+                if callback is not None:
+                    # Callback requested by post-process, e.g. to
+                    # show a custom page with handling instructions
+                    return callback(record.site_id,
+                                    person_id,
+                                    action = action,
+                                    )
 
         # @ToDo: Allow configuring the special chars via Web UI?
         # NB  small tilde  char not visible in Notepad++ using default font, switch to Consolas!
-        success = T("Scan succesful: check In or Out?")
+        #success = T("Scan successful: check In or Out?")
         # @ToDo: Personalise with Name from AJAX call too?
         #checked_in = T("You are currently Checked-In, would you like to Check-Out?")
         #checked_out = T("You are currently Checked-Out, would you like to Check-In?")
@@ -5769,6 +5569,7 @@ class org_SiteCheckInMethod(S3Method):
         #else:
         #    s3.scripts.append("/%s/static/scripts/jquery.barcodelistener-1.1-min.js" % r.application)
         #s3.jquery_ready.append('''$(document).BarcodeListener([['§','32'],['˜','732']],function(code){$('#pe_label').val(code);S3.showAlert('%(success)s')})''' % success)
+
         response.view = "check-in.html"
         output = dict(form = form,
                       title = T("Check-In"),
@@ -5904,6 +5705,11 @@ def org_rheader(r, tabs=[]):
         if not tabs:
             skip_branches = False
 
+            if settings.get_org_offices_tab():
+                offices = (T("Offices"), "office")
+            else:
+                offices = None
+
             # If a filter is being applied to the Organisations, amend the tabs accordingly
             type_filter = current.request.get_vars.get("organisation_type.name",
                                                        None)
@@ -5911,22 +5717,27 @@ def org_rheader(r, tabs=[]):
                 if type_filter == "Supplier":
                     skip_branches = True
                     tabs = [(T("Basic Details"), None, {"native": 1}),
-                            (T("Offices"), "office"),
+                            offices,
                             (T("Warehouses"), "warehouse"),
                             (T("Contacts"), "human_resource"),
                             ]
                 elif type_filter == "Academic,Bilateral,Government,Intergovernmental,NGO,UN agency":
                     tabs = [(T("Basic Details"), None, {"native": 1}),
-                            (T("Offices"), "office"),
+                            offices,
                             (T("Warehouses"), "warehouse"),
                             (T("Contacts"), "human_resource"),
                             (T("Projects"), "project"),
                             ]
             else:
+                if settings.get_org_facilities_tab():
+                    facilities =  (T("Facilities"), "facility")
+                else:
+                    facilities = None
+
                 tabs = [(T("Basic Details"), None),
-                        (T("Offices"), "office"),
+                        offices,
                         (T("Warehouses"), "warehouse"),
-                        (T("Facilities"), "facility"),
+                        facilities,
                         (T("Staff & Volunteers"), "human_resource"),
                         (T("Assets"), "asset"),
                         (T("Projects"), "project"),
@@ -5937,6 +5748,8 @@ def org_rheader(r, tabs=[]):
                     append_tab((T("Tags"), "tag"))
                 if settings.get_org_resources_tab():
                     tabs.insert(-1, (T("Resources"), "resource"))
+                if settings.get_org_needs_tab():
+                    tabs.insert(-1, (T("Needs"), "needs"))
                 if settings.get_org_service_locations():
                     tabs.insert(-1, (T("Service Locations"), "service_location"))
 
@@ -6020,14 +5833,14 @@ def org_rheader(r, tabs=[]):
             if permitted("update", tablename, r.id) and \
                permitted("create", "hrm_human_resource_site"):
                 append_tab((T("Assign %(staff)s") % dict(staff=STAFF), "assign"))
-        if settings.get_req_summary():
-            append_tab((T("Needs"), "site_needs"))
-        if settings.has_module("asset"):
-            append_tab((T("Assets"), "asset"))
         if settings.has_module("inv"):
             tabs = tabs + s3db.inv_tabs(r)
-        if settings.has_module("req"):
+        if settings.get_org_needs_tab():
+            append_tab((T("Needs"), "site_needs"))
+        elif settings.has_module("req"):
             tabs = tabs + s3db.req_tabs(r)
+        if settings.has_module("asset"):
+            append_tab((T("Assets"), "asset"))
 
         tabs.extend(((T("Attachments"), "document"),
                      (T("User Roles"), "roles"),
@@ -6179,6 +5992,46 @@ def org_organisation_controller():
                 r.resource.add_filter(branch_filter)
 
             if not component or r.component_name == "branch":
+                if not component:
+                    keyvalue = settings.get_ui_auto_keyvalue()
+                    if keyvalue:
+                        # What Keys do we have?
+                        kvtable = s3db.org_organisation_tag
+                        keys = db(kvtable.deleted == False).select(kvtable.tag,
+                                                                   distinct=True)
+                        if keys:
+                            tablename = "org_organisation"
+                            crud_fields = s3db.org_organisation_crud_fields
+                            cappend = crud_fields.append
+                            add_component = s3db.add_components
+                            list_fields = s3db.get_config(tablename,
+                                                          "list_fields")
+                            lappend = list_fields.append
+                            for key in keys:
+                                tag = key.tag
+                                label = T(tag.title())
+                                cappend(S3SQLInlineComponent("tag",
+                                                             label = label,
+                                                             name = tag,
+                                                             multiple = False,
+                                                             fields = [("", "value")],
+                                                             filterby = dict(field = "tag",
+                                                                             options = tag,
+                                                                             )
+                                                             ))
+                                add_component(tablename,
+                                              org_organisation_tag = {"name": tag,
+                                                                      "joinby": "organisation_id",
+                                                                      "filterby": "tag",
+                                                                      "filterfor": (tag,),
+                                                                      },
+                                              )
+                                lappend((label, "%s.value" % tag))
+                            crud_form = S3SQLCustomForm(*crud_fields)
+                            s3db.configure(tablename,
+                                           crud_form = crud_form,
+                                           )
+
                 if type_filter:
                     type_names = [name.lower().strip()
                                   for name in type_filter.split(",")]

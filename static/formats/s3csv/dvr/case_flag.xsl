@@ -8,6 +8,11 @@
          CSV column...........Format..........Content
 
          Name.................string..........Type Name
+         External.............string..........Flag indicates that person is
+                                              currently external
+                                              true|false
+         Not Transferable.....string..........Cases with this flag are not transferable
+                                              true|false
          Comments.............string..........Comments
 
     *********************************************************************** -->
@@ -23,12 +28,43 @@
     <!-- ****************************************************************** -->
     <xsl:template match="row">
         <resource name="dvr_case_flag">
+
             <data field="name">
                 <xsl:value-of select="col[@field='Name']"/>
             </data>
+
+            <xsl:variable name="is_external" select="col[@field='External']/text()"/>
+            <data field="is_external">
+                <xsl:attribute name="value">
+                    <xsl:choose>
+                        <xsl:when test="$is_external='true'">
+                            <xsl:value-of select="'true'"/>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:value-of select="'false'"/>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </xsl:attribute>
+            </data>
+
+            <xsl:variable name="is_not_transferable" select="col[@field='Not Transferable']/text()"/>
+            <data field="is_not_transferable">
+                <xsl:attribute name="value">
+                    <xsl:choose>
+                        <xsl:when test="$is_not_transferable='true'">
+                            <xsl:value-of select="'true'"/>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:value-of select="'false'"/>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </xsl:attribute>
+            </data>
+
             <data field="comments">
                 <xsl:value-of select="col[@field='Comments']"/>
             </data>
+
         </resource>
     </xsl:template>
 

@@ -85,7 +85,7 @@ from gluon.storage import Storage
 from gluon.validators import Validator
 
 from s3datetime import S3DateTime
-from s3utils import s3_orderby_fields, s3_unicode, s3_validate
+from s3utils import s3_orderby_fields, s3_str, s3_unicode, s3_validate
 
 def translate(text):
     if text is None:
@@ -399,7 +399,7 @@ class IS_INT_AMOUNT(IS_INT_IN_RANGE):
     def __call__(self, value):
 
         thousands_sep = ","
-        value = str(value).replace(thousands_sep, "")
+        value = s3_str(value).replace(thousands_sep, "")
         return IS_INT_IN_RANGE.__call__(self, value)
 
     # -------------------------------------------------------------------------
@@ -476,15 +476,19 @@ class IS_FLOAT_AMOUNT(IS_FLOAT_IN_RANGE):
     def __call__(self, value):
 
         thousands_sep = ","
-        value = str(value).replace(thousands_sep, "")
+        value = s3_str(value).replace(thousands_sep, "")
         return IS_FLOAT_IN_RANGE.__call__(self, value)
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def represent(number, precision=None):
+    def represent(number, precision=None, fixed=False):
         """
             Change the format of the number depending on the language
             Based on https://code.djangoproject.com/browser/django/trunk/django/utils/numberformat.py
+
+            @param number: the number
+            @param precision: the number of decimal places to show
+            @param fixed: show decimal places even if the decimal part is 0
         """
 
         if number is None:
@@ -500,10 +504,12 @@ class IS_FLOAT_AMOUNT(IS_FLOAT_IN_RANGE):
                 dec_part = dec_part[:precision]
         else:
             int_part, dec_part = str_number, ""
-        if int(dec_part) == 0:
+
+        if dec_part and int(dec_part) == 0 and not fixed:
             dec_part = ""
         elif precision is not None:
             dec_part = dec_part + ("0" * (precision - len(dec_part)))
+
         if dec_part:
             dec_part = DECIMAL_SEPARATOR + dec_part
 
@@ -3234,7 +3240,7 @@ class IS_PHONE_NUMBER(Validator):
         T = current.T
         error_message = self.error_message
 
-        number = str(value).strip()
+        number = s3_str(value).strip()
         number, error = s3_single_phone_requires(number)
         if not error:
             if self.international and \

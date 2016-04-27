@@ -45,9 +45,10 @@ Vulnerability,Reader,vul_reader@example.com,eden,"reader/0,vulnerability_reader/
 Vulnerability,Data Entry,vul_data_entry@example.com,eden,"reader/0,vulnerability_data_entry/0",International Federation of Red Cross and Red Crescent Societies,,,
 Vulnerability,Editor,vul_editor@example.com,eden,"reader/0,vulnerability_editor/0",International Federation of Red Cross and Red Crescent Societies,,,
 Vulnerability,Super Editor,vul_super@example.com,eden,"reader/0,vulnerability_super/0",International Federation of Red Cross and Red Crescent Societies,,,
+Afghanistan,Member Super Editor,af_member@example.com,eden,member_super,Afghan Red Crescent Society,,,prs
 Afghanistan,Volunteer Data Entry,af_dataentry@example.com,eden,vol_data_entry,Afghan Red Crescent Society,,,prs
 Afghanistan,Volunteer Editor,af_editor@example.com,eden,vol_editor,Afghan Red Crescent Society,,,prs
-Afghanistan,Volunteer Super Editor,af_super@example.com,eden,vol_super,Afghan Red Crescent Society,,,prs
+Afghanistan,Volunteer Super Editor,af_super@example.com,eden,"vol_super,member_super",Afghan Red Crescent Society,,,prs
 Bangladesh,Volunteer Data Entry,bd_dataentry@example.com,eden,vol_data_entry,Bangladesh Red Crescent Society,,,
 Bangladesh,Volunteer Editor,bd_editor@example.com,eden,vol_editor,Bangladesh Red Crescent Society,,,
 Bangladesh,Volunteer Super Editor,bd_super@example.com,eden,vol_super,Bangladesh Red Crescent Society,,,
@@ -91,5 +92,6 @@ Vietnam,Volunteer Editor,vn_editor@example.com,eden,vol_editor,Viet Nam Red Cros
 Vietnam,Volunteer Super Editor,vn_super@example.com,eden,vol_super,Viet Nam Red Cross,,,vi
 Vietnam,Org Admin,vn_orgadmin@example.com,eden,ORG_ADMIN,Viet Nam Red Cross,,,vi
 RecoveryOutreach,Admin,roadmin@example.com,eden,PO_ADMIN,New Zealand Red Cross,,,
-RDRT,Admin,rdrtadmin@example.com,eden,"RDRT_ADMIN/0",International Federation of Red Cross and Red Crescent Societies,,,
-RDRT,Regional,rdrtregional@example.com,eden,"RDRT_REGIONAL/0",International Federation of Red Cross and Red Crescent Societies,,,
+RDRT,Admin,rdrtadmin@example.com,eden,"RDRT_ADMIN/0",Africa Zone,,,
+RDRT,Regional,rdrtregional@example.com,eden,"RDRT_REGIONAL/0",Africa Zone,,,
+AP,RDRT Admin,aprdrtadmin@example.com,eden,"RDRT_ADMIN/0,AP_RDRT_ADMIN/0",Asia-Pacific Region,,,

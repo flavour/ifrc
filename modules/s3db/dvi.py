@@ -2,7 +2,7 @@
 
 """ Sahana Eden Disaster Victim Identification Model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -160,11 +160,14 @@ class S3DVIModel(S3Model):
         define_table(tablename,
                      super_link("pe_id", "pr_pentity"),
                      super_link("site_id", "org_site"),
-                     Field("name",
-                           length=255,
-                           unique=True,
-                           notnull=True,
-                           label = T("Morgue")),
+                     Field("name", length=255, unique=True, notnull=True,
+                           label = T("Morgue"),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_NOT_ONE_OF(db,
+                                                     "dvi_morgue.name",
+                                                     ),
+                                       ],
+                           ),
                      self.org_organisation_id(),
                      Field("description",
                            label = T("Description")),

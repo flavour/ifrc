@@ -2,7 +2,7 @@
 
 """ Sahana Eden Supply Model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -124,6 +124,11 @@ class S3SupplyModel(S3Model):
         define_table(tablename,
                      Field("name", length=128, notnull=True, unique=True,
                            label = T("Name"),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_NOT_ONE_OF(db,
+                                                     "%s.name" % tablename,
+                                                     ),
+                                       ],
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -169,6 +174,11 @@ class S3SupplyModel(S3Model):
         define_table(tablename,
                      Field("name", length=128, notnull=True, unique=True,
                            label = T("Name"),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_NOT_ONE_OF(db,
+                                                     "%s.name" % tablename,
+                                                     ),
+                                       ],
                            ),
                      self.org_organisation_id(),
                      s3_comments(),
@@ -350,6 +360,7 @@ $.filterOptionsS3({
                      ),
                      Field("name", length=128, notnull=True,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("code", length=16,
                            label = T("Code"),
@@ -358,6 +369,7 @@ $.filterOptionsS3({
                      Field("um", length=128, notnull=True,
                            default = "piece",
                            label = T("Unit of Measure"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      brand_id(),
                      Field("kit", "boolean",
@@ -627,6 +639,7 @@ $.filterOptionsS3({
                            notnull=True, # Ideally this would reference another table for normalising Pack names
                            default = T("piece"),
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("quantity", "double", notnull=True,
                            default = 1,
@@ -1179,17 +1192,23 @@ class S3SupplyDistributionModel(S3Model):
         super_link = self.super_link
 
         # ---------------------------------------------------------------------
-        # Distribution Item
+        # Distribution Item: supply items which can be distributed
         #
         tablename = "supply_distribution_item"
         define_table(tablename,
                      super_link("parameter_id", "stats_parameter"),
                      self.supply_item_entity_id,
                      self.supply_item_id(ondelete = "RESTRICT",
-                                         required = True),
+                                         required = True,
+                                         ),
+                     # @ToDo: Hide this field & populate onaccept from the item_id represent
                      Field("name", length=128, unique=True,
+                           #label = T("Distribution Item Name"),
+                           label = T("Label"),
                            requires = IS_NOT_IN_DB(db,
-                                                   "supply_distribution_item.name")),
+                                                   "supply_distribution_item.name",
+                                                   ),
+                           ),
                      *s3_meta_fields())
 
         # CRUD Strings
@@ -1213,7 +1232,7 @@ class S3SupplyDistributionModel(S3Model):
                   )
 
         # ---------------------------------------------------------------------
-        # Distribution
+        # Distribution: actual distribution of a supply item
         #
         tablename = "supply_distribution"
         define_table(tablename,
@@ -1234,16 +1253,17 @@ class S3SupplyDistributionModel(S3Model):
                                 empty = False,
                                 comment = S3PopupLink(c = "supply",
                                                       f = "distribution_item",
-                                                      vars = {"child": "parameter_id"},
+                                                      vars = {"prefix": "supply",
+                                                              "child": "parameter_id"},
                                                       title=ADD_ITEM,
                                                       ),
                                 ),
                      self.gis_location_id(),
                      Field("value", "integer",
                            label = T("Quantity"),
-                           requires = IS_INT_IN_RANGE(0, 99999999),
+                           requires = IS_INT_IN_RANGE(0, None),
                            represent = lambda v: \
-                           IS_INT_AMOUNT.represent(v),
+                                       IS_INT_AMOUNT.represent(v),
                            ),
                      s3_date("date",
                              #empty = False,
@@ -1445,7 +1465,11 @@ class S3SupplyDistributionModel(S3Model):
                   context = {"location": "location_id",
                              "organisation": "activity_id$organisation_activity.organisation_id",
                              },
-                  deduplicate = self.supply_distribution_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("activity_id",
+                                                       "location_id",
+                                                       "parameter_id",
+                                                       ),
+                                            ),
                   filter_widgets = filter_widgets,
                   onaccept = self.supply_distribution_onaccept,
                   report_options = report_options,
@@ -1469,33 +1493,13 @@ class S3SupplyDistributionModel(S3Model):
         record_id = form.vars.id
         query = (dtable.id == record_id) & \
                 (ltable.id == dtable.item_id)
-        item = db(query).select(ltable.name,
+        item = db(query).select(dtable.name,
+                                ltable.name,
                                 limitby=(0, 1)).first()
-        if item:
-            db(dtable.id == record_id).update(name = item.name)
+
+        if item and not item[dtable.name]:
+            db(dtable.id == record_id).update(name = item[ltable.name])
         return
-
-    # ---------------------------------------------------------------------
-    @staticmethod
-    def supply_distribution_deduplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        activity_id = data.get("activity_id")
-        location_id = data.get("location_id")
-        parameter_id = data.get("parameter_id")
-
-        if activity_id and location_id and parameter_id:
-            # Match distribution by activity, item and location
-            table = item.table
-            query = (table.activity_id == activity_id) & \
-                    (table.location_id == location_id) & \
-                    (table.parameter_id == parameter_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -1672,7 +1676,7 @@ class supply_ItemRepresent(S3Represent):
             um = row["supply_item.um"]
             if um:
                 name = "%s (%s)" % (name, um)
-        return s3_unicode(name)
+        return s3_str(name)
 
 # =============================================================================
 class supply_ItemPackRepresent(S3Represent):
@@ -1882,7 +1886,7 @@ class supply_ItemCategoryRepresent(S3Represent):
         if catalog:
             name = "%s > %s" % (catalog, name)
 
-        return s3_unicode(name)
+        return s3_str(name)
 
 # =============================================================================
 def item_um_from_name(name):

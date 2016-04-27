@@ -146,6 +146,8 @@ def config(settings):
     # =========================================================================
     # UI settings
     #
+    settings.ui.formstyle_read = "default_inline"
+
     settings.search.filter_manager = False
     settings.ui.label_postcode = "Postal Code"
     settings.ui.summary = ({"common": True,
@@ -700,9 +702,12 @@ def config(settings):
     settings.project.hazards = True
     settings.project.themes = False
     settings.project.hfa = False
+    settings.project.activities = True
+
+    settings.project.multiple_organisations = True
 
     # Custom label for project organisation
-    settings.project.organisation_roles = {1: T("Organization"),
+    settings.project.organisation_roles = {1: T("Implementing Organization"),
                                            2: T("Partner Organization"),
                                            3: T("Donor"),
                                            }
@@ -778,8 +783,6 @@ def config(settings):
                 "status_id",
                 "start_date",
                 "end_date",
-                "budget",
-                "currency",
                 S3SQLInlineLink(
                     "hazard",
                     label = T("Hazards"),
@@ -796,6 +799,12 @@ def config(settings):
                     translate = True,
                 ),
                 "objectives",
+                (T("Funds available"), "budget"),
+                "project_needs.funding",
+                "currency",
+                "project_needs.funding_details",
+                #"project_needs.vol",
+                #"project_needs.vol_details",
                 "human_resource_id",
                 S3SQLInlineComponent(
                     "document",
@@ -896,6 +905,79 @@ def config(settings):
 
 
     settings.customise_project_location_resource = customise_project_location_resource
+
+    # -------------------------------------------------------------------------
+    def customise_project_activity_resource(r, tablename):
+
+        s3db = current.s3db
+        table = s3db.project_activity
+
+        # Hide unwanted fields
+        field = table.person_id
+        field.readable = field.writable = False
+
+        # Custom CRUD form
+        from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink
+
+        if r.controller == "org":
+            organisation_id = None
+        else:
+            organisation_id = S3SQLInlineLink("organisation",
+                                              field = "organisation_id",
+                                              multiple = False,
+                                              )
+
+        crud_form = S3SQLCustomForm("project_id",
+                                    organisation_id,
+                                    "name",
+                                    #S3SQLInlineLink("activity_type",
+                                    #                field = "activity_type_id",
+                                    #                label = T("Activity Types"),
+                                    #                ),
+                                    S3SQLInlineComponent("distribution",
+                                                         fields = ["parameter_id",
+                                                                   "value",
+                                                                   "comments",
+                                                                   ],
+                                                         label = T("Distributed Supplies"),
+                                                         ),
+                                    "location_id",
+                                    "date",
+                                    "end_date",
+                                    "status_id",
+                                    "comments",
+                                    )
+
+        # Custom list fields
+        list_fields = ["project_id",
+                       "name",
+                       "location_id",
+                       "date",
+                       "end_date",
+                       "status_id",
+                       ]
+
+        if organisation_id is not None:
+            list_fields.insert(1, "activity_organisation.organisation_id")
+
+        s3db.configure("project_activity",
+                       crud_form = crud_form,
+                       list_fields = list_fields,
+                       )
+
+
+    settings.customise_project_activity_resource = customise_project_activity_resource
+
+    # -------------------------------------------------------------------------
+    def customise_project_activity_controller(**attr):
+
+        # Custom rheader and tabs
+        attr = dict(attr)
+        attr["rheader"] = mavc_rheader
+
+        return attr
+
+    settings.customise_project_activity_controller = customise_project_activity_controller
 
     # =========================================================================
     # Requests
@@ -1084,6 +1166,7 @@ def mavc_rheader(r, tabs=None):
                     (INDIVIDUALS, "human_resource"),
                     (T("Services"), "service_location"),
                     (T("Facilities"), "facility"),
+                    (T("Activities"), "activity"),
                     (T("Projects"), "project"),
                     (T("Attachments"), "document"),
                     ]
@@ -1126,11 +1209,39 @@ def mavc_rheader(r, tabs=None):
                           ),
                       )
 
+    elif tablename == "project_activity":
+
+        if not tabs:
+            tabs = [(T("Activity"), None),
+                    (T("Attachments"), "document"),
+                    ]
+
+        # Retrieve details for the rheader
+        data = resource.select(["activity_organisation.organisation_id",
+                                "location_id",
+                                ],
+                               represent = True,
+                               )
+        row = data.rows[0]
+
+        # Title and Subtitle
+        title = row["project_activity_organisation.organisation_id"]
+        subtitle = row["project_activity.location_id"]
+
+        # Compose the rheader
+        rheader = DIV(DIV(H1(title),
+                          H2(subtitle),
+                          _class="rheader-details",
+                          ),
+                      )
+
     elif tablename == "project_project":
 
         if not tabs:
             tabs = [(T("About"), None),
                     (T("Locations"), "location"),
+                    (T("Partners and Donors"), "organisation"),
+                    (T("Activities"), "activity"),
                     (T("Attachments"), "document"),
                     ]
 

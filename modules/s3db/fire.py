@@ -2,7 +2,7 @@
 
 """ Sahana Eden Fire Models
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -87,7 +87,7 @@ class S3FireModel(S3Model):
         zone_type_represent = S3Represent(lookup=tablename)
 
         self.configure(tablename,
-                       deduplicate = self.fire_zone_type_duplicate,
+                       deduplicate = S3Duplicate(),
                        )
 
         # -----------------------------------------------------------
@@ -138,23 +138,6 @@ class S3FireModel(S3Model):
         #
         return {}
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def fire_zone_type_duplicate(item):
-        """
-            Zone Type record duplicate detection, used for the deduplicate hook
-
-            @param item: the S3ImportItem to check
-        """
-
-        table = item.table
-        query = (table.name == item.data.name)
-        row = current.db(query).select(table.id,
-                                       limitby=(0, 1)).first()
-        if row:
-            item.id = row.id
-            item.method = item.METHOD.UPDATE
-
 # =============================================================================
 class S3FireStationModel(S3Model):
     """
@@ -197,6 +180,7 @@ class S3FireStationModel(S3Model):
                      self.super_link("site_id", "org_site"),
                      Field("name", notnull=True, length=64,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("code", length=10,
                            # @ToDo: code_requires based on deployment_setting

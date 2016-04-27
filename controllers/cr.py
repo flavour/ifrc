@@ -52,12 +52,54 @@ def shelter_unit():
         REST controller to
             retrieve options for shelter unit selection
             show layer on Map
+            imports
     """
 
-    # [Geo]JSON & Map Popups only
-    s3.prep = lambda r: r.representation in ("json", "geojson", "plain")
+    # [Geo]JSON & Map Popups or Imports only
+    def prep(r):
+        if r.representation == "plain":
+            # Have the 'Open' button open in the context of the Shelter
+            record_id = r.id
+            table = s3db.cr_shelter_unit
+            row = db(table.id == record_id).select(table.shelter_id,
+                                                   limitby=(0, 1)
+                                                   ).first()
+            shelter_id = row.shelter_id
+            s3db.configure("cr_shelter_unit",
+                           popup_url = URL(c="cr", f="shelter",
+                                           args=[shelter_id, "shelter_unit",
+                                                 record_id]),
+                        )
+            return True
+        elif r.representation in ("json", "geojson", "plain") or \
+             r.method == "import":
+            return True
+        return False
+
+    s3.prep = prep
 
     return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def shelter_registration():
+    """
+        RESTful CRUD controller
+    """
+
+    s3.crud_strings.cr_shelter_registration = Storage(
+        label_create = T("Register Person"),
+        title_display = T("Registration Details"),
+        title_list = T("Registered People"),
+        title_update = T("Edit Registration"),
+        label_list_button = T("List Registrations"),
+        msg_record_created = T("Registration added"),
+        msg_record_modified = T("Registration updated"),
+        msg_record_deleted = T("Registration entry deleted"),
+        msg_list_empty = T("No people currently registered in this shelter")
+        )
+
+    output = s3_rest_controller()
+    return output
 
 # =============================================================================
 def shelter():
@@ -93,6 +135,8 @@ def shelter():
             map_widget = dict(label = T("Housing Units"),
                               type = "map",
                               icon = "icon-map",
+                              colspan = 2,
+                              height = 500,
                               #bbox = bbox,
                               )
             ftable = s3db.gis_layer_feature

@@ -12,6 +12,10 @@
          Status...............string..........Status Name
          Default..............string..........is default status
                                               true|false
+         Closed...............string..........cases with this status are closed
+                                              true|false
+         Not Transferable.....string..........cases with this status are not transferable
+                                              true|false
          Comments.............string..........Comments
 
     *********************************************************************** -->
@@ -41,6 +45,32 @@
                 <xsl:attribute name="value">
                     <xsl:choose>
                         <xsl:when test="$is_default='true'">
+                            <xsl:value-of select="'true'"/>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:value-of select="'false'"/>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </xsl:attribute>
+            </data>
+            <xsl:variable name="is_closed" select="col[@field='Closed']/text()"/>
+            <data field="is_closed">
+                <xsl:attribute name="value">
+                    <xsl:choose>
+                        <xsl:when test="$is_closed='true'">
+                            <xsl:value-of select="'true'"/>
+                        </xsl:when>
+                        <xsl:otherwise>
+                            <xsl:value-of select="'false'"/>
+                        </xsl:otherwise>
+                    </xsl:choose>
+                </xsl:attribute>
+            </data>
+            <xsl:variable name="is_not_transferable" select="col[@field='Not Transferable']/text()"/>
+            <data field="is_not_transferable">
+                <xsl:attribute name="value">
+                    <xsl:choose>
+                        <xsl:when test="$is_not_transferable='true'">
                             <xsl:value-of select="'true'"/>
                         </xsl:when>
                         <xsl:otherwise>

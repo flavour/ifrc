@@ -2,7 +2,7 @@
 
 """ Resource Import Tools
 
-    @copyright: 2011-15 (c) Sahana Software Foundation
+    @copyright: 2011-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -724,21 +724,27 @@ class S3Importer(S3Method):
             except:
                 pass
 
-        if form.accepts(r.post_vars, current.session,
-                        formname="upload_form"):
-            upload_id = table.insert(**table._filter_fields(form.vars))
+        if form.accepts(r.post_vars, current.session, formname="upload_form"):
+
+            formvars = form.vars
+
+            # Create the upload entry
+            upload_id = table.insert(file = formvars.file)
+
+            # Process extra fields
             if self.csv_extra_fields:
+
                 # Convert Values to Represents
-                self.csv_extra_data = Storage()
+                extra_data = self.csv_extra_data = Storage()
                 for f in self.csv_extra_fields:
-                    label = f.get("label", None)
+                    label = f.get("label")
                     if not label:
                         continue
-                    field = f.get("field", None)
-                    value = f.get("value", None)
+                    field = f.get("field")
+                    value = f.get("value")
                     if field:
-                        if field.name in form.vars:
-                            data = form.vars[field.name]
+                        if field.name in formvars:
+                            data = formvars[field.name]
                         else:
                             data = field.default
                         value = data
@@ -763,7 +769,8 @@ class S3Importer(S3Method):
                                     value = value.m
                     elif value is None:
                         continue
-                    self.csv_extra_data[label] = value
+                    extra_data[label] = value
+
         s3.no_formats = True
         return form
 
@@ -2144,13 +2151,14 @@ class S3ImportItem(object):
                 current.log.debug(format_exc(10))
         accepted = True
         if form.errors:
+            element = self.element
             for k in form.errors:
-                e = self.element.findall("data[@field='%s']" % k)
+                e = element.findall("data[@field='%s']" % k)
                 if not e:
-                    e = self.element.findall("reference[@field='%s']" % k)
-                    if not e:
-                        e = self.element
-                        form.errors[k] = "[%s] %s" % (k, form.errors[k])
+                    e = element.findall("reference[@field='%s']" % k)
+                if not e:
+                    e = element
+                    form.errors[k] = "[%s] %s" % (k, form.errors[k])
                 else:
                     e = e[0]
                 e.set(ERROR, str(form.errors[k]).decode("utf-8"))
@@ -3820,7 +3828,14 @@ class S3Duplicate(object):
 
         if ignore_case and \
            hasattr(value, "lower") and ftype in ("string", "text"):
-            query = (field.lower() == value.lower())
+            # NB Must convert to unicode before lower() in order to correctly
+            #    convert certain unicode-characters (e.g. İ=>i, or Ẽ=>ẽ)
+            # => PostgreSQL LOWER() on Windows may not convert correctly,
+            #    which seems to be a locale issue:
+            #    http://stackoverflow.com/questions/18507589/the-lower-function-on-international-characters-in-postgresql
+            # => works fine on Debian servers if the locale is a .UTF-8 before
+            #    the Postgres cluster is created
+            query = (field.lower() == s3_unicode(value).lower().encode("utf-8"))
         else:
             query = (field == value)
         return query

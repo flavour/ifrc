@@ -2,7 +2,7 @@
 
 """ Sahana Eden Content Management System Model
 
-    @copyright: 2012-2015 (c) Sahana Software Foundation
+    @copyright: 2012-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -91,6 +91,11 @@ class S3ContentModel(S3Model):
         define_table(tablename,
                      Field("name", length=255, notnull=True, unique=True,
                            label = T("Name"),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_NOT_ONE_OF(db,
+                                                     "%s.name" % tablename,
+                                                     ),
+                                       ],
                            ),
                      Field("avatar", "boolean",
                            default = False,
@@ -186,6 +191,7 @@ class S3ContentModel(S3Model):
                      Field("body", "text", notnull=True,
                            label = T("Body"),
                            represent = body_represent,
+                           #requires = IS_NOT_EMPTY(),
                            widget = body_widget,
                            ),
                      # @ToDo: Move this to link table?
@@ -425,17 +431,17 @@ class S3ContentModel(S3Model):
         define_table(tablename,
                      post_id(empty=False),
                      Field("module",
-                           comment = T("If you specify a module then this will be used as the text in that module's index page"),
+                           comment = T("If you specify a module, but no resource, then this will be used as the text in that module's index page"),
                            label = T("Module"),
                            ),
                      Field("resource",
-                           comment = T("If you specify a resource then this will be used as the text in that resource's summary page"),
+                           comment = T("If you specify a resource, but no record, then this will be used as the text in that resource's summary page"),
                            label = T("Resource"),
                            ),
-                     #Field("record",
-                     #      comment = T("If you specify a record then this will be used as a hyperlink to that resource"),
-                     #      label = T("Record"),
-                     #      ),
+                     Field("record",
+                           comment = T("If you specify a record then this will be used for that record's profile page"),
+                           label = T("Record"),
+                           ),
                      *s3_meta_fields())
 
         # CRUD Strings
@@ -533,6 +539,7 @@ class S3ContentModel(S3Model):
                      post_id(empty=False),
                      Field("body", "text", notnull=True,
                            label = T("Comment"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      *s3_meta_fields())
 
@@ -632,10 +639,17 @@ class S3ContentModel(S3Model):
             query = (table.module == module)
             resource = get_vars.get("resource", None)
             if resource:
-                # Resource Summary page
                 query &= (table.resource == resource)
+                record = get_vars.get("record", None)
+                if record:
+                    # Profile page
+                    query &= (table.record == record)
+                else:
+                    # Resource Summary page
+                    query &= (table.record == None)
             else:
                 # Module home page
+                record = None
                 query &= ((table.resource == None) | \
                           (table.resource == "index"))
             result = db(query).update(post_id=post_id)
@@ -643,6 +657,7 @@ class S3ContentModel(S3Model):
                 table.insert(post_id=post_id,
                              module=module,
                              resource=resource,
+                             record=record,
                              )
 
         layer_id = get_vars.get("layer_id", None)
@@ -1105,9 +1120,9 @@ def cms_documentation(r, default_page, default_url):
         table = r.resource.table
         query = (table.name == name) & (table.deleted != True)
         row = current.db(query).select(table.id,
-                                        table.title,
-                                        table.body,
-                                        limitby=(0, 1)).first()
+                                       table.title,
+                                       table.body,
+                                       limitby=(0, 1)).first()
     if not row:
         if name != default_page:
             # Error - CMS page not found
@@ -1165,21 +1180,35 @@ class S3CMS(S3Method):
         if not current.deployment_settings.has_module("cms"):
             return ""
 
-        # This is currently assuming that we're being used in a Summary page or similar
-        request = current.request
-
-        return self.resource_content(request.controller,
-                                     request.function,
+        return self.resource_content(r.controller,
+                                     r.function,
+                                     r.id,
                                      widget_id)
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def resource_content(module, resource, widget_id=None):
+    def resource_content(module,
+                         resource,
+                         record=None,
+                         widget_id=None,
+                         hide_if_empty=False):
+        """
+            Render resource-related CMS contents
+
+            @param module: the module prefix
+            @param resource: the resource name (without prefix)
+            @param record: the record ID (optional)
+            @param widget_id: the DOM node ID for the CMS widget
+            @param hide_if_empty: return an empty string when there is no
+                                  contents rather than a blank DIV
+        """
+
         db = current.db
         table = current.s3db.cms_post
         ltable = db.cms_post_module
         query = (ltable.module == module) & \
                 (ltable.resource == resource) & \
+                (ltable.record == record) & \
                 (ltable.post_id == table.id) & \
                 (table.deleted != True)
         _item = db(query).select(table.id,
@@ -1190,37 +1219,42 @@ class S3CMS(S3Method):
         auth = current.auth
         ADMIN = auth.get_system_roles().ADMIN
         ADMIN = auth.s3_has_role(ADMIN)
-        if _item:
-            if ADMIN:
-                if current.response.s3.crud.formstyle == "bootstrap":
-                    _class = "btn"
-                else:
-                    _class = "action-btn"
-                item = DIV(XML(_item.body),
-                           A(current.T("Edit"),
-                             _href=URL(c="cms", f="post",
-                                       args=[_item.id, "update"],
-                                       vars={"module": module,
-                                             "resource": resource
-                                             }),
-                             _class="%s cms-edit" % _class))
-            else:
-                item = XML(_item.body)
-        elif ADMIN:
+        if ADMIN:
             if current.response.s3.crud.formstyle == "bootstrap":
                 _class = "btn"
             else:
                 _class = "action-btn"
-            item = A(current.T("Edit"),
-                     _href=URL(c="cms", f="post", args="create",
-                               vars={"module": module,
-                                     "resource": resource
-                                     }),
-                     _class="%s cms-edit" % _class)
+            url_vars = {"module": module,
+                        "resource": resource,
+                        }
+            if record:
+                url_vars["record"] = record
+            if _item:
+                item = DIV(XML(_item.body),
+                           A(current.T("Edit"),
+                             _href=URL(c="cms", f="post",
+                                       args = [_item.id, "update"],
+                                       vars = url_vars,
+                                       ),
+                             _class="%s cms-edit" % _class,
+                             ))
+            else:
+                item = A(current.T("Edit"),
+                         _href=URL(c="cms", f="post",
+                                   args = "create",
+                                   vars = url_vars,
+                                   ),
+                         _class="%s cms-edit" % _class,
+                         )
+        elif _item:
+            item = XML(_item.body)
         else:
             item = ""
 
-        output = DIV(item, _id=widget_id, _class="cms_content")
+        if item != "" or not hide_if_empty:
+            output = DIV(item, _id=widget_id, _class="cms_content")
+        else:
+            output = item
         return output
 
 # =============================================================================

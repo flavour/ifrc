@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -128,6 +128,7 @@ class S3Config(Storage):
         self.cr = Storage()
         self.database = Storage()
         self.deploy = Storage()
+        self.dvr = Storage()
         self.event = Storage()
         self.evr = Storage()
         self.fin = Storage()
@@ -144,6 +145,8 @@ class S3Config(Storage):
         self.inv = Storage()
         self.irs = Storage()
         self.L10n = Storage()
+        # Allow templates to append rather than replace
+        self.L10n.languages = {"en": "English"}
         self.log = Storage()
         self.mail = Storage()
         self.member = Storage()
@@ -456,6 +459,12 @@ class S3Config(Storage):
         visible = self.get_security_self_registration() and \
                   self.security.get("registration_visible", True)
         return visible
+
+    def get_security_version_info_requires_login(self):
+        """
+            Whether the version info on the About page requires login
+        """
+        return self.security.get("version_info_requires_login", False)
 
     def get_auth_registration_requires_verification(self):
         return self.auth.get("registration_requires_verification", False)
@@ -989,12 +998,21 @@ class S3Config(Storage):
         return self.gis.get("api_google",
                             "ABQIAAAAgB-1pyZu7pKAZrMGv3nksRTpH3CbXHjuCVmaTc5MkkU4wO1RRhQWqp1VGwrG8yPE2KhLCPYhD7itFw")
 
-    def get_gis_api_yahoo(self):
+    def get_gis_bbox_min_size(self):
         """
-            API key for Yahoo
-            - deprecated
+            Minimum size for BBOX around Features on Map
+            - so that there is always some Map around a Point
+
+            Value is in degrees
         """
-        return self.gis.get("api_yahoo")
+        return self.gis.get("bbox_min_size", 0.05)
+
+    def get_gis_bbox_inset(self):
+        """
+            BBOX inset around Features on Map
+            - so that ones on the edge don't get cut-off
+        """
+        return self.gis.get("bbox_inset", 0.007)
 
     def get_gis_building_name(self):
         """
@@ -1334,8 +1352,16 @@ class S3Config(Storage):
             Default Tolerance for the Simplification of Polygons
             - a lower value means less simplification, which is suitable for higher-resolution local activities
             - a higher value is suitable for global views
+            - set to 0 to disable
         """
         return self.gis.get("simplify_tolerance", 0.01)
+
+    def get_gis_precision(self):
+        """
+            Number of Decimal places to put in output
+            Increase this to 5 for highly-zoomed maps showing buildings
+        """
+        return self.gis.get("precision", 4)
 
     def get_gis_spatialdb(self):
         """
@@ -1399,35 +1425,7 @@ class S3Config(Storage):
         return self.L10n.get("display_toolbar", True)
 
     def get_L10n_languages(self):
-        return self.L10n.get("languages", OrderedDict([("ar", "العربية"),
-                                                       ("zh-cn", "中文 (简体)"),
-                                                       ("zh-tw", "中文 (繁體)"),
-                                                       ("bs", "Bosanski"),
-                                                       ("en", "English"),
-                                                       ("fr", "Français"),
-                                                       ("de", "Deutsch"),
-                                                       ("el", "ελληνικά"),
-                                                       ("es", "Español"),
-                                                       ("it", "Italiano"),
-                                                       ("ja", "日本語"),
-                                                       ("km", "ភាសាខ្មែរ"),         # Khmer
-                                                       ("ko", "한국어"),
-                                                       ("mn", "Монгол хэл"),   # Mongolian
-                                                       ("my", "မြန်မာစာ"),        # Burmese
-                                                       ("ne", "नेपाली"),           # Nepali
-                                                       ("prs", "دری"),         # Dari
-                                                       ("ps", "پښتو"),         # Pashto
-                                                       ("pt", "Português"),
-                                                       ("pt-br", "Português (Brasil)"),
-                                                       ("ru", "русский"),
-                                                       #("si", "සිංහල"),                # Sinhala
-                                                       #("ta", "தமிழ்"),               # Tamil
-                                                       #("th", "ภาษาไทย"),        # Thai
-                                                       ("tl", "Tagalog"),
-                                                       ("tr", "Türkçe"),
-                                                       ("ur", "اردو"),
-                                                       ("vi", "Tiếng Việt"),
-                                                       ]))
+        return self.L10n.get("languages")
 
     def get_L10n_languages_readonly(self):
         return self.L10n.get("languages_readonly", True)
@@ -1643,42 +1641,51 @@ class S3Config(Storage):
     # -------------------------------------------------------------------------
     # UI Settings
     #
+
+    def _get_formstyle(cls, setting):
+        """ Helper function to identify a formstyle """
+
+        formstyles = cls.FORMSTYLE
+
+        if callable(setting):
+            # A custom formstyle defined in the template
+            formstyle = setting
+        if setting in formstyles:
+            # One of the standard supported formstyles
+            formstyle = formstyles[setting]
+        else:
+            # A default web2py formstyle
+            formstyle = setting
+        return formstyle
+
     def get_ui_formstyle(self):
         """ Get the current form style """
 
         setting = self.ui.get("formstyle", "default")
-        if setting in self.FORMSTYLE:
-            # One of the standard supported formstyles
-            return self.FORMSTYLE[setting]
-        elif callable(setting):
-            # A custom formstyle defined in the template
-            return setting
+        return self._get_formstyle(setting)
+
+    def get_ui_formstyle_read(self):
+        """ Get the current form style for read views """
+
+        setting = self.ui.get("formstyle_read")
+        if setting is not None:
+            formstyle = self._get_formstyle(setting)
         else:
-            # A default web2py formstyle
-            return setting
+            # Fall back to default formstyle
+            formstyle = self.get_ui_formstyle()
+        return formstyle
 
     def get_ui_filter_formstyle(self):
         """ Get the current filter form style """
 
         setting = self.ui.get("filter_formstyle", "default_inline")
-        if callable(setting):
-            return setting
-        elif setting in self.FORMSTYLE:
-            return self.FORMSTYLE[setting]
-        else:
-            return setting
+        return self._get_formstyle(setting)
 
     def get_ui_report_formstyle(self):
         """ Get the current report form style """
 
         setting = self.ui.get("report_formstyle")
-        formstyles = self.FORMSTYLE
-        if callable(setting):
-            return setting
-        elif setting in formstyles:
-            return formstyles[setting]
-        else:
-            return setting
+        return self._get_formstyle(setting)
 
     def get_ui_inline_formstyle(self):
         """ Get the _inline formstyle for the current formstyle """
@@ -1688,12 +1695,17 @@ class S3Config(Storage):
         formstyles = self.FORMSTYLE
 
         if isinstance(setting, basestring):
+            # Try to find the corresponding _inline formstyle
             inline_formstyle_name = "%s_inline" % setting
-            if inline_formstyle_name in formstyles:
-                return formstyles[inline_formstyle_name]
-            elif setting in formstyles:
-                return formstyles[setting]
-        return setting
+            formstyle = formstyles.get(inline_formstyle_name)
+        else:
+            formstyle = None
+
+        if formstyle is None:
+            # Fall back to default formstyle
+            formstyle = self._get_formstyle(setting)
+
+        return formstyle
 
     def get_ui_datatables_dom(self):
         """
@@ -1761,6 +1773,13 @@ class S3Config(Storage):
         return self.ui.get("icon_layout")
 
     # -------------------------------------------------------------------------
+    def get_ui_auto_keyvalue(self):
+        """
+            Should crud_form & list_fields automatically display all Keys in KeyValue tables?
+            - can be set to False, True or a list of tablenames for which it is True
+        """
+        return self.ui.get("auto_keyvalue", False)
+
     def get_ui_auth_user_represent(self):
         """
             Should the auth_user created_by/modified_by be represented by Name or Email?
@@ -2410,6 +2429,23 @@ class S3Config(Storage):
 
         return self.cap.get("restrict_fields", False)
 
+    def get_cap_post_to_twitter(self):
+        """
+            Whether to post the alerts in twitter
+            @ToDo: enhance this by as well as True,
+            being able to specify a specific Twitter channel to tweet on
+        """
+
+        return self.cap.get("post_to_twitter", False)
+
+    def get_cap_same_code(self):
+        """
+            Name of the tag that will be used to lookup in the gis_location_tag
+            to extract location_id for the alert
+        """
+
+        return self.cap.get("same_code")
+
     # -------------------------------------------------------------------------
     # CMS: Content Management System
     #
@@ -2571,6 +2607,111 @@ class S3Config(Storage):
         """
         return self.deploy.get("hr_label", "Staff")
 
+    def get_deploy_team_label(self):
+        """
+            Label for deployable Team
+            e.g. 'RDRT', 'RIT'
+        """
+        return self.deploy.get("team_label", "Deployable")
+
+    def get_deploy_manual_recipients(self):
+        """
+            Whether Alert recipients should be selected manually
+        """
+        return self.deploy.get("manual_recipients", True)
+
+    def get_deploy_post_to_twitter(self):
+        """
+            Whether to post the alerts in twitter
+            @ToDo: enhance this by as well as True,
+            being able to specify a specific Twitter channel to tweet on
+        """
+
+        return self.deploy.get("post_to_twitter", False)
+
+    def get_deploy_responses_via_web(self):
+        """
+            Whether Responses to Alerts come in via the Web
+        """
+
+        return self.deploy.get("responses_via_web", True)
+
+    # -------------------------------------------------------------------------
+    # DVR Options
+    #
+    def get_dvr_manage_transferability(self):
+        """
+            Enable features to manage transferability of cases
+        """
+        return self.dvr.get("manage_transferability", False)
+
+    def get_dvr_household_size(self):
+        """
+            Register number of persons per household (family)
+
+            False = off
+            True = manual
+            "auto" = count family members automatically
+        """
+        return self.dvr.get("household_size", False)
+
+    def get_dvr_mandatory_appointments(self):
+        """
+            Expose flags to mark appointment types as mandatory
+        """
+        return self.dvr.get("mandatory_appointments", False)
+
+    def get_dvr_appointments_update_last_seen_on(self):
+        """
+            Whether appointments which require presence shall
+            automatically update the "last seen on" date when
+            set to "completed"
+        """
+        return self.dvr.get("appointments_update_last_seen_on", False)
+
+    def get_dvr_appointments_update_case_status(self):
+        """
+            Whether appointments automatically update the case
+            status when set to "completed"
+        """
+        return self.dvr.get("appointments_update_case_status", False)
+
+    def get_dvr_case_events_close_appointments(self):
+        """
+            Whether case events automatically close appointments
+        """
+        return self.dvr.get("case_events_close_appointments", False)
+
+    def get_dvr_payments_update_last_seen_on(self):
+        """
+            Whether payments (e.g. allowance) shall automatically update
+            the "last seen on" date when set to "paid"
+        """
+        return self.dvr.get("payments_update_last_seen_on", False)
+
+    def get_dvr_multiple_case_groups(self):
+        """
+            Whether a case can belong to multiple case groups at the same time
+        """
+        return self.dvr.get("multiple_case_groups", False)
+
+    def get_dvr_id_code_pattern(self):
+        """
+            A regular expression pattern to parse ID Codes (QR codes),
+            None to disable ID code parsing
+
+            Should return the following groups:
+                label                   the PE label, mandatory
+                family                  the PE label of the head of family, optional
+                first_name              optional
+                last_name               optional
+                date_of_birth           optional
+
+            Example:
+                "(?P<label>[^,]*),(?P<first_name>[^,]*),(?P<last_name>[^,]*),(?P<date_of_birth>[^,]*)"
+        """
+        return self.dvr.get("id_code_pattern", None)
+
     # -------------------------------------------------------------------------
     # Events
     #
@@ -2642,13 +2783,27 @@ class S3Config(Storage):
 
     # -------------------------------------------------------------------------
     # Human Resource Management
-    #
-    #def get_hrm_human_resource_label(self):
-    #    """
-    #        Label for 'Human Resources'
-    #        e.g. 'Contacts'
-    #    """
-    #    return current.T(self.hrm.get("human_resource_label", "Staff"))
+
+    def get_hrm_course_grades(self):
+        """
+            Grade options for Courses
+            NB Best to keep Pass/Fail on these numbers but can add additional values if-required, e.g.:
+            {0: T("No Show"),
+             1: T("Left Early"),
+             8: T("Pass"),
+             9: T("Fail"),
+             }
+        """
+        T = current.T
+        return self.__lazy("hrm", "course_grades", default={8: T("Pass"),
+                                                            9: T("Fail"),
+                                                            })
+
+    def get_hrm_course_pass_marks(self):
+        """
+            Whether the Pass Mark for a course is defined by the Grade Details
+        """
+        return self.hrm.get("course_pass_marks", False)
 
     def get_hrm_staff_label(self):
         """
@@ -3179,6 +3334,13 @@ class S3Config(Storage):
         """
         return self.member.get("cv_tab", False)
 
+    def get_member_membership_types(self):
+        """
+            Whether to have Membership Types
+        """
+        return self.__lazy("member", "membership_types", default=True)
+
+
     # -------------------------------------------------------------------------
     # Organisations
     #
@@ -3288,6 +3450,12 @@ class S3Config(Storage):
         """
         return self.org.get("organisation_types_multiple", False)
 
+    def get_org_facilities_tab(self):
+        """
+            Whether to show a Tab for Facilities
+        """
+        return self.org.get("facilities_tab", True)
+
     def get_org_groups(self):
         """
             Whether to support Organisation Groups or not
@@ -3304,11 +3472,29 @@ class S3Config(Storage):
         """
         return self.org.get("group_team_represent", False)
 
+    def get_org_needs_tab(self):
+        """
+            Whether to show a Tab for Organisation Needs
+        """
+        return self.org.get("needs_tab", False)
+
+    def get_org_offices_tab(self):
+        """
+            Whether to show a Tab for Offices
+        """
+        return self.org.get("offices_tab", True)
+
     def get_org_regions(self):
         """
             Whether to support Organisation Regions or not
         """
         return self.org.get("regions", False)
+
+    def get_org_region_countries(self):
+        """
+            Whether Organisation Regions maintain a list of countries
+        """
+        return self.org.get("region_countries", False)
 
     def get_org_regions_hierarchical(self):
         """
@@ -3376,6 +3562,12 @@ class S3Config(Storage):
         """
         return self.org.get("site_volunteers", False)
 
+    def get_org_site_check(self):
+        """
+            Get custom tasks for scheduled site checks
+        """
+        return self.org.get("site_check")
+
     def get_org_summary(self):
         """
             Whether to use Summary fields for Organisation/Office:
@@ -3433,7 +3625,7 @@ class S3Config(Storage):
 
     def get_org_tags(self):
         """
-            Whether Organidations, Office & Facilities should show a Tags tab
+            Whether Organisations, Offices & Facilities should show a Tags tab
         """
         return self.org.get("tags", False)
 
@@ -3521,6 +3713,10 @@ class S3Config(Storage):
     def get_pr_request_home_phone(self):
         """ Include Home Phone in the AddPersonWidget2 """
         return self.__lazy("pr", "request_home_phone", default=False)
+
+    def get_pr_request_mobile_phone(self):
+        """ Include Mobile Phone in the AddPersonWidget2 """
+        return self.__lazy("pr", "request_mobile_phone", default=True)
 
     def get_pr_request_year_of_birth(self):
         """ Include Year of Birth in the AddPersonWidget2 """
@@ -3956,11 +4152,11 @@ class S3Config(Storage):
         """
         return self.req.get("prompt_match", True)
 
-    def get_req_summary(self):
-        """
-            Whether to use Summary Needs for Sites (Office/Facility currently):
-        """
-        return self.req.get("summary", False)
+    #def get_req_summary(self):
+    #    """
+    #        Whether to use Summary Needs for Sites (Office/Facility currently):
+    #    """
+    #    return self.req.get("summary", False)
 
     def get_req_use_commit(self):
         """

@@ -2,7 +2,7 @@
 
 """ Framework for filtered REST requests
 
-    @copyright: 2013-15 (c) Sahana Software Foundation
+    @copyright: 2013-2016 (c) Sahana Software Foundation
     @license: MIT
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
@@ -3209,6 +3209,8 @@ def s3_get_filter_opts(tablename,
     table = current.s3db.table(tablename)
     if auth.s3_has_permission("read", table):
         query = auth.s3_accessible_query("read", table)
+        if "deleted" in table.fields:
+            query &= (table.deleted != True)
         if location_filter:
             location = current.session.s3.location_filter
             if location:

@@ -2,7 +2,7 @@
 
 """ S3 Notifications
 
-    @copyright: 2011-15 (c) Sahana Software Foundation
+    @copyright: 2011-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -54,7 +54,7 @@ from gluon.storage import Storage
 from gluon.tools import fetch
 
 from s3datetime import s3_decode_iso_datetime, s3_encode_iso_datetime, s3_utc
-from s3utils import S3ModuleDebug, s3_truncate, s3_unicode
+from s3utils import S3ModuleDebug, s3_str, s3_truncate, s3_unicode
 
 DEBUG = False
 if DEBUG:
@@ -271,7 +271,7 @@ class S3Notifications(object):
         #       str(subscription["method"]),
         #       str(subscription["notify_on"]),
         #       subscription["resource"],
-        #      subscription["last_check_time"],
+        #       subscription["last_check_time"],
         #       )
 
         # Check notification settings
@@ -281,10 +281,10 @@ class S3Notifications(object):
             return json_message(message="No notifications configured "
                                         "for this subscription")
 
-        # Authorization (subscriber must be logged in)
-        auth = current.auth
+        # Authorization (pe_id must not be None)
         pe_id = subscription["pe_id"]
-        if not auth.s3_logged_in() or auth.user.pe_id != pe_id:
+
+        if not pe_id:
             r.unauthorised()
 
         # Fields to extract
@@ -333,7 +333,7 @@ class S3Notifications(object):
                      "last_check_time": last_check_time,
                      "filter_query": filter_query,
                      "total_rows": numrows,
-                    }
+                     }
 
         # Render contents for the message template(s)
         renderer = get_config("notify_renderer")
@@ -404,7 +404,7 @@ class S3Notifications(object):
                 path = join("views", "msg")
                 template = get_template(path, filenames)
             if template is None:
-                template = StringIO(T("New updates are available."))
+                template = StringIO(s3_str(current.T("New updates are available.")))
 
             # Select contents format
             if method == "EMAIL" and email_format == "html":
@@ -419,6 +419,9 @@ class S3Notifications(object):
                 exc_info = sys.exc_info()[:2]
                 error = ("%s: %s" % (exc_info[0].__name__, exc_info[1]))
                 errors.append(error)
+                continue
+
+            if not message:
                 continue
 
             # Send the message
@@ -474,7 +477,6 @@ class S3Notifications(object):
 
         stable = s3db.pr_subscription
         rtable = db.pr_subscription_resource
-        ftable = s3db.pr_filter
 
         # Find all resources with due suscriptions
         query = ((rtable.next_check_time == None) |

@@ -226,22 +226,22 @@
 
                 <xsl:variable name="Services" select="col[@field='Services']/text()"/>
                 <xsl:variable name="Service">
-                    <xsl:value-of select="col[@field='Service']"/>
+                    <xsl:value-of select="col[@field='Service']/text()"/>
                 </xsl:variable>
                 <xsl:variable name="SubService">
-                    <xsl:value-of select="col[@field='SubService']"/>
+                    <xsl:value-of select="col[@field='SubService']/text()"/>
                 </xsl:variable>
                 <xsl:variable name="SubSubService">
-                    <xsl:value-of select="col[@field='SubSubService']"/>
+                    <xsl:value-of select="col[@field='SubSubService']/text()"/>
                 </xsl:variable>
                 <xsl:variable name="Type">
-                    <xsl:value-of select="col[@field='Type']"/>
+                    <xsl:value-of select="col[@field='Type']/text()"/>
                 </xsl:variable>
                 <xsl:variable name="SubType">
-                    <xsl:value-of select="col[@field='SubType']"/>
+                    <xsl:value-of select="col[@field='SubType']/text()"/>
                 </xsl:variable>
                 <xsl:variable name="SubSubType">
-                    <xsl:value-of select="col[@field='SubSubType']"/>
+                    <xsl:value-of select="col[@field='SubSubType']/text()"/>
                 </xsl:variable>
 
                 <xsl:if test="col[@field='Approved']!=''">

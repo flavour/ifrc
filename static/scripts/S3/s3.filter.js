@@ -121,6 +121,7 @@ S3.search = {};
         timeout : 10000,
         retryLimit: 5,
         dataType: 'json',
+        contentType: 'application/json; charset=utf-8',
         processData: false,
         async: true,
         type: 'POST'
@@ -240,11 +241,7 @@ S3.search = {};
             for (key in data) {
                 input = document.createElement('textarea');
                 input.name = key;
-                if (typeof data[key] === 'object') {
-                    input.value = JSON.stringify(data[key]);
-                } else {
-                    input.value = data[key];
-                }
+                input.value = JSON.stringify(data[key]);
                 form.appendChild(input);
             }
         }
@@ -389,6 +386,7 @@ S3.search = {};
             urlVar,
             value,
             values,
+            subString,
             operator;
 
         // Text widgets
@@ -396,14 +394,18 @@ S3.search = {};
             $this = $(this);
             id = $this.attr('id');
             urlVar = $('#' + id + '-data').val();
-            value = $this.val();
+            value = $this.val().trim();
             if (value) {
                 values = value.split(' ');
                 var match = $this.data('match'),
                     quoted,
                     anyValue = [];
                 for (i=0; i < values.length; i++) {
-                    quoted = quoteValue('*' + values[i] + '*');
+                    subString = $.trim(values[i]);
+                    if (subString === "") {
+                        continue;
+                    }
+                    quoted = quoteValue('*' + subString + '*');
                     if (match == "any") {
                         anyValue.push(quoted);
                     } else {
@@ -960,7 +962,7 @@ S3.search = {};
             k = q[0];
             v = q[1];
             if (update[k]) {
-                query.push(k + '=' + v);
+                query.push(k + '=' + encodeURIComponent(v));
             }
         }
 
@@ -2186,6 +2188,7 @@ S3.search = {};
                 'url': this.options.ajaxURL,
                 'type': 'POST',
                 'dataType': 'json',
+                'contentType': 'application/json; charset=utf-8',
                 'data': JSON.stringify(filter),
                 'success': function(data) {
                     var new_id = data.created;
@@ -2238,6 +2241,7 @@ S3.search = {};
                 'url': this.options.ajaxURL,
                 'type': 'POST',
                 'dataType': 'json',
+                'contentType': 'application/json; charset=utf-8',
                 'data': JSON.stringify(filter),
                 'success': function() {
                     fm.options.filters[id] = filter.query;
@@ -2287,6 +2291,7 @@ S3.search = {};
                 'url': url,
                 'type': 'POST',
                 'dataType': 'json',
+                'contentType': 'application/json; charset=utf-8',
                 'data': JSON.stringify(filter),
                 'success': function() {
                     // Remove options from element

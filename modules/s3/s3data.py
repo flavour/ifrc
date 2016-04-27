@@ -2,7 +2,7 @@
 
 """ S3 Data Views
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -733,10 +733,7 @@ class S3DataTable(object):
 
         # Wrap the table in a form and add some data in hidden fields
         form = FORM(_class="dt-wrapper")
-        if not s3.no_formats and len(html) > 0:
-            # @todo: always *render* both export options and permalink,
-            #        even if the initial table is empty, so that
-            #        Ajax-update can unhide them once there are results
+        if not s3.no_formats:
             # @todo: move export-format update into drawCallback()
             # @todo: poor UX with onclick-JS, better to render real
             #        links which can be bookmarked, and then update them

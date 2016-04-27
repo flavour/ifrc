@@ -2,7 +2,7 @@
 
 """ S3 SQL Forms
 
-    @copyright: 2012-15 (c) Sahana Software Foundation
+    @copyright: 2012-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -397,6 +397,8 @@ class S3SQLDefaultForm(S3SQLForm):
         if format == "plain":
             # Default formstyle works best when we have no formatting
             formstyle = "table3cols"
+        elif readonly:
+            formstyle = settings.formstyle_read
         else:
             formstyle = settings.formstyle
 
@@ -871,6 +873,8 @@ class S3SQLCustomForm(S3SQLForm):
         if format == "plain":
             # Simple formstyle works best when we have no formatting
             formstyle = "table3cols"
+        elif readonly:
+            formstyle = settings.formstyle_read
         else:
             formstyle = settings.formstyle
 
@@ -1333,19 +1337,31 @@ class S3SQLCustomForm(S3SQLForm):
             db = current.db
             onaccept = get_config(tablename, "update_onaccept",
                        get_config(tablename, "onaccept", None))
+
+            table_fields = table.fields
+            query = (table._id == record_id)
             if onaccept:
-                # Get oldrecord to save in form
-                oldrecord = db(table._id == record_id).select(limitby=(0, 1)
-                                                              ).first()
+                # Get oldrecord in full to save in form
+                oldrecord = db(query).select(limitby=(0, 1)).first()
+            elif "deleted" in table_fields:
+                oldrecord = db(query).select(table.deleted,
+                                             limitby=(0, 1)).first()
+            else:
+                oldrecord = None
+
             if undelete:
-                # Re-instating a previously deleted record
-                table_fields = table.fields
+                # Restoring a previously deleted record
                 if "deleted" in table_fields:
                     data["deleted"] = False
                 if "created_by" in table_fields and current.auth.user:
                     data["created_by"] = current.auth.user.id
                 if "created_on" in table_fields:
                     data["created_on"] = current.request.utcnow
+            elif oldrecord and "deleted" in oldrecord and oldrecord.deleted:
+                # Do not (ever) update a deleted record that we don't
+                # want to restore, otherwise this may set foreign keys
+                # in a deleted record!
+                return accept_id
             db(table._id == record_id).update(**data)
         else:
             # Insert new record
@@ -2920,7 +2936,8 @@ class S3SQLInlineComponent(S3SQLSubForm):
                         # Update super entity link
                         s3db.update_super(table, values)
                         # Update link table
-                        if link and actuate_link:
+                        if link and actuate_link and \
+                            options.get("update_link", True):
                             link.update_link(master, values)
                         # Set record owner
                         auth.s3_set_record_owner(table, record_id)

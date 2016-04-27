@@ -2,7 +2,7 @@
 
 """ S3 Navigation Module
 
-    @copyright: 2011-15 (c) Sahana Software Foundation
+    @copyright: 2011-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -745,6 +745,7 @@ class S3NavigationItem(object):
         # Args and vars
         # Match levels (=order of preference):
         #   0 = args mismatch
+        #   1 = last arg mismatch (numeric instead of method)
         #   2 = no args in item and vars mismatch
         #   3 = no args and no vars in item
         #   4 = no args in item but vars match
@@ -767,7 +768,12 @@ class S3NavigationItem(object):
                        all([args[i] == largs[i] for i in xrange(len(args))]):
                         level = 5
                     else:
-                        return 0
+                        if len(rargs) >= len(args) > 0 and \
+                           rargs[len(args)-1].isdigit() and \
+                           not str(args[-1]).isdigit():
+                            level = 1
+                        else:
+                            return 0
                 else:
                     level = 3
             elif args:
@@ -1780,20 +1786,24 @@ class S3ResourceHeader:
                             fn = f
                             if "." in fn:
                                 fn = f.split(".", 1)[1]
-                                if fn not in table.fields or \
-                                   fn not in record:
-                                    continue
+                            if fn not in record or fn not in table:
+                                continue
                             field = table[fn]
                             value = record[fn]
+                            # Field.Method?
+                            if callable(value):
+                                value = value()
                         elif isinstance(f, Field) and f.name in record:
                             field = f
                             value = record[f.name]
                     if field is not None:
                         if not label:
                             label = field.label
-                        if field.represent is not None:
+                        if hasattr(field, "represent") and \
+                           field.represent is not None:
                             value = field.represent(value)
-                    tr.append(TH("%s: " % label))
+                    if label is not None:
+                        tr.append(TH("%s: " % label))
                     v = value
                     if not isinstance(v, basestring) and \
                        not isinstance(value, DIV):

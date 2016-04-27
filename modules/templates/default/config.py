@@ -12,11 +12,9 @@ from gluon.storage import Storage
 
 def config(settings):
     """
-        Template settings
+        Template settings for a default system
 
-        All settings which are to configure a specific template are located
-        here. Deployers should ideally not need to edit any other files outside
-        of their template folder.
+        @ToDo: Rename this as 'Demo'
     """
 
     T = current.T
@@ -125,34 +123,37 @@ def config(settings):
     # L10n settings
     # Languages used in the deployment (used for Language Toolbar & GIS Locations)
     # http://www.loc.gov/standards/iso639-2/php/code_list.php
-    #settings.L10n.languages = OrderedDict([
-    #    ("ar", "العربية"),
-    #    ("bs", "Bosanski"),
-    #    ("en", "English"),
-    #    ("fr", "Français"),
-    #    ("de", "Deutsch"),
-    #    ("el", "ελληνικά"),
-    #    ("es", "Español"),
-    #    ("it", "Italiano"),
-    #    ("ja", "日本語"),
-    #    ("km", "ភាសាខ្មែរ"),
-    #    ("ko", "한국어"),
-    #    ("mn", "Монгол хэл"), # Mongolian
-    #    ("my", "မြန်မာစာ"),       # Burmese
-    #    ("ne", "नेपाली"),                               #  Nepali
-    #    ("prs", "دری"),       # Dari
-    #    ("ps", "پښتو"),       # Pashto
-    #    ("pt", "Português"),
-    #    ("pt-br", "Português (Brasil)"),
-    #    ("ru", "русский"),
-    #    ("tet", "Tetum"),
-    #    ("tl", "Tagalog"),
-    #    ("tr", "Türkçe"),
-    #    ("ur", "اردو"),
-    #    ("vi", "Tiếng Việt"),
-    #    ("zh-cn", "中文 (简体)"),
-    #    ("zh-tw", "中文 (繁體)"),
-    #])
+    settings.L10n.languages = OrderedDict([
+        ("ar", "العربية"),
+        ("bs", "Bosanski"),
+        ("en", "English"),
+        ("fr", "Français"),
+        ("de", "Deutsch"),
+        ("el", "ελληνικά"),
+        ("es", "Español"),
+        ("it", "Italiano"),
+        ("ja", "日本語"),
+        ("km", "ភាសាខ្មែរ"),
+        ("ko", "한국어"),
+        ("mn", "Монгол хэл"),  # Mongolian
+        ("my", "မြန်မာစာ"),       # Burmese
+        ("ne", "नेपाली"),         # Nepali
+        ("prs", "دری"),        # Dari
+        ("ps", "پښتو"),         # Pashto
+        ("pt", "Português"),
+        ("pt-br", "Português (Brasil)"),
+        ("ru", "русский"),
+        ("tet", "Tetum"),
+        #("si", "සිංහල"),                 # Sinhala
+        #("ta", "தமிழ்"),                 # Tamil
+        #("th", "ภาษาไทย"),              # Thai
+        ("tl", "Tagalog"),
+        ("tr", "Türkçe"),
+        ("ur", "اردو"),
+        ("vi", "Tiếng Việt"),
+        ("zh-cn", "中文 (简体)"),
+        ("zh-tw", "中文 (繁體)"),
+    ])
     # Default language for Language Toolbar (& GIS Locations in future)
     #settings.L10n.default_language = "en"
     # Uncomment to Hide the language toolbar
@@ -479,6 +480,27 @@ def config(settings):
     #settings.cr.tags = True
 
     # -------------------------------------------------------------------------
+    # Disaster Victim Registry / Case Management
+    # Uncomment this to enable features to manage transferability of cases
+    #settings.dvr.manage_transferability = True
+    # Uncomment this to enable household size in cases, set to "auto" for automatic counting
+    #settings.dvr.household_size = True
+    # Uncomment this to expose flags to mark appointment types as mandatory
+    #settings.dvr.mandatory_appointments = True
+    # Uncomment this to have appointments with personal presence update last_seen_on
+    #settings.dvr.appointments_update_last_seen_on = True
+    # Uncomment this to automatically update the case status when appointments are completed
+    #settings.dvr.appointments_update_case_status = True
+    # Uncomment this to automatically close appointments when registering certain case events
+    #settings.dvr.case_events_close_appointments = True
+    # Uncomment this to have allowance payments update last_seen_on
+    #settings.dvr.payments_update_last_seen_on = True
+    # Uncomment this to allow cases to belong to multiple case groups ("households")
+    #settings.dvr.multiple_case_groups = True
+    # Configure a regular expression pattern for ID Codes (QR Codes)
+    #settings.dvr.id_code_pattern = "(?P<label>[^,]*),(?P<first_name>[^,]*),(?P<last_name>[^,]*),(?P<date_of_birth>[^,]*)"
+
+    # -------------------------------------------------------------------------
     # Events
     # Make Event Types Hierarchical
     #settings.event.types_hierarchical = True
@@ -489,6 +511,8 @@ def config(settings):
 
     # -------------------------------------------------------------------------
     # Members
+    # Hide Membership Types
+    #settings.member.membership_types = False
     # Show a CV tab for Members
     #settings.member.cv_tab = True
 
@@ -543,6 +567,8 @@ def config(settings):
     #settings.org.regions = True
     # Make Organisation Regions Hierarchical
     #settings.org.regions_hierarchical = True
+    # Enable the use of Organisation Region Countries
+    #settings.org.region_countries = True
     # Uncomment to show a Tab for Organisation Resources
     #settings.org.resources_tab = True
     # Make Services Hierarchical
@@ -655,6 +681,8 @@ def config(settings):
     #settings.hrm.use_trainings = False
     # Uncomment this to configure tracking of internal/external training instructors
     #settings.hrm.training_instructors = "external"
+    # Uncomment this to have Pass marks defined by Course
+    #settings.hrm.course_pass_marks = True
     # Uncomment to use activity types in experience record, specify as {"code":"label", ...}
     #settings.hrm.activity_types = {"rdrt": "RDRT Mission"}
 

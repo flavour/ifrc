@@ -9,7 +9,7 @@
     Messages get sent to the Outbox (& Log)
     From there, the Scheduler tasks collect them & send them
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -280,6 +280,8 @@ class S3Msg(object):
                 type = "SMS",
                 recipient_type = None,
                 recipient = None,
+                #@ToDo:
+                #sender = None,
                 #hide = True,
                 subject = "",
                 message = "",
@@ -390,6 +392,8 @@ class S3Msg(object):
         # Place the Message in the appropriate Log
         if contact_method == "EMAIL":
             if not from_address:
+                # Fallback to system default
+                # @ToDo: Allow a multi-context lookup here for multi-tenancy?
                 from_address = current.deployment_settings.get_mail_sender()
 
             table = s3db.msg_email
@@ -518,6 +522,7 @@ class S3Msg(object):
                               organisation_id = None,
                               contact_method = contact_method,
                               channel_id = channel_id,
+                              from_address = None,
                               outgoing_sms_handler = outgoing_sms_handler,
                               lookup_org = lookup_org,
                               channels = channels):
@@ -547,7 +552,9 @@ class S3Msg(object):
                 if contact_method == "EMAIL":
                     return self.send_email(address,
                                            subject,
-                                           message)
+                                           message,
+                                           sender = from_address,
+                                           )
                 elif contact_method == "SMS":
                     if lookup_org:
                         channel = channels.get(organisation_id)
@@ -609,7 +616,7 @@ class S3Msg(object):
 
         if contact_method == "EMAIL":
             mailbox = s3db.msg_email
-            fields.extend([mailbox.subject, mailbox.body])
+            fields.extend([mailbox.subject, mailbox.body, mailbox.from_address])
             left.append(mailbox.on(mailbox.message_id == outbox.message_id))
         elif contact_method == "SMS":
             mailbox = s3db.msg_sms
@@ -687,14 +694,17 @@ class S3Msg(object):
             if contact_method == "EMAIL":
                 subject = row["msg_email.subject"] or ""
                 message = row["msg_email.body"] or ""
+                from_address = row["msg_email.from_address"] or ""
             elif contact_method == "SMS":
                 subject = None
                 message = row["msg_sms.body"] or ""
+                from_address = None
                 if lookup_org:
                     organisation_id = row["msg_sms.organisation_id"]
             elif contact_method == "TWITTER":
                 subject = None
                 message = row["msg_twitter.body"] or ""
+                from_address = None
             else:
                 # @ToDo
                 continue
@@ -711,12 +721,15 @@ class S3Msg(object):
             if entity_type == "pr_person":
                 # Send the message to this person
                 try:
-                    status = dispatch_to_pe_id(pe_id,
-                                               subject,
-                                               message,
-                                               row.id,
-                                               message_id,
-                                               organisation_id)
+                    status = dispatch_to_pe_id(
+                                    pe_id,
+                                    subject,
+                                    message,
+                                    row.id,
+                                    message_id,
+                                    organisation_id = organisation_id,
+                                    from_address = from_address,
+                                    )
                 except:
                     status = False
 
@@ -799,8 +812,6 @@ class S3Msg(object):
         if chainrun:
             self.process_outbox(contact_method)
 
-        return
-
     # -------------------------------------------------------------------------
     # Send Email
     # -------------------------------------------------------------------------
@@ -857,6 +868,8 @@ class S3Msg(object):
                                    reply_to=reply_to,
                                    sender=sender,
                                    encoding=encoding,
+                                   # e.g. Return-Receipt-To:<user@domain>
+                                   headers={},
                                    # Added to Web2Py 2014-03-04
                                    # - defaults to sender
                                    #from_address=from_address,
@@ -1199,7 +1212,9 @@ class S3Msg(object):
             #    redirect(URL(f='index'))
         except:
             pass
-        return False # Returning False because the API needs to ask us for the messsage again.
+
+        # Return False because the API needs to ask us for the messsage again.
+        return False
 
     # -------------------------------------------------------------------------
     def send_sms_by_pe_id(self,
@@ -1243,6 +1258,7 @@ class S3Msg(object):
             All chunks, except for first, start with prefix.
         """
 
+        from s3 import s3_str
         res = []
         current_prefix = "" # first chunk has no prefix
         while text:
@@ -1255,8 +1271,8 @@ class S3Msg(object):
                 if i > 0: # got a blank
                     c = c[:i]
                 text = text[len(c):].lstrip()
-                res.append((current_prefix + c.rstrip() + suffix))
-                current_prefix = prefix # from now on, we want a prefix
+                res.append(current_prefix + c.rstrip() + s3_str(suffix))
+                current_prefix = s3_str(prefix) # from now on, we want a prefix
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1476,8 +1492,6 @@ class S3Msg(object):
             This is a simple mailbox polling script for the Messaging Module.
             It is normally called from the scheduler.
 
-            @ToDo: Handle MIME attachments
-                   http://docs.python.org/2/library/email-examples.html
             @ToDo: If there is a need to collect from non-compliant mailers
                    then suggest using the robust Fetchmail to collect & store
                    in a more compliant mailer!
@@ -1949,7 +1963,7 @@ class S3Msg(object):
             else:
                 location_id = None
 
-            title = entry.title
+            title = entry.get("title")
 
             content = entry.get("content", None)
             if content:
@@ -2027,7 +2041,7 @@ class S3Msg(object):
 
             else:
                 _id = minsert(channel_id = channel_id,
-                              title = entry.title,
+                              title = title,
                               from_address = link,
                               body = content,
                               author = entry.get("author", None),
@@ -2659,7 +2673,8 @@ class S3Compose(S3CRUD):
                                               # Breaks PG
                                               #orderby="instance_type",
                                               filterby="instance_type",
-                                              filter_opts=(recipient_type,))
+                                              filter_opts=(recipient_type,),
+                                              )
                 pe_field.widget = S3PentityAutocompleteWidget(types=(recipient_type,))
             else:
                 # @ToDo A new widget (tree?) required to handle multiple persons and groups
@@ -2671,20 +2686,23 @@ class S3Compose(S3CRUD):
                  T("Please enter the first few letters of the Person/Group for the autocomplete.")))
 
         sqlform = S3SQLDefaultForm()
-        logform = sqlform(request=request,
-                          resource=s3db.resource("msg_message"),
-                          onvalidation=self._compose_onvalidation,
-                          message="Message Sent",
-                          format="html")
-        outboxform = sqlform(request=request,
-                             resource=s3db.resource("msg_outbox"),
-                             message="Message Sent",
-                             format="html")
 
-        mailform = sqlform(request=request,
-                           resource=s3db.resource("msg_email"),
-                           message="Message Sent",
-                           format="html")
+        s3resource = s3db.resource
+        logform = sqlform(request = request,
+                          resource = s3resource("msg_message"),
+                          onvalidation = self._compose_onvalidation,
+                          message = "Message Sent",
+                          format = "html")
+
+        outboxform = sqlform(request = request,
+                             resource = s3resource("msg_outbox"),
+                             message = "Message Sent",
+                             format = "html")
+
+        mailform = sqlform(request = request,
+                           resource = s3resource("msg_email"),
+                           message = "Message Sent",
+                           format = "html")
 
         # Shortcuts
         lcustom = logform.custom
@@ -2701,7 +2719,7 @@ class S3Compose(S3CRUD):
             pe_row.append(TD(ocustom.widget.pe_id))
             pe_row.append(TD(ocustom.comment.pe_id))
 
-        # Build a custom form from the 2 source forms
+        # Build a custom form from the 3 source forms
         form = DIV(lcustom.begin,
                    TABLE(TBODY(TR(TD(LABEL(ocustom.label.contact_method)),
                                   TD(ocustom.widget.contact_method),
@@ -2727,12 +2745,14 @@ class S3Compose(S3CRUD):
                                TR(TD(),
                                   TD(INPUT(_type="submit",
                                            _value=T("Send message"),
-                                           _id="dummy_submit")),
+                                           _id="dummy_submit"),
+                                     ),
                                   _id="submit_record__row"
+                                  ),
                                ),
                          ),
-                   ),
-                   lcustom.end)
+                   lcustom.end,
+                   )
 
         s3 = current.response.s3
         if s3.debug:

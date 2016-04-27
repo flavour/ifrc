@@ -361,7 +361,6 @@ def s3_set_default_filter(selector, value, tablename=None):
             filter_defaults[level] = {}
         filter_defaults = filter_defaults[level]
     filter_defaults[selector] = value
-    return
 
 # =============================================================================
 def s3_dev_toolbar():
@@ -447,7 +446,7 @@ def s3_mark_required(fields,
         mark_required = ()
 
     if label_html is None:
-        # @ToDo: DRY this setting with s3.locationselector.widget2.js
+        # @ToDo: DRY this setting with s3.ui.locationselector.js
         label_html = s3_required_label
 
     labels = dict()
@@ -549,6 +548,7 @@ def s3_truncate(text, length=48, nice=True):
         @param nice: do not truncate words
     """
 
+    # Make sure text is multi-byte-aware before truncating it
     text = s3_unicode(text)
     if len(text) > length:
         if nice:
@@ -574,6 +574,7 @@ def s3_datatable_truncate(string, maxlength=40):
         @note: the JS click-event will be attached by S3.datatables.js
     """
 
+    # Make sure text is multi-byte-aware before truncating it
     string = s3_unicode(string)
     if string and len(string) > maxlength:
         _class = "dt-truncate"
@@ -652,7 +653,7 @@ def s3_text_represent(text, truncate=True, lines=5, _class=None):
     """
 
     if not text:
-        text = ""
+        text = current.messages["NONE"]
     if _class is None:
         selector = ".text-body"
         _class = "text-body"
@@ -687,7 +688,7 @@ def s3_format_fullname(fname=None, mname=None, lname=None, truncate=True):
         if truncate:
             fname = "%s" % s3_truncate(fname, 24)
             mname = "%s" % s3_truncate(mname, 24)
-            lname = "%s" % s3_truncate(lname, 24, nice = False)
+            lname = "%s" % s3_truncate(lname, 24, nice=False)
         name_format = current.deployment_settings.get_pr_name_format()
         name = name_format % dict(first_name=fname,
                                   middle_name=mname,
@@ -695,7 +696,7 @@ def s3_format_fullname(fname=None, mname=None, lname=None, truncate=True):
                                   )
         name = name.replace("  ", " ").rstrip()
         if truncate:
-            name = s3_truncate(name, 24, nice = False)
+            name = s3_truncate(name, 24, nice=False)
     return name
 
 # =============================================================================
@@ -1300,7 +1301,7 @@ def s3_get_foreign_key(field, m2m=True):
 def s3_unicode(s, encoding="utf-8"):
     """
         Convert an object into an unicode instance, to be used instead of
-        unicode(s) (Note: user data should never be converted into str).
+        unicode(s)
 
         @param s: the object
         @param encoding: the character encoding
@@ -1324,9 +1325,25 @@ def s3_unicode(s, encoding="utf-8"):
     except UnicodeDecodeError:
         if not isinstance(s, Exception):
             raise
-        else:
-            s = " ".join([s3_unicode(arg, encoding) for arg in s])
+        s = " ".join([s3_unicode(arg, encoding) for arg in s])
     return s
+
+def s3_str(s):
+    """
+        Unicode-safe conversion of an object s into a utf-8 encoded str,
+        to be used instead of str(s)
+
+        @param s: the object
+
+        @note: assumes utf-8, for other character encodings use explicit:
+
+                - s3_unicode(s, encoding=<in>).encode(<out>)
+    """
+
+    if type(s) is str:
+        return s
+    else:
+        return s3_unicode(s).encode("utf-8", "strict")
 
 # =============================================================================
 def s3_flatlist(nested):

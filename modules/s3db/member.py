@@ -2,7 +2,7 @@
 
 """ Sahana Eden Members Model
 
-    @copyright: 2012-15 (c) Sahana Software Foundation
+    @copyright: 2012-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -54,6 +54,7 @@ class S3MembersModel(S3Model):
         db = current.db
         auth = current.auth
         s3 = current.response.s3
+        settings = current.deployment_settings
 
         organisation_id = self.org_organisation_id
 
@@ -73,6 +74,8 @@ class S3MembersModel(S3Model):
         else:
             filter_opts = (None,)
 
+        types = settings.get_member_membership_types()
+
         # ---------------------------------------------------------------------
         # Membership Types
         #
@@ -80,6 +83,7 @@ class S3MembersModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, length=64,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
@@ -110,6 +114,7 @@ class S3MembersModel(S3Model):
         membership_type_id = S3ReusableField("membership_type_id", "reference %s" % tablename,
                                              label = T("Type"),
                                              ondelete = "SET NULL",
+                                             readable = types,
                                              represent = represent,
                                              requires = IS_EMPTY_OR(
                                                             IS_ONE_OF(db, "member_membership_type.id",
@@ -117,15 +122,20 @@ class S3MembersModel(S3Model):
                                                                       filterby="organisation_id",
                                                                       filter_opts=filter_opts)),
                                              sortby = "name",
-                                             comment=S3PopupLink(f = "membership_type",
-                                                                 label = ADD_MEMBERSHIP_TYPE,
-                                                                 title = ADD_MEMBERSHIP_TYPE,
-                                                                 tooltip = T("Add a new membership type to the catalog."),
-                                                                 ),
+                                             writable = types,
+                                             comment = S3PopupLink(f = "membership_type",
+                                                                   label = ADD_MEMBERSHIP_TYPE,
+                                                                   title = ADD_MEMBERSHIP_TYPE,
+                                                                   tooltip = T("Add a new membership type to the catalog."),
+                                                                   ),
                                              )
 
         configure(tablename,
-                  deduplicate = self.member_type_duplicate,
+                  deduplicate = S3Duplicate(primary = ("name",
+                                                       "organisation_id",
+                                                       ),
+                                            ignore_deleted = True,
+                                            ),
                   )
 
         # ---------------------------------------------------------------------
@@ -156,10 +166,23 @@ class S3MembersModel(S3Model):
                               set_min = "#member_membership_end_date",
                               ),
                       s3_date("end_date",
-                              label = T("Date resigned"),
+                              label = T("Date Resigned"),
                               set_max = "#member_membership_start_date",
                               start_field = "member_membership_start_date",
                               default_interval = 12,
+                              ),
+                      Field("leaving_reason",
+                            label = T("Reason for Leaving"),
+                            # Enable in template as-required
+                            readable = False,
+                            writable = False,
+                            ),
+                      s3_date("restart_date",
+                              label = T("Date Rejoined"),
+                              # Enable in template as-required
+                              readable = False,
+                              set_max = "#member_membership_end_date",
+                              writable = False,
                               ),
                       Field("membership_fee", "double",
                             label = T("Membership Fee"),
@@ -174,6 +197,7 @@ class S3MembersModel(S3Model):
                             readable = False,
                             writable = False,
                             ),
+                      s3_comments(),
                       # Location (from pr_address component)
                       self.gis_location_id(readable = False,
                                            writable = False,
@@ -200,28 +224,35 @@ class S3MembersModel(S3Model):
 
         list_fields = ["person_id",
                        "organisation_id",
-                       "membership_type_id",
-                       "start_date",
-                       # useful for testing the paid virtual field
-                       #"membership_paid",
-                       (T("Paid"), "paid"),
-                       (T("Email"), "email.value"),
-                       (T("Phone"), "phone.value"),
                        ]
+        if types:
+            list_fields.append("membership_type_id")
+        list_fields += ["start_date",
+                        # useful for testing the paid virtual field
+                        #"membership_paid",
+                        (T("Paid"), "paid"),
+                        (T("Email"), "email.value"),
+                        (T("Phone"), "phone.value"),
+                        ]
 
-        report_fields = ["person_id",
-                         "membership_type_id",
-                         (T("Paid"), "paid"),
-                         "organisation_id",
-                         ]
+        report_fields = ["person_id"]
+        if types:
+            report_fields.append("membership_type_id")
+            default_row = "membership.membership_type_id"
+        else:
+            default_row = "membership.paid"
+        report_fields += [(T("Paid"), "paid"),
+                          "organisation_id",
+                          ]
 
-        text_fields = ["membership_type_id",
-                       "organisation_id$name",
+        text_fields = ["organisation_id$name",
                        "organisation_id$acronym",
                        "person_id$first_name",
                        "person_id$middle_name",
                        "person_id$last_name",
                        ]
+        if types:
+            text_fields.append("membership_type_id")
 
         for level in levels:
             lfield = "location_id$%s" % level
@@ -229,7 +260,7 @@ class S3MembersModel(S3Model):
             report_fields.append(lfield)
             text_fields.append(lfield)
 
-        if current.deployment_settings.get_org_branches():
+        if settings.get_org_branches():
             org_filter = S3HierarchyFilter("organisation_id",
                                            # Can be unhidden in customise_xx_resource if there is a need to use a default_filter
                                            hidden = True,
@@ -243,15 +274,17 @@ class S3MembersModel(S3Model):
                                          hidden = True,
                                          )
 
-        filter_widgets = [
-            S3TextFilter(text_fields,
-                         label = T("Search"),
-                         ),
-            org_filter,
-            S3OptionsFilter("membership_type_id",
-                            cols = 3,
-                            hidden = True,
-                            ),
+        filter_widgets = [S3TextFilter(text_fields,
+                                       label = T("Search"),
+                                       ),
+                          org_filter,
+                          ]
+        if types:
+            filter_widgets.append(S3OptionsFilter("membership_type_id",
+                                                  cols = 3,
+                                                  hidden = True,
+                                                  ))
+        filter_widgets += [
             S3OptionsFilter("paid",
                             cols = 3,
                             label = T("Paid"),
@@ -274,7 +307,7 @@ class S3MembersModel(S3Model):
                                  facts = report_fields,
                                  defaults = Storage(
                                     cols = "membership.organisation_id",
-                                    rows = "membership.membership_type_id",
+                                    rows = default_row,
                                     fact = "count(membership.person_id)",
                                     totals = True,
                                     )
@@ -283,7 +316,11 @@ class S3MembersModel(S3Model):
         configure(tablename,
                   create_next = URL(f="person", args="address",
                                     vars={"membership.id": "[id]"}),
-                  deduplicate = self.member_duplicate,
+                  deduplicate = S3Duplicate(primary = ("person_id",
+                                                       "organisation_id",
+                                                       ),
+                                            ignore_deleted = True,
+                                            ),
                   extra_fields = ("start_date",
                                   "membership_paid",
                                   "fee_exemption",
@@ -507,50 +544,6 @@ class S3MembersModel(S3Model):
         if not data:
             return
         record.update_record(**data)
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def member_duplicate(item):
-        """
-            Member record duplicate detection, used for the deduplicate hook
-        """
-
-        data = item.data
-        person_id = data.get("person_id")
-        organisation_id = data.get("organisation_id")
-
-        table = item.table
-        # 1 Membership record per Person<>Organisation
-        query = (table.deleted != True) & \
-                (table.person_id == person_id) & \
-                (table.organisation_id == organisation_id)
-        row = current.db(query).select(table.id,
-                                       limitby=(0, 1)).first()
-        if row:
-            item.id = row.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def member_type_duplicate(item):
-        """
-            Membership Type duplicate detection, used for the deduplicate hook
-        """
-
-        data = item.data
-        name = data.get("name")
-        organisation_id = data.get("organisation_id")
-
-        table = item.table
-        # 1 Membership Type per Name<>Organisation
-        query = (table.deleted != True) & \
-                (table.name == name) & \
-                (table.organisation_id == organisation_id)
-        row = current.db(query).select(table.id,
-                                       limitby=(0, 1)).first()
-        if row:
-            item.id = row.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3MemberProgrammeModel(S3Model):

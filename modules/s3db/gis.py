@@ -2,7 +2,7 @@
 
 """ Sahana Eden GIS Model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -399,6 +399,11 @@ class S3LocationModel(S3Model):
                             #                "multiple": False,
                             #                },
 
+                            # Regions
+                            org_region_country = {"name": "region",
+                                                  "joinby": "location_id",
+                                                  },
+
                             # Sites
                             org_site = "location_id",
                             )
@@ -483,8 +488,6 @@ class S3LocationModel(S3Model):
         auth = current.auth
         response = current.response
         settings = current.deployment_settings
-
-        MAP_ADMIN = auth.s3_has_role(current.session.s3.system_roles.MAP_ADMIN)
 
         form_vars = form.vars
         vars_get = form_vars.get
@@ -1249,7 +1252,10 @@ class S3LocationNameModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.gis_location_name_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("location_id",
+                                                       "language",
+                                                       ),
+                                            ),
                   )
 
         # ---------------------------------------------------------------------
@@ -1274,59 +1280,14 @@ class S3LocationNameModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.gis_location_name_alt_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("location_id",
+                                                       "name_alt",
+                                                       ),
+                                            ),
                   )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_location_name_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method to update
-        """
-
-        data = item.data
-        language = data.get("language", None)
-        location = data.get("location_id", None)
-
-        if not language or not location:
-            return
-
-        table = item.table
-        query = (table.language == language) & \
-                (table.location_id == location)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_location_name_alt_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method to update
-        """
-
-        data = item.data
-        location = data.get("location_id", None)
-        name_alt = data.get("name_alt", None)
-
-        if not name_alt or not location:
-            return
-
-        table = item.table
-        query = (table.name_alt == name_alt) & \
-                (table.location_id == location)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3LocationTagModel(S3Model):
@@ -1375,7 +1336,10 @@ class S3LocationTagModel(S3Model):
                           *s3_meta_fields())
 
         self.configure(tablename,
-                       deduplicate = self.gis_location_tag_deduplicate,
+                       deduplicate = S3Duplicate(primary = ("location_id",
+                                                            "tag",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
@@ -1404,33 +1368,6 @@ class S3LocationTagModel(S3Model):
         for opt in opts:
             od[opt.id] = opt.name
         return od
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_location_tag_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method
-           to update
-
-           @param item: the S3ImportItem
-        """
-
-        data = item.data
-        tag = data.get("tag", None)
-        location_id = data.get("location_id", None)
-
-        if not tag or not location_id:
-            return
-
-        table = item.table
-        query = (table.tag.lower() == tag.lower()) & \
-                (table.location_id == location_id)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3LocationGroupModel(S3Model):
@@ -1570,40 +1507,13 @@ class S3LocationHierarchyModel(S3Model):
         )
 
         self.configure(tablename,
-                       deduplicate = self.gis_hierarchy_deduplicate,
+                       deduplicate = S3Duplicate(primary=("location_id",)),
                        onvalidation = self.gis_hierarchy_onvalidation,
                        )
 
         # Pass names back to global scope (s3.*)
         return dict(gis_hierarchy_form_setup = self.gis_hierarchy_form_setup,
                     )
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_hierarchy_deduplicate(item):
-        """
-          This callback will be called when importing Hierarchy records it will look
-          to see if the record being imported is a duplicate.
-
-          @param item: An S3ImportJob object which includes all the details
-                      of the record being imported
-
-          If the record is a duplicate then it will set the item method to update
-
-        """
-
-        location_id = item.data.get("location_id")
-        if not location_id:
-            return
-
-        # Match by location_id
-        table = item.table
-        query = (table.location_id == location_id)
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1737,6 +1647,7 @@ class S3GISConfigModel(S3Model):
         define_table(tablename,
                      Field("name", length=64, notnull=True, unique=True,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      # If-needed, then Symbology should be here
                      #symbology_id(),
@@ -1819,7 +1730,7 @@ class S3GISConfigModel(S3Model):
         #               )
 
         configure(tablename,
-                  deduplicate = self.gis_marker_deduplicate,
+                  deduplicate = S3Duplicate(),
                   onvalidation = self.gis_marker_onvalidation,
                   )
 
@@ -1830,6 +1741,7 @@ class S3GISConfigModel(S3Model):
         define_table(tablename,
                      Field("name", length=64, notnull=True, unique=True,
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      Field("epsg", "integer", notnull=True,
                            label = "EPSG",
@@ -1892,7 +1804,7 @@ class S3GISConfigModel(S3Model):
                                         ondelete = "RESTRICT")
 
         configure(tablename,
-                  deduplicate = self.gis_projection_deduplicate,
+                  deduplicate = S3Duplicate(primary=("epsg",)),
                   deletable = False,
                   )
 
@@ -2063,7 +1975,7 @@ class S3GISConfigModel(S3Model):
         configure(tablename,
                   create_next = URL(c="gis", f="config",
                                     args=["[id]", "layer_entity"]),
-                  deduplicate = self.gis_config_deduplicate,
+                  deduplicate = S3Duplicate(),
                   # These are amended as-required in the controller
                   list_fields = ["name",
                                  "pe_id",
@@ -2248,33 +2160,6 @@ class S3GISConfigModel(S3Model):
             _title="%s|%s" % (
                 T("Zoom"),
                 T("How much detail is seen. A high Zoom level means lot of detail, but not a wide area. A low Zoom level means seeing a wide area, but not a high level of detail.")))
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_config_deduplicate(item):
-        """
-          This callback will be called when importing Marker records it will look
-          to see if the record being imported is a duplicate.
-
-          @param item: An S3ImportJob object which includes all the details
-                      of the record being imported
-
-          If the record is a duplicate then it will set the item method to update
-
-        """
-
-        # Match by name (all-lowercase)
-        name = item.data.name
-        if not name:
-            return
-
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2547,59 +2432,6 @@ class S3GISConfigModel(S3Model):
 
         form_vars.width = width
         form_vars.height = height
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_marker_deduplicate(item):
-        """
-          This callback will be called when importing Marker records it will look
-          to see if the record being imported is a duplicate.
-
-          @param item: An S3ImportJob object which includes all the details
-                      of the record being imported
-
-          If the record is a duplicate then it will set the item method to update
-
-        """
-
-        name = item.data.get("name")
-        if not name:
-            return
-
-        # Match by name (all-lowercase)
-        table = item.table
-        query = (table.name.lower() == name.lower())
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_projection_deduplicate(item):
-        """
-            This callback will be called when importing Projection records it
-            will look to see if the record being imported is a duplicate.
-
-            @param item: An S3ImportItem object which includes all the details
-                         of the record being imported
-
-            If the record is a duplicate then it will set the item method to update
-        """
-
-        epsg = item.data.get("epsg")
-        if not epsg:
-            return
-
-        # Match by epsg
-        table = item.table
-        query = (table.epsg == epsg)
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class gis_MarkerRepresent(S3Represent):
@@ -3273,7 +3105,9 @@ class S3MapModel(S3Model):
         #
         tablename = "gis_feature_query"
         define_table(tablename,
-                     Field("name", length=128, notnull=True),
+                     Field("name", length=128, notnull=True,
+                           requires = IS_NOT_EMPTY(),
+                           ),
                      Field("lat", "double",
                            requires = IS_LAT(),
                            ),
@@ -3482,7 +3316,7 @@ class S3MapModel(S3Model):
 
         configure(tablename,
                   create_next = URL(args=["[id]", "style"]),
-                  deduplicate = self.gis_layer_geojson_deduplicate,
+                  deduplicate = S3Duplicate(),
                   onaccept = self.gis_layer_geojson_onaccept,
                   onvalidation = self.gis_layer_geojson_onvalidation,
                   super_entity = "gis_layer_entity",
@@ -3519,7 +3353,9 @@ class S3MapModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.gis_layer_georss_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("url",),
+                                            ignore_case = False,
+                                            ),
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
@@ -3650,7 +3486,9 @@ class S3MapModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.gis_layer_kml_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("url",),
+                                            ignore_case = False,
+                                            ),
                   onaccept = gis_layer_onaccept,
                   super_entity="gis_layer_entity",
                   )
@@ -3721,7 +3559,9 @@ class S3MapModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.gis_layer_openstreetmap_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("url1",),
+                                            ignore_case = False,
+                                            ),
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
@@ -3814,7 +3654,8 @@ class S3MapModel(S3Model):
 
         configure(tablename,
                   create_onaccept = self.gis_layer_shapefile_onaccept,
-                  deduplicate = self.gis_layer_shapefile_deduplicate,
+                  # Match if name is identical (not ideal):
+                  deduplicate = S3Duplicate(ignore_case=False),
                   #update_onaccept = self.gis_layer_shapefile_onaccept_update,
                   super_entity = "gis_layer_entity",
                   )
@@ -3946,7 +3787,11 @@ class S3MapModel(S3Model):
                      *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.gis_layer_wfs_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("url",
+                                                       "featureType",
+                                                       ),
+                                            ignore_case = False,
+                                            ),
                   onaccept = gis_layer_onaccept,
                   super_entity = "gis_layer_entity",
                   )
@@ -4142,7 +3987,9 @@ class S3MapModel(S3Model):
         #
         tablename = "gis_cache2"
         define_table(tablename,
-                     Field("name", length=128, notnull=True, unique=True),
+                     Field("name", length=128, notnull=True, unique=True,
+                           requires = IS_NOT_EMPTY(),
+                           ),
                      Field("file", "upload",
                            autodelete = True,
                            custom_retrieve = self.gis_cache2_retrieve,
@@ -4171,132 +4018,6 @@ class S3MapModel(S3Model):
 
         f = open(os.path.join(path, filename), "rb")
         return (filename, f)
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_layer_geojson_deduplicate(item):
-
-        # Match if name is identical (URL may be empty at this stage)
-        data = item.data
-        name = data.get("name")
-        if not name:
-            return
-
-        table = item.table
-        duplicate = current.db(table.name == name).select(table.id,
-                                                          limitby=(0, 1)
-                                                          ).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_layer_georss_deduplicate(item):
-
-        # Match if url is identical
-        data = item.data
-        url = data.get("url")
-        if not url:
-            return
-
-        table = item.table
-        duplicate = current.db(table.url == url).select(table.id,
-                                                        limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_layer_kml_deduplicate(item):
-        """
-          @param item: An S3ImportJob object which includes all the details
-                      of the record being imported
-
-          If the record is a duplicate then it will set the item method to update
-        """
-
-        # Match if url is identical
-        data = item.data
-        url = data.get("url")
-        if not url:
-            return
-
-        table = item.table
-        duplicate = current.db(table.url == url).select(table.id,
-                                                        limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_layer_openstreetmap_deduplicate(item):
-        """
-          @param item: An S3ImportJob object which includes all the details
-                      of the record being imported
-
-          If the record is a duplicate then it will set the item method to update
-        """
-
-        # Match if url1 is identical
-        data = item.data
-        url = data.get("url1")
-        if not url:
-            return
-
-        table = item.table
-        duplicate = current.db(table.url1 == url).select(table.id,
-                                                         limitby=(0, 1)
-                                                         ).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_layer_wfs_deduplicate(item):
-        """
-          @param item: An S3ImportJob object which includes all the details
-                      of the record being imported
-
-          If the record is a duplicate then it will set the item method to update
-        """
-
-        # Match if url is identical
-        table = item.table
-        data = item.data
-        featureType = data.featureType
-        url = data.url
-        query = (table.url == url) & \
-                (table.featureType == featureType)
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_layer_shapefile_deduplicate(item):
-        """
-          @param item: An S3ImportJob object which includes all the details
-                      of the record being imported
-
-          If the record is a duplicate then it will set the item method to update
-        """
-
-        # Match if name is identical (not ideal)
-        table = item.table
-        data = item.data
-        name = data.name
-        query = (table.name == name)
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4796,7 +4517,7 @@ class S3PoIModel(S3Model):
                                       )
 
         self.configure(tablename,
-                       deduplicate = self.gis_poi_type_deduplicate,
+                       deduplicate = S3Duplicate(),
                        onaccept = self.gis_poi_type_onaccept,
                        )
 
@@ -4886,25 +4607,6 @@ class S3PoIModel(S3Model):
         # Pass names back to global scope (s3.*)
         return dict(gis_poi_id = poi_id,
                     )
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_poi_type_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method to update
-        """
-
-        name = item.data.get("name", None)
-        if not name:
-            return
-
-        table = item.table
-        duplicate = current.db(table.name == name).select(table.id,
-                                                          limitby=(0, 1)
-                                                          ).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -5117,30 +4819,14 @@ class S3PoIOrganisationGroupModel(S3Model):
                           *s3_meta_fields())
 
         self.configure(tablename,
-                       deduplicate = self.gis_poi_group_deduplicate,
+                       deduplicate = S3Duplicate(primary = ("poi_id",
+                                                            "group_id",
+                                                            ),
+                                                 ),
                        )
 
         # Pass names back to global scope (s3.*)
         return {}
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def gis_poi_group_deduplicate(item):
-        """ Import item de-duplication """
-
-        data = item.data
-        poi_id = data.get("poi_id", None)
-        group_id = data.get("group_id", None)
-        if poi_id and group_id:
-            table = item.table
-            query = (table.poi_id == poi_id) & \
-                    (table.group_id == group_id)
-            duplicate = current.db(query).select(table.id,
-                                                 limitby=(0, 1)).first()
-
-            if duplicate:
-                item.id = duplicate.id
-                item.method = item.METHOD.UPDATE
 
 # =============================================================================
 class S3PoIFeedModel(S3Model):
@@ -5168,6 +4854,7 @@ def name_field():
     return S3ReusableField("name", length=64, notnull=True,
                            #unique=True,
                            label = current.T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            )
 
 # =============================================================================
@@ -5723,7 +5410,7 @@ class gis_LocationRepresent(S3Represent):
                                      )
                     return represent
 
-        return s3_unicode(represent)
+        return s3_str(represent)
 
 # =============================================================================
 def gis_layer_represent(id, row=None, show_link=True):

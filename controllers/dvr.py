@@ -10,7 +10,7 @@ if not settings.has_module(module):
 def index():
     """ Module's Home Page """
 
-    return s3db.cms_index(module, alt_function="index_alt")
+    return settings.customise_home(module, alt_function="index_alt")
 
 # -----------------------------------------------------------------------------
 def index_alt():
@@ -34,19 +34,43 @@ def person():
         resource = r.resource
         resource.add_filter(FS("dvr_case.id") != None)
 
-        # Filter to current/archived cases
+        CASES = T("Cases")
+
+        # Filters to split case list
         if not r.record:
-            archived = r.get_vars.get("archived")
-            if archived in ("1", "true", "yes"):
+            get_vars = r.get_vars
+
+            # Filter to active/archived cases
+            archived = get_vars.get("archived")
+            if archived == "1":
                 archived = True
+                CASES = T("Archived Cases")
                 query = FS("dvr_case.archived") == True
             else:
                 archived = False
                 query = (FS("dvr_case.archived") == False) | \
                         (FS("dvr_case.archived") == None)
+
+            # Filter to open/closed cases
+            # (also filtering status filter opts)
+            closed = get_vars.get("closed")
+            get_status_opts = s3db.dvr_case_status_filter_opts
+            if closed == "1":
+                CASES = T("Closed Cases")
+                query &= FS("dvr_case.status_id$is_closed") == True
+                status_opts = lambda: get_status_opts(closed=True)
+            elif closed == "0":
+                CASES = T("Current Cases")
+                query &= (FS("dvr_case.status_id$is_closed") == False) | \
+                         (FS("dvr_case.status_id$is_closed") == None)
+                status_opts = lambda: get_status_opts(closed=False)
+            else:
+                status_opts = get_status_opts
+
             resource.add_filter(query)
         else:
             archived = False
+            status_opts = s3db.dvr_case_status_filter_opts
 
         # Should not be able to delete records in this view
         resource.configure(deletable = False)
@@ -78,7 +102,7 @@ def person():
         if r.interactive:
 
             # Adapt CRUD strings to context
-            CASES = T("Archived Cases") if archived else T("Cases")
+
             s3.crud_strings["pr_person"] = Storage(
                 label_create = T("Create Case"),
                 title_display = T("Case Details"),
@@ -171,7 +195,7 @@ def person():
                                     cols = 3,
                                     default = default_status,
                                     #label = T("Case Status"),
-                                    options = s3db.dvr_case_status_filter_opts,
+                                    options = status_opts,
                                     sort = False,
                                     ),
                     S3OptionsFilter("person_details.nationality",
@@ -186,9 +210,43 @@ def person():
                                     ),
                     ]
 
+                # Add filter for transferability if relevant for deployment
+                if settings.get_dvr_manage_transferability():
+                    filter_widgets.append(
+                        S3OptionsFilter("dvr_case.transferable",
+                                        options = {True: T("Yes"),
+                                                   False: T("No"),
+                                                   },
+                                        cols = 2,
+                                        hidden = True,
+                                        )
+                        )
+
                 resource.configure(crud_form = crud_form,
                                    filter_widgets = filter_widgets,
                                    )
+            elif r.component_name == "allowance" and \
+                 r.method in (None, "update"):
+
+                records = r.component.select(["status"], as_rows=True)
+                if len(records) == 1:
+                    record = records[0]
+                    table = r.component.table
+                    readonly = []
+                    if record.status == 2:
+                        # Can't change payment details if already paid
+                        readonly = ["person_id",
+                                    "entitlement_period",
+                                    "date",
+                                    "paid_on",
+                                    "amount",
+                                    "currency",
+                                    ]
+                    for fn in readonly:
+                        if fn in table.fields:
+                            field = table[fn]
+                            field.writable = False
+                            field.comment = None
 
         # Module-specific list fields (must be outside of r.interactive)
         list_fields = ["dvr_case.reference",
@@ -243,10 +301,12 @@ def group_membership():
                 if group_ids:
                     # Single group ID?
                     group_id = tuple(group_ids)[0] if len(group_ids) == 1 else None
-                else:
-                    group_id = gtable.insert(name = record_id,
+                elif r.http == "POST":
+                    name = s3_fullname(record_id)
+                    group_id = gtable.insert(name = name,
                                              group_type = 7,
                                              )
+                    s3db.update_super(gtable, {"id": group_id})
                     table.insert(group_id = group_id,
                                  person_id = record_id,
                                  )
@@ -269,14 +329,17 @@ def group_membership():
                            "person_id$date_of_birth",
                            ]
 
-            if len(group_ids) == 1:
+            if len(group_ids) == 0:
+                # No case group exists, will be auto-generated on POST,
+                # hide the field in the form:
+                field = table.group_id
+                field.readable = field.writable = False
+            elif len(group_ids) == 1:
                 field = table.group_id
                 field.default = group_id
-                # If we have only one relevant case, then hide the group ID
-                # in create-forms:
-                if not r.id:
-                    field.readable = field.writable = False
-            else:
+                # If we have only one relevant case, then hide the group ID:
+                field.readable = field.writable = False
+            elif len(group_ids) > 1:
                 # Show the case ID in list fields if there is more than one
                 # relevant case
                 list_fields.insert(0, "group_id")
@@ -386,13 +449,110 @@ def case_type():
 def allowance():
     """ Allowances: RESTful CRUD Controller """
 
-    return s3_rest_controller()
+    deduplicate = s3db.get_config("pr_person", "deduplicate")
+
+    def person_deduplicate(item):
+        """
+            Wrapper for person deduplicator to identify person
+            records, but preventing actual imports of persons
+        """
+
+        # Run standard person deduplication
+        if deduplicate:
+            deduplicate(item)
+
+        # Person not found?
+        if item.method != item.METHOD.UPDATE:
+
+            # Provide some meaningful details of the failing
+            # person record to facilitate correction of the source:
+            from s3 import s3_unicode
+            person_details = []
+            append = person_details.append
+            data = item.data
+            for f in ("pe_label", "last_name", "first_name", "date_of_birth"):
+                value = data.get(f)
+                if value:
+                    append(s3_unicode(value))
+            error = "Person not found: %s" % ", ".join(person_details)
+            item.error = error
+            item.element.set(current.xml.ATTRIBUTE["error"], error)
+
+            # Reject any new person records
+            item.accepted = False
+
+        # Skip - we don't want to update person records here
+        item.skip = True
+        item.method = None
+
+    s3db.configure("pr_person", deduplicate=person_deduplicate)
+
+    def prep(r):
+
+        if r.method == "import":
+            # Allow deduplication of persons by pe_label: existing
+            # pe_labels would be caught by IS_NOT_ONE_OF before
+            # reaching the deduplicator, so remove the validator here:
+            ptable = s3db.pr_person
+            ptable.pe_label.requires = None
+
+        record = r.record
+        if record:
+            table = r.table
+            readonly = []
+            if record.status == 2:
+                # Can't change payment details if already paid
+                readonly = ["person_id",
+                            "entitlement_period",
+                            "date",
+                            "paid_on",
+                            "amount",
+                            "currency",
+                            ]
+            for fn in readonly:
+                if fn in table.fields:
+                    field = table[fn]
+                    field.writable = False
+                    field.comment = None
+        return True
+    s3.prep = prep
+
+    table = s3db.dvr_allowance
+
+    return s3_rest_controller(csv_extra_fields=[{"label": "Date",
+                                                 "field": table.date,
+                                                 },
+                                                ],
+                              )
 
 # -----------------------------------------------------------------------------
 def case_appointment():
     """ Appointments: RESTful CRUD Controller """
 
-    return s3_rest_controller()
+    def prep(r):
+
+        if r.method == "import":
+            # Allow deduplication of persons by pe_label: existing
+            # pe_labels would be caught by IS_NOT_ONE_OF before
+            # reaching the deduplicator, so remove the validator here:
+            ptable = s3db.pr_person
+            ptable.pe_label.requires = None
+        return True
+    s3.prep = prep
+
+    table = s3db.dvr_case_appointment
+
+    return s3_rest_controller(csv_extra_fields=[{"label": "Appointment Type",
+                                                 "field": table.type_id,
+                                                 },
+                                                {"label": "Appointment Date",
+                                                 "field": table.date,
+                                                 },
+                                                {"label": "Appointment Status",
+                                                 "field": table.status,
+                                                 },
+                                                ],
+                              )
 
 # -----------------------------------------------------------------------------
 def case_appointment_type():
@@ -457,6 +617,32 @@ def income_source():
 # -----------------------------------------------------------------------------
 def beneficiary_type():
     """ Beneficiary Types: RESTful CRUD Controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def case_event_type():
+    """ Case Event Types: RESTful CRUD Controller """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def case_event():
+    """ Case Event Types: RESTful CRUD Controller """
+
+    def prep(r):
+        if not r.component:
+            list_fields = ["date",
+                           (T("ID"), "person_id$pe_label"),
+                           "person_id",
+                           "type_id",
+                           (T("Registered by"), "created_by"),
+                           "comments",
+                           ]
+            r.resource.configure(list_fields = list_fields,
+                                 )
+        return True
+    s3.prep = prep
 
     return s3_rest_controller()
 

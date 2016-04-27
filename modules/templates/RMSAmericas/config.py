@@ -12,6 +12,8 @@ from gluon.storage import Storage
 
 from s3 import S3Method
 
+from controllers import deploy_index
+
 RED_CROSS = "Red Cross / Red Crescent"
 
 def config(settings):
@@ -443,6 +445,8 @@ def config(settings):
     # Training Instructors are person_ids
     settings.hrm.training_instructors = "internal"
     settings.hrm.record_label = "National Society Information"
+    # Pass marks are defined by Course
+    settings.hrm.course_pass_marks = True
     # Work History & Missions
     settings.hrm.staff_experience = "both"
 
@@ -465,6 +469,28 @@ def config(settings):
     #    return default
 
     #settings.pr.dob_required = dob_required
+
+    def hrm_course_grades(default):
+        """ Course Grades """
+
+        default = {0: T("No Show"),
+                   1: T("Left Early"),
+                   #2: T("Attendance"),
+                   8: T("Pass"),
+                   9: T("Fail"),
+                   }
+
+        return default
+
+    settings.hrm.course_grades = hrm_course_grades
+
+    # -------------------------------------------------------------------------
+    # RIT
+    settings.deploy.team_label = "RIT"
+    settings.customise_deploy_home = deploy_index
+    # Alerts get sent to all recipients
+    settings.deploy.manual_recipients = False
+    settings.deploy.post_to_twitter = True
 
     # -------------------------------------------------------------------------
     # Projects
@@ -694,12 +720,13 @@ def config(settings):
         #        restricted = True,
         #        #module_type = 5,
         #    )),
-        #("event", Storage(
-        #        name_nice = T("Events"),
-        #        #description = "Events",
-        #        restricted = True,
-        #        #module_type = 10
-        #    )),
+        # Used by RIT
+        ("event", Storage(
+                name_nice = T("Events"),
+                #description = "Events",
+                restricted = True,
+                #module_type = 10
+            )),
         #("member", Storage(
         #       name_nice = T("Members"),
         #       #description = "Membership Management System",
@@ -954,45 +981,181 @@ def config(settings):
     settings.customise_auth_user_controller = customise_auth_user_controller
 
     # -------------------------------------------------------------------------
+    def customise_deploy_alert_resource(r, tablename):
+
+        s3db = current.s3db
+
+        # Only send Alerts via Email
+        # @ToDo: Also send via Twitter
+        f = s3db[tablename].contact_method
+        f.readable = f.writable = False
+
+        #from s3 import S3SQLCustomForm
+
+        #crud_form = S3SQLCustomForm("mission_id",
+        #                            "subject",
+        #                            "body",
+        #                            "modified_on",
+        #                            )
+
+        #s3db.configure(tablename,
+                       #crud_form = crud_form,
+                       #list_fields = ["mission_id",
+                       #               "subject",
+                       #               "body",
+                       #               ],
+        #               )
+
+    settings.customise_deploy_alert_resource = customise_deploy_alert_resource
+
+    # -------------------------------------------------------------------------
+    def customise_deploy_mission_resource(r, tablename):
+
+        s3db = current.s3db
+        s3db[tablename].event_type_id.label = T("Disaster Type")
+        COUNTRY = current.messages.COUNTRY
+
+        from s3 import S3SQLCustomForm
+
+        crud_form = S3SQLCustomForm("name",
+                                    "date",
+                                    "location_id",
+                                    "event_type_id",
+                                    )
+
+        from s3 import S3DateFilter, S3LocationFilter, S3OptionsFilter, S3TextFilter
+        filter_widgets = [S3TextFilter(["name",
+                                        "event_type_id$name",
+                                        "location_id",
+                                        ],
+                                       label=T("Search")
+                                       ),
+                          S3LocationFilter("location_id",
+                                           label=COUNTRY,
+                                           widget="multiselect",
+                                           levels=["L0"],
+                                           hidden=True
+                                           ),
+                          S3OptionsFilter("event_type_id",
+                                          widget="multiselect",
+                                          hidden=True
+                                          ),
+                          #S3OptionsFilter("status",
+                          #                options=s3db.deploy_mission_status_opts,
+                          #                hidden=True
+                          #                ),
+                          S3DateFilter("date",
+                                       hide_time=True,
+                                       hidden=True
+                                       ),
+                          ]
+
+        list_fields = ["name",
+                       "date",
+                       "event_type_id",
+                       (COUNTRY, "location_id"),
+                       (T("Responses"), "response_count"),
+                       (T("Members Deployed"), "hrquantity"),
+                       ]
+
+        s3db.configure(tablename,
+                       crud_form = crud_form,
+                       list_fields = list_fields,
+                       )
+
+    settings.customise_deploy_mission_resource = customise_deploy_mission_resource
+
+    # -------------------------------------------------------------------------
+    def customise_event_event_type_resource(r, tablename):
+
+        current.response.s3.crud_strings[tablename] = Storage(
+            label_create = T("Create Disaster Type"),
+            title_display = T("Disaster Type Details"),
+            title_list = T("Disaster Types"),
+            title_update = T("Edit Disaster Type Details"),
+            title_upload = T("Import Disaster Types"),
+            label_list_button = T("List Disaster Types"),
+            label_delete_button = T("Delete Disaster Type"),
+            msg_record_created = T("Disaster Type added"),
+            msg_record_modified = T("Disaster Type Details updated"),
+            msg_record_deleted = T("Disaster Type deleted"),
+            msg_list_empty = T("No Disaster Types currently defined"))
+
+    settings.customise_event_event_type_resource = customise_event_event_type_resource
+
+    # -------------------------------------------------------------------------
+    def customise_hrm_course_controller(**attr):
+
+        table = current.s3db.hrm_course
+        auth = current.auth
+        has_role = auth.s3_has_role
+        if has_role("ADMIN"):
+            # See all Courses
+            current.response.s3.filter = (table.id > 0)
+        elif has_role("training_coordinator") or has_role("training_assistant"):
+            # Only show this Center's courses
+            current.response.s3.filter = (table.organisation_id == auth.user.organisation_id) | (table.organisation_id == None)
+        else:
+            # See all Courses
+            current.response.s3.filter = (table.id > 0)
+
+        return attr
+
+    settings.customise_hrm_course_controller = customise_hrm_course_controller
+
+    # -------------------------------------------------------------------------
     def customise_hrm_course_resource(r, tablename):
 
         from s3 import IS_ONE_OF, S3SQLCustomForm#, S3SQLInlineLink
 
         db = current.db
+        auth = current.auth
         s3db = current.s3db
         table = s3db[tablename]
 
         f = table.organisation_id
-        f.readable = f.writable = True
         f.label = T("Training Center")
         f.comment = False # Don't create here
-
-        ttable = s3db.org_organisation_type
-        try:
-            type_id = db(ttable.name == "Training Center").select(ttable.id,
-                                                                  limitby=(0, 1),
-                                                                  ).first().id
-        except:
-            # No/incorrect prepop done - skip (e.g. testing impacts of CSS changes in this theme)
-            pass
-        else:
-            ltable = s3db.org_organisation_organisation_type
-            rows = db(ltable.organisation_type_id == type_id).select(ltable.organisation_id)
-            filter_opts = [row.organisation_id for row in rows]
-
-            f.requires = IS_ONE_OF(db, "org_organisation.id",
-                                   s3db.org_OrganisationRepresent(parent=False),
-                                   orderby = "org_organisation.name",
-                                   sort = True,
-                                   filterby = "id",
-                                   filter_opts = filter_opts,
-                                   )
+        org_represent = s3db.org_OrganisationRepresent(parent=False)
+        f.represent = org_represent
 
         list_fields = ["organisation_id",
                        "code",
                        "name",
                        #(T("Sectors"), "course_sector.sector_id"),
                        ]
+
+        has_role = auth.s3_has_role
+        if has_role("ADMIN"):
+            #f.readable = f.writable = True
+            ttable = s3db.org_organisation_type
+            try:
+                type_id = db(ttable.name == "Training Center").select(ttable.id,
+                                                                      limitby=(0, 1),
+                                                                      ).first().id
+            except:
+                # No/incorrect prepop done - skip (e.g. testing impacts of CSS changes in this theme)
+                pass
+            else:
+                ltable = s3db.org_organisation_organisation_type
+                rows = db(ltable.organisation_type_id == type_id).select(ltable.organisation_id)
+                filter_opts = [row.organisation_id for row in rows]
+
+                f.requires = IS_ONE_OF(db, "org_organisation.id",
+                                       org_represent,
+                                       orderby = "org_organisation.name",
+                                       sort = True,
+                                       filterby = "id",
+                                       filter_opts = filter_opts,
+                                       )
+
+        elif has_role("training_coordinator"):
+            f.default = auth.user.organisation_id
+            #organisation_id = auth.user.organisation_id
+            #f.default = organisation_id
+            # Too late to do this here
+            #current.response.s3.filter = (table.organisation_id == organisation_id) | (table.organisation_id == None)
+            list_fields.pop(0)
 
         crud_form = S3SQLCustomForm("organisation_id",
                                     "code",
@@ -1006,6 +1169,7 @@ def config(settings):
         s3db.configure(tablename,
                        crud_form = crud_form,
                        list_fields = list_fields,
+                       orderby = "hrm_course.code",
                        )
 
     settings.customise_hrm_course_resource = customise_hrm_course_resource
@@ -1262,6 +1426,68 @@ def config(settings):
     settings.customise_hrm_competency_resource = customise_hrm_competency_resource
 
     # -------------------------------------------------------------------------
+    def hrm_training_onaccept(form):
+        """
+            Add People to the RIT Alert List if they have passed the RIT course
+        """
+
+        db = current.db
+        s3db = current.s3db
+        form_vars = form.vars
+
+        # Lookup full record
+        table = db.hrm_training
+        record = db(table.id == form_vars.id).select(table.id,
+                                                     table.person_id,
+                                                     table.course_id,
+                                                     table.grade,
+                                                     limitby=(0, 1)).first()
+        try:
+            course_id = record.course_id
+        except:
+            current.log.error("Cannot find Training record")
+            return
+
+        # Lookup the RIT Course ID
+        ctable = db.hrm_course
+        row = db(ctable.name == "Regional Intervention Teams").select(ctable.id,
+                                                                      cache = s3db.cache,
+                                                                      limitby=(0, 1)
+                                                                      ).first()
+        try:
+            rit_course_id = row.id
+        except:
+            current.log.error("Cannot find RIT Course: Prepop not done?")
+            return
+
+        if course_id != rit_course_id:
+            # Nothing to do
+            return
+
+        if record.grade != 8:
+            # Not passed: Nothing to do
+            return
+
+        # Is person already a RIT Member?
+        htable = s3db.hrm_human_resource
+        hr = db(htable.person_id == record.person_id).select(htable.id,
+                                                             limitby=(0, 1)
+                                                             ).first()
+        try:
+            human_resource_id = hr.id
+        except:
+            current.log.error("Cannot find Human Resource record")
+            return
+
+        dtable = s3db.deploy_application
+        exists = db(dtable.human_resource_id == human_resource_id).select(dtable.id,
+                                                                          limitby=(0, 1)
+                                                                          ).first()
+        if not exists:
+            # Add them to the list
+            dtable.insert(human_resource_id = human_resource_id)
+
+    # -------------------------------------------------------------------------
     #def customise_hrm_training_controller(**attr):
 
     #    # Default Filter
@@ -1275,51 +1501,132 @@ def config(settings):
     #settings.customise_hrm_training_controller = customise_hrm_training_controller
 
     # -------------------------------------------------------------------------
+    def customise_hrm_training_resource(r, tablename):
+
+        s3db = current.s3db
+        table = s3db.hrm_training
+        f = table.grade
+        f.readable = f.writable = True
+
+        from s3 import S3TextFilter, S3OptionsFilter, S3DateFilter
+        filter_widgets = [
+            S3TextFilter(["person_id$first_name",
+                          "person_id$last_name",
+                          "course_id$name",
+                          "comments",
+                          ],
+                         label = T("Search"),
+                         comment = T("You can search by trainee name, course name or comments. You may use % as wildcard. Press 'Search' without input to list all trainees."),
+                         _class="filter-search",
+                         ),
+            S3OptionsFilter("training_event_id$site_id",
+                            label = T("Country"),
+                            represent = s3db.org_SiteRepresent(show_type=False),
+                            ),
+            S3OptionsFilter("person_id$human_resource.organisation_id",
+                            label = T("Organization"),
+                            ),
+            S3OptionsFilter("course_id",
+                            ),
+            S3OptionsFilter("grade",
+                            ),
+            S3DateFilter("date",
+                         hide_time=True,
+                         ),
+            ]
+
+        default_onaccept = s3db.get_config(tablename, "onaccept")
+        if default_onaccept and not isinstance(default_onaccept, list): # Catch running twice
+            onaccept = [default_onaccept,
+                        hrm_training_onaccept,
+                        ]
+        else:
+            onaccept = hrm_training_onaccept
+
+        s3db.configure(tablename,
+                      filter_widgets = filter_widgets,
+                      onaccept = onaccept,
+                      )
+
+    settings.customise_hrm_training_resource = customise_hrm_training_resource
+
+    # -------------------------------------------------------------------------
     def customise_hrm_training_event_resource(r, tablename):
 
         from s3 import IS_ONE_OF, S3Represent, S3SQLCustomForm, S3SQLInlineComponent
 
         db = current.db
+        auth = current.auth
         s3db = current.s3db
         table = s3db.hrm_training_event
 
         # @ToDo: Default Filter for Training Center staff
 
+        org_represent = s3db.org_OrganisationRepresent(parent=False)
+
         f = table.organisation_id
-        f.readable = f.writable = True
         f.label = T("Training Center")
         f.comment = False # Don't create here
+        f.represent = org_represent
 
-        ttable = s3db.org_organisation_type
-        try:
-            type_id = db(ttable.name == "Training Center").select(ttable.id,
-                                                                  limitby=(0, 1),
-                                                                  ).first().id
-        except:
-            # No/incorrect prepop done - skip (e.g. testing impacts of CSS changes in this theme)
-            pass
-        else:
-            ltable = s3db.org_organisation_organisation_type
-            rows = db(ltable.organisation_type_id == type_id).select(ltable.organisation_id)
-            filter_opts = [row.organisation_id for row in rows]
+        list_fields = ["organisation_id",
+                       "course_id",
+                       "site_id",
+                       "start_date",
+                       "training_event_instructor.person_id",
+                       "comments",
+                       ]
 
-            f.requires = IS_ONE_OF(db, "org_organisation.id",
-                                   s3db.org_OrganisationRepresent(parent=False),
-                                   orderby = "org_organisation.name",
-                                   sort = True,
-                                   filterby = "id",
-                                   filter_opts = filter_opts,
-                                   )
+        has_role = auth.s3_has_role
+        if has_role("ADMIN"):
+            #f.readable = f.writable = True
+            ttable = s3db.org_organisation_type
+            try:
+                type_id = db(ttable.name == "Training Center").select(ttable.id,
+                                                                      limitby=(0, 1),
+                                                                      ).first().id
+            except:
+                # No/incorrect prepop done - skip (e.g. testing impacts of CSS changes in this theme)
+                pass
+            else:
+                ltable = s3db.org_organisation_organisation_type
+                rows = db(ltable.organisation_type_id == type_id).select(ltable.organisation_id)
+                filter_opts = [row.organisation_id for row in rows]
+
+                f.requires = IS_ONE_OF(db, "org_organisation.id",
+                                       org_represent,
+                                       orderby = "org_organisation.name",
+                                       sort = True,
+                                       filterby = "id",
+                                       filter_opts = filter_opts,
+                                       )
+
+        elif has_role("training_coordinator") or has_role("training_assistant"):
+            organisation_id = auth.user.organisation_id
+            f.default = organisation_id
+            f.writable = False
+            list_fields.pop(0)
+            table.course_id.requires = IS_ONE_OF(db, "hrm_course.id",
+                                                 org_represent,
+                                                 orderby = "hrm_course.name",
+                                                 sort = True,
+                                                 filterby = "organisation_id",
+                                                 filter_opts = [organisation_id],
+                                                 )
 
         # Hours are Optional
         from gluon import IS_EMPTY_OR
         requires = table.hours.requires
         table.hours.requires = IS_EMPTY_OR(table.hours)
 
+        site_represent = S3Represent(lookup = "org_site")
+
         # Filter list of Venues
         f = table.site_id
         f.default = None
         f.label = T("Country")
+        f.represent = site_represent
+
         ftable = s3db.org_facility
         ltable = s3db.org_site_facility_type
         ttable = s3db.org_facility_type
@@ -1330,7 +1637,7 @@ def config(settings):
         rows = db(query).select(ftable.site_id)
         filter_opts = [row.site_id for row in rows]
         f.requires = IS_ONE_OF(db, "org_site.site_id",
-                               S3Represent(lookup = "org_site"),
+                               site_represent,
                                filterby="site_id",
                                filter_opts=filter_opts,
                                )
@@ -1352,13 +1659,6 @@ def config(settings):
                                                          ),
                                     "comments",
                                     )
-        list_fields = ["organisation_id",
-                       "course_id",
-                       "site_id",
-                       "start_date",
-                       "training_event_instructor.person_id",
-                       "comments",
-                       ]
 
         s3db.configure(tablename,
                        crud_form = crud_form,

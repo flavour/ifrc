@@ -2,7 +2,7 @@
 
 """ Sahana Eden Document Library
 
-    @copyright: 2011-2015 (c) Sahana Software Foundation
+    @copyright: 2011-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -29,6 +29,7 @@
 
 __all__ = ("S3DocumentLibrary",
            "S3DocSitRepModel",
+           "S3CKEditorModel",
            "doc_image_represent",
            "doc_document_list_layout",
            )
@@ -74,6 +75,7 @@ class S3DocumentLibrary(S3Model):
         # Document-referencing entities
         #
         entity_types = Storage(asset_asset=T("Asset"),
+                               cap_resource=T("CAP Resource"),
                                cms_post=T("Post"),
                                cr_shelter=T("Shelter"),
                                deploy_mission=T("Mission"),
@@ -375,8 +377,6 @@ class S3DocumentLibrary(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
-
-        return
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -811,5 +811,79 @@ class S3DocSitRepModel(S3Model):
 
         return dict(doc_sitrep_id = lambda **attr: dummy("sitrep_id"),
                     )
+
+# =============================================================================
+class S3CKEditorModel(S3Model):
+    """
+        Storage for Images used by CKEditor
+        - and hence the s3_richtext_widget
+
+        Based on https://github.com/timrichardson/web2py_ckeditor4
+    """
+
+    names = ("doc_ckeditor",
+             "doc_filetype",
+             )
+
+    def model(self):
+
+        #T = current.T
+
+        # ---------------------------------------------------------------------
+        # Images
+        #
+        tablename = "doc_ckeditor"
+        self.define_table(tablename,
+                          Field("title", length=255),
+                          Field("filename", length=255),
+                          Field("flength", "integer"),
+                          Field("mime_type", length=128),
+                          Field("upload", "upload",
+                                #uploadfs = self.settings.uploadfs,
+                                requires = [IS_NOT_EMPTY(),
+                                            IS_LENGTH(maxsize=10485760, # 10 Mb
+                                                      minsize=0)],
+                                ),
+                          *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return dict(doc_filetype = self.doc_filetype,
+                    )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def doc_filetype(filename):
+        """
+            Takes a filename and returns a category based on the file type.
+            Categories: word, excel, powerpoint, flash, pdf, image, video, audio, archive, other.
+        """
+
+        parts = os.path.splitext(filename)
+        if len(parts) < 2:
+            return "other"
+        else:
+            ext = parts[1][1:].lower()
+            if ext in ("png", "jpg", "jpeg", "gif"):
+                return "image"
+            elif ext in ("avi", "mp4", "m4v", "ogv", "wmv", "mpg", "mpeg"):
+                return "video"
+            elif ext in ("mp3", "m4a", "wav", "ogg", "aiff"):
+                return "audio"
+            elif ext in ("zip", "7z", "tar", "gz", "tgz", "bz2", "rar"):
+                return "archive"
+            elif ext in ("doc", "docx", "dot", "dotx", "rtf"):
+                return "word"
+            elif ext in ("xls", "xlsx", "xlt", "xltx", "csv"):
+                return "excel"
+            elif ext in ("ppt", "pptx"):
+                return "powerpoint"
+            elif ext in ("flv", "swf"):
+                return "flash"
+            elif ext == "pdf":
+                return "pdf"
+            else:
+                return "other"
 
 # END =========================================================================

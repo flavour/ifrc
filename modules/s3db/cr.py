@@ -2,7 +2,7 @@
 
 """ Shelter (Camp) Registry, model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -69,7 +69,6 @@ class S3ShelterModel(S3Model):
              "cr_shelter_unit",
              )
 
-    # Define a function model() which takes no parameters (except self):
     def model(self):
 
         T = current.T
@@ -87,15 +86,18 @@ class S3ShelterModel(S3Model):
 
         location_id = self.gis_location_id
 
-        # -------------------------------------------------------------------------
+        # ---------------------------------------------------------------------
         # Shelter types
         # e.g. NGO-operated, Government evacuation center, School, Hospital -- see Agasti opt_camp_type.)
         tablename = "cr_shelter_type"
         define_table(tablename,
                      Field("name", notnull=True,
                            label = NAME,
-                           requires = IS_NOT_ONE_OF(db,
-                                                    "%s.name" % tablename),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_NOT_ONE_OF(db,
+                                                     "%s.name" % tablename,
+                                                     ),
+                                       ],
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -153,6 +155,7 @@ class S3ShelterModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True,
                            label = NAME,
+                           requires = IS_NOT_EMPTY(),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -217,6 +220,7 @@ class S3ShelterModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True,
                            label = NAME,
+                           requires = IS_NOT_EMPTY(),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -242,8 +246,10 @@ class S3ShelterModel(S3Model):
 
 
         # -------------------------------------------------------------------------
+        # Shelters
+        #
         cr_shelter_opts = {1 : T("Closed"),
-                           2 : T("Open")
+                           2 : T("Open"),
                            }
 
         day_and_night = settings.get_cr_day_and_night()
@@ -252,12 +258,12 @@ class S3ShelterModel(S3Model):
         if settings.get_cr_shelter_housing_unit_management():
             if day_and_night:
                 capacity_day_comment = DIV(_class="tooltip",
-                                           _title="%s|%s|%s" % (T("Capacity (Day and Night)"),
-                                                                T("Capacity of the shelter for people who need to stay both day and night"),
+                                           _title="%s|%s|%s" % (T("Capacity (Day)"),
+                                                                T("Capacity of the shelter during the day"),
                                                                 T("Capacity evaluated adding all defined housing unit capacities")))
                 capacity_night_comment = DIV(_class="tooltip",
-                                             _title="%s|%s|%s" % (T("Capacity (Night only)"),
-                                                                  T("Capacity of the shelter for people who need to stay for night only"),
+                                             _title="%s|%s|%s" % (T("Capacity (Night)"),
+                                                                  T("Capacity of the shelter during the night"),
                                                                   T("Capacity evaluated adding all defined housing unit capacities")))
             else:
                 capacity_day_comment = DIV(_class="tooltip",
@@ -268,11 +274,11 @@ class S3ShelterModel(S3Model):
         else:
             if day_and_night:
                 capacity_day_comment = DIV(_class="tooltip",
-                                           _title="%s|%s" % (T("Capacity (Day and Night)"),
-                                                             T("Capacity of the shelter for people who need to stay both day and night")))
+                                           _title="%s|%s" % (T("Capacity (Day)"),
+                                                             T("Capacity of the shelter during the day")))
                 capacity_night_comment = DIV(_class="tooltip",
-                                             _title="%s|%s" % (T("Capacity (Night only)"),
-                                                               T("Capacity of the shelter for people who need to stay for night only")))
+                                             _title="%s|%s" % (T("Capacity (Night)"),
+                                                               T("Capacity of the shelter during the night")))
             else:
                 capacity_day_comment = DIV(_class="tooltip",
                                            _title="%s|%s" % (T("Capacity"),
@@ -313,8 +319,7 @@ class S3ShelterModel(S3Model):
                      Field("population", "integer",
                            label = T("Estimated Population"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            readable = not dynamic,
                            writable = not dynamic,
                            comment = DIV(_class="tooltip",
@@ -323,18 +328,16 @@ class S3ShelterModel(S3Model):
                            ),
                      Field("capacity_day", "integer",
                            default = 0,
-                           label = T("Capacity (Day and Night)") if day_and_night else T("Capacity"),
+                           label = T("Capacity (Day)") if day_and_night else T("Capacity"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            comment = capacity_day_comment,
                            ),
                      Field("capacity_night", "integer",
                            default = 0,
-                           label = T("Capacity (Night only)"),
+                           label = T("Capacity (Night)"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            readable = day_and_night,
                            writable = day_and_night,
                            comment = capacity_night_comment,
@@ -342,10 +345,9 @@ class S3ShelterModel(S3Model):
                      # Dynamic field
                      Field("available_capacity_day", "integer",
                            default = 0,
-                           label = T("Available Capacity (Day and Night)") if day_and_night else T("Available Capacity"),
+                           label = T("Available Capacity (Day)") if day_and_night else T("Available Capacity"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            readable = dynamic and day_and_night,
                            # Automatically updated
                            writable = False,
@@ -353,10 +355,9 @@ class S3ShelterModel(S3Model):
                      # Dynamic field
                      Field("available_capacity_night", "integer",
                            default = 0,
-                           label = T("Available Capacity (Night only)"),
+                           label = T("Available Capacity (Night)"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            readable = dynamic and day_and_night,
                            # Automatically updated
                            writable = False,
@@ -364,13 +365,12 @@ class S3ShelterModel(S3Model):
                      # Dynamic field
                      Field("population_day", "integer",
                            default = 0,
-                           label = T("Current Population (Day and Night)") if day_and_night else T("Current Population"),
+                           label = T("Current Population (Day)") if day_and_night else T("Current Population"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Population (Day)"),
-                                                           T("Number of evacuees registered in the shelter for day and night"))),
+                                                           T("Number of people registered in the shelter for day and night"))),
                            readable = dynamic,
                            # Automatically updated
                            writable = False
@@ -378,13 +378,12 @@ class S3ShelterModel(S3Model):
                      # Dynamic field
                      Field("population_night", "integer",
                            default = 0,
-                           label = T("Current Population (Night only)"),
+                           label = T("Current Population (Night)"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Population (Night)"),
-                                                           T("Number of people registered in the shelter for night only"))),
+                                                           T("Number of people registered in the shelter for the night"))),
                            readable = dynamic and day_and_night,
                            # Automatically updated
                            writable = False
@@ -550,7 +549,7 @@ class S3ShelterModel(S3Model):
 
         configure(tablename,
                   create_next = create_next,
-                  deduplicate = self.cr_shelter_duplicate,
+                  deduplicate = S3Duplicate(),
                   filter_widgets = filter_widgets,
                   list_fields = list_fields,
                   onaccept = self.cr_shelter_onaccept,
@@ -630,8 +629,7 @@ class S3ShelterModel(S3Model):
                      Field("population", "integer",
                            label = T("Population"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                       IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -660,22 +658,26 @@ class S3ShelterModel(S3Model):
                 msg_record_deleted = T("Shelter Status deleted"),
                 msg_list_empty = T("No Shelter Statuses currently registered"))
 
-        cr_housing_unit_opts = {1 : T("Available"),
-                                2 : T("Not Available"),
+        # -------------------------------------------------------------------------
+        # Housing units
+        #
+        cr_housing_unit_opts = {1: T("Available"),
+                                2: T("Not Available"),
                                 }
+
         cr_housing_unit_handicap_facilities = {1: T("Available"),
                                                2: T("Suitable"),
-                                               3: T("Not Available")
+                                               3: T("Not Available"),
                                                }
 
         tablename = "cr_shelter_unit"
         define_table(tablename,
-                     Field("name", notnull=True,
-                           length=64,
+                     Field("name", notnull=True, length = 64,
                            label = T("Housing Unit Name"),
                            requires = IS_NOT_EMPTY(),
                            ),
-                     # @ToDo: Using site_id would be more flexible & link better to default_site/auth.user.site_id
+                     # @ToDo: Using site_id would be more flexible & link
+                     #        better to default_site/auth.user.site_id
                      shelter_id(ondelete = "CASCADE"),
                      location_id(widget = S3LocationSelector(#catalog_layers=True,
                                                              points = False,
@@ -690,13 +692,28 @@ class S3ShelterModel(S3Model):
                            requires = IS_EMPTY_OR(
                                        IS_IN_SET(cr_housing_unit_opts))
                            ),
-
+                     Field("transitory", "boolean",
+                           default = False,
+                           label = T("Transitory Accommodation"),
+                           represent = s3_yes_no_represent,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Transitory Accommodation"),
+                                                           T("This unit is for transitory accommodation upon arrival."),
+                                                           ),
+                                         ),
+                           # Enable in template as required:
+                           readable = False,
+                           writable = False,
+                           ),
                      Field("bath", "boolean",
                            default = True,
                            label = T("Available Bath"),
+                           represent = s3_yes_no_represent,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Bath Availability"),
-                                                           T("Integrated bath within housing unit"))),
+                                                           T("Integrated bath within housing unit"),
+                                                           ),
+                                         ),
                            ),
                      Field("handicap_bath", "integer",
                            default = 1,
@@ -707,11 +724,14 @@ class S3ShelterModel(S3Model):
                                        IS_IN_SET(cr_housing_unit_handicap_facilities)),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Bath Handicap Facilities"),
-                                                           T("Availability of bath handicap facilities"))),
+                                                           T("Availability of bath handicap facilities"),
+                                                           ),
+                                         ),
                            ),
                      Field("shower", "boolean",
                            default = True,
                            label = T("Available Shower"),
+                           represent = s3_yes_no_represent,
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Shower Availability"),
                                                            T("Integrated shower within housing unit"))),
@@ -725,84 +745,92 @@ class S3ShelterModel(S3Model):
                                        IS_IN_SET(cr_housing_unit_handicap_facilities)),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Shower Handicap Facilities"),
-                                                           T("Availability of shower handicap facilities"))),
+                                                           T("Availability of shower handicap facilities"),
+                                                           ),
+                                         ),
                            ),
                      Field("capacity_day", "integer",
                            default = 0,
-                           label = T("Housing Unit Capacity (Day and Night)") if day_and_night else T("Housing Unit Capacity"),
+                           label = T("Housing Unit Capacity (Day)") if day_and_night else T("Housing Unit Capacity"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            comment = DIV(_class="tooltip",
-                                         _title="%s|%s" % (T("Housing Unit Day and Night Capacity"),
-                                                           T("Capacity of the housing unit for people who need to stay both day and night"))),
+                                         _title="%s|%s" % (T("Housing Unit Capacity (Day)"),
+                                                           T("Capacity of the housing unit for people during the day"),
+                                                           ),
+                                         ),
                            ),
                      Field("capacity_night", "integer",
                            default = 0,
                            label = T("Housing Unit Capacity (Night)"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            readable = day_and_night,
                            writable = day_and_night,
                            comment = DIV(_class="tooltip",
-                                         _title="%s|%s" % (T("Housing Unit Night Capacity"),
-                                                           T("Capacity of the housing unit for people who need to stay both day and night"))),
+                                         _title="%s|%s" % (T("Housing Unit Capacity (Night)"),
+                                                           T("Capacity of the housing unit for people during the night"),
+                                                           ),
+                                         ),
                            ),
                      Field("available_capacity_day", "integer",
                            default = 0,
-                           label = T("Available Capacity (Day and Night)") if day_and_night else T("Available Capacity"),
+                           label = T("Available Capacity (Day)") if day_and_night else T("Available Capacity"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
-                           comment = DIV(_class="tooltip",
-                                         _title="%s" % (T("Current Population Availability (Day and Night)"))),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           comment = DIV(_class = "tooltip",
+                                         _title = T("Currently Available Capacity (Day)"),
+                                         ),
                            # Automatically updated
                            readable = dynamic,
-                           writable = False
+                           writable = False,
                            ),
                      Field("available_capacity_night", "integer",
                            default = 0,
                            label = T("Population Availability (Night)"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
-                           comment = DIV(_class="tooltip",
-                                         _title="%s" % (T("Current Population Availability (Night)"))),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           comment = DIV(_class = "tooltip",
+                                         _title = T("Currently Available Capacity (Night)"),
+                                         ),
                            # Automatically updated
                            readable = dynamic and day_and_night,
-                           writable = False
+                           writable = False,
                            ),
                      Field("population_day", "integer",
                            default = 0,
-                           label = T("Current Population (Day and Night)") if day_and_night else T("Current Population"),
+                           label = T("Current Population (Day)") if day_and_night else T("Current Population"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Housing Unit Current Population"),
-                                                           T("Number of evacuees registered in this housing unit (Day and Night)"))),
+                                                           T("Number of people registered in this housing unit for day and night"),
+                                                           ),
+                                         ),
                            # Automatically updated
                            readable = False,
-                           writable = False
+                           writable = False,
                            ),
                      Field("population_night", "integer",
                            default = 0,
                            label = T("Current Population (Night)"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
-                           requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(0, 999999)),
+                           requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Housing Unit Current Population"),
-                                                           T("Number of evacuees registered in this housing unit (Night)"))),
+                                                           T("Number of evacuees registered in this housing unit for the night"),
+                                                           ),
+                                         ),
                            readable = day_and_night,
                            # Automatically updated
-                           writable = False
+                           writable = False,
                            ),
                      Field("domestic_animals", "boolean",
                            default = False,
                            label = T("Free for domestic animals"),
+                           represent = s3_yes_no_represent,
                            ),
+                     Field.Method("cstatus", self.cr_shelter_unit_status),
                      s3_comments(),
                      *s3_meta_fields())
 
@@ -824,14 +852,22 @@ class S3ShelterModel(S3Model):
                             ]
 
         population_onaccept = lambda form: \
-                                self.cr_shelter_population_onaccept(form,
-                                                                    tablename="cr_shelter_unit")
+                                self.cr_shelter_population_onaccept(
+                                            form,
+                                            tablename="cr_shelter_unit",
+                                            )
 
         configure(tablename,
-                  # @ToDo: Allow multiple shelters to have the same name of unit (Requires that Shelter is in dvr/person.xsl/csv)
+                  # @ToDo: Allow multiple shelters to have the same
+                  # name of unit (Requires that Shelter is in dvr/person.xsl/csv)
                   #deduplicate = S3Duplicate(primary=("shelter_id", "name")),
                   deduplicate = S3Duplicate(),
                   list_fields = list_fields,
+                  # Extra fields for cr_shelter_unit_status:
+                  extra_fields = ["capacity_day",
+                                  "available_capacity_day",
+                                  "status",
+                                  ],
                   onaccept = population_onaccept,
                   ondelete = population_onaccept,
                   )
@@ -841,11 +877,11 @@ class S3ShelterModel(S3Model):
                                           label = T("Housing Unit"),
                                           ondelete = "RESTRICT",
                                           represent = represent,
-                                          requires = IS_NULL_OR(IS_ONE_OF(db, "cr_shelter_unit.id",
-                                                                          represent,
-                                                                          orderby="shelter_id",
-                                                                          #sort=True
-                                                                )),
+                                          requires = IS_EMPTY_OR(IS_ONE_OF(db, "cr_shelter_unit.id",
+                                                                           represent,
+                                                                           orderby="shelter_id",
+                                                                           #sort=True
+                                                                 )),
                                           #widget = S3AutocompleteWidget("cr", "shelter_unit")
                                           )
 
@@ -891,50 +927,6 @@ class S3ShelterModel(S3Model):
 
         return
 
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def cr_shelter_duplicate(item):
-        """
-            Shelter record duplicate detection, used for the deduplicate hook
-
-            @param item: the S3ImportItem to check
-        """
-
-        data = item.data
-        #org = data.get("organisation_id")
-        address = data.get("address")
-
-        table = item.table
-        query = (table.name == data.name)
-        #if org:
-        #    query = query & (table.organisation_id == org)
-        if address:
-            query = query & (table.address == address)
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def cr_shelter_service_represent(id, row=None):
-        """ FK representation """
-
-        if row:
-            return row.name
-        elif not id:
-            return current.messages["NONE"]
-
-        db = current.db
-        table = db.cr_shelter_service
-        r = db(table.id == id).select(table.name,
-                                      limitby = (0, 1)).first()
-        try:
-            return r.name
-        except:
-            return current.messages.UNKNOWN_OPT
-
     # -----------------------------------------------------------------------------
     @staticmethod
     def cr_shelter_service_multirepresent(shelter_service_ids):
@@ -959,11 +951,94 @@ class S3ShelterModel(S3Model):
             except:
                 return current.messages.UNKNOWN_OPT
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def cr_shelter_unit_status(row):
+        """
+            Virtual Field to show the status of the unit by available capacity
+            - used to colour features on the map
+            0: Full
+            1: Partial
+            2: Empty
+            3: Not Available
+        """
+
+        if hasattr(row, "cr_shelter_unit"):
+            row = row.cr_shelter_unit
+
+        if hasattr(row, "status"):
+            status = row.status
+        else:
+            status = None
+
+        if status == 2:
+            # Not Available
+            return 3
+
+        if hasattr(row, "available_capacity_day"):
+            actual = row.available_capacity_day
+        else:
+            actual = None
+
+        if status is not None and actual is not None:
+            if actual <= 0:
+                # Full (or over-capacity)
+                return 0
+
+        if hasattr(row, "capacity_day"):
+            total = row.capacity_day
+            if total == 0:
+                # No capacity ever, so Full
+                return 0
+        else:
+            total = None
+
+        if status is not None and total is not None and actual is not None:
+            if actual == total:
+                # Empty
+                return 2
+            else:
+                # Partial
+                return 1
+
+        if hasattr(row, "id"):
+            # Reload the record
+            s3_debug("Reloading cr_shelter_unit record")
+            table = current.s3db.cr_shelter_unit
+            r = current.db(table.id == row.id).select(table.status,
+                                                      table.capacity_day,
+                                                      table.available_capacity_day,
+                                                      limitby=(0, 1)
+                                                      ).first()
+            if r:
+                status = r.status
+                if status == 2:
+                    # Not Available
+                    return 3
+                actual = r.available_capacity_day
+                if actual <= 0:
+                    # Full (or over-capacity)
+                    return 0
+                total = r.capacity_day
+                if total == 0:
+                    # No capacity ever, so Full
+                    return 0
+                elif actual == total:
+                    # Empty
+                    return 2
+                else:
+                    # Partial
+                    return 1
+
+        return current.messages["NONE"]
+
 # =============================================================================
 class S3ShelterRegistrationModel(S3Model):
 
     names = ("cr_shelter_allocation",
              "cr_shelter_registration",
+             "cr_shelter_registration_history",
+             "cr_shelter_registration_status_opts",
              "cr_shelter_population_onaccept",
              )
 
@@ -974,7 +1049,9 @@ class S3ShelterRegistrationModel(S3Model):
         configure = self.configure
         define_table = self.define_table
         settings = current.deployment_settings
+
         shelter_id = self.cr_shelter_id
+        person_id = self.pr_person_id
 
         day_and_night = settings.get_cr_day_and_night()
 
@@ -1015,8 +1092,10 @@ class S3ShelterRegistrationModel(S3Model):
                      *s3_meta_fields())
 
         population_onaccept = lambda form: \
-                                self.cr_shelter_population_onaccept(form,
-                                                                    tablename="cr_shelter_allocation")
+                                self.cr_shelter_population_onaccept(
+                                    form,
+                                    tablename="cr_shelter_allocation",
+                                    )
 
         configure(tablename,
                   onaccept = population_onaccept,
@@ -1030,10 +1109,21 @@ class S3ShelterRegistrationModel(S3Model):
                                 DAY_AND_NIGHT: T("Day and Night")
                                 }
 
-        cr_registration_status_opts = {1: T("Planned"),
-                                       2: T("Checked-in"),
-                                       3: T("Checked-out"),
-                                       }
+        # Registration status
+        reg_status_opts = {1: T("Planned"),
+                           2: T("Checked-in"),
+                           3: T("Checked-out"),
+                           }
+
+        reg_status = S3ReusableField("registration_status", "integer",
+                                     label = T("Status"),
+                                     represent = S3Represent(
+                                                    options=reg_status_opts,
+                                                    ),
+                                     requires = IS_IN_SET(reg_status_opts,
+                                                          zero=None
+                                                          ),
+                                     )
 
         housing_unit = settings.get_cr_shelter_housing_unit_management()
 
@@ -1045,7 +1135,7 @@ class S3ShelterRegistrationModel(S3Model):
                                 ),
                      # The comment explains how to register a new person
                      # it should not be done in a popup
-                     self.pr_person_id(
+                     person_id(
                          comment = DIV(_class="tooltip",
                                        _title="%s|%s" % (T("Person"),
                                                          #  @ToDo: Generalise (this is EVASS-specific)
@@ -1069,15 +1159,7 @@ class S3ShelterRegistrationModel(S3Model):
                            readable = day_and_night,
                            writable = day_and_night,
                            ),
-                     Field("registration_status", "integer",
-                           label = T("Status"),
-                           represent = S3Represent(
-                                            options=cr_registration_status_opts,
-                                            ),
-                           requires = IS_IN_SET(cr_registration_status_opts,
-                                                zero=None
-                                                ),
-                           ),
+                     reg_status(),
                      s3_datetime("check_in_date",
                                  label = T("Check-in date"),
                                  default = "now",
@@ -1090,29 +1172,64 @@ class S3ShelterRegistrationModel(S3Model):
                      s3_comments(),
                      *s3_meta_fields())
 
-        population_onaccept = lambda form: \
-            self.cr_shelter_population_onaccept(form,
-                                                tablename="cr_shelter_registration")
-
+        registration_onaccept = self.shelter_registration_onaccept
         configure(tablename,
-                  deduplicate =  S3Duplicate(primary = ("person_id", "shelter_unit_id")),
-                  onaccept = population_onaccept,
-                  ondelete = population_onaccept,
+                  deduplicate = S3Duplicate(primary = ("person_id",
+                                                       "shelter_unit_id",
+                                                       ),
+                                            ),
+                  onaccept = registration_onaccept,
+                  ondelete = registration_onaccept,
                   )
 
         if housing_unit:
             configure(tablename,
-                      onvalidation = self.unit_onvalidation,
+                      onvalidation = self.cr_shelter_registration_onvalidation,
                       )
+
+        # Custom Methods
+        self.set_method("cr", "shelter_registration",
+                        method = "assign",
+                        action = cr_AssignUnit())
+
+        # ---------------------------------------------------------------------
+        # Shelter Registration History: history of status changes
+        #
+        tablename = "cr_shelter_registration_history"
+        define_table(tablename,
+                     person_id(),
+                     self.cr_shelter_id(),
+                     s3_datetime(default = "now",
+                                 ),
+                     reg_status("previous_status",
+                                label = T("Old Status"),
+                                ),
+                     reg_status("status",
+                                label = T("New Status"),
+                                ),
+                     *s3_meta_fields())
+
+        configure(tablename,
+                  list_fields = ["shelter_id",
+                                 "date",
+                                 (T("Status"), "status"),
+                                 (T("Modified by"), "modified_by"),
+                                 ],
+                  insertable = False,
+                  editable = False,
+                  deletable = False,
+                  orderby = "%s.date desc" % tablename,
+                  )
 
         # ---------------------------------------------------------------------
         # Pass variables back to global scope (response.s3.*)
         return dict(cr_shelter_population_onaccept = self.shelter_population_onaccept,
+                    cr_shelter_registration_status_opts = reg_status_opts,
                     )
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def unit_onvalidation(form):
+    def cr_shelter_registration_onvalidation(form):
         """
             Check if the housing unit belongs to the requested shelter
         """
@@ -1123,61 +1240,183 @@ class S3ShelterRegistrationModel(S3Model):
             # Housing Unit is not mandatory during Case Registration
             return
 
-        db = current.db
-        T = current.T
-
-        htable = db.cr_shelter_unit
-
         unit_id = None
-        if type(form) is Row:
-            if controller == "evr":
-                shelter_id = form.shelter_id
-                unit_id = form.shelter_unit_id
-            elif controller == "cr":
-                # @ToDo: don't assume this!
-                shelter_id = request.args[0]
-                unit_id = form.shelter_unit_id
-        else:
-            if controller == "evr":
-                shelter_id = form.vars.shelter_id
-                unit_id = form.vars.shelter_unit_id
-            elif controller == "cr":
-                # @ToDo: don't assume this!
-                shelter_id = request.args[0]
-                unit_id = form.vars.shelter_unit_id
 
-        if unit_id == None:
-            warning = T("Warning: No housing unit selected")
-            current.response.warning = warning
+        if type(form) is Row:
+            form_vars = form
         else:
+            form_vars = form.vars
+
+        if controller == "evr":
+            # Registration form includes the Shelter
+            shelter_id = form_vars.shelter_id
+            unit_id = form_vars.shelter_unit_id
+        elif controller == "cr":
+            # Registration form doesn't include the Shelter
+            # @ToDo: don't assume that we are running as component of the shelter
+            shelter_id = form_vars.shelter_id or (form.record and form.record.shelter_id) or request.args[0]
+            unit_id = form_vars.shelter_unit_id
+
+        if unit_id is None:
+            current.response.warning = current.T("Warning: No housing unit selected")
+        else:
+            db = current.db
+            htable = db.cr_shelter_unit
             record = db(htable.id == unit_id).select(htable.shelter_id,
                                                      limitby=(0, 1)).first()
 
-            shelter_value = str(record.shelter_id)
-            if shelter_value != shelter_id:
-                error = T("You have to select a housing unit belonged to the shelter")
+            if str(record.shelter_id) != str(shelter_id):
+                error = current.T("You have to select a housing unit belonging to the shelter")
                 form.errors["branch_id"] = error
                 current.response.error = error
 
     # -------------------------------------------------------------------------
+    @classmethod
+    def shelter_registration_onaccept(cls, form):
+        """
+            Registration onaccept: track status changes, update
+            shelter population
+
+            @param form: the FORM (also accepts Row)
+        """
+
+        try:
+            if type(form) is Row:
+                formvars = form
+            else:
+                formvars = form.vars
+            registration_id = formvars.id
+        except AttributeError:
+            unit_id = None
+        else:
+            unit_id = formvars.get("shelter_unit_id")
+
+            if registration_id:
+
+                s3db = current.s3db
+                db = current.db
+
+                # Get the current status
+                rtable = s3db.cr_shelter_registration
+                query = (rtable.id == registration_id) & \
+                        (rtable.deleted != True)
+                reg = db(query).select(rtable.id,
+                                       rtable.shelter_id,
+                                       rtable.shelter_unit_id,
+                                       rtable.registration_status,
+                                       rtable.check_in_date,
+                                       rtable.check_out_date,
+                                       rtable.modified_on,
+                                       rtable.person_id,
+                                       limitby = (0, 1),
+                                       ).first()
+
+                if reg:
+                    person_id = reg.person_id
+
+                    # Unit to check availability for
+                    unit_id = reg.shelter_unit_id
+
+                    # Get the previous status
+                    htable = s3db.cr_shelter_registration_history
+                    query = (htable.person_id == person_id) & \
+                            (htable.shelter_id == reg.shelter_id) & \
+                            (htable.deleted != True)
+                    row = db(query).select(htable.status,
+                                           htable.date,
+                                           orderby = ~htable.created_on,
+                                           limitby = (0, 1),
+                                           ).first()
+                    if row:
+                        previous_status = row.status
+                        previous_date = row.date
+                    else:
+                        previous_status = None
+                        previous_date = None
+
+                    # Get the current status
+                    current_status = reg.registration_status
+
+                    # Get the effective date
+                    if current_status == 2:
+                        effective_date_field = "check_in_date"
+                    elif current_status == 3:
+                        effective_date_field = "check_out_date"
+                    else:
+                        effective_date_field = None
+
+                    if effective_date_field:
+                        # Read from registration
+                        effective_date = reg[effective_date_field]
+                    else:
+                        # Use modified_on for history
+                        effective_date = reg.modified_on
+
+                    if current_status != previous_status or \
+                       effective_date_field and not effective_date:
+
+                        if effective_date_field:
+                            # If the new status has an effective date,
+                            # make sure it gets updated when the status
+                            # has changed:
+                            if effective_date_field not in formvars or \
+                               not effective_date or \
+                               previous_date and effective_date < previous_date:
+
+                                effective_date = current.request.utcnow
+                                reg.update_record(**{
+                                    effective_date_field: effective_date,
+                                    })
+
+                        # Insert new history entry
+                        htable.insert(previous_status = previous_status,
+                                      status = current_status,
+                                      date = effective_date,
+                                      person_id = person_id,
+                                      shelter_id = reg.shelter_id,
+                                      )
+
+                        # Update last_seen_on
+                        if current.deployment_settings.has_module("dvr"):
+                            s3db.dvr_update_last_seen(person_id)
+
+        # Update population
+        cls.shelter_population_onaccept(form,
+                                        tablename = "cr_shelter_registration",
+                                        unit_id = unit_id,
+                                        )
+
+    # -------------------------------------------------------------------------
     @staticmethod
-    def shelter_population_onaccept(form, tablename=None):
+    def shelter_population_onaccept(form, tablename=None, unit_id = None):
+        """
+            Update the shelter population, onaccept
+
+            @param form: the FORM
+            @param tablename: the table name
+            @param unit_id: the shelter unit ID (to warn if full)
+        """
 
         db = current.db
+        s3db = current.s3db
 
         if not tablename:
             return
-        table = current.s3db[tablename]
+        table = s3db[tablename]
 
         try:
             if type(form) is Row:
                 record_id = form.id
             else:
                 record_id = form.vars.id
-        except:
+        except AttributeError:
             # Nothing we can do
             return
 
+        if tablename == "cr_shelter_unit":
+            unit_id = record_id
+
+        # Get the record
         row = db(table._id == record_id).select(table._id,
                                                 table.shelter_id,
                                                 table.deleted,
@@ -1193,13 +1432,26 @@ class S3ShelterRegistrationModel(S3Model):
                 shelter_id = deleted_fk.get("shelter_id")
             else:
                 shelter_id = row.shelter_id
+
             if shelter_id:
+
                 if current.deployment_settings.get_cr_shelter_housing_unit_management():
+                    # First update housing units census
                     cr_update_capacity_from_housing_units(shelter_id)
 
+                # Shelter census
                 cr_update_shelter_population(shelter_id)
 
-        return
+                # Warn if unit is full
+                if unit_id:
+                    cr_check_population_availability(unit_id,
+                                                     table = s3db.cr_shelter_unit,
+                                                     )
+
+                # Warn if shelter is full
+                cr_check_population_availability(shelter_id,
+                                                 table = s3db.cr_shelter,
+                                                 )
 
 # =============================================================================
 def cr_shelter_rheader(r, tabs=[]):
@@ -1287,65 +1539,118 @@ def cr_update_housing_unit_population(shelter_id):
     htable = db.cr_shelter_unit
     rtable = db.cr_shelter_registration
 
-    # All housing units need to be updated. This is necessary because evacuees
-    # (or groups) could be moved within the same shelter.
+    rjoin = (htable.id == rtable.shelter_unit_id) & \
+            (rtable.deleted != True)
+
+    check_out_is_final = settings.get_cr_check_out_is_final()
+    if check_out_is_final:
+        rtable &= (rtable.registration_status != 3)
+
     query = (htable.shelter_id == shelter_id) & \
             (htable.status == 1) & \
             (htable.deleted != True)
 
-    rows = db(query).select(htable.id,
-                            htable.capacity_day,
-                            htable.capacity_night)
-
-    base_query = (rtable.deleted != True)
-
-    check_out_is_final = settings.get_cr_check_out_is_final()
-    if check_out_is_final:
-        base_query &= (rtable.registration_status != 3)
+    rcount = rtable.id.count()
 
     day_and_night = settings.get_cr_day_and_night()
-
-    dquery = base_query & (rtable.day_or_night == 1)
     if day_and_night:
-        nquery = base_query & (rtable.day_or_night == 2)
 
-    unit_field = rtable.shelter_unit_id
-    for row in rows:
-        capacity_day = row.capacity_day
-        unit_id = row.id
+        for daytime in (True, False):
 
-        query = dquery & (unit_field == unit_id)
-        population_day = db(query).count()
-
-        if day_and_night:
-            capacity_night = row.capacity_night
-            query = nquery & (unit_field == unit_id)
-            population_night = db(query).count()
-
-        if capacity_day:
-            available_capacity_day = capacity_day - population_day
-        else:
-            capacity_day = 0
-            available_capacity_day = 0
-
-        data = dict(available_capacity_day=available_capacity_day,
-                    population_day=population_day,
-                    )
-
-        if day_and_night:
-            if capacity_night:
-                available_capacity_night = capacity_night - \
-                                           population_night
+            if daytime:
+                fn_capacity = "capacity_day"
+                fn_population = "population_day"
+                fn_available_capacity = "available_capacity_day"
+                left = rtable.on(rjoin & (rtable.day_or_night == DAY_AND_NIGHT))
             else:
-                capacity_day = 0
-                available_capacity_night = 0
+                fn_capacity = "capacity_night"
+                fn_population = "population_night"
+                fn_available_capacity = "available_capacity_night"
+                left = rtable.on(rjoin)
 
-            data.update(available_capacity_night = available_capacity_night,
-                        population_night=population_night)
+            rows = db(query).select(htable.id,
+                                    htable[fn_capacity],
+                                    htable[fn_population],
+                                    htable[fn_available_capacity],
+                                    rtable.id.count(),
+                                    groupby = htable.id,
+                                    left = left,
+                                    )
 
-        db(htable.id == unit_id).update(**data)
+            for row in rows:
 
-        cr_check_population_availability(unit_id, htable)
+                data = {}
+
+                unit = row[str(htable)]
+                population = row[rcount]
+
+                # Update population
+                current_population = unit[fn_population]
+                if current_population != population:
+                    data[fn_population] = population
+
+                # Update daytime capacity
+                capacity = unit[fn_capacity]
+                if capacity > 0:
+                    available_capacity = capacity - population
+                else:
+                    available_capacity = 0
+                if unit[fn_available_capacity] != available_capacity:
+                    data[fn_available_capacity] = available_capacity
+
+                # Write only if data have changed
+                if data:
+                    db(htable.id == unit.id).update(**data)
+
+    else:
+        left = rtable.on(rjoin)
+        rows = db(query).select(htable.id,
+                                htable.capacity_day,
+                                htable.capacity_night,
+                                htable.population_day,
+                                htable.population_night,
+                                htable.available_capacity_day,
+                                htable.available_capacity_night,
+                                rcount,
+                                groupby = htable.id,
+                                left = left,
+                                )
+
+        for row in rows:
+
+            data = {}
+
+            unit = row[str(htable)]
+            population = row[rcount]
+
+            # Update daytime population/capacity
+            current_population = unit.population_day
+            if current_population != population:
+                data["population_day"] = population
+            capacity = unit.capacity_day
+            if capacity > 0:
+                available_capacity = capacity - population
+            else:
+                available_capacity = 0
+            if unit.available_capacity_day != available_capacity:
+                data["available_capacity_day"] = available_capacity
+
+            # Update daytime population/capacity
+            current_population = unit.population_night
+            if current_population != population:
+                data["population_night"] = population
+            capacity = unit.capacity_night
+            if capacity > 0:
+                available_capacity = capacity - population
+            else:
+                available_capacity = 0
+            if unit.available_capacity_night != available_capacity:
+                data["available_capacity_night"] = available_capacity
+
+            # Write only if data have changed
+            if data:
+                unit_id = unit.id
+                db(htable.id == unit_id).update(**data)
 
 # =============================================================================
 def cr_update_shelter_population(shelter_id):
@@ -1390,6 +1695,8 @@ def cr_update_shelter_population(shelter_id):
             population_night = number
         elif reg_type == DAY_AND_NIGHT and number:
             population_day = number
+    # population_day is both day /and/ night
+    population_night += population_day
 
     # Get allocation numbers
     # @ToDo: deployment_setting to disable Allocations
@@ -1437,8 +1744,6 @@ def cr_update_shelter_population(shelter_id):
                          available_capacity_day=available_capacity_day,
                          available_capacity_night=available_capacity_night)
 
-    cr_check_population_availability(shelter_id, stable)
-
 # =============================================================================
 def cr_check_population_availability(unit_id, table):
     """
@@ -1459,24 +1764,51 @@ def cr_check_population_availability(unit_id, table):
                                             table.population_night,
                                             limitby=(0, 1)
                                             ).first()
+
+    day_and_night = current.deployment_settings.get_cr_day_and_night()
+
+    warning = None
+    full_day = full_night = False
+
     capacity_day = record.capacity_day
     population_day = record.population_day
+    if capacity_day is not None and \
+       population_day and \
+       population_day >= capacity_day:
+        full_day = True
 
-    if (capacity_day is not None) and (population_day > capacity_day):
-        if table._tablename == "cr_shelter":
-            response.warning = T("Warning: this shelter is full for daytime")
-        elif table._tablename == "cr_shelter_unit":
-            response.warning = T("Warning: this housing unit is full for daytime")
-
-    if current.deployment_settings.get_cr_day_and_night():
+    if day_and_night:
         capacity_night = record.capacity_night
         population_night = record.population_night
+        if capacity_night is not None and \
+           population_night and \
+           population_night >= capacity_night:
+            full_night = True
 
-        if (capacity_night is not None) and (population_night > capacity_night):
-            if table._tablename == "cr_shelter":
-                response.warning = T("Warning: this shelter is full for the night")
-            elif table._tablename == "cr_shelter_unit":
-                response.warning = T("Warning: this housing unit is full for the night")
+    tablename = table._tablename
+    if not day_and_night and full_day or full_day and full_night:
+        if tablename == "cr_shelter":
+            warning = T("Warning: this shelter is full")
+        elif tablename == "cr_shelter_unit":
+            warning = T("Warning: this housing unit is full")
+    elif full_day:
+        if tablename == "cr_shelter":
+            warning = T("Warning: this shelter is full for daytime")
+        elif tablename == "cr_shelter_unit":
+            warning = T("Warning: this housing unit is full for daytime")
+    elif full_night:
+        if tablename == "cr_shelter":
+            warning = T("Warning: this shelter is full for the night")
+        elif tablename == "cr_shelter_unit":
+            warning = T("Warning: this housing unit is full for the night")
+
+    if warning:
+        response = current.response
+        response_warning = response.warning
+        if response_warning:
+            response.warning = "%s - %s" % (response_warning, warning)
+        else:
+            response.warning = warning
 
 # =============================================================================
 def cr_update_capacity_from_housing_units(shelter_id):
@@ -1488,6 +1820,7 @@ def cr_update_capacity_from_housing_units(shelter_id):
 
         @param shelter_id: the shelter record ID
     """
+
     db = current.db
 
     stable = db.cr_shelter
@@ -1499,16 +1832,19 @@ def cr_update_capacity_from_housing_units(shelter_id):
 
     total_capacity_day = htable.capacity_day.sum()
     total_capacity_night = htable.capacity_night.sum()
-    capacity_count = db(query).select(total_capacity_day, total_capacity_night)
+    row = db(query).select(total_capacity_day,
+                           total_capacity_night,
+                           ).first()
 
-    if capacity_count:
-        total_capacity_day = capacity_count[0]._extra[total_capacity_day]
-        total_capacity_night = capacity_count[0]._extra[total_capacity_night]
+    if row:
+        total_capacity_day = row[total_capacity_day]
+        total_capacity_night = row[total_capacity_night]
     else:
         total_capacity_day = total_capacity_night = 0
 
-    db(stable._id==shelter_id).update(capacity_day=total_capacity_day,
-                                      capacity_night = total_capacity_night)
+    db(stable._id==shelter_id).update(capacity_day = total_capacity_day,
+                                      capacity_night = total_capacity_night,
+                                      )
 
 # =============================================================================
 def cr_notification_dispatcher(r, **attr):
@@ -1590,5 +1926,50 @@ def cr_notification_dispatcher(r, **attr):
 
     else:
         raise HTTP(501, current.messages.BADMETHOD)
+
+# =============================================================================
+class cr_AssignUnit(S3CRUD):
+    """
+        Assign a Person to a Housing Unit
+    """
+
+    # -------------------------------------------------------------------------
+    def apply_method(self, r, **attr):
+        """
+            Entry point for REST API
+
+            @param r: the S3Request
+            @param attr: controller arguments
+        """
+
+        try:
+            person_id = int(r.get_vars["person_id"])
+        except:
+            raise HTTP(400, current.messages.BAD_REQUEST)
+
+        self.settings = current.response.s3.crud
+        sqlform = self._config("crud_form")
+        self.sqlform = sqlform if sqlform else S3SQLDefaultForm()
+        self.data = None
+
+        # Create or Update?
+        table = current.s3db.cr_shelter_registration
+        query = (table.deleted == False) & \
+                (table.person_id == person_id)
+        exists = current.db(query).select(table.id,
+                                          limitby=(0, 1)
+                                          ).first()
+        if exists:
+            # Update form
+            r.method = "update" # Ensure correct View template is used
+            self.record_id = exists.id
+            output = self.update(r, **attr)
+        else:
+            # Create form
+            r.method = "create" # Ensure correct View template is used
+            self.data = {"person_id": person_id}
+            output = self.create(r, **attr)
+
+        return output
 
 # END =========================================================================

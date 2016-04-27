@@ -2,7 +2,7 @@
 
 """ Sahana Eden Hospital Management System Model
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -131,6 +131,7 @@ class HospitalDataModel(S3Model):
                      Field("name", notnull=True,
                            length=64, # Mayon compatibility
                            label = T("Name"),
+                           requires = IS_NOT_EMPTY(),
                            ),
                      # Alternate name, or name in local language
                      Field("aka1",
@@ -310,7 +311,9 @@ class HospitalDataModel(S3Model):
 
         # Resource configuration
         configure(tablename,
-                  deduplicate = self.hms_hospital_duplicate,
+                  deduplicate = S3Duplicate(primary = ("name",),
+                                            secondary = ("address",),
+                                            ),
                   filter_widgets = filter_widgets,
                   list_fields = ["id",
                                  #"gov_uuid",
@@ -410,7 +413,10 @@ class HospitalDataModel(S3Model):
                           *s3_meta_fields())
 
         configure(tablename,
-                  deduplicate = self.hms_hospital_tag_deduplicate,
+                  deduplicate = S3Duplicate(primary = ("hospital_id",
+                                                       "tag",
+                                                       ),
+                                            ),
                   )
 
         # ---------------------------------------------------------------------
@@ -950,61 +956,12 @@ class HospitalDataModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def hms_hospital_duplicate(item):
-        """
-            Hospital record duplicate detection, used for the deduplicate hook
-
-            @param item: the S3ImportItem to check
-        """
-
-        data = item.data
-        #org = data.get("organisation_id")
-        address = data.get("address")
-
-        table = item.table
-        query = (table.name == data.name)
-        #if org:
-        #    query = query & (table.organisation_id == org)
-        if address:
-            query = query & (table.address == address)
-        row = current.db(query).select(table.id,
-                                       limitby=(0, 1)).first()
-        if row:
-            item.id = row.id
-            item.method = item.METHOD.UPDATE
-
-    # -------------------------------------------------------------------------
-    @staticmethod
     def hms_hospital_onaccept(form):
         """
             Update Affiliation, record ownership and component ownership
         """
 
         current.s3db.org_update_affiliations("hms_hospital", form.vars)
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def hms_hospital_tag_deduplicate(item):
-        """
-           If the record is a duplicate then it will set the item method to update
-        """
-
-        data = item.data
-        tag = data.get("tag", None)
-        hospital_id = data.get("hospital_id", None)
-
-        if not tag or not hospital_id:
-            return
-
-        table = item.table
-        query = (table.tag.lower() == tag.lower()) & \
-                (table.hospital_id == hospital_id)
-
-        duplicate = current.db(query).select(table.id,
-                                             limitby=(0, 1)).first()
-        if duplicate:
-            item.id = duplicate.id
-            item.method = item.METHOD.UPDATE
 
     # -------------------------------------------------------------------------
     @staticmethod

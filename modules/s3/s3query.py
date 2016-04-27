@@ -2,7 +2,7 @@
 
 """ S3 Query Construction
 
-    @copyright: 2009-2015 (c) Sahana Software Foundation
+    @copyright: 2009-2016 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -223,7 +223,8 @@ class S3FieldSelector(object):
             try:
                 value = value()
             except:
-                current.log.error("%s.%s: %s" % (tname, fname, sys.exc_info()[1]))
+                t, m = sys.exc_info()[:2]
+                current.log.error("%s.%s: %s" % (tname, fname, str(m) or t.__name__))
                 value = None
 
         if hasattr(field, "expr"):
@@ -982,6 +983,15 @@ class S3Joins(object):
                     joins_dict[tname] = [join]
         self.tables.add(tablename)
         return
+
+    # -------------------------------------------------------------------------
+    def __len__(self):
+        """
+            Return the number of tables in the join, for boolean
+            test of this instance ("if joins:")
+        """
+
+        return len(self.tables)
 
     # -------------------------------------------------------------------------
     def keys(self):
@@ -2337,16 +2347,29 @@ class S3URLQuery(object):
 
         v = cls.parse_value(value)
 
+        # Auto-lowercase, escape, and replace wildcards
+        like = lambda s: s3_unicode(s).lower() \
+                                      .replace("%", "\\%") \
+                                      .replace("_", "\\_") \
+                                      .replace("?", "_") \
+                                      .replace("*", "%") \
+                                      .encode("utf-8")
+
         q = None
+
+        # Don't repeat LIKE-escaping for multiple selectors
+        escaped = False
+
         for fs in selectors:
 
             if op == S3ResourceQuery.LIKE:
-                # Auto-lowercase and replace wildcard
                 f = S3FieldSelector(fs).lower()
-                if isinstance(v, basestring):
-                    v = v.replace("*", "%").lower()
-                elif isinstance(v, list):
-                    v = [x.replace("*", "%").lower() for x in v if x is not None]
+                if not escaped:
+                    if isinstance(v, basestring):
+                        v = like(v)
+                    elif isinstance(v, list):
+                        v = [like(s) for s in v if s is not None]
+                    escaped = True
             else:
                 f = S3FieldSelector(fs)
 
@@ -2425,7 +2448,7 @@ class S3AIRegex(object):
 
         string = cls.translate(r)
         if string:
-            return l.lower().regexp("^%s$" % string.replace("%", ".*"))
+            return l.lower().regexp("^%s$" % string)
         else:
             return l.like(r)
 
@@ -2448,18 +2471,40 @@ class S3AIRegex(object):
 
         GROUPS = cls.GROUPS
         ESCAPE = cls.ESCAPE
+
+        escaped = False
         for character in s3_unicode(string).lower():
 
-            if character in ESCAPE:
-                result = "\%s" % character
-            else:
-                result = character
-                for group in GROUPS:
-                    if character in group:
-                        match = True
-                        result = "[%s%s]{1}" % (group, group.upper())
-                        break
+            result = None
+
+            # Translate any unescaped wildcard characters
+            if not escaped:
+                if character == "\\":
+                    escaped = True
+                    continue
+                elif character == "%":
+                    result = ".*"
+                elif character == "_":
+                    result = "."
+
+            if result is None:
+                if character in ESCAPE:
+                    result = "\\%s" % character
+                else:
+                    result = character
+                    for group in GROUPS:
+                        if character in group:
+                            match = True
+                            result = "[%s%s]{1}" % (group, group.upper())
+                            break
+
+            # Don't swallow backslashes that do not escape wildcards
+            if escaped and character not in ("%", "_"):
+                result = "\\%s" % result
+
+            escaped = False
             append(result)
+
         return "".join(output) if match else None
 
 # =============================================================================

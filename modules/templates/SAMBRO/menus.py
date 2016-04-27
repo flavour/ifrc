@@ -59,8 +59,9 @@ class S3MainMenu(default.S3MainMenu):
         """ Custom Modules Menu """
 
         auth = current.auth
+        has_role = auth.s3_has_role
         if auth.s3_logged_in():
-            if auth.s3_has_role("ADMIN"):
+            if has_role("ADMIN"):
                 # Full set
                 # @ToDo: Add menu entries for "Create RSS Feed for CAP" & "Create RSS Feed for CMS"
                 return super(S3MainMenu, cls).menu_modules()
@@ -69,12 +70,12 @@ class S3MainMenu(default.S3MainMenu):
                 menus_ = [homepage(),
                           ]
 
-                if auth.s3_has_role("MAP_ADMIN"):
+                if has_role("MAP_ADMIN"):
                     menus_.extend([homepage("cap"),
                                   homepage("gis"),
                                   ])
-                elif auth.s3_has_role("ALERT_EDITOR") or \
-                     auth.s3_has_role("ALERT_APPROVER"):
+                elif has_role("ALERT_EDITOR") or \
+                     has_role("ALERT_APPROVER"):
                     menus_.append(homepage("cap"),
                                   )
                 else:
@@ -96,18 +97,18 @@ class S3MainMenu(default.S3MainMenu):
         if not auth.is_logged_in():
             menu_auth = MM("Login", link=False, right=True)(
                            MM("Login", c="default", f="user", m="login",
-                              vars={"_next": URL(c="default", f="index")}),
+                              vars={"_next": URL(c="cap", f="alert")}),
                            MM("Lost Password", c="default", f="user",
-                              m="retrieve_password")
+                              m="retrieve_password"),
+                           MM("Request for Account", c="default", f="user",
+                              m="register"),
                         )
         else:
             # Logged-in
-            user_id = auth.s3_logged_in_person()
+            user_id = auth.s3_logged_in_person()                
             menu_auth = MM(auth.user.email, link=False, right=True)(
+                           MM("Subscription", c="pr", f="subscription"),
                            MM("Edit Profile", c="pr", f="person", args=[user_id]),
-                           MM("Details", c="default", f="user", m="profile"),
-                           MM("Notification Settings", c="default", f="index",
-                              m="subscriptions"),
                            MM("Change Password", c="default", f="user",
                               m="change_password"),
                            MM("Logout", c="default", f="user", m="logout"),
@@ -165,11 +166,22 @@ class S3OptionsMenu(default.S3OptionsMenu):
                                 s3_has_role("ALERT_APPROVER")
 
         return M(c="cap")(
+                    M("Manage Recipients",
+                      c="pr",
+                      f="subscription",
+                      vars={"option": "manage_recipient"},
+                      check=cap_editors,
+                      ),
+                    M("Manage Recipient Groups",
+                      c="pr",
+                      f="group",
+                      check=cap_editors,
+                      ),
                     M("Alerts", f="alert",
                       check=cap_editors)(
                         M("Create", m="create"),
                         M("Import from Feed URL", m="import_feed", p="create",
-                          restrict=["ADMIN"]),
+                          check=cap_editors),
                     ),
                     M("Templates", f="template")(
                         M("Create", m="create",
@@ -184,14 +196,6 @@ class S3OptionsMenu(default.S3OptionsMenu):
                       restrict=["ADMIN"])(
                         M("Create", m="create"),
                         M("Import from CSV", m="import", p="create"),
-                    ),
-                    M("RSS Channels", c="msg", f="rss_channel",
-                      restrict=["ADMIN"])(
-                        M("Create", m="create"),
-                    ),
-                    M("Twitter Channels", c="msg", f="twitter_channel",
-                      restrict=["ADMIN"])(
-                        M("Create", m="create"),
                     ),
                 )
 
