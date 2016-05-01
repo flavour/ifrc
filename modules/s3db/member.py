@@ -186,13 +186,33 @@ class S3MembersModel(S3Model):
                               ),
                       Field("membership_fee", "double",
                             label = T("Membership Fee"),
+                            represent = lambda v: \
+                                IS_FLOAT_AMOUNT.represent(v, precision=2),
+                            requires = IS_EMPTY_OR(
+                                        IS_FLOAT_IN_RANGE(minimum=0.0)
+                                        ),
                             ),
                       s3_date("membership_paid",
                               label = T("Membership Paid"),
                               ),
+                      s3_date("membership_due",
+                              label = T("Membership Fee Due Date"),
+                              ),
                       Field("fee_exemption", "boolean",
                             label = T("Exempted from Membership Fee"),
                             default = False,
+                            # Expose in templates as needed:
+                            readable = False,
+                            writable = False,
+                            ),
+                      Field("election",
+                            label = T("Participation in the Election as a"),
+                            # Expose in templates as needed:
+                            readable = False,
+                            writable = False,
+                            ),
+                      Field("trainings",
+                            label = T("Trainings"),
                             # Expose in templates as needed:
                             readable = False,
                             writable = False,

@@ -2162,6 +2162,14 @@ class S3GroupModel(S3Model):
             msg_list_empty = T("No Group Member Roles currently defined"),
             )
 
+        # Table configuration
+        configure(tablename,
+                  deduplicate = S3Duplicate(primary = ("name",),
+                                            secondary = ("group_type",),
+                                            ignore_deleted = True,
+                                            ),
+                  )
+
         # Reusable Field
         represent = S3Represent(lookup=tablename, translate=True)
         role_id = S3ReusableField("role_id", "reference %s" % tablename,
@@ -2197,6 +2205,7 @@ class S3GroupModel(S3Model):
                      # Enable in template if required
                      role_id(readable = False,
                              writable = False,
+                             ondelete = "SET NULL",
                              ),
                      Field("group_head", "boolean",
                            default = False,
@@ -2235,22 +2244,16 @@ class S3GroupModel(S3Model):
                 msg_record_deleted = T("Person removed from Group"),
                 msg_list_empty = T("This Group has no Members yet"))
 
-        text_fields = ["group_id$name",
-                       "person_id$first_name",
-                       "person_id$middle_name",
-                       "person_id$last_name",
-                       ]
-
         # Which levels of Hierarchy are we using?
         levels = current.gis.get_relevant_hierarchy_levels()
-        for level in levels:
-            lfield = "location_id$%s" % level
-            # @ToDo:
-            #report_fields.append(lfield)
-            text_fields.append(lfield)
 
+        # Filter widgets
         filter_widgets = [
-            S3TextFilter("text_fields",
+            S3TextFilter(["group_id$name",
+                          "person_id$first_name",
+                          "person_id$middle_name",
+                          "person_id$last_name",
+                          ],
                           label = T("Search"),
                           comment = T("To search for a member, enter any portion of the name of the person or group. You may use % as wildcard. Press 'Search' without input to list all members."),
                           _class="filter-search",
@@ -2262,6 +2265,7 @@ class S3GroupModel(S3Model):
                              ),
             ]
 
+        # Table configuration
         configure(tablename,
                   context = {"person": "person_id",
                              },
@@ -2414,6 +2418,7 @@ class S3GroupModel(S3Model):
         row = db(table.id == record_id).select(table.id,
                                                table.person_id,
                                                table.group_id,
+                                               table.group_head,
                                                table.deleted,
                                                table.deleted_fk,
                                                gtable.id,
@@ -2479,6 +2484,13 @@ class S3GroupModel(S3Model):
 
             if group.group_type == 7:
                 # DVR Case Group
+
+                # Case groups should only have one group head
+                if not record.deleted and record.group_head:
+                    query = (table.group_id == group_id) & \
+                            (table.id != record.id) & \
+                            (table.group_head == True)
+                    db(query).update(group_head=False)
 
                 update_household_size = settings.get_dvr_household_size() == "auto"
                 recount = s3db.dvr_case_household_size
@@ -3295,9 +3307,11 @@ class S3PersonImageModel(S3Model):
         url_small = URL(c="default", f="download", args=image)
 
         return DIV(A(IMG(_src=url_small,
-                         _height=size[1]),
-                         _href=url_full,
-                         _class="th"))
+                         _height=size[1],
+                         ),
+                     _href=url_full,
+                     _class="th",
+                     ))
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3721,6 +3735,11 @@ class S3PersonEducationModel(S3Model):
                            label = T("Grade"),
                            represent = lambda v: v or NONE,
                            ),
+                     Field("current", "boolean",
+                           default = False,
+                           label = T("Current?"),
+                           represent = s3_yes_no_represent,
+                           ),
                      s3_comments(),
                      *s3_meta_fields())
 
@@ -3779,6 +3798,7 @@ class S3PersonDetailsModel(S3Model):
         T = current.T
         gis = current.gis
         messages = current.messages
+        NONE = messages["NONE"]
         UNKNOWN_OPT = messages.UNKNOWN_OPT
 
         # ---------------------------------------------------------------------
@@ -3848,6 +3868,7 @@ class S3PersonDetailsModel(S3Model):
                                 ),
                           Field("place_of_birth",
                                 label = T("Place of Birth"),
+                                represent = lambda v: v or NONE,
                                 # Enable as-required in template
                                 readable = False,
                                 writable = False,
@@ -3864,6 +3885,7 @@ class S3PersonDetailsModel(S3Model):
                                 ),
                           Field("hometown",
                                 label = T("Home Town"),
+                                represent = lambda v: v or NONE,
                                 # Enable as-required in template
                                 readable = False,
                                 writable = False,
@@ -3887,34 +3909,42 @@ class S3PersonDetailsModel(S3Model):
                           # This field can either be used as a free-text version of religion, or to provide details of the 'other'
                           Field("religion_other",
                                 #label = T("Other Religion"),
+                                represent = lambda v: v or NONE,
                                 readable = False,
                                 writable = False,
                                 ),
                           Field("father_name",
                                 label = T("Name of Father"),
+                                represent = lambda v: v or NONE,
                                 ),
                           Field("mother_name",
                                 label = T("Name of Mother"),
+                                represent = lambda v: v or NONE,
                                 ),
                           Field("grandfather_name",
                                 label = T("Name of Grandfather"),
+                                represent = lambda v: v or NONE,
                                 readable = False,
                                 writable = False,
                                 ),
                           Field("grandmother_name",
                                 label = T("Name of Grandmother"),
+                                represent = lambda v: v or NONE,
                                 readable = False,
                                 writable = False,
                                 ),
                           Field("occupation", length=128, # Mayon Compatibility
                                 label = T("Profession"),
+                                represent = lambda v: v or NONE,
                                 ),
                           Field("company",
                                 label = T("Company"),
+                                represent = lambda v: v or NONE,
                                 # @ToDo: Autofill from hrm_human_resource Staff Organisation
                                 ),
                           Field("affiliations",
                                 label = T("Affiliations"),
+                                represent = lambda v: v or NONE,
                                 # @ToDo: Autofill from hrm_human_resource Volunteer Organisation
                                 ),
                           Field("criminal_record", "boolean",

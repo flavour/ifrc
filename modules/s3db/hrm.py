@@ -2425,6 +2425,7 @@ class S3HRSkillModel(S3Model):
         #
         external_courses = settings.get_hrm_trainings_external()
         course_pass_marks = settings.get_hrm_course_pass_marks()
+        hrm_course_types = settings.get_hrm_course_types()
 
         tablename = "hrm_course"
         define_table(tablename,
@@ -2436,6 +2437,17 @@ class S3HRSkillModel(S3Model):
                            represent = lambda v: T(v) if v is not None \
                                                       else NONE,
                            requires = IS_NOT_EMPTY(),
+                           ),
+                     # Optionally restrict to Staff/Volunteers/Members
+                     Field("type", "integer",
+                           label = T("Type"),
+                           represent = lambda opt: \
+                                       hrm_course_types.get(opt, UNKNOWN_OPT) \
+                                       if opt is not None else NONE,
+                           requires = IS_EMPTY_OR(IS_IN_SET(hrm_course_types)),
+                           # Enable in Templates as-required
+                           readable = False,
+                           writable = False,
                            ),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
@@ -6717,7 +6729,8 @@ def hrm_human_resource_controller(extra_filter=None):
                 rappend("site_id")
 
             list_fields.extend(((T("Email"), "email.value"),
-                                (settings.get_ui_label_mobile_phone(), "phone.value")))
+                                (settings.get_ui_label_mobile_phone(), "phone.value")
+                                ))
 
             # Which levels of Hierarchy are we using?
             levels = current.gis.get_relevant_hierarchy_levels()
@@ -8648,6 +8661,7 @@ def hrm_human_resource_filters(resource_type=None,
                           "person_id$middle_name",
                           "person_id$last_name",
                           "person_id$email.value",
+                          "organisation_id",
                           ]
 
     use_code = settings.get_hrm_use_code()
