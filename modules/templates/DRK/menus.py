@@ -189,6 +189,8 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Check-in overdue", c=("dvr", "pr"), f="person",
                           vars = {"closed": "0", "overdue": "1"},
                           ),
+                        M("Residents Reports", c="dvr", f="site_activity",
+                          ),
                         ),
                     M("Activities", f="case_activity")(
                         M("Emergencies",
@@ -219,7 +221,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                           vars={"archived": "1"},
                           ),
                         ),
-                    M("Administration", restrict=ADMIN)(
+                    M("Administration", restrict=(ADMIN, "ADMIN_HEAD"))(
                         M("Flags", f="case_flag"),
                         M("Case Status", f="case_status"),
                         M("Appointment Types", f="case_appointment_type"),

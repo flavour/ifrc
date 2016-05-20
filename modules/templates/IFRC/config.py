@@ -2,12 +2,7 @@
 
 import datetime
 
-try:
-    # Python 2.7
-    from collections import OrderedDict
-except:
-    # Python 2.6
-    from gluon.contrib.simplejson.ordered_dict import OrderedDict
+from collections import OrderedDict
 
 from gluon import current
 from gluon.storage import Storage
@@ -25,7 +20,7 @@ def config(settings):
 
     T = current.T
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Pre-Populate
     #settings.base.prepopulate += ("IFRC", "IFRC/Train", "IFRC/Demo")
     settings.base.prepopulate += ("IFRC", "IFRC/Train")
@@ -33,9 +28,9 @@ def config(settings):
     settings.base.system_name = T("Resource Management System")
     settings.base.system_name_short = T("RMS")
 
-    # =============================================================================
+    # =========================================================================
     # System Settings
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Security Policy
     settings.security.policy = 8 # Delegations
     settings.security.map = True
@@ -243,7 +238,7 @@ def config(settings):
 
     settings.auth.realm_entity = ifrc_realm_entity
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Theme (folder to use for views/layout.html)
     settings.base.theme = "IFRC"
     settings.base.xtheme = "IFRC/xtheme-ifrc.css"
@@ -268,7 +263,7 @@ def config(settings):
     # GeoNames username
     settings.gis.geonames_username = "rms_dev"
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # L10n (Localization) settings
     settings.L10n.languages = OrderedDict([
         ("ar", "العربية"),
@@ -322,7 +317,7 @@ def config(settings):
     PRC = "Philippine Red Cross"
     VNRC = "Viet Nam Red Cross"
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def airegex(default):
         """ NS-specific settings for accent-insensitive searching """
 
@@ -334,7 +329,7 @@ def config(settings):
 
     settings.database.airegex = airegex
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def l10n_calendar(default):
         """ Which calendar to use """
 
@@ -345,7 +340,7 @@ def config(settings):
 
     settings.L10n.calendar = l10n_calendar
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Finance settings
     #
     def currencies(default):
@@ -418,7 +413,7 @@ def config(settings):
 
     settings.fin.currency_default = currency_default
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def pdf_bidi(default):
         """ NS-specific selection of whether to support BiDi in PDF output """
 
@@ -429,7 +424,7 @@ def config(settings):
 
     settings.L10n.pdf_bidi = pdf_bidi
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def pdf_export_font(default):
         """ NS-specific selection of which font to use in PDF output """
 
@@ -441,7 +436,7 @@ def config(settings):
 
     settings.L10n.pdf_export_font = pdf_export_font
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def postcode_selector(default):
         """ NS-specific selection of whether to show Postcode """
 
@@ -452,9 +447,11 @@ def config(settings):
 
     settings.gis.postcode_selector = postcode_selector
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def label_fullname(default):
-        """ NS-specific selection of label for the AddPersonWidget2's Name field """
+        """
+            NS-specific selection of label for the AddPersonWidget2's Name field
+        """
 
         if current.session.s3.language == "mg":
             # Allow for better localisation
@@ -463,17 +460,17 @@ def config(settings):
 
     settings.pr.label_fullname = label_fullname
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Enable this for a UN-style deployment
     #settings.ui.cluster = True
     # Enable this to use the label 'Camp' instead of 'Shelter'
     settings.ui.camp = True
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Filter Manager
     settings.search.filter_manager = False
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Default Summary
     settings.ui.summary = ({"common": True,
                             "name": "add",
@@ -493,22 +490,22 @@ def config(settings):
                             },
                            )
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Content Management
     #
     # Uncomment this to hide CMS from module index pages
     settings.cms.hide_index = True
     settings.cms.richtext = True
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Messaging
     # Parser
     settings.msg.parser = "IFRC"
 
-    # =============================================================================
+    # =========================================================================
     # Module Settings
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Organisation Management
     # Enable the use of Organisation Branches
     settings.org.branches = True
@@ -538,7 +535,7 @@ def config(settings):
          "vol_volunteer_cluster.vol_cluster_position_id" : (PRC, ),
          }
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Human Resource Management
     # Uncomment to allow Staff & Volunteers to be registered without an email address
     settings.hrm.email_required = False
@@ -578,7 +575,7 @@ def config(settings):
     # Activity types for experience record
     settings.hrm.activity_types = {"rdrt": "RDRT Mission"}
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Projects
     # Uncomment this to use settings suitable for a global/regional organisation (e.g. DRR)
     settings.project.mode_3w = True
@@ -613,7 +610,7 @@ def config(settings):
         9: T("Partner National Society"),
     }
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Inventory Management
     settings.inv.show_mode_of_transport = True
     settings.inv.send_show_time_in = True
@@ -639,7 +636,7 @@ def config(settings):
     #                           37: T("In Transit"),  # Loaning warehouse space to another agency
     #                           }
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Request Management
     # Uncomment to disable Inline Forms in Requests module
     settings.req.inline_forms = False
@@ -653,7 +650,7 @@ def config(settings):
     # Uncomment to disable Recurring Request
     #settings.req.recurring = False # HNRC
 
-    # =============================================================================
+    # =========================================================================
     # Template Modules
     # Comment/uncomment modules here to disable/enable them
     settings.modules = OrderedDict([
@@ -995,7 +992,7 @@ def config(settings):
             # Not allowed to add NS/Branch
             f.comment = ""
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def user_org_default_filter(selector, tablename=None):
         """
             Default filter for organisation_id:
@@ -1011,7 +1008,7 @@ def config(settings):
             # no default
             return {}
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def user_org_and_children_default_filter(selector, tablename=None):
         """
             Default filter for organisation_id:
@@ -1043,7 +1040,7 @@ def config(settings):
             # no default
             return {}
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def user_region_and_children_default_filter(selector, tablename=None):
         """
             Default filter for organisation_id:
@@ -1065,7 +1062,9 @@ def config(settings):
                 region_id = org.region_id
                 # Find Sub regions (just 1 level needed)
                 rtable = s3db.org_region
-                subregions = db(rtable.parent == region_id).select(rtable.id)
+                query = (rtable.parent == region_id) & \
+                        (rtable.deleted == False)
+                subregions = db(query).select(rtable.id)
                 if subregions:
                     region_ids = [region.id for region in subregions]
                     region_ids.append(region_id)
@@ -1076,7 +1075,7 @@ def config(settings):
             # no default
             return {}
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Org-dependent settings
     # => lazy settings because they require user authentication and we want them to
     #    work across multiple controllers (inc menus) without too much code
@@ -1392,7 +1391,7 @@ def config(settings):
 
     settings.customise_asset_asset_controller = customise_asset_asset_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_asset_asset_resource(r, tablename):
 
         # Load standard model
@@ -1455,7 +1454,7 @@ def config(settings):
 
     settings.customise_asset_asset_resource = customise_asset_asset_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_auth_user_controller(**attr):
         """
             Customise admin/user() and default/user() controllers
@@ -1481,66 +1480,7 @@ def config(settings):
 
     settings.customise_auth_user_controller = customise_auth_user_controller
 
-    # -----------------------------------------------------------------------------
-    def customise_deploy_alert_resource(r, tablename):
-
-        from s3 import S3DateTime, S3SQLCustomForm
-
-        s3db = current.s3db
-
-        s3db.deploy_alert_recipient.human_resource_id.label = T("Member")
-
-        atable = s3db.deploy_alert
-        created_on = atable.modified_on
-        created_on.readable = True
-        created_on.label = T("Date")
-        created_on.represent = lambda d: S3DateTime.date_represent(d, utc=True)
-
-        crud_form = S3SQLCustomForm("mission_id",
-                                    "contact_method",
-                                    "subject",
-                                    "body",
-                                    "modified_on",
-                                    )
-
-        s3db.configure(tablename,
-                       crud_form = crud_form,
-                       list_fields = ["mission_id",
-                                      "contact_method",
-                                      "subject",
-                                      "body",
-                                      "alert_recipient.human_resource_id",
-                                      ],
-                       )
-
-        countries = _countries_for_region()
-        if countries:
-            # Limit Missions to just those from this region's countries
-            db = current.db
-            mtable = s3db.deploy_mission
-            missions = db(mtable.location_id.belongs(countries)).select(mtable.id)
-            missions = [m.id for m in missions]
-
-            field = atable.mission_id
-            current.response.s3.filter = (field.belongs(missions))
-
-            from s3 import IS_ONE_OF
-            field.requires = IS_ONE_OF(db, "deploy_mission.id",
-                                       field.represent,
-                                       filterby = "id",
-                                       filter_opts = missions,
-                                       sort=True)
-
-    settings.customise_deploy_alert_resource = customise_deploy_alert_resource
-
-    # -----------------------------------------------------------------------------
-    def customise_deploy_application_resource(r, tablename):
-
-        current.s3db[tablename].human_resource_id.label = T("Member")
-
-    settings.customise_deploy_application_resource = customise_deploy_application_resource
-
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def _is_asia_pacific(region_id=False):
         """
             Helper to determine if the user is in the Asia Pacific region
@@ -1577,7 +1517,7 @@ def config(settings):
 
         return False
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def _countries_for_region():
         """
             Helper to determine the list of countries in a user's root region
@@ -1613,11 +1553,13 @@ def config(settings):
                         (ctable.deleted == False)
                 countries = db(query).select(ctable.location_id)
                 countries = [c.location_id for c in countries]
+                # Cache countries for use in customise_resource is we lookup 1st in customise_controller
+                current.response.s3.countries = countries
                 return countries
 
         return []
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def _customise_job_title_field(field, r = None):
         """
             Helper to customise the Job Title field for RDRT
@@ -1646,7 +1588,7 @@ def config(settings):
                                    field.represent,
                                    )
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def _customise_assignment_fields():
 
         MEMBER = T("Member")
@@ -1667,7 +1609,135 @@ def config(settings):
         activity_type = s3db.hrm_experience.activity_type
         activity_type.default = activity_type.update = "rdrt"
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    def customise_deploy_alert_controller(**attr):
+
+        db = current.db
+        s3db = current.s3db
+        s3 = current.response.s3
+
+        countries = _countries_for_region()
+        if countries:
+            # Filter Alerts to just those from this region's countries
+            # @ToDo: Switch to using mission_id$organisation_id
+            mtable = s3db.deploy_mission
+            missions = db(mtable.location_id.belongs(countries)).select(mtable.id)
+            missions = [m.id for m in missions]
+            # Cache missions for use in customise_resource
+            s3.missions = missions
+            s3.filter = (s3db.deploy_alert.mission_id.belongs(missions))
+
+        # Custom prep
+        standard_prep = s3.prep
+        def custom_prep(r):
+            # Call standard prep
+            if callable(standard_prep):
+                result = standard_prep(r)
+            else:
+                result = True
+
+            if r.method == "select":
+                if _is_asia_pacific():
+                    settings.deploy.select_ratings = True
+
+                user_org_id = current.auth.user.organisation_id
+                if user_org_id:
+                    otable = s3db.org_organisation
+                    org = db(otable.id == user_org_id).select(otable.region_id,
+                                                              limitby=(0, 1),
+                                                              cache = s3db.cache,
+                                                              ).first()
+                    if org:
+                        region_id = org.region_id
+                        # Find Sub regions (just 1 level needed)
+                        rtable = s3db.org_region
+                        query = (rtable.parent == region_id) & \
+                                (rtable.deleted == False)
+                        subregions = db(query).select(rtable.id)
+                        if subregions:
+                            region_ids = [region.id for region in subregions]
+                            region_ids.append(region_id)
+                        else:
+                            region_ids = [region_id]
+                    s3.filter = ((s3db.hrm_human_resource.organisation_id == otable.id) & \
+                                 (otable.region_id.belongs(region_ids)))
+
+            elif r.method == "send":
+                settings.deploy.cc_groups = ["RDRT Focal Points"]
+
+            return result
+
+        s3.prep = custom_prep
+            
+        return attr
+
+    settings.customise_deploy_alert_controller = customise_deploy_alert_controller
+
+    # -------------------------------------------------------------------------
+    def customise_deploy_alert_resource(r, tablename):
+
+        from s3 import S3DateTime, S3SQLCustomForm
+
+        s3db = current.s3db
+
+        s3db.deploy_alert_recipient.human_resource_id.label = T("Member")
+
+        atable = s3db.deploy_alert
+        created_on = atable.modified_on
+        created_on.readable = True
+        created_on.label = T("Date")
+        created_on.represent = lambda d: S3DateTime.date_represent(d, utc=True)
+
+        crud_form = S3SQLCustomForm("mission_id",
+                                    "contact_method",
+                                    "subject",
+                                    "body",
+                                    "modified_on",
+                                    )
+
+        s3db.configure(tablename,
+                       crud_form = crud_form,
+                       list_fields = ["mission_id",
+                                      "contact_method",
+                                      "subject",
+                                      "body",
+                                      "alert_recipient.human_resource_id",
+                                      ],
+                       )
+
+        s3 = current.response.s3
+        countries = s3.countries
+        if not countries:
+            # Not coming from deploy/alert controller so need to query
+            countries = _countries_for_region()
+        if countries:
+            # Limit Missions to just those from this region's countries
+            db = current.db
+            missions = s3.missions
+            if not missions:
+                # Not coming from deploy/alert controller so need to query
+                mtable = s3db.deploy_mission
+                missions = db(mtable.location_id.belongs(countries)).select(mtable.id)
+                missions = [m.id for m in missions]
+
+            from s3 import IS_ONE_OF
+            field = atable.mission_id
+            field.requires = IS_ONE_OF(db, "deploy_mission.id",
+                                       field.represent,
+                                       filterby = "id",
+                                       filter_opts = missions,
+                                       sort=True)
+
+    settings.customise_deploy_alert_resource = customise_deploy_alert_resource
+
+    # -------------------------------------------------------------------------
+    def customise_deploy_application_resource(r, tablename):
+
+        current.s3db[tablename].human_resource_id.label = T("Member")
+
+    settings.customise_deploy_application_resource = customise_deploy_application_resource
+
+    # -------------------------------------------------------------------------
     def customise_deploy_assignment_controller(**attr):
 
         s3db = current.s3db
@@ -1746,12 +1816,13 @@ def config(settings):
 
     settings.customise_deploy_assignment_controller = customise_deploy_assignment_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_deploy_mission_controller(**attr):
 
         from gluon.html import DIV
 
         db = current.db
+        auth = current.auth
         s3db = current.s3db
         s3 = current.response.s3
         messages = current.messages
@@ -1765,7 +1836,28 @@ def config(settings):
         table = s3db.deploy_mission
         table.code.label = T("Appeal Code")
         table.event_type_id.label = T("Disaster Type")
-        table.organisation_id.readable = table.organisation_id.writable = False
+
+        dotable = s3db.deploy_organisation
+        deploying_orgs = db(dotable.deleted == False).select(dotable.organisation_id)
+        deploying_orgs = [o.organisation_id for o in deploying_orgs]
+
+        is_admin = auth.s3_has_role("ADMIN")
+        organisation_id = auth.user.organisation_id
+
+        from s3 import IS_ONE_OF
+        f = table.organisation_id
+        if not is_admin and organisation_id in deploying_orgs:
+            f.default = organisation_id
+            f.readable = f.writable = False
+            s3.filter = (f == organisation_id)
+        else:
+            f.requires = IS_ONE_OF(db, "org_organisation.id",
+                                   f.represent,
+                                   filterby = "id",
+                                   filter_opts = deploying_orgs,
+                                   orderby = "org_organisation.name",
+                                   sort = True
+                                   )
 
         # Restrict Location to just Countries
         from s3 import S3Represent, S3MultiSelectWidget
@@ -1776,14 +1868,14 @@ def config(settings):
         countries = _countries_for_region()
         if countries:
             # Limit to just this region's countries
-            from s3 import IS_ONE_OF
             field.requires = IS_ONE_OF(db, "gis_location.id",
                                        field.represent,
                                        filterby = "id",
                                        filter_opts = countries,
                                        sort=True)
             # Filter to just the user's region
-            s3.filter = (field.belongs(countries))
+            # (we filter on organisation_id now)
+            #s3.filter = (field.belongs(countries))
         else:
             # Allow all countries
             field.requires = s3db.gis_country_requires
@@ -1902,7 +1994,8 @@ def config(settings):
                 table.date.label = T("Date Created")
 
                 from s3 import S3SQLCustomForm, S3SQLInlineComponent
-                crud_form = S3SQLCustomForm("name",
+                crud_form = S3SQLCustomForm("organisation_id",
+                                            "name",
                                             "event_type_id",
                                             "location_id",
                                             "code",
@@ -1956,7 +2049,7 @@ def config(settings):
 
     settings.customise_deploy_mission_controller = customise_deploy_mission_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_deploy_response_resource(r, tablename):
 
         from s3 import S3SQLCustomForm
@@ -1976,7 +2069,23 @@ def config(settings):
 
     settings.customise_deploy_response_resource = customise_deploy_response_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    def customise_event_incident_report_resource(r, tablename):
+
+        # Special cases for different NS
+        root_org = current.auth.root_org_name()
+        if root_org == ARCS:
+            from s3 import S3LocationSelector
+
+            # Don't go back to Create form after submission
+            current.session.s3.rapid_data_entry = False
+
+            # Hide Street Address
+            current.s3db.event_incident_report.location_id.widget = S3LocationSelector()
+
+    settings.customise_event_incident_report_resource = customise_event_incident_report_resource
+
+    # -------------------------------------------------------------------------
     def poi_marker_fn(record):
         """
             Function to decide which Marker to use for PoI KML export
@@ -2000,7 +2109,7 @@ def config(settings):
 
         return Storage(image = marker)
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_gis_poi_resource(r, tablename):
 
         if r.representation == "kml":
@@ -2011,7 +2120,7 @@ def config(settings):
 
     settings.customise_gis_poi_resource = customise_gis_poi_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_certificate_controller(**attr):
 
         # Organisation needs to be an NS
@@ -2024,7 +2133,7 @@ def config(settings):
 
     settings.customise_hrm_certificate_controller = customise_hrm_certificate_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_course_controller(**attr):
 
         tablename = "hrm_course"
@@ -2086,7 +2195,7 @@ def config(settings):
 
     settings.customise_hrm_course_controller = customise_hrm_course_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_credential_controller(**attr):
 
         # Currently just used by RDRT
@@ -2104,7 +2213,7 @@ def config(settings):
 
     settings.customise_hrm_credential_controller = customise_hrm_credential_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_department_controller(**attr):
 
         # Organisation needs to be an NS
@@ -2117,7 +2226,7 @@ def config(settings):
 
     settings.customise_hrm_department_controller = customise_hrm_department_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_experience_controller(**attr):
 
         s3 = current.response.s3
@@ -2156,7 +2265,7 @@ def config(settings):
 
     settings.customise_hrm_experience_controller = customise_hrm_experience_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def rdrt_member_profile_header(r):
         """ Custom profile header to allow update of RDRT roster status """
 
@@ -2239,7 +2348,7 @@ def config(settings):
                    _class="profile-header",
                    )
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def emergency_contact_represent(row):
         """
             Representation of Emergency Contacts (S3Represent label renderer)
@@ -2256,7 +2365,7 @@ def config(settings):
             items.append(": %s" % phone_number)
         return "".join(items)
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_vol_activity_controller(**attr):
 
         # Organisation needs to be an NS/Branch
@@ -2269,7 +2378,7 @@ def config(settings):
 
     settings.customise_vol_activity_controller = customise_vol_activity_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_vol_volunteer_award_resource(r, tablename):
 
         root_org = current.auth.root_org_name()
@@ -2295,7 +2404,7 @@ def config(settings):
 
     settings.customise_vol_volunteer_award_resource = customise_vol_volunteer_award_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_vol_award_resource(r, tablename):
 
         root_org = current.auth.root_org_name()
@@ -2316,7 +2425,7 @@ def config(settings):
 
     settings.customise_vol_award_resource = customise_vol_award_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_human_resource_resource(r, tablename):
 
         root_org = current.auth.root_org_name()
@@ -2437,16 +2546,17 @@ def config(settings):
 
     settings.customise_hrm_human_resource_resource = customise_hrm_human_resource_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_human_resource_controller(**attr):
 
         tablename = "hrm_human_resource"
 
+        auth = current.auth
         s3db = current.s3db
 
         # Special cases for different NS
         arcs = vnrc = False
-        root_org = current.auth.root_org_name()
+        root_org = auth.root_org_name()
 
         controller = current.request.controller
         if controller == "deploy":
@@ -2513,8 +2623,10 @@ def config(settings):
                 if arcs:
                     # ARCS have a custom Volunteer form
                     #from s3 import IS_ADD_PERSON_WIDGET2, IS_ONE_OF, S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
-                    #from s3 import IS_ONE_OF, S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
-                    from s3 import S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
+                    from s3 import IS_ONE_OF, S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
+
+                    # Go back to Create form after submission
+                    current.session.s3.rapid_data_entry = True
 
                     db = current.db
 
@@ -2536,21 +2648,31 @@ def config(settings):
                     dtable.father_name.label = T("Father Name")
                     dtable.grandfather_name.label = T("Grand Father Name")
                     dtable.occupation.label = T("Job")
-                    s3db.pr_education.level_id.comment = None # Don't Add Education Levels inline
+                    etable = s3db.pr_education
+                    etable.level_id.comment = None # Don't Add Education Levels inline
+                    organisation_id = auth.root_org()
+                    f = etable.level_id
+                    f.requires = IS_ONE_OF(db, "pr_education_level.id",
+                                           f.represent,
+                                           filterby = "organisation_id",
+                                           filter_opts = (organisation_id,),
+                                           )
                     s3db.pr_image.image.widget = None # ImageCropWidget doesn't work inline
                     #ctable = s3db.hrm_course
-                    #query = (ctable.organisation_id == current.auth.root_org()) & \
+                    #query = (ctable.organisation_id == auth.root_org()) & \
                     #        (ctable.type == 2) & \
                     #        (ctable.deleted != True)
                     #courses = db(query).select(ctable.id)
                     #course_ids = [c.id for c in courses]
-                    #f = s3db.hrm_training.course_id
-                    #f.requires = IS_ONE_OF(db, "hrm_course.id",
-                    #                       f.represent,
-                    #                       filterby = "id",
-                    #                       filter_opts = course_ids,
-                    #                       sort = True,
-                    #                       )
+                    f = s3db.hrm_training.course_id
+                    f.requires = IS_ONE_OF(db, "hrm_course.id",
+                                           f.represent,
+                                           #filterby = "id",
+                                           #filter_opts = course_ids,
+                                           filterby = "organisation_id",
+                                           filter_opts = (organisation_id,),
+                                           sort = True,
+                                           )
 
                     s3db.add_components(tablename,
                                         #hrm_training = {"name": "vol_training",
@@ -2832,9 +2954,22 @@ def config(settings):
 
             elif controller == "deploy":
                 # Custom settings for RDRT
+
+                from s3 import FS
+
+                db = current.db
+
+                is_admin = auth.s3_has_role("ADMIN")
+                if not is_admin:
+                    organisation_id = auth.user.organisation_id
+                    dotable = s3db.deploy_organisation
+                    deploying_orgs = db(dotable.deleted == False).select(dotable.organisation_id)
+                    deploying_orgs = [o.organisation_id for o in deploying_orgs]
+                    if organisation_id in deploying_orgs:
+                        r.resource.add_filter(FS("application.organisation_id") == organisation_id)
+
                 AP = _is_asia_pacific()
                 if AP:
-                    db = current.db
                     otable = s3db.org_organisation
                     org = db(otable.name == AP_ZONE).select(otable.id,
                                                             limitby=(0, 1),
@@ -2875,7 +3010,6 @@ def config(settings):
                                )
 
                 # Custom profile widgets for hrm_competency ("skills"):
-                from s3 import FS
                 subsets = (("Computer", "Computer Skills", "Add Computer Skills"),
                            ("Language", "Language Skills", "Add Language Skills"),
                            )
@@ -2937,7 +3071,7 @@ def config(settings):
                                        "icon": "user",
                                        })
 
-                # Remove unneeded filter widgets
+                # Remove unnecessary filter widgets
                 filters = []
                 append_widget = filters.append
                 filter_widgets = get_config("filter_widgets")
@@ -2951,7 +3085,7 @@ def config(settings):
 
                 from s3 import S3OptionsFilter
 
-                # Add gender-filter
+                # Add gender filter
                 gender_opts = dict(s3db.pr_gender_opts)
                 del gender_opts[1]
                 append_widget(S3OptionsFilter("person_id$gender",
@@ -3039,7 +3173,7 @@ def config(settings):
 
     settings.customise_hrm_human_resource_controller = customise_hrm_human_resource_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_job_title_controller(**attr):
 
         s3 = current.response.s3
@@ -3106,7 +3240,7 @@ def config(settings):
 
     settings.customise_hrm_job_title_controller = customise_hrm_job_title_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_programme_controller(**attr):
 
         # Organisation needs to be an NS
@@ -3134,7 +3268,7 @@ def config(settings):
 
     settings.customise_hrm_programme_controller = customise_hrm_programme_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_programme_hours_controller(**attr):
 
         # Default Filter
@@ -3159,7 +3293,7 @@ def config(settings):
 
     settings.customise_hrm_programme_hours_controller = customise_hrm_programme_hours_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_hrm_training_controller(**attr):
 
         tablename = "hrm_training"
@@ -3211,12 +3345,17 @@ def config(settings):
 
             # Grades 1-4
             course_grade_opts = (1, 2, 3, 4)
-            field = s3db.hrm_training.grade
+            field = ttable.grade
             field.readable = field.writable = True
             field.represent = None
             from gluon import IS_EMPTY_OR, IS_IN_SET
             field.requires = IS_EMPTY_OR(IS_IN_SET(course_grade_opts,
                                                    zero=None))
+
+            # Upload Performance Appraisal
+            field = ttable.file
+            field.readable = field.writable = True
+            field.label = T("Performance Appraisal")
 
             # Customise Filter Widgets
             filter_widgets = s3db.get_config(tablename, "filter_widgets")
@@ -3268,7 +3407,108 @@ def config(settings):
 
     settings.customise_hrm_training_controller = customise_hrm_training_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    def deploy_status_update(person_id):
+        """
+            Update the status of AP RDRT members based on their
+            Trainings & Deployments
+        """
+    
+        db = current.db
+        s3db = current.s3db
+
+        # Which courses has the person taken?
+        ctable = s3db.hrm_course
+        ttable = s3db.hrm_training
+        query = (ttable.person_id == person_id) & \
+                (ttable.deleted == False) & \
+                (ttable.course_id == ctable.id)
+        courses = db(query).select(ttable.grade,
+                                   ttable.course_id,
+                                   ctable.name,
+                                   ctable.organisation_id,
+                                   )
+
+        # Which of these are RDRT courses?
+        otable = s3db.org_organisation
+        org = db(otable.name == AP_ZONE).select(otable.id,
+                                                limitby=(0, 1),
+                                                cache = s3db.cache,
+                                                ).first()
+        try:
+            organisation_id = org.id
+        except:
+            current.log.error("Cannot find org %s - prepop not done?" % AP_ZONE)
+            return
+
+        rdrt_courses = {}
+        for course in courses:
+            if course["hrm_course.organisation_id"] == organisation_id:
+                rdrt_courses[course["hrm_course.name"]] = course["hrm_training.grade"]
+        # @ToDo: Complete this when we know how to interpret the grades as Pass/Fail
+        
+        # Has the person been deployed already?
+        # @ToDo
+
+        # Read the current status of the member
+        dtable = s3db.deploy_application
+        htable = s3db.hrm_human_resource
+        left = dtable.on(dtable.human_resource_id == htable.id)
+        app = db(htable.person_id == person_id).select(htable.id,
+                                                       dtable.status,
+                                                       left = left,
+                                                       limitby=(0, 1),
+                                                       ).first()
+        current_status = app["deploy_application.status"]
+
+        if not current_status:
+            # Create the record
+            dtable.insert(human_resource_id = app["hrm_human_resource.id"],
+                          status = new_status,
+                          )
+
+    # -------------------------------------------------------------------------
+    def hrm_training_onaccept(form):
+        """
+            If the Training is an AP RDRT-related one then adjust the status of the
+            Member accordingly
+        """
+
+        form_vars = form.vars
+        person_id = form_vars.person_id
+
+        if not person_id:
+            # Load the record
+            ttable = current.s3db.hrm_training
+            record = current.db(ttable.id == form_vars.id).select(ttable.person_id,
+                                                                  limitby=(0, 1)
+                                                                  ).first()
+            person_id = record.person_id
+
+        deploy_status_update(person_id)
+
+    # -------------------------------------------------------------------------
+    def customise_hrm_training_resource(r, tablename):
+
+        # Add custom onaccept
+        s3db = current.s3db
+        default = s3db.get_config(tablename, "onaccept")
+        if not default:
+            onaccept = hrm_training_onaccept
+        elif not isinstance(default, list):
+            onaccept = [hrm_training_onaccept, default]
+        else:
+            onaccept = default
+            if all(cb != hrm_training_onaccept for cb in onaccept):
+                onaccept.append(hrm_training_onaccept)
+        s3db.configure(tablename,
+                       onaccept = onaccept,
+                       )
+
+    # @ToDo: Activate once requirements & implementation completed
+    #settings.customise_hrm_training_resource = customise_hrm_training_resource
+
+    # -------------------------------------------------------------------------
     def customise_hrm_training_event_controller(**attr):
 
         # Special cases for different NS
@@ -3289,7 +3529,7 @@ def config(settings):
 
     settings.customise_hrm_training_event_controller = customise_hrm_training_event_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_inv_home():
         """
             Homepage for the Inventory module
@@ -3303,13 +3543,13 @@ def config(settings):
 
     settings.customise_inv_home = customise_inv_home
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_inv_inv_item_resource(r, tablename):
 
         # Special cases for different NS
         root_org = current.auth.root_org_name()
-        if root_org in (IRCS, AURC, CRMADA):
-            # Australian  Iraqi RC use proper Logistics workflow
+        if root_org in (AURC, CRMADA, IRCS):
+            # Proper Logistics workflow
             settings.inv.direct_stock_edits = False
             current.s3db.configure("inv_inv_item",
                                    create = False,
@@ -3320,7 +3560,7 @@ def config(settings):
 
     settings.customise_inv_inv_item_resource = customise_inv_inv_item_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_inv_send_resource(r, tablename):
 
         current.s3db.configure("inv_send",
@@ -3344,13 +3584,13 @@ def config(settings):
 
     settings.customise_inv_send_resource = customise_inv_send_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_inv_warehouse_resource(r, tablename):
 
         # Special cases for different NS
         root_org = current.auth.root_org_name()
-        if root_org in (ARCS, AURC, CRMADA):
-            # Australian & Iraqi RC use proper Logistics workflow
+        if root_org in (AURC, CRMADA, IRCS):
+            # Proper Logistics workflow
             settings.inv.direct_stock_edits = False
         if root_org != NRCS:
             # Only Nepal RC use Warehouse Types
@@ -3366,7 +3606,7 @@ def config(settings):
 
     settings.customise_inv_warehouse_resource = customise_inv_warehouse_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def member_membership_paid(row):
         """
             Simplified variant of the original function in s3db/member.py,
@@ -3410,16 +3650,18 @@ def config(settings):
             result = current.messages["NONE"]
         return result
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_member_membership_resource(r, tablename):
 
         # Special cases for different NS
         root_org = current.auth.root_org_name()
         if root_org == ARCS:
-            #from s3 import IS_ONE_OF, S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
-            from s3 import S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
+            from s3 import IS_ONE_OF, S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
 
-            db = current.db
+            # Go back to Create form after submission
+            current.session.s3.rapid_data_entry = True
+
+            #db = current.db
             s3db = current.s3db
             tablename = "member_membership"
 
@@ -3445,7 +3687,14 @@ def config(settings):
             dtable.father_name.label = T("Father Name")
             dtable.grandfather_name.label = T("Grand Father Name")
             #dtable.company.label = T("Place of Work")
-            s3db.pr_education.level_id.comment = None # Don't Add Education Levels inline
+            etable = s3db.pr_education
+            etable.level_id.comment = None # Don't Add Education Levels inline
+            f = etable.level_id
+            f.requires = IS_ONE_OF(current.db, "pr_education_level.id",
+                                   f.represent,
+                                   filterby = "organisation_id",
+                                   filter_opts = (current.auth.root_org(),),
+                                   )
             s3db.pr_image.image.widget = None # ImageCropWidget doesn't work inline
             #ctable = s3db.hrm_course
             #query = (ctable.organisation_id == current.auth.root_org()) & \
@@ -3658,7 +3907,7 @@ def config(settings):
 
     settings.customise_member_membership_resource = customise_member_membership_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_member_membership_controller(**attr):
 
         s3db = current.s3db
@@ -3742,7 +3991,7 @@ def config(settings):
 
     settings.customise_member_membership_controller = customise_member_membership_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_member_membership_type_controller(**attr):
 
         # Organisation needs to be an NS/Branch
@@ -3755,21 +4004,24 @@ def config(settings):
 
     settings.customise_member_membership_type_controller = customise_member_membership_type_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_msg_email_controller(**attr):
 
         if current.request.controller == "deploy":
             organisation_id = current.auth.user.organisation_id
             if organisation_id:
                 # Filter InBox by Channel
-                from s3.s3query import FS
-                s3.filter &= (FS("channel_id$organisation_id") == organisation_id)
+                #from s3 import FS
+                s3db = current.s3db
+                table = s3db.msg_email_channel
+                current.response.s3.filter &= ((table.organisation_id == organisation_id) & \
+                                               (table.channel_id == s3db.msg_email.channel_id))
 
         return attr
 
-    settings.customise_member_membership_type_controller = customise_member_membership_type_controller
+    settings.customise_msg_email_controller = customise_msg_email_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_org_capacity_assessment_controller(**attr):
 
         # Organisation needs to be an NS/Branch
@@ -3803,7 +4055,7 @@ def config(settings):
 
     settings.customise_org_capacity_assessment_controller = customise_org_capacity_assessment_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_org_office_resource(r, tablename):
 
         # Organisation needs to be an NS/Branch
@@ -3833,7 +4085,7 @@ def config(settings):
 
     settings.customise_org_office_resource = customise_org_office_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_org_organisation_controller(**attr):
 
         s3 = current.response.s3
@@ -3984,7 +4236,7 @@ def config(settings):
 
     settings.customise_org_organisation_controller = customise_org_organisation_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_pr_contact_resource(r, tablename):
 
         # Special cases for different NS
@@ -4004,7 +4256,7 @@ def config(settings):
 
     settings.customise_pr_contact_resource = customise_pr_contact_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_pr_contact_emergency_resource(r, tablename):
 
         # Special cases for different NS
@@ -4018,7 +4270,7 @@ def config(settings):
 
     settings.customise_pr_contact_emergency_resource = customise_pr_contact_emergency_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_pr_person_availability_resource(r, tablename):
 
         T = current.T
@@ -4094,7 +4346,7 @@ def config(settings):
 
     settings.customise_pr_person_availability_resource = customise_pr_person_availability_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_pr_group_controller(**attr):
 
         # Organisation needs to be an NS/Branch
@@ -4130,7 +4382,7 @@ def config(settings):
 
     settings.customise_pr_group_controller = customise_pr_group_controller
 
-    # =============================================================================
+    # =========================================================================
     def vol_programme_active(person_id):
         """
             Whether a Volunteer counts as 'Active' based on the number of hours
@@ -4183,7 +4435,7 @@ def config(settings):
 
         return False
 
-    # =============================================================================
+    # =========================================================================
     def vol_activity_active(person_id):
         """
             Whether a Volunteer counts as 'Active' based on the number of hours
@@ -4214,7 +4466,7 @@ def config(settings):
 
         return False
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def vnrc_cv_form(r):
 
         from s3 import S3FixedOptionsWidget, S3SQLCustomForm
@@ -4256,7 +4508,7 @@ def config(settings):
                     context = ("id", "id"),
                     )
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_pr_person_controller(**attr):
 
         s3db = current.s3db
@@ -4487,11 +4739,18 @@ def config(settings):
             if arcs:
                 # Changes common to both Members & Volunteers
                 from gluon import IS_EMPTY_OR
-                #from s3 import IS_ONE_OF, S3SQLCustomForm, S3SQLInlineComponent, S3LocationSelector
-                from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3LocationSelector
+                from s3 import IS_ONE_OF, S3SQLCustomForm, S3SQLInlineComponent, S3LocationSelector
                 db = current.db
                 s3db.pr_address.location_id.widget = S3LocationSelector(show_map = False)
-                s3db.pr_education.level_id.comment = None # Don't Add Education Levels inline
+                etable = s3db.pr_education
+                etable.level_id.comment = None # Don't Add Education Levels inline
+                organisation_id = current.auth.root_org()
+                f = etable.level_id
+                f.requires = IS_ONE_OF(db, "pr_education_level.id",
+                                       f.represent,
+                                       filterby = "organisation_id",
+                                       filter_opts = (organisation_id,),
+                                       )
                 s3db.pr_image.image.widget = None # ImageCropWidget doesn't work inline
                 s3db.add_components("pr_person",
                                     pr_address = {"name": "perm_address",
@@ -4518,13 +4777,15 @@ def config(settings):
                     #        (ctable.deleted != True)
                     #courses = db(query).select(ctable.id)
                     #course_ids = [c.id for c in courses]
-                    #f = s3db.hrm_training.course_id
-                    #f.requires = IS_ONE_OF(db, "hrm_course.id",
-                    #                       f.represent,
-                    #                       filterby = "id",
-                    #                       filter_opts = course_ids,
-                    #                       sort = True,
-                    #                       )
+                    f = s3db.hrm_training.course_id
+                    f.requires = IS_ONE_OF(db, "hrm_course.id",
+                                           f.represent,
+                                           #filterby = "id",
+                                           #filter_opts = course_ids,
+                                           filterby = "organisation_id",
+                                           filter_opts = (organisation_id,),
+                                           sort = True,
+                                           )
                     s3db.add_components("pr_person",
                                         hrm_human_resource = {"name": "volunteer",
                                                               "joinby": "person_id",
@@ -5131,7 +5392,7 @@ def config(settings):
 
     settings.customise_pr_person_controller = customise_pr_person_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def pr_rheader(r, vnrc):
         """
             Custom rheader for vol/person for vnrc
@@ -5150,7 +5411,7 @@ def config(settings):
             s3db.hrm_vars()
             return s3db.hrm_rheader(r)
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_survey_series_controller(**attr):
 
         # Organisation needs to be an NS/Branch
@@ -5322,7 +5583,7 @@ def config(settings):
                 # Start date relates to previous entry
                 start_date = d
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_project_programme_controller(**attr):
 
         # Organisation needs to be an NS/Branch
@@ -5336,7 +5597,7 @@ def config(settings):
 
     settings.customise_project_programme_controller = customise_project_programme_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_project_project_controller(**attr):
 
         tablename = "project_project"
@@ -5603,7 +5864,7 @@ def config(settings):
 
     settings.customise_project_project_controller = customise_project_project_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_project_beneficiary_resource(r, tablename):
         """
             Link Project Beneficiaries to Activity Type
@@ -5704,7 +5965,7 @@ def config(settings):
 
     settings.customise_project_beneficiary_resource = customise_project_beneficiary_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_project_location_resource(r, tablename):
 
         from s3 import S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponentCheckbox
@@ -5744,7 +6005,7 @@ def config(settings):
 
     settings.customise_project_location_resource = customise_project_location_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_req_commit_controller(**attr):
 
         # Request is mandatory
@@ -5755,7 +6016,7 @@ def config(settings):
 
     settings.customise_req_commit_controller = customise_req_commit_controller
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_req_req_resource(r, tablename):
 
         s3db = current.s3db
@@ -5778,7 +6039,7 @@ def config(settings):
 
     settings.customise_req_req_resource = customise_req_req_resource
 
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def customise_vulnerability_data_resource(r, tablename):
 
         # Date is required: We don't store modelled data

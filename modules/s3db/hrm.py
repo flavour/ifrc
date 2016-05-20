@@ -67,17 +67,7 @@ __all__ = ("S3HRModel",
            )
 
 import datetime
-
-try:
-    # try stdlib (Python 2.6)
-    import json
-except ImportError:
-    try:
-        # try external module
-        import simplejson as json
-    except:
-        # fallback to pure-Python module
-        import gluon.contrib.simplejson as json
+import json
 
 from gluon import *
 from gluon.sqlhtml import RadioWidget
@@ -665,7 +655,13 @@ class S3HRModel(S3Model):
                                        "filterfor": ("1",),
                                        },
                                       ),
-                        # Skills
+                        # Experience & Skills
+                        hrm_appraisal = {"link": "pr_person",
+                                         "joinby": "id",
+                                         "key": "id",
+                                         "fkey": "person_id",
+                                         "pkey": "person_id",
+                                         },
                         hrm_certification = {"link": "pr_person",
                                              "joinby": "id",
                                              "key": "id",
@@ -678,30 +674,30 @@ class S3HRModel(S3Model):
                                           "fkey": "person_id",
                                           "pkey": "person_id",
                                           },
+                        hrm_contract = {"joinby": "human_resource_id",
+                                        "multiple": multiple_contracts,
+                                        },
                         hrm_credential = {"link": "pr_person",
                                           "joinby": "id",
                                           "key": "id",
                                           "fkey": "person_id",
                                           "pkey": "person_id",
                                           },
+                        pr_education = {"link": "pr_person",
+                                        "joinby": "id",
+                                        "key": "id",
+                                        "fkey": "person_id",
+                                        "pkey": "person_id",
+                                        },
                         hrm_experience = {"link": "pr_person",
                                           "joinby": "id",
                                           "key": "id",
                                           "fkey": "person_id",
                                           "pkey": "person_id",
                                           },
-                        hrm_salary = "human_resource_id",
                         hrm_insurance = "human_resource_id",
-                        hrm_contract = {"joinby": "human_resource_id",
-                                        "multiple": multiple_contracts,
-                                        },
+                        hrm_salary = "human_resource_id",
                         hrm_training = {"link": "pr_person",
-                                        "joinby": "id",
-                                        "key": "id",
-                                        "fkey": "person_id",
-                                        "pkey": "person_id",
-                                        },
-                        pr_education = {"link": "pr_person",
                                         "joinby": "id",
                                         "key": "id",
                                         "fkey": "person_id",
@@ -719,7 +715,7 @@ class S3HRModel(S3Model):
                                            "joinby": "human_resource_id",
                                            "key": "project_id",
                                            },
-                        # Application for Deployment
+                        # Application(s) for Deployment
                         deploy_application = "human_resource_id",
                         # Assignments
                         deploy_assignment = "human_resource_id",
@@ -1972,6 +1968,7 @@ class S3HRSkillModel(S3Model):
         db = current.db
         auth = current.auth
         request = current.request
+        folder = request.folder
         s3 = current.response.s3
         settings = current.deployment_settings
 
@@ -1989,7 +1986,6 @@ class S3HRSkillModel(S3Model):
 
         s3_string_represent = lambda s: s if s else NONE
 
-        # Shortcuts
         add_components = self.add_components
         configure = self.configure
         crud_strings = s3.crud_strings
@@ -2799,6 +2795,17 @@ class S3HRSkillModel(S3Model):
                            readable = course_pass_marks,
                            writable = course_pass_marks,
                            ),
+                     Field("file", "upload",
+                           autodelete = True,
+                           length = current.MAX_FILENAME_LENGTH,
+                           represent = self.hrm_training_file_represent,
+                           # upload folder needs to be visible to the download() function as well as the upload
+                           uploadfolder = os.path.join(folder,
+                                                       "uploads"),
+                           # Enable (& label) in templates as-required
+                           readable = False,
+                           writable = False,
+                           ),
                      Field.Method("job_title", hrm_training_job_title),
                      Field.Method("organisation", hrm_training_organisation),
                      s3_comments(),
@@ -3012,7 +3019,7 @@ class S3HRSkillModel(S3Model):
                            label = T("Scanned Copy"),
                            length = current.MAX_FILENAME_LENGTH,
                            # upload folder needs to be visible to the download() function as well as the upload
-                           uploadfolder = os.path.join(request.folder,
+                           uploadfolder = os.path.join(folder,
                                                        "uploads"),
                            ),
                      # This field can only be filled-out by specific roles
@@ -3346,6 +3353,23 @@ class S3HRSkillModel(S3Model):
         if duplicate:
             item.id = duplicate.id
             item.method = item.METHOD.UPDATE
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def hrm_training_file_represent(file):
+        """ File representation """
+
+        if file:
+            try:
+                # Read the filename from the file
+                filename = current.db.hrm_training.file.retrieve(file)[0]
+            except IOError:
+                return current.T("File not found")
+            else:
+                return A(filename,
+                         _href=URL(c="default", f="download", args=[file]))
+        else:
+            return current.messages["NONE"]
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -6505,7 +6529,6 @@ def hrm_human_resource_controller(extra_filter=None):
         if method in ("form", "lookup"):
             return True
 
-        # Profile
         elif method == "profile":
 
             # Adapt list_fields for pr_address
@@ -6574,7 +6597,6 @@ def hrm_human_resource_controller(extra_filter=None):
                             comments)
 
             # Configure widgets
-            # @todo: put into separate function
             contacts_widget = dict(label = "Contacts",
                                    label_create = "Add Contact",
                                    tablename = "pr_contact",
@@ -6597,6 +6619,7 @@ def hrm_human_resource_controller(extra_filter=None):
             credentials_widget = dict(# @ToDo: deployment_setting for Labels
                                       label = "Sectors",
                                       label_create = "Add Sector",
+                                      create_controller = c,
                                       type = "datalist",
                                       tablename = "hrm_credential",
                                       filter = FS("person_id") == person_id,
@@ -6606,6 +6629,7 @@ def hrm_human_resource_controller(extra_filter=None):
                                       )
             skills_widget = dict(label = "Skills",
                                  label_create = "Add Skill",
+                                 create_controller = c,
                                  type = "datalist",
                                  tablename = "hrm_competency",
                                  filter = FS("person_id") == person_id,
@@ -6615,6 +6639,7 @@ def hrm_human_resource_controller(extra_filter=None):
                                  )
             trainings_widget = dict(label = "Trainings",
                                     label_create = "Add Training",
+                                    create_controller = c,
                                     type = "datalist",
                                     tablename = "hrm_training",
                                     filter = FS("person_id") == person_id,
@@ -6624,6 +6649,7 @@ def hrm_human_resource_controller(extra_filter=None):
                                     )
             experience_widget = dict(label = "Experience",
                                      label_create = "Add New Experience",
+                                     create_controller = c,
                                      type = "datalist",
                                      tablename = "hrm_experience",
                                      filter = FS("person_id") == person_id,
@@ -6678,7 +6704,6 @@ def hrm_human_resource_controller(extra_filter=None):
                            profile_widgets = profile_widgets,
                            )
 
-        # Summary
         elif method == "summary":
 
             # CRUD Strings
@@ -8673,6 +8698,14 @@ def hrm_human_resource_filters(resource_type=None,
                                    ),
                       ]
     append_filter = filter_widgets.append
+
+    if module == "deploy" and current.auth.s3_has_role("ADMIN"):
+        dotable = current.s3db.deploy_organisation
+        deploying_orgs = current.db(dotable.deleted == False).count()
+        if deploying_orgs > 1:
+            append_filter(S3OptionsFilter("application.organisation_id",
+                                          label = T("Deployment Team"),
+                                          ))
 
     # Type filter (only if not pre-filtered)
     if not resource_type in ("staff", "volunteer"):

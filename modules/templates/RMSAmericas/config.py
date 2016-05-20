@@ -1,11 +1,6 @@
 # -*- coding: utf-8 -*-
 
-try:
-    # Python 2.7
-    from collections import OrderedDict
-except:
-    # Python 2.6
-    from gluon.contrib.simplejson.ordered_dict import OrderedDict
+from collections import OrderedDict
 
 from gluon import current
 from gluon.storage import Storage
@@ -1106,12 +1101,17 @@ def config(settings):
     # -------------------------------------------------------------------------
     def customise_hrm_course_resource(r, tablename):
 
+        from gluon import IS_EMPTY_OR, IS_NOT_IN_DB
         from s3 import IS_ONE_OF, S3SQLCustomForm#, S3SQLInlineLink
 
         db = current.db
         auth = current.auth
         s3db = current.s3db
         table = s3db[tablename]
+
+        # Code should be Unique
+        f = table.code
+        f.requires = IS_EMPTY_OR(IS_NOT_IN_DB(db, "hrm_course.code"))
 
         f = table.organisation_id
         f.label = T("Training Center")
@@ -2217,6 +2217,10 @@ def config(settings):
                     s3db.clear_config("hrm_human_resource", "crud_form")
 
             elif not component_name:
+                s3db.configure("pr_person",
+                               listadd = True,
+                               )
+
                 # Basic Details tab
                 f = s3db.pr_person_details.nationality2
                 f.readable = f.writable = True
@@ -2692,7 +2696,7 @@ def config(settings):
                             #                                   # that the user has write access to
                             #                                   updateable = True,
                             #                                   )
-                    
+
             else:
                 # Lead Organisation needs to be an NS (not a branch)
                 ns_only(tablename,

@@ -83,16 +83,9 @@ __all__ = ("S3ACLWidget",
            )
 
 import datetime
+import json
 import os
 import re
-
-try:
-    import json # try stdlib (Python 2.6)
-except ImportError:
-    try:
-        import simplejson as json # try external module
-    except:
-        import gluon.contrib.simplejson as json # fallback to pure-Python module
 
 try:
     from dateutil.relativedelta import relativedelta
@@ -1689,13 +1682,13 @@ class S3CalendarWidget(FormWidget):
             # Localise if we have configured a Date Format and we have a jQueryUI options file
 
             # Do we have a suitable locale file?
-            if language in ("prs", "ps"):
-                # Dari & Pashto use Farsi
-                language = "fa"
+            #if language in ("prs", "ps"):
+            #    # Dari & Pashto use Farsi
+            #    language = "fa"
             #elif language == "ur":
             #    # Urdu uses Arabic
             #    language = "ar"
-            elif "-" in language:
+            if "-" in language:
                 parts = language.split("_", 1)
                 language = "%s-%s" % (parts[0], parts[1].upper())
 
