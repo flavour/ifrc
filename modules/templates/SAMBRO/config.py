@@ -243,60 +243,86 @@ def config(settings):
         def onapprove(record):
             # Normal onapprove
             s3db.cap_alert_approve(record)
+
+            async_task = current.s3task.async
+
             # Sync FTP Repository
-            current.s3task.async("cap_ftp_sync")
+            async_task("cap_ftp_sync")
 
-            # Twitter Post
-            if settings.get_cap_post_to_twitter() and \
-               record["scope"] != "Private":
-                try:
-                    import tweepy
-                except ImportError:
-                    current.log.debug("tweepy module needed for sending tweets")
-                else:
-                    alert_id = int(record["id"])
-                    atable = s3db.cap_alert
-                    itable = s3db.cap_info
+            alert_id = int(record["id"])
+            table = s3db.cap_alert
+            itable = s3db.cap_info
+            query_ = (table.id == alert_id) & \
+                     (table.deleted != True) & \
+                     (itable.alert_id == table.id) & \
+                     (itable.deleted != True)
+            rows_ = db(query_).select(table.status,
+                                      itable.event_type_id,
+                                      itable.headline,
+                                      itable.priority,
+                                      itable.sender_name,
+                                      itable.web)
 
-                    arow = db(atable.id == alert_id).select(atable.status,
-                                                            limitby=(0, 1)).first()
-                    query = (itable.alert_id == alert_id) & \
-                            (itable.deleted != True)
-                    irows = db(query).select(itable.headline,
-                                             itable.sender_name,
-                                             itable.web)
-                    # @ToDo: shorten url
-                    # @ToDo: Handle the multi-message nicely?
-                    # @ToDo: Send resource url with tweet
-                    for irow in irows:
-                        twitter_text = \
-("""%(Status)s: %(Headline)s
-%(SENDER)s: %(SenderName)s
-%(WEBSITE)s: %(Website)s%(Profile)s""") % dict(Status = arow.status,
-                                               Headline = s3_str(irow.headline),
-                                               SENDER = T("Sender"),
-                                               SenderName = s3_str(irow.sender_name),
-                                               WEBSITE = T("Website"),
-                                               Website = irow.web,
-                                               Profile = "/profile",
-                                               )
-                        try:
-                            current.msg.send_tweet(text=twitter_text)
-                        except tweepy.error.TweepError, e:
-                            current.log.debug("Sending tweets failed: %s" % e)
+            if record["scope"] != "Private" and len(rows_):
+                # Google Cloud Messaging
+                stable = s3db.pr_subscription
+                ctable = s3db.pr_contact
+    
+                query = (stable.pe_id == ctable.pe_id) & \
+                        (ctable.contact_method == "GCM") & \
+                        (ctable.value != None) & \
+                        (ctable.deleted != True) & \
+                        (stable.deleted != True) & \
+                        (stable.method.like("%GCM%"))
+                rows = db(query).select(ctable.value)
+                if len(rows):
+                    registration_ids = [s3_str(row.value) for row in rows]
+                    for row_ in rows_:
+                        title = "[%s] %s %s" % (row_.cap_info.sender_name,
+                                                itable.event_type_id.represent(row_.cap_info.event_type_id),
+                                                itable.priority.represent(row_.cap_info.priority),
+                                                )
+                        async_task("cap_gcm", args=[title,
+                                                    "%s/%s" % (s3_str(row_.cap_info.web), "profile"),
+                                                    s3_str(row_.cap_info.headline),
+                                                    json.dumps(registration_ids),
+                                                    ])
+                # Twitter Post
+                if settings.get_cap_post_to_twitter():
+                    try:
+                        import tweepy
+                    except ImportError:
+                        current.log.debug("tweepy module needed for sending tweets")
+                    else:
+                        # @ToDo: shorten url
+                        # @ToDo: Handle the multi-message nicely?
+                        # @ToDo: Send resource url with tweet
+                        for row_ in rows_:
+                            twitter_text = \
+    ("""%(Status)s: %(Headline)s
+    %(SENDER)s: %(SenderName)s
+    %(WEBSITE)s: %(Website)s%(Profile)s""") % dict(Status = row_.cap_alert.status,
+                                                   Headline = s3_str(row_.cap_info.headline),
+                                                   SENDER = T("Sender"),
+                                                   SenderName = s3_str(row_.cap_info.sender_name),
+                                                   WEBSITE = T("Website"),
+                                                   Website = row_.cap_info.web,
+                                                   Profile = "/profile",
+                                                   )
+                            try:
+                                current.msg.send_tweet(text=twitter_text)
+                            except tweepy.error.TweepError, e:
+                                current.log.debug("Sending tweets failed: %s" % e)
 
             # Send out private alerts to addresses
             # @ToDo: Check for LEFT join when required
             # this is ok for now since every Alert should have an Info & an Area
             # @ToDo: Handle multi-lingual alerts when required
             if record["scope"] == "Private":
-                table = s3db.cap_alert
-                itable = s3db.cap_info
                 atable = s3db.cap_area
                 gtable = s3db.pr_group
                 send_by_pe_id = current.msg.send_by_pe_id
 
-                alert_id = record["id"]
                 addresses = record["addresses"]
                 query = (table.id == alert_id) & \
                         (itable.alert_id == table.id) & \
@@ -578,7 +604,8 @@ def config(settings):
                         append_column = record.append
                         for colname, label in labels:
                             append_column((label, row[colname]))
-                        append_record(record)
+                        sms_content = get_sms_content(row)
+                        append_record(sms_content)
 
             if "new" in notify_on and len(new):
                 output["new"] = len(new)
@@ -980,8 +1007,7 @@ T("Alert is effective from %(Effective)s and expires on %(Expires)s") % \
             priority = T("None")
 
         sms_body = \
-T("""%(Status)s %(MessageType)s for %(AreaDescription)s with %(Priority)s
-priority %(EventType)s issued by %(SenderName)s at %(Date)s (ID:%(Identifier)s)""") % \
+T("""%(Status)s %(MessageType)s for %(AreaDescription)s with %(Priority)s priority %(EventType)s issued by %(SenderName)s at %(Date)s (ID:%(Identifier)s) \n\n""") % \
             dict(Status = s3_str(row["cap_alert.status"]),
                  MessageType = s3_str(row["cap_alert.msg_type"]),
                  AreaDescription = s3_str(row["cap_area.name"]),
@@ -991,6 +1017,6 @@ priority %(EventType)s issued by %(SenderName)s at %(Date)s (ID:%(Identifier)s)"
                  Date = s3_str(row["cap_alert.sent"]),
                  Identifier = s3_str(row["cap_alert.identifier"]))
 
-        return sms_body
+        return s3_str(sms_body)
 
 # END =========================================================================
