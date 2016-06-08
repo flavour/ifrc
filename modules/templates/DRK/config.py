@@ -228,7 +228,7 @@ def config(settings):
         row = db(query).select(count).first()
         children = row[count]
 
-        CHILDREN = TR(TD(T("How many Children")),
+        CHILDREN = TR(TD(T("Number of Children")),
                          TD(children),
                          )
 
@@ -250,7 +250,7 @@ def config(settings):
                                 join = join,
                                 )
         families = len(rows)
-        FAMILIES = TR(TD(T("How many Families")),
+        FAMILIES = TR(TD(T("Number of Families")),
                          TD(families),
                          )
 
@@ -2004,7 +2004,7 @@ def config(settings):
                 resource.configure(list_fields = list_fields,
                                    insertable = False,
                                    deletable = False,
-                                   updatable = False,
+                                   #editable = False,
                                    )
 
             return result
@@ -2061,6 +2061,7 @@ def config(settings):
         s3db.configure("dvr_site_activity",
                        listadd = False,
                        addbtn = True,
+                       editable = False,
                        )
 
         crud_strings = current.response.s3.crud_strings
