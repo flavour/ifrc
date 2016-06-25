@@ -1268,8 +1268,10 @@ def config(settings):
                 from s3 import FS
                 r.resource.add_filter(FS("organisation_id$organisation_type.name") == RED_CROSS)
 
+            table = r.table
+
             # Default to Volunteers
-            r.table.type.default = 2
+            table.type.default = 2
 
             # Organisation needs to be an NS/Branch
             ns_only("hrm_human_resource",
@@ -1278,6 +1280,24 @@ def config(settings):
                     # default
                     #limit_filter_opts = True,
                     )
+
+            # Hide Venues from the list of Offices
+            from gluon import IS_EMPTY_OR
+            db = current.db
+
+            ttable = s3db.org_facility_type
+            ltable = s3db.org_site_facility_type
+            query = (ltable.facility_type_id == ttable.id) & \
+                    (ttable.name == "Venue")
+            venues = db(query).select(ltable.site_id)
+            venues = [f.site_id for f in venues]
+            stable = s3db.org_site
+            dbset = db(~stable.site_id.belongs(venues))
+
+            f = table.site_id
+            new_requires = f.requires.other
+            new_requires.dbset = dbset
+            f.requires = IS_EMPTY_OR(new_requires)
 
             # For the filter
             s3db.hrm_competency.skill_id.label = T("Language")
@@ -2387,7 +2407,7 @@ def config(settings):
             # Need another Unique name
             import uuid
             budget_name = "%s %s" % (project_name[:91], uuid.uuid4())
-        budget.update_record(name = budget_name)name = "Budget for %s" % project.name)
+        budget.update_record(name = budget_name)
 
         mtable = s3db.budget_monitoring
         exists = db(mtable.budget_entity_id == budget_entity_id).select(mtable.id,

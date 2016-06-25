@@ -8,12 +8,23 @@
     <!-- cap_info -->
     <!-- @ToDo: Handle multiple info -->
     <xsl:template match="resource[@name='cap_alert']" mode="contents">
-        <xsl:if test="./data[@field='is_template' and @value='false']">
+        <!-- filter non-template internal alerts that are approved -->
+        <xsl:if test="./data[@field='is_template' and @value='false'] and ./data[@field='external' and @value='false'] and ./data[@field='approved_on']">
             <title>
                 <xsl:value-of select="./resource[@name='cap_info']/data[@field='headline']/text()"/>
             </title>
             <description>
-                <xsl:value-of select="./resource[@name='cap_info']/data[@field='description']/text()"/>
+                <xsl:if test="./resource[@name='cap_area']/data[@field='name']/text()">
+                    <strong>Alert Location: </strong><xsl:value-of select="./resource[@name='cap_area']/data[@field='name']/text()"/>
+                </xsl:if>
+                <br />
+                <xsl:if test="./resource[@name='cap_info']/data[@field='description']/text()">
+                    <strong>Alert Description: </strong><xsl:value-of select="./resource[@name='cap_info']/data[@field='description']/text()"/>
+                </xsl:if>
+                <br />
+                <xsl:if test="./resource[@name='cap_info']/data[@field='sender_name']/text()">
+                    <strong>Issued By: </strong><xsl:value-of select="./resource[@name='cap_info']/data[@field='sender_name']/text()"/>
+                </xsl:if>                
             </description>
             <link>
             	<!--alert-id substring after last character "/" --> 
@@ -24,7 +35,7 @@
                     </xsl:call-template>
                 </xsl:variable>
                 <xsl:choose>
-                	<xsl:when test="translate(data[@field='scope']/@value, '&quot;', '') = 'Public'">
+                    <xsl:when test="data[@field='scope'] = 'Public'">
                     	<xsl:value-of select="concat(../@url,'/cap/public/', $alert-id, '.cap')"/>
                 	</xsl:when>
                 	<xsl:otherwise>
@@ -33,7 +44,7 @@
             	</xsl:choose>
             </link>
             <pubDate>
-                <xsl:value-of select="./data[@field='sent']/@value"/>
+                <xsl:value-of select="./data[@field='sent']/text()"/>
             </pubDate>
             <category>
                 <xsl:value-of select="./resource[@name='cap_info']/data[@field='category']/text()"/>
