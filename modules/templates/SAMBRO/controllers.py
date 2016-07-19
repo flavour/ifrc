@@ -488,11 +488,8 @@ class subscriptions(S3CustomController):
         methods = [("EMAIL", T("Email")),
                    ("SMS", T("SMS")),
                    ("FTP", T("FTP")),
+                   ("GCM", T("Mobile App")),
                    ]
-
-        if not (request.get_vars["option"] == "manage_recipient" and \
-           has_role("ADMIN")):
-            methods.append(("GCM", T("GCM")))
 
         method_options = Storage(name = "method", requires = IS_IN_SET(methods))
 

@@ -23,9 +23,10 @@ def download():
         session.error("Need to specify the file to download!")
         redirect(URL(f="index"))
 
-    # Load the Model
+    # Check Permissions
     tablename = filename.split(".", 1)[0]
     if "_" in tablename:
+        # Load the Model
         table = s3db.table(tablename)
         if table and not auth.s3_has_permission("read", tablename):
             auth.permission.fail()
@@ -160,7 +161,7 @@ def index():
 
     # Menu boxes
     from s3layouts import S3HomepageMenuLayout as HM
-    
+
     sit_menu = HM("Situation Awareness")(
         HM("Map", c="gis", f="index", icon="map-marker"),
         HM("Incidents", c="event", f="incident_report", icon="incident"),
@@ -208,10 +209,10 @@ def index():
     table = s3db.org_organisation
     has_permission = auth.s3_has_permission
     if AUTHENTICATED in roles and has_permission("read", table):
-        
+
         org_items = organisation()
         datatable_ajax_source = "/%s/default/organisation.aadata" % appname
-        
+
         # List of Organisations
         if has_permission("create", table):
             create = A(T("Create Organization"),
@@ -230,7 +231,7 @@ def index():
                       _id = "org-box",
                       _class = "menu-box"
                       )
-                      
+
         s3.actions = None
         response.view = "default/index.html"
 
@@ -239,7 +240,7 @@ def index():
         permission.controller = "org"
         permission.function = "site"
         permitted_facilities = auth.permitted_facilities(redirect_on_error=False)
-        
+
         if permitted_facilities:
             facilities = s3db.org_SiteRepresent().bulk(permitted_facilities,
                                                        include_blank=False,
@@ -248,7 +249,7 @@ def index():
             facility_list = sorted(facility_list, key=lambda fac: fac[1])
             facility_opts = [OPTION(fac[1], _value=fac[0])
                              for fac in facility_list]
-                             
+
             manage_facility_box = DIV(H3(T("Manage Your Facilities")),
                                       SELECT(_id = "manage-facility-select",
                                              *facility_opts
@@ -263,7 +264,7 @@ def index():
                                       _id = "manage-facility-box",
                                       _class = "menu-box"
                                       )
-                                      
+
             s3.jquery_ready.append('''$('#manage-facility-select').change(function(){
  $('#manage-facility-btn').attr('href',S3.Ap.concat('/default/site/',$('#manage-facility-select').val()))})
 $('#manage-facility-btn').click(function(){
@@ -341,7 +342,7 @@ $('#login-btn').click(function(){
                  for feed in rss
                  ]
         feeds = ",".join(feeds)
-        
+
         # feedCycleTime: milliseconds before feed is reloaded (5 minutes)
         feed_control = "".join(('''
 function LoadDynamicFeedControl(){
@@ -364,17 +365,17 @@ google.setOnLoadCallback(LoadDynamicFeedControl)'''))
 
     # Output dict for the view
     output = {"title": title,
-    
+
               # CMS Contents
               "item": item,
-              
+
               # Menus
               "sit_menu": sit_menu,
               "org_menu": org_menu,
               "res_menu": res_menu,
               "aid_menu": aid_menu,
               #"facility_box": facility_box,
-              
+
               # Quick Access Boxes
               "manage_facility_box": manage_facility_box,
               "org_box": org_box,
@@ -386,7 +387,7 @@ google.setOnLoadCallback(LoadDynamicFeedControl)'''))
               # Registration Form
               "register_div": register_div,
               "register_form": register_form,
-              
+
               # Control Data
               "self_registration": self_registration,
               "registered": registered,
