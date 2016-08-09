@@ -32,6 +32,7 @@
 """
 
 __all__ = ("S3Dashboard",
+           "S3DashboardConfig",
            "S3DashboardWidget",
            )
 
@@ -40,6 +41,7 @@ import json
 from gluon import *
 
 from s3utils import s3_get_extension
+from s3widgets import ICON
 
 DEFAULT = lambda: None
 DEFAULT_FORMAT = "html"
@@ -215,6 +217,8 @@ class S3DashboardConfig(object):
         - builds the configuration GUI and handles its requests (@todo)
     """
 
+    DEFAULT_LAYOUT = "boxes"
+
     def __init__(self,
                  layout,
                  widgets=None,
@@ -229,8 +233,6 @@ class S3DashboardConfig(object):
             @param default: the default configuration (=list of widget configs)
             @param configurable: whether this dashboard is user-configurable
         """
-
-        DEFAULT_LAYOUT = "boxes"
 
         if isinstance(layout, dict):
             config = layout
@@ -249,7 +251,7 @@ class S3DashboardConfig(object):
 
         # Layout
         if layout is None:
-            layout = DEFAULT_LAYOUT
+            layout = self.DEFAULT_LAYOUT
         self.layout = layout
 
         # Available Widgets
@@ -264,6 +266,42 @@ class S3DashboardConfig(object):
 
         # Is this dashboard user-configurable?
         self.configurable = configurable
+        self.loaded = True if not configurable else False
+
+    # -------------------------------------------------------------------------
+    def load(self, context):
+        """
+            Load the current active configuration for the context
+
+            @param context: the current S3DashboardContext
+        """
+
+        if not self.configurable:
+            return
+
+        table = current.s3db.s3_dashboard
+        query = (table.controller == context.controller) & \
+                (table.function == context.function) & \
+                (table.active == True) & \
+                (table.deleted != True)
+        row = current.db(query).select(table.id,
+                                       table.layout,
+                                       table.title,
+                                       table.widgets,
+                                       limitby = (0, 1),
+                                       ).first()
+
+        if row:
+            if row.title:
+                self.title = row.title
+
+            self.layout = row.layout
+
+            widgets = row.widgets
+            if type(widgets) is list:
+                self.active_widgets = widgets
+
+            self.config_id = row.id
 
 # =============================================================================
 class S3DashboardChannel(object):
@@ -548,8 +586,8 @@ class S3Dashboard(object):
 
         if not isinstance(config, S3DashboardConfig):
             config = S3DashboardConfig(config)
+        self._config = config
 
-        self.config = config
         self.context = S3DashboardContext()
 
         available_layouts = dict(self.layouts)
@@ -558,6 +596,21 @@ class S3Dashboard(object):
         self.available_layouts = available_layouts
 
         self._agents = None
+
+    # -------------------------------------------------------------------------
+    @property
+    def config(self):
+        """
+            Lazy property to load the current configuration from the database
+
+            @return: the S3DashboardConfig
+        """
+
+        config = self._config
+        if not config.loaded:
+            config.load(self.context)
+
+        return config
 
     # -------------------------------------------------------------------------
     @property
@@ -594,12 +647,14 @@ class S3Dashboard(object):
                     agent_id = "db-none-%s" % index
                 else:
                     agent_id = widget_config.get("agent_id")
+                if not agent_id:
+                    continue
 
                 # Instantiate the agent
-                agent = widget._create_agent(agent_id,
-                                             config = widget_config,
-                                             context = context,
-                                             )
+                agent = widget.create_agent(agent_id,
+                                            config = widget_config,
+                                            context = context,
+                                            )
 
                 # Register the agent
                 agents[agent_id] = agent
@@ -690,9 +745,21 @@ class S3Dashboard(object):
 
         dashboard_id = attr.get("_id", "dashboard")
 
+        # Switch for config mode
+        hide = " hide" if not config.configurable else ""
+        switch = SPAN(ICON("settings",
+                           _class = "db-config-on%s" % hide,
+                           ),
+                      ICON("done",
+                           _class = "db-config-off hide"),
+                      _class = "db-config",
+                      data = {"mode": "off"},
+                      )
+
         output = {"title": config.title,
                   "contents": "",
                   "dashboard_id": dashboard_id,
+                  "switch": switch,
                   }
 
         # Script Options
@@ -775,9 +842,7 @@ class S3Dashboard(object):
             if script not in scripts:
                 scripts.append(script)
         else:
-            # @todo: add minify-config
-            script = "/%s/static/scripts/S3/s3.ui.dashboard.js" % appname
-            #script = "/%s/static/scripts/S3/s3.ui.dashboard.min.js" % appname
+            script = "/%s/static/scripts/S3/s3.ui.dashboard.min.js" % appname
             if script not in scripts:
                 scripts.append(script)
 
@@ -941,11 +1006,21 @@ class S3DashboardAgent(object):
         config = self.config
         prototype = self.widget
 
-        # Produce the widget XML
-        widget = prototype.widget(self.agent_id,
-                                  config,
-                                  context = context,
-                                  )
+        # Produce the contents XML
+        contents = prototype.widget(self.agent_id,
+                                    config,
+                                    context = context,
+                                    )
+
+        # Get the config bar
+        configbar = prototype.configbar()
+
+        # Construct the widget
+        widget = DIV(configbar,
+                     contents,
+                     _class = "db-widget",
+                     _id = self.agent_id,
+                     )
 
         # Add script file
         prototype._load_script()
@@ -976,18 +1051,17 @@ class S3DashboardWidget(object):
             @param context: the S3DashboardContext
             @param config: the active widget configuration
 
-            @return: a DIV instance, with agent_id as node ID
+            @return: an XmlComponent with the widget contents,
+                     the outer DIV will be added by the agent
         """
 
         # Base class just renders some static XML
         contents = config.get("xml", "")
 
+        # Inject the JavaScript components
         self.inject_script(agent_id)
 
-        return DIV(XML(contents),
-                   _class = "db-generic",
-                   _id = agent_id,
-                   )
+        return XML(contents)
 
     # -------------------------------------------------------------------------
     def get_script_path(self, debug=False):
@@ -1040,6 +1114,25 @@ class S3DashboardWidget(object):
         s3.jquery_ready.append(script)
 
     # -------------------------------------------------------------------------
+    @staticmethod
+    def configbar():
+        """
+            Build the widget configuration task bar
+
+            @return: the XML for the task bar
+        """
+
+        return DIV(SPAN(ICON("move", _class="db-task-move"),
+                        _class="db-configbar-left",
+                        ),
+                   SPAN(ICON("delete", _class="db-task-delete"),
+                        ICON("settings", _class="db-task-config"),
+                        _class="db-configbar-right",
+                        ),
+                   _class = "db-configbar",
+                   )
+
+    # -------------------------------------------------------------------------
     # Base class methods
     # -------------------------------------------------------------------------
     def __init__(self,
@@ -1079,7 +1172,7 @@ class S3DashboardWidget(object):
         self.script_loaded = False
 
     # -------------------------------------------------------------------------
-    def _create_agent(self, agent_id, config=None, context=None):
+    def create_agent(self, agent_id, config=None, context=None):
         """
             Create an agent for this widget
 

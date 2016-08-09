@@ -10,9 +10,113 @@ import unittest
 from gluon import current
 from gluon.storage import Storage
 
-from s3.s3dashboard import S3DashboardContext
+from s3.s3dashboard import S3DashboardAgent, \
+                           S3DashboardContext, \
+                           S3DashboardWidget, \
+                           delegated
 
 from unit_tests import run_suite
+
+# =============================================================================
+class S3DashboardAgentTests(unittest.TestCase):
+
+    # -------------------------------------------------------------------------
+    class DummyWidget(S3DashboardWidget):
+        """ Dummy subclass for testing """
+
+        @delegated
+        def command(agent, context):
+            """ An agent command implemented by the widget """
+
+            config = agent.config
+
+            # Build return value from config and context
+            return {"param": "%s,%s" % (config.get("param"),
+                                        context.get("param"),
+                                        ),
+                    }
+
+        def not_delegated():
+            """ Some other internal method of the widget """
+
+            # Agent should never execute this
+            raise RuntimeError
+
+    # -------------------------------------------------------------------------
+    def setUp(self):
+
+        self.widget = self.DummyWidget(defaults = {"param": "default"})
+
+    # -------------------------------------------------------------------------
+    def testDelegation(self):
+        """ Verify execution of delegated widget method """
+
+        # The widget
+        widget = self.widget
+
+        # Create an agent for the widget
+        agent = widget.create_agent("agent",
+                                    config = {"param": "live",
+                                              },
+                                    )
+
+        # Dummy context
+        context = {"param": "test"}
+
+        # Verify execution of delegated method
+        output = agent.do("command", context)
+        self.assertIn("param", output)
+        self.assertEqual(output["param"], "live,test")
+
+    # -------------------------------------------------------------------------
+    def testDelegationMultipleAgents(self):
+        """ Verify execution of delegated widget method with multiple agents """
+
+        assertIn = self.assertIn
+        assertEqual = self.assertEqual
+
+        num_agents = 4
+
+        # The widget
+        widget = self.widget
+        create_agent = widget.create_agent
+
+        # Create an array of agents for the widget
+        agents = []
+        append = agents.append
+        for i in xrange(num_agents):
+            agent = create_agent("agent%s" % i,
+                                 config = {"param": "live%s" % i},
+                                 )
+            append(agent)
+        assertEqual(len(widget.agents), num_agents)
+
+        # Dummy context
+        context = {"param": "test"}
+
+        # Verify execution of delegated method
+        for i, agent in enumerate(agents):
+            output = agent.do("command", context)
+            assertIn("param", output)
+            assertEqual(output["param"], "live%s,test" % i)
+
+    # -------------------------------------------------------------------------
+    def testInvalidDelegation(self):
+        """ Verify error handling for delegated widget methods """
+
+        # The widget
+        widget = self.widget
+
+        # Create an agent for the widget
+        agent = widget.create_agent("agent")
+
+        # Attempt to execute a nonexistent widget method should raise exception
+        with self.assertRaises(NotImplementedError):
+            agent.do("nonexistent", {})
+
+        # Attempt to execute a non-delegated widget method should raise exception
+        with self.assertRaises(NotImplementedError):
+            agent.do("not_delegated", {})
 
 # =============================================================================
 class S3DashboardContextTests(unittest.TestCase):
@@ -225,11 +329,92 @@ class S3DashboardContextTests(unittest.TestCase):
         context = S3DashboardContext()
         self.assertEqual(context.representation, "html")
 
+    # -------------------------------------------------------------------------
+    def testSharedWrite(self):
+        """ Verify item pattern to write shared context dict """
+
+        context = S3DashboardContext()
+
+        context["test"] = "ABC"
+        self.assertTrue("test" in context.shared)
+        self.assertEqual(context.shared["test"], "ABC")
+
+    # -------------------------------------------------------------------------
+    def testSharedRead(self):
+        """ Verify item pattern to read shared context dict """
+
+        context = S3DashboardContext()
+
+        context.shared["test"] = "XYZ"
+        self.assertEqual(context["test"], "XYZ")
+
+        # Verify KeyError raised when attempting to access nonexistent item
+        with self.assertRaises(KeyError):
+            context["nonexistent"]
+
+    # -------------------------------------------------------------------------
+    def testSharedGet(self):
+        """ Verify get() method to read shared context dict """
+
+        assertEqual = self.assertEqual
+
+        context = S3DashboardContext()
+
+        context.shared["test"] = "XYZ"
+
+        assertEqual(context.get("test"), "XYZ")
+        assertEqual(context.get("nonexistent"), None)
+
+        default = lambda: None
+        self.assertTrue(context.get("nonexistent", default) is default)
+
+    # -------------------------------------------------------------------------
+    def testSharedDelete(self):
+        """ Verify deletion of shared context items """
+
+        context = S3DashboardContext()
+
+        context.shared["test"] = "XYZ"
+
+        # Verify deletion of item
+        del context["test"]
+        self.assertNotIn("test", context.shared)
+
+        # Verify KeyError raised when attempting to delete nonexistent item
+        with self.assertRaises(KeyError):
+            del context["test"]
+
+    # -------------------------------------------------------------------------
+    def testAttributeFallback(self):
+        """ Verify attribute access falls back to current request """
+
+        request = current.request
+
+        assertIn = self.assertIn
+        assertNotIn = self.assertNotIn
+        assertTrue = self.assertTrue
+
+        fallback = request.args
+        override = ["override"]
+
+        context = S3DashboardContext(request)
+
+        # Check fallback
+        assertNotIn("args", context.__dict__)
+        assertTrue(context.args is fallback)
+
+        # Check override
+        context.args = override
+        assertIn("args", context.__dict__)
+        assertTrue(request.args is fallback)
+        assertTrue(context.args is override)
+
 # =============================================================================
 if __name__ == "__main__":
 
     run_suite(
         S3DashboardContextTests,
+        S3DashboardAgentTests,
     )
 
 # END ========================================================================

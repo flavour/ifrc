@@ -355,6 +355,7 @@ class DVRCaseModel(S3Model):
                                      ),
                      Field("origin_site_id", "reference org_site",
                            label = T("Admission from"),
+                           ondelete = "RESTRICT",
                            requires = IS_EMPTY_OR(
                                         IS_ONE_OF(db, "org_site.site_id",
                                                   site_represent,
@@ -374,6 +375,7 @@ class DVRCaseModel(S3Model):
                            ),
                      Field("destination_site_id", "reference org_site",
                            label = T("Transfer to"),
+                           ondelete = "RESTRICT",
                            requires = IS_EMPTY_OR(
                                         IS_ONE_OF(db, "org_site.site_id",
                                                   site_represent,
@@ -2469,8 +2471,16 @@ class DVRCaseEventModel(S3Model):
                                                           T("The type of appointments which are completed with this type of event"),
                                                           ),
                                       ),
-
                         ),
+                     Field("min_interval", "double",
+                           label = T("Minimum Interval (Hours)"),
+                           comment = DIV(_class = "tooltip",
+                                         _title = "%s|%s" % (T("Minimum Interval (Hours)"),
+                                                             T("Minimum interval between two consecutive registrations of this event type for the same person"),
+                                                             ),
+                                         ),
+                           requires = IS_FLOAT_IN_RANGE(0.0, None),
+                           ),
                      s3_comments(),
                      *s3_meta_fields())
 
@@ -3568,9 +3578,11 @@ class DVRRegisterCaseEvent(S3Method):
                 pe_label = person.pe_label
                 request_vars["label"] = pe_label
 
-        # Get flag and permission info
+        # Get person details, waiting intervals, flag and permission info
         flags = []
+        intervals = {}
         if person:
+            # Person details
             name = s3_fullname(person)
             dob = person.date_of_birth
             if dob:
@@ -3578,6 +3590,21 @@ class DVRRegisterCaseEvent(S3Method):
                 person_data = "%s (%s %s)" % (name, T("Date of Birth"), dob)
             else:
                 person_data = name
+
+            # Blocking periods for events
+            event_types = self.get_event_types()
+            blocked = self.get_blocked_events(person.id)
+            for type_id, info in blocked.items():
+                event_type = event_types.get(type_id)
+                if not event_type:
+                    continue
+                code = event_type.code
+                msg, dt = info
+                intervals[code] = (s3_str(msg),
+                                   "%sZ" % s3_encode_iso_datetime(dt),
+                                   )
+
+            # Flag info
             flag_info = dvr_get_flag_instructions(person.id,
                                                   action = self.ACTION,
                                                   )
@@ -3631,6 +3658,7 @@ class DVRRegisterCaseEvent(S3Method):
                   "actionable": json.dumps(actionable),
                   "permitted": json.dumps(permitted),
                   "flags": json.dumps(flags),
+                  "intervals": json.dumps(intervals),
                   }
 
         # Additional form data
@@ -3762,8 +3790,8 @@ class DVRRegisterCaseEvent(S3Method):
         T = current.T
 
         formvars = form.vars
-        pe_label = formvars.get("label").strip()
 
+        pe_label = formvars.get("label").strip()
         person = self.get_person(pe_label)
         if person is None:
             form.errors["label"] = T("No person found with this ID number")
@@ -3779,14 +3807,29 @@ class DVRRegisterCaseEvent(S3Method):
 
         # Validate the event type (if not default)
         type_id = None
-        event_code = formvars.get("event_code")
+        try:
+            request_vars = form.request_vars
+        except AttributeError:
+            event_code = None
+        else:
+            event_code = request_vars.get("event")
         if event_code:
             event_type = self.get_event_type(event_code)
             if not event_type:
-                form.errors["event_code"] = T("Invalid event code")
+                form.errors["event"] = \
+                current.response.error = T("Invalid event code")
             else:
                 type_id = event_type.id
         formvars.type_id = type_id
+
+        # Check whether event type is blocked for this person
+        if type_id:
+            blocked = self.get_blocked_events(person.id,
+                                              type_id = type_id,
+                                              )
+            if type_id in blocked:
+                msg, earliest = blocked[type_id]
+                form.errors["event"] = current.response.error = msg
 
     # -------------------------------------------------------------------------
     def accept(self, r, form, event_type=None):
@@ -3896,6 +3939,7 @@ class DVRRegisterCaseEvent(S3Method):
             check = data.get("c")
             if check:
 
+                # Person details
                 name = s3_fullname(person)
                 dob = person.date_of_birth
                 if dob:
@@ -3903,16 +3947,40 @@ class DVRRegisterCaseEvent(S3Method):
                     person_data = "%s (%s %s)" % (name, T("Date of Birth"), dob)
                 else:
                     person_data = name
-
                 output["p"] = s3_str(person_data)
                 output["l"] = person.pe_label
 
+                # Family details
+                details = self.get_household_size(person.id,
+                                                  dob = person.date_of_birth,
+                                                  )
+                if details:
+                    output["d"] = {"d": details}
+
+                # Flag Info
                 info = flag_info["info"]
                 for flagname, instructions in info:
                     flags.append({"n": s3_str(T(flagname)),
                                   "i": s3_str(T(instructions)),
                                   })
+
+                # Blocking periods for events
+                event_types = self.get_event_types()
+                blocked = self.get_blocked_events(person.id)
+                intervals = {}
+                for type_id, info in blocked.items():
+                    event_type = event_types.get(type_id)
+                    if not event_type:
+                        continue
+                    code = event_type.code
+                    msg, dt = info
+                    intervals[code] = (s3_str(msg),
+                                       "%sZ" % s3_encode_iso_datetime(dt),
+                                       )
+                output["i"] = intervals
             else:
+                # Check event code and permission
+                type_id = None
                 event_code = data.get("t")
                 if not event_code:
                     alert = T("No event type specified")
@@ -3923,7 +3991,20 @@ class DVRRegisterCaseEvent(S3Method):
                     if not event_type:
                         alert = T("Invalid event type %s" % event_code)
                     else:
-                        success = self.register_event(person.id, event_type.id)
+                        type_id = event_type.id
+
+                if type_id:
+                    # Check whether event type is blocked for this person
+                    person_id = person.id
+                    blocked = self.get_blocked_events(person_id,
+                                                      type_id = type_id,
+                                                      )
+                    if type_id in blocked:
+                        # Event type is currently blocked for this person
+                        alert = blocked[type_id][0]
+                    else:
+                        # Ok - register the event
+                        success = self.register_event(person.id, type_id)
                         if success:
                             message = T("Event registered")
                         else:
@@ -3959,6 +4040,22 @@ class DVRRegisterCaseEvent(S3Method):
 
             @return: tuple (widget_id, submit_label)
         """
+
+        T = current.T
+
+        # Extend form with household size info
+        if person:
+            details = self.get_household_size(person.id,
+                                              dob = person.date_of_birth,
+                                              )
+        else:
+            details = ""
+        formfields.extend([Field("details",
+                                 label = T("Family"),
+                                 writable = False,
+                                 ),
+                           ])
+        data["details"] = details
 
         widget_id = "case-event-form"
         submit = current.T("Register")
@@ -4096,6 +4193,7 @@ class DVRRegisterCaseEvent(S3Method):
                                             table.code,
                                             table.name,
                                             table.is_default,
+                                            table.min_interval,
                                             table.comments,
                                             )
             for row in rows:
@@ -4105,6 +4203,80 @@ class DVRRegisterCaseEvent(S3Method):
             self.event_types = event_types
 
         return self.event_types
+
+    # -------------------------------------------------------------------------
+    def check_intervals(self, person_id, type_id=None):
+        """
+            Check minimum intervals between consecutive registrations
+            of the same event type
+
+            @param person_id: the person record ID
+            @param type_id: check only this event type (rather than all types)
+
+            @return: a dict with blocked event types
+                     {type_id: (error_message, blocked_until_datetime)}
+        """
+
+        s3db = current.s3db
+        db = current.db
+        T = current.T
+
+        output = {}
+
+        table = s3db.dvr_case_event
+        event_type_id = table.type_id
+
+        # Get event types to check
+        event_types = self.get_event_types()
+        if not type_id:
+            check = set(type_id for type_id, row in event_types.items()
+                        if row.min_interval and type_id != "_default"
+                        )
+            if len(check) == 1:
+                type_query = (event_type_id == list(check)[0])
+            elif check:
+                type_query = event_type_id.belongs(check)
+            else:
+                # No types to check
+                return output
+        else:
+            event_type = event_types.get(type_id)
+            if event_type and event_type.min_interval:
+                # Check single event type
+                type_query = (event_type_id == type_id)
+            else:
+                return output
+
+        # Get the last events for these types for this person
+        query = (table.person_id == person_id) & \
+                type_query & \
+                (table.deleted != True)
+        timestamp = table.date.max()
+        rows = db(query).select(event_type_id,
+                                timestamp,
+                                groupby = event_type_id,
+                                )
+
+        # Check intervals
+        import datetime
+        now = current.request.utcnow
+        represent = table.date.represent
+
+        for row in rows:
+            type_id_ = row[event_type_id]
+            event_type = event_types[type_id_]
+            interval = event_type.min_interval
+            latest = row[timestamp]
+            if latest:
+                earliest = latest + datetime.timedelta(hours=interval)
+                if earliest > now:
+                    msg = T("%(event)s already registered on %(timestamp)s") % \
+                                {"event": T(event_type.name),
+                                 "timestamp": represent(latest),
+                                 }
+                    output[type_id_] = (msg, earliest)
+
+        return output
 
     # -------------------------------------------------------------------------
     # Common methods
@@ -4148,7 +4320,7 @@ class DVRRegisterCaseEvent(S3Method):
                                     )
             return rows[0] if rows else None
 
-        pe_label = data["label"]
+        pe_label = data["label"].strip()
         if pe_label:
             person = person_(pe_label)
         if person:
@@ -4250,6 +4422,126 @@ class DVRRegisterCaseEvent(S3Method):
                 person = rows[0]
 
         return person
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def get_household_size(person_id, dob=False, formatted=True):
+        """
+            Helper function to calculate the household size
+            (counting only members with active cases)
+
+            @param person_id: the person record ID
+            @param dob: the date of birth of that person (if known)
+            @param formatted: return household size info as string
+
+            @return: household size info as string if formatted=True,
+                     otherwise tuple (number_of_adults, number_of_children)
+        """
+
+        db = current.db
+
+        s3db = current.s3db
+        ptable = s3db.pr_person
+        gtable = s3db.pr_group
+        mtable = s3db.pr_group_membership
+        ctable = s3db.dvr_case
+        stable = s3db.dvr_case_status
+
+        from dateutil.relativedelta import relativedelta
+        now = current.request.utcnow.date()
+
+        # Default result
+        adults, children = 1, 0
+
+        # Count the person in question
+        if dob is False:
+            query = (ptable.id == person_id)
+            row = db(query).select(ptable.date_of_birth,
+                                    limitby = (0, 1),
+                                    ).first()
+            if row:
+                dob = row.date_of_birth
+        if dob:
+            age = relativedelta(now, dob).years
+            if age < 18:
+                adults, children = 0, 1
+
+        # Household members which have already been counted
+        members = set([person_id])
+        counted = members.add
+
+        # Get all case groups this person belongs to
+        query = ((mtable.person_id == person_id) & \
+                 (mtable.deleted != True) & \
+                 (gtable.id == mtable.group_id) & \
+                 (gtable.group_type == 7))
+        rows = db(query).select(gtable.id)
+        group_ids = set(row.id for row in rows)
+
+        if group_ids:
+            join = [ptable.on(ptable.id == mtable.person_id),
+                    ctable.on((ctable.person_id == ptable.id) & \
+                              (ctable.archived != True) & \
+                              (ctable.deleted != True)),
+                    ]
+            left = [stable.on(stable.id == ctable.status_id),
+                    ]
+            query = (mtable.group_id.belongs(group_ids)) & \
+                    (mtable.deleted != True) & \
+                    (stable.is_closed != True)
+            rows = db(query).select(ptable.id,
+                                    ptable.date_of_birth,
+                                    join = join,
+                                    left = left,
+                                    )
+
+            for row in rows:
+                person, dob = row.id, row.date_of_birth
+                if person not in members:
+                    age = relativedelta(now, dob).years if dob else None
+                    if age is not None and age < 18:
+                        children += 1
+                    else:
+                        adults += 1
+                    counted(person)
+
+        if not formatted:
+            return adults, children
+
+        T = current.T
+        template = "%(number)s %(label)s"
+        details = []
+        if adults:
+            label = T("Adults") if adults != 1 else T("Adult")
+            details.append(template % {"number": adults,
+                                       "label": label,
+                                       })
+        if children:
+            label = T("Children") if children != 1 else T("Child")
+            details.append(template % {"number": children,
+                                       "label": label,
+                                       })
+        return ", ".join(details)
+
+    # -------------------------------------------------------------------------
+    def get_blocked_events(self, person_id, type_id=None):
+        """
+            Check minimum intervals for event registration and return
+            all currently blocked events
+
+            @param person_id: the person record ID
+            @param type_id: check only this event type (rather than all)
+
+            @return: a dict of blocked event types:
+                     {type_id: (reason, blocked_until)}
+        """
+
+        check_intervals = self.check_intervals
+        if check_intervals and callable(check_intervals):
+            blocked = check_intervals(person_id, type_id=type_id)
+        else:
+            blocked = {}
+        return blocked
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -4360,6 +4652,9 @@ class DVRRegisterPayment(DVRRegisterCaseEvent):
     # Action to check flag restrictions for
     ACTION = "payment"
 
+    # Do not check minimum intervals for consecutive registrations
+    check_intervals = False
+
     # -------------------------------------------------------------------------
     # Configuration
     # -------------------------------------------------------------------------
@@ -4384,7 +4679,7 @@ class DVRRegisterPayment(DVRRegisterCaseEvent):
         """
 
         # Only one type of event
-        return Storage(code="PAYMENT")
+        return Storage(id=None, code="PAYMENT")
 
     # -------------------------------------------------------------------------
     def accept(self, r, form, event_type=None):
@@ -4610,10 +4905,10 @@ class DVRRegisterPayment(DVRRegisterCaseEvent):
 
         # Additional form fields for payments
         formfields.extend([Field("details",
-                                label = T("Pending Payments"),
-                                writable = False,
-                                represent = self.payment_data_represent,
-                                ),
+                                 label = T("Pending Payments"),
+                                 writable = False,
+                                 represent = self.payment_data_represent,
+                                 ),
                            Field("date",
                                  label = T("Payment Date"),
                                  writable = False,
