@@ -1828,8 +1828,6 @@ $.filterOptionsS3({
 
         resource, tree = data
 
-        ORG_ADMIN = not self.s3_has_role("ADMIN")
-
         # Memberships
         elements = tree.getroot().xpath("/s3xml//resource[@name='auth_membership']/data[@field='pe_id']")
         looked_up = dict(org_organisation = {})
@@ -1875,84 +1873,111 @@ $.filterOptionsS3({
 
         # Organisations
         elements = tree.getroot().xpath("/s3xml//resource[@name='auth_user']/data[@field='organisation_id']")
-        orgs = looked_up["org_organisation"]
-        for element in elements:
-            org_full = element.text
-            if org_full in orgs:
-                # Replace string with id
-                element.text = orgs[org_full]["id"]
-                # Don't check again
-                continue
-            try:
-                # Is this the 2nd phase of a 2-phase import & hence values have already been replaced?
-                int(org_full)
-            except ValueError:
-                # This is a non-integer, so must be 1st or only phase
-                if "+BRANCH+" in org_full:
-                    parent, org = org_full.split("+BRANCH+")
-                else:
-                    parent = None
-                    org = org_full
-
+        if elements:
+            ORG_ADMIN = not self.s3_has_role("ADMIN")
+            TRANSLATE = current.deployment_settings.get_L10n_translate_org_organisation()
+            if TRANSLATE:
+                ltable = s3db.org_organisation_name
+            def add_org(name, parent=None):
+                """ Helper to add a New Organisation """
+                id = otable.insert(name=name)
+                update_super(otable, Storage(id=id))
+                set_record_owner(otable, id)
+                # @ToDo: Call onaccept?
                 if parent:
-                    btable = s3db.org_organisation_branch
-                    ptable = db.org_organisation.with_alias("org_parent_organisation")
-                    query = (otable.name == org) & \
-                            (ptable.name == parent) & \
-                            (btable.organisation_id == ptable.id) & \
-                            (btable.branch_id == otable.id)
-                else:
-                    query = (otable.name == org)
+                    records = db(otable.name == parent).select(otable.id)
+                    if len(records) == 1:
+                        # Add branch link
+                        link_id = btable.insert(organisation_id = records.first().id,
+                                                branch_id = id)
+                        onaccept = s3db.get_config("org_organisation_branch", "onaccept")
+                        callback(onaccept, Storage(vars=Storage(id=link_id)))
+                    elif len(records) > 1:
+                        # Ambiguous
+                        s3_debug("Cannot set branch link for new Organisation %s as there are multiple matches for parent %s" % (org, parent))
+                    else:
+                        # Create Parent
+                        parent_id = otable.insert(name=parent)
+                        update_super(otable, Storage(id=parent_id))
+                        set_record_owner(otable, id)
+                        # @ToDo: Call onaccept?
+                        # Create link
+                        link_id = btable.insert(organisation_id == parent_id,
+                                                branch_id == id)
+                        onaccept = s3db.get_config("org_organisation_branch", "onaccept")
+                        callback(onaccept, Storage(vars=Storage(id=link_id)))
 
-                records = db(query).select(otable.id)
-                if len(records) == 1:
-                    id = records.first().id
-                elif len(records) > 1:
-                    # Ambiguous
-                    s3_debug("Cannot set Organisation %s for user as there are multiple matches" % org)
-                    id = ""
-                else:
-                    if ORG_ADMIN:
+            orgs = looked_up["org_organisation"]
+            for element in elements:
+                org_full = element.text
+                if org_full in orgs:
+                    # Replace string with id
+                    element.text = orgs[org_full]["id"]
+                    # Don't check again
+                    continue
+                try:
+                    # Is this the 2nd phase of a 2-phase import & hence values have already been replaced?
+                    int(org_full)
+                except ValueError:
+                    # This is a non-integer, so must be 1st or only phase
+                    if "+BRANCH+" in org_full:
+                        parent, org = org_full.split("+BRANCH+")
+                    else:
+                        parent = None
+                        org = org_full
+
+                    query = (otable.name.lower() == org.lower()) & \
+                            (otable.deleted != True)
+                    if parent:
+                        btable = s3db.org_organisation_branch
+                        ptable = db.org_organisation.with_alias("org_parent_organisation")
+                        query &= (ptable.name == parent) & \
+                                 (btable.organisation_id == ptable.id) & \
+                                 (btable.branch_id == otable.id)
+
+                    records = db(query).select(otable.id, limitby = (0, 2))
+                    if len(records) == 1:
+                        id = records.first().id
+                    elif len(records) > 1:
+                        # Ambiguous
+                        s3_debug("Cannot set Organisation %s for user as there are multiple matches" % org)
+                        id = ""
+                    elif TRANSLATE:
+                        # Search by local name
+                        query = (ltable.name_l10n.lower() == org.lower()) & \
+                                (ltable.organisation_id == otable.id) & \
+                                (ltable.deleted != True)
+                        records = db(query).select(otable.id, limitby = (0, 2))
+                        if len(records) == 1:
+                            id = records.first().id
+                        elif len(records) > 1:
+                            # Ambiguous
+                            s3_debug("Cannot set Organisation %s for user as there are multiple matches" % org)
+                            id = ""
+                        elif ORG_ADMIN:
+                            # NB ORG_ADMIN has the list of permitted pe_ids already in filter_opts
+                            s3_debug("Cannot create new Organisation %s as ORG_ADMIN cannot create new Orgs during User Imports" % org)
+                            id = ""
+                        else:
+                            # Add a new record
+                            add_org(org, parent)
+
+                    elif ORG_ADMIN:
                         # NB ORG_ADMIN has the list of permitted pe_ids already in filter_opts
                         s3_debug("Cannot create new Organisation %s as ORG_ADMIN cannot create new Orgs during User Imports" % org)
                         id = ""
                     else:
                         # Add a new record
-                        id = otable.insert(name=org)
-                        update_super(otable, Storage(id=id))
-                        set_record_owner(otable, id)
-                        # @ToDo: Call onaccept?
-                        if parent:
-                            records = db(otable.name == parent).select(otable.id)
-                            if len(records) == 1:
-                                # Add branch link
-                                link_id = btable.insert(organisation_id = records.first().id,
-                                                        branch_id = id)
-                                onaccept = s3db.get_config("org_organisation_branch", "onaccept")
-                                callback(onaccept, Storage(vars=Storage(id=link_id)))
-                            elif len(records) > 1:
-                                # Ambiguous
-                                s3_debug("Cannot set branch link for new Organisation %s as there are multiple matches for parent %s" % (org, parent))
-                            else:
-                                # Create Parent
-                                parent_id = otable.insert(name=parent)
-                                update_super(otable, Storage(id=parent_id))
-                                set_record_owner(otable, id)
-                                # @ToDo: Call onaccept?
-                                # Create link
-                                link_id = btable.insert(organisation_id == parent_id,
-                                                        branch_id == id)
-                                onaccept = s3db.get_config("org_organisation_branch", "onaccept")
-                                callback(onaccept, Storage(vars=Storage(id=link_id)))
+                        add_org(org, parent)
 
-                # Replace string with id
-                id = str(id)
-                element.text = id
-                # Store in case we get called again with same value
-                orgs[org_full] = dict(id=id)
-            else:
-                # Store in case we get called again with same value
-                orgs[org_full] = dict(id=org_full)
+                    # Replace string with id
+                    id = str(id)
+                    element.text = id
+                    # Store in case we get called again with same value
+                    orgs[org_full] = dict(id=id)
+                else:
+                    # Store in case we get called again with same value
+                    orgs[org_full] = dict(id=org_full)
 
         # Organisation Groups
         elements = tree.getroot().xpath("/s3xml//resource[@name='auth_user']/data[@field='org_group_id']")
@@ -3255,7 +3280,9 @@ $.filterOptionsS3({
         s3 = current.response.s3
         if "restricted_tables" in s3:
             del s3["restricted_tables"]
-        self.permission.clear_cache()
+
+        permission = self.permission
+        permission.clear_cache()
 
         system_roles = self.get_system_roles()
         ANONYMOUS = system_roles.ANONYMOUS
@@ -3297,7 +3324,7 @@ $.filterOptionsS3({
             # Permissions of a group apply only for records owned by any of
             # the entities which belong to the realm of the group membership
 
-            if not self.permission.entity_realm:
+            if not permission.entity_realm:
                 # Group memberships have no realms (policy 5 and below)
                 self.user["realms"] = Storage([(row.group_id, None) for row in rows])
                 self.user["delegations"] = Storage()
@@ -3339,7 +3366,7 @@ $.filterOptionsS3({
                     elif pe_id not in realm:
                         realms[group_id].append(pe_id)
 
-                if self.permission.entity_hierarchy:
+                if permission.entity_hierarchy:
                     # Realms include subsidiaries of the realm entities
 
                     # Get all entities in realms
@@ -3352,7 +3379,7 @@ $.filterOptionsS3({
                                     append(entity)
 
                     # Lookup all delegations to any OU ancestor of the user
-                    if self.permission.delegations and self.user.pe_id:
+                    if permission.delegations and self.user.pe_id:
 
                         ancestors = s3db.pr_get_ancestors(self.user.pe_id)
 
@@ -3408,7 +3435,7 @@ $.filterOptionsS3({
                                         append(subsidiary)
 
                     # Process the delegations
-                    if self.permission.delegations:
+                    if permission.delegations:
                         for row in rows:
 
                             # owner == delegates group_id to ==> partner
@@ -3501,8 +3528,9 @@ $.filterOptionsS3({
                                    description=description,
                                    **system_data)
         if role_id:
+            update_acl = self.permission.update_acl
             for acl in acls:
-                self.permission.update_acl(role_id, **acl)
+                update_acl(role_id, **acl)
 
         return role_id
 
@@ -5517,11 +5545,12 @@ class S3Permission(object):
             @return: True if the current user owns the record, else False
         """
 
+        auth = self.auth
         user_id = None
-        sr = self.auth.get_system_roles()
+        sr = auth.get_system_roles()
 
-        if self.auth.user is not None:
-            user_id = self.auth.user.id
+        if auth.user is not None:
+            user_id = auth.user.id
 
         session = current.session
         roles = [sr.ANONYMOUS]
@@ -5546,7 +5575,7 @@ class S3Permission(object):
                 record_id = record[table._id.name]
             else:
                 record_id = record
-            if self.auth.s3_session_owns(table, record_id):
+            if auth.s3_session_owns(table, record_id):
                 # Session owns record
                 return True
             else:
@@ -5564,7 +5593,7 @@ class S3Permission(object):
 
         # OrgAuth: apply only group memberships within the realm
         if self.entity_realm and realm_entity:
-            realms = self.auth.user.realms
+            realms = auth.user.realms
             roles = [sr.ANONYMOUS]
             append = roles.append
             for r in realms:

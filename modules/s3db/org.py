@@ -374,8 +374,9 @@ class S3OrganisationModel(S3Model):
                      # @ToDo: Deprecate with Contact component
                      Field("phone",
                            label = T("Phone #"),
-                           represent = lambda v: v or NONE,
-                           requires = IS_EMPTY_OR(s3_phone_requires),
+                           represent = s3_phone_represent,
+                           requires = IS_EMPTY_OR(IS_PHONE_NUMBER()),
+                           widget = S3PhoneWidget(),
                            #readable = False,
                            #writable = False,
                            ),
@@ -3753,13 +3754,15 @@ class S3FacilityModel(S3Model):
                            ),
                      Field("phone1",
                            label = T("Phone 1"),
-                           represent = lambda v: v or NONE,
-                           requires=IS_EMPTY_OR(s3_phone_requires),
+                           represent = s3_phone_represent,
+                           requires = IS_EMPTY_OR(IS_PHONE_NUMBER()),
+                           widget = S3PhoneWidget(),
                            ),
                      Field("phone2",
                            label = T("Phone 2"),
-                           represent = lambda v: v or NONE,
-                           requires = IS_EMPTY_OR(s3_phone_requires),
+                           represent = s3_phone_represent,
+                           requires = IS_EMPTY_OR(IS_PHONE_NUMBER()),
+                           widget = S3PhoneWidget(),
                            ),
                      Field("email",
                            label = T("Email"),
@@ -4463,13 +4466,15 @@ class S3OfficeModel(S3Model):
                      self.gis_location_id(),
                      Field("phone1",
                            label = T("Phone 1"),
-                           represent = lambda v: v or "",
-                           requires = IS_EMPTY_OR(s3_phone_requires),
+                           represent = s3_phone_represent,
+                           requires = IS_EMPTY_OR(IS_PHONE_NUMBER()),
+                           widget = S3PhoneWidget(),
                            ),
                      Field("phone2",
                            label = T("Phone 2"),
-                           represent = lambda v: v or "",
-                           requires = IS_EMPTY_OR(s3_phone_requires),
+                           represent = s3_phone_represent,
+                           requires = IS_EMPTY_OR(IS_PHONE_NUMBER()),
+                           widget = S3PhoneWidget(),
                            ),
                      Field("email",
                            label = T("Email"),
@@ -4478,8 +4483,9 @@ class S3OfficeModel(S3Model):
                            ),
                      Field("fax",
                            label = T("Fax"),
-                           represent = lambda v: v or "",
-                           requires = IS_EMPTY_OR(s3_phone_requires),
+                           represent = s3_phone_represent,
+                           requires = IS_EMPTY_OR(IS_PHONE_NUMBER()),
+                           widget = S3PhoneWidget(),
                            ),
                      Field("obsolete", "boolean",
                            default = False,
@@ -7058,14 +7064,14 @@ class org_OrganisationDuplicate(object):
                      local name if enabled and no direct name match
         """
 
-        db = current.db
-        s3db = current.s3db
-
         matches = {}
 
         name = item.data.get("name")
         if not name:
             return matches
+
+        db = current.db
+        s3db = current.s3db
 
         table = item.table
 
@@ -7073,8 +7079,7 @@ class org_OrganisationDuplicate(object):
         query = (table.name.lower() == name.lower())
         rows = db(query).select(table.id, table.name)
 
-        settings = current.deployment_settings
-        if not rows and settings.get_L10n_translate_org_organisation():
+        if not rows and current.deployment_settings.get_L10n_translate_org_organisation():
             # Search by local name
             ltable = s3db.org_organisation_name
             query = (ltable.name_l10n.lower() == name.lower()) & \
