@@ -55,6 +55,7 @@ __all__ = ("single_phone_number_pattern",
            "IS_NOT_ONE_OF",
            "IS_PERSON_GENDER",
            "IS_PHONE_NUMBER",
+           "IS_PHONE_NUMBER_MULTI",
            "IS_PROCESSED_IMAGE",
            "IS_SITE_SELECTOR",
            "IS_UTC_DATETIME",
@@ -78,7 +79,7 @@ from s3datetime import S3DateTime
 from s3utils import s3_orderby_fields, s3_str, s3_unicode, s3_validate
 
 DEFAULT = lambda: None
-JSONErrors = (NameError, TypeError, ValueError, AttributeError, KeyError)
+JSONERRORS = (NameError, TypeError, ValueError, AttributeError, KeyError)
 SEPARATORS = (",", ":")
 
 def translate(text):
@@ -160,7 +161,7 @@ class IS_JSONS3(Validator):
                 value_ = json.dumps(ast.literal_eval(value),
                                     separators = SEPARATORS,
                                     )
-            except JSONErrors + (SyntaxError,), e:
+            except JSONERRORS + (SyntaxError,), e:
                 return error(value, e)
             if self.native_json:
                 return (value_, None)
@@ -174,7 +175,7 @@ class IS_JSONS3(Validator):
                     return (value, None) #  the serialized value is not passed
                 else:
                     return (json.loads(value), None)
-            except JSONErrors, e:
+            except JSONERRORS, e:
                 return error(value, e)
 
     # -------------------------------------------------------------------------
@@ -3261,33 +3262,80 @@ class IS_PHONE_NUMBER(Validator):
                      is converted into E.123 international notation.
         """
 
-        T = current.T
-        error_message = self.error_message
+        if isinstance(value, basestring):
+            value = value.strip()
+            if value and value[0] == unichr(8206):
+                # Strip the LRM character
+                value = value[1:]
+            number = s3_str(value)
+            number, error = s3_single_phone_requires(number)
+        else:
+            error = True
 
-        value = value.strip()
-        if value[0] == unichr(8206):
-            # Strip the LRM character 
-            value = value[1:]
-        number = s3_str(value)
-        number, error = s3_single_phone_requires(number)
         if not error:
             if self.international and \
                current.deployment_settings \
                       .get_msg_require_international_phone_numbers():
+
+                # Configure alternative error message
+                error_message = self.error_message
                 if not error_message:
-                    error_message = T("Enter phone number in international format like +46783754957")
+                    error_message = current.T("Enter phone number in international format like +46783754957")
+
                 # Require E.123 international format
                 number = "".join(re.findall("[\d+]+", number))
                 match = re.match("(\+)([1-9]\d+)$", number)
                 #match = re.match("(\+|00|\+00)([1-9]\d+)$", number)
+
                 if match:
                     number = "+%s" % match.groups()[1]
                     return (number, None)
             else:
                 return (number, None)
 
+        error_message = self.error_message
         if not error_message:
-            error_message = T("Enter a valid phone number")
+            error_message = current.T("Enter a valid phone number")
+
+        return (value, error_message)
+
+# =============================================================================
+class IS_PHONE_NUMBER_MULTI(Validator):
+    """
+        Validator for multiple phone numbers.
+    """
+
+    def __init__(self,
+                 error_message = None):
+        """
+            Constructor
+
+            @param error_message: alternative error message
+        """
+
+        self.error_message = error_message
+
+    def __call__(self, value):
+        """
+            Validation of a value
+
+            @param value: the value
+            @return: tuple (value, error), where error is None if value
+                     is valid.
+        """
+
+        value = value.strip()
+        if value[0] == unichr(8206):
+            # Strip the LRM character
+            value = value[1:]
+        number = s3_str(value)
+        number, error = s3_phone_requires(number)
+        if not error:
+            return (number, None)
+
+        error_message = self.error_message
+        if not error_message:
+            error_message = current.T("Enter a valid phone number")
 
         return (value, error_message)
 
