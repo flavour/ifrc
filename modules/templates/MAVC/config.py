@@ -16,7 +16,7 @@ def config(settings):
     T = current.T
 
     settings.base.system_name = T("Map the Philippines")
-    #settings.base.system_name_short = T("MAVC")
+    settings.base.system_name_short = T("MapPH")
 
     # PrePopulate data
     settings.base.prepopulate += ("MAVC", "default/users", "MAVC/Demo")
@@ -128,6 +128,9 @@ def config(settings):
     # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
 
     settings.security.policy = 6 # Organisation-ACLs
+
+    # Hide version info on about page
+    settings.security.version_info = False
 
     # Record Approval
     #settings.auth.record_approval = True

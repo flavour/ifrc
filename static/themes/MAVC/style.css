@@ -628,12 +628,28 @@ div.tabs span.tab_other a:hover {
 /* Footer */
 /* line 2, ../scss/custom/_footer.scss */
 #footer {
-  text-align: center;
-  padding-top: 1.75rem;
-  padding-bottom: 1.75rem;
   background-color: #04AFF6;
+  color: #FFFFFF;
+  text-align: center;
 }
-/* line 10, ../scss/custom/_footer.scss */
+/* line 4, ../scss/custom/_footer.scss */
+#footer .columns {
+  padding-top: 0.5rem;
+  padding-bottom: 1rem;
+}
+/* line 12, ../scss/custom/_footer.scss */
+#footer .footer-logo {
+  max-height: 83px;
+}
+/* line 15, ../scss/custom/_footer.scss */
+#footer .footer-icon {
+  padding: 1rem;
+}
+/* line 18, ../scss/custom/_footer.scss */
+#footer .footer-text {
+  font-size: 1rem;
+}
+/* line 23, ../scss/custom/_footer.scss */
 #footer button.btn {
   font-size: 0.6875rem;
   border: 0;
@@ -648,47 +664,17 @@ div.tabs span.tab_other a:hover {
   color: #0399D7;
   background: transparent;
 }
-/* line 17, ../scss/custom/_footer.scss */
+/* line 30, ../scss/custom/_footer.scss */
 #footer button.btn:hover {
   color: #dddddd;
   background: #909090;
 }
 
-/* line 22, ../scss/custom/_footer.scss */
-.footer-menu {
-  list-style: none;
-}
-/* line 25, ../scss/custom/_footer.scss */
-.footer-menu > li {
-  display: inline;
-  padding: 1.75rem;
-}
-/* line 28, ../scss/custom/_footer.scss */
-.footer-menu > li > a {
-  font-size: 0.8125rem;
-  font-weight: bold;
-  color: white;
-}
-/* line 32, ../scss/custom/_footer.scss */
-.footer-menu > li > a:hover {
-  color: #e0e0e0;
-}
-
-/* line 38, ../scss/custom/_footer.scss */
-.footer-home {
-  display: block;
-  margin: 3rem;
-}
-/* line 41, ../scss/custom/_footer.scss */
-.footer-home img {
-  width: 24px;
-}
-
-/* line 46, ../scss/custom/_footer.scss */
+/* line 36, ../scss/custom/_footer.scss */
 #poweredby {
   margin-right: 0.5rem;
 }
-/* line 48, ../scss/custom/_footer.scss */
+/* line 38, ../scss/custom/_footer.scss */
 #poweredby a {
   color: #999999;
   text-decoration: none;
@@ -728,7 +714,7 @@ div.tabs span.tab_other a:hover {
 }
 /* line 24, ../scss/custom/_menus.scss */
 .top-bar-section > ul li.menu-home a:before {
-  content: url(img/logo-mtp-header.png);
+  content: url(img/logo-mtp-header-beta.png);
 }
 /* line 33, ../scss/custom/_menus.scss */
 .top-bar-section form.language-selector {
@@ -1243,18 +1229,32 @@ h4.profile-sub-header {
   padding-right: 0;
 }
 
-/* line 63, ../scss/custom/_misc.scss */
+/* line 61, ../scss/custom/_misc.scss */
+.about-contents {
+  padding-top: 1rem;
+}
+
+/* line 64, ../scss/custom/_misc.scss */
+.twitter-link {
+  color: #FFE860;
+}
+/* line 66, ../scss/custom/_misc.scss */
+.twitter-link:visited {
+  color: #FFE860;
+}
+
+/* line 72, ../scss/custom/_misc.scss */
 body.rtl .personal-menu {
   clear: left;
   float: left;
 }
-/* line 67, ../scss/custom/_misc.scss */
+/* line 76, ../scss/custom/_misc.scss */
 body.rtl .username {
   padding-left: 0.5rem;
   padding-right: 0;
   float: left;
 }
-/* line 70, ../scss/custom/_misc.scss */
+/* line 79, ../scss/custom/_misc.scss */
 body.rtl .username i.icon {
   padding-left: 0;
   padding-right: 0.2rem;
