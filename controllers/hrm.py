@@ -83,21 +83,23 @@ def staff():
                            "person_id",
                            "job_title_id",
                            "organisation_id",
-                           "department_id",
                            "site_id",
                            #"site_contact",
                            ]
+            if settings.get_hrm_staff_departments():
+                list_fields.insert(4, "department_id")
         else:
             # Adapt list_fields
             list_fields = ["person_id",
                            "job_title_id",
                            "organisation_id",
-                           "department_id",
                            "site_id",
                            #"site_contact",
                            (T("Email"), "email.value"),
                            (settings.get_ui_label_mobile_phone(), "phone.value"),
                            ]
+            if settings.get_hrm_staff_departments():
+                list_fields.insert(3, "department_id")
             if settings.get_hrm_use_trainings():
                 list_fields.append("person_id$training.course_id")
             if settings.get_hrm_use_certificates():
@@ -377,8 +379,8 @@ def group_membership():
     s3.prep = prep
 
     output = s3_rest_controller("pr", "group_membership",
-                                csv_template="group_membership",
-                                csv_stylesheet=("hrm", "group_membership.xsl"),
+                                csv_stylesheet = ("hrm", "group_membership.xsl"),
+                                csv_template = "group_membership",
                                 )
     return output
 
@@ -527,7 +529,8 @@ def certificate():
        not auth.s3_has_role(ADMIN):
         s3.filter = auth.filter_by_root_org(s3db.hrm_certificate)
 
-    output = s3_rest_controller(rheader=s3db.hrm_rheader)
+    output = s3_rest_controller(rheader = s3db.hrm_rheader,
+                                )
     return output
 
 # -----------------------------------------------------------------------------

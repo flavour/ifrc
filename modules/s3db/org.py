@@ -2456,6 +2456,7 @@ class S3OrganisationServiceModel(S3Model):
 
         T = current.T
         db = current.db
+        settings = current.deployment_settings
 
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
@@ -2464,7 +2465,7 @@ class S3OrganisationServiceModel(S3Model):
 
         organisation_id = self.org_organisation_id
 
-        hierarchical_service_types = current.deployment_settings.get_org_services_hierarchical()
+        hierarchical_service_types = settings.get_org_services_hierarchical()
 
         # ---------------------------------------------------------------------
         # Service
@@ -2546,6 +2547,8 @@ class S3OrganisationServiceModel(S3Model):
 
         # ---------------------------------------------------------------------
         # Organizations <> Services Link Table
+        # - normally use org_service_location instead, but can use this simpler
+        #   variant if-required
         #
         tablename = "org_service_organisation"
         define_table(tablename,
@@ -2583,14 +2586,22 @@ class S3OrganisationServiceModel(S3Model):
                                )
 
         # ---------------------------------------------------------------------
-        # Organisation Service Locations
+        # Organizations <> Services <> Locations Link Table
         #
-        SITE = current.deployment_settings.get_org_site_label()
+        SITE = settings.get_org_site_label()
 
         tablename = "org_service_location"
         define_table(tablename,
                      super_link("doc_id", "doc_entity"),
-                     organisation_id(),
+                     organisation_id(
+                        default = current.auth.root_org(),
+                        requires = self.org_organisation_requires(
+                                    required = True,
+                                    # Only allowed to add Projects for Orgs
+                                    # that the user has write access to
+                                    updateable = True,
+                                    ),
+                        ),
                      # The site where the organisation provides services:
                      # (component not instance)
                      super_link("site_id", "org_site",
@@ -2639,17 +2650,17 @@ class S3OrganisationServiceModel(S3Model):
 
         # CRUD strings
         crud_strings[tablename] = Storage(
-            label_create = T("Create Service Location"),
-            title_display = T("Service Location Details"),
-            title_list = T("Service Locations"),
-            title_update = T("Edit Service Location"),
-            title_upload = T("Import Service Locations"),
-            label_list_button = T("List Service Locations"),
-            label_delete_button = T("Delete Service Location"),
-            msg_record_created = T("Service Location added"),
-            msg_record_modified = T("Service Location updated"),
-            msg_record_deleted = T("Service Location deleted"),
-            msg_list_empty = T("No Service Locations currently registered"))
+            label_create = T("Add Service"),
+            title_display = T("Service Details"),
+            title_list = T("Services"),
+            title_update = T("Edit Service"),
+            title_upload = T("Import Services"),
+            label_list_button = T("List Services"),
+            label_delete_button = T("Delete Service"),
+            msg_record_created = T("Service added"),
+            msg_record_modified = T("Service updated"),
+            msg_record_deleted = T("Service deleted"),
+            msg_list_empty = T("No Services currently registered"))
 
         # CRUD form
         service_widget = "hierarchy" if hierarchical_service_types else None
@@ -2678,11 +2689,46 @@ class S3OrganisationServiceModel(S3Model):
                        "comments",
                        ]
 
+        # Report axes
+        report_fields = ["organisation_id",
+                         "service_location_service.service_id",
+                         ]
+        add_report_field = report_fields.append
+
+        # Location levels (append to list fields and report axes)
+        # @ToDo: deployment_setting for Site vs Location
+        levels = current.gis.get_relevant_hierarchy_levels()
+        for level in levels:
+            lfield = "location_id$%s" % level
+            #list_fields.append(lfield)
+            add_report_field(lfield)
+
+        if "L0" in levels:
+            default_row = "location_id$L0"
+        elif "L1" in levels:
+            default_row = "location_id$L1"
+        elif "L2" in levels:
+            default_row = "location_id$L2"
+
         # Table configuration
         configure(tablename,
                   crud_form = crud_form,
                   deduplicate = self.org_service_location_deduplicate,
                   list_fields = list_fields,
+                  report_options = Storage(
+                    rows = report_fields,
+                    cols = report_fields,
+                    fact = [(T("Number of Organizations"),
+                             "count(organisation_id)",
+                             ),
+                            ],
+                    defaults = Storage(
+                        rows = default_row,
+                        cols = "service_location_service.service_id",
+                        fact = "count(organisation_id)",
+                        totals = True,
+                    )
+                  ),
                   super_entity = "doc_entity",
                   )
 
@@ -5829,43 +5875,47 @@ def org_rheader(r, tabs=[]):
         #    sectors = TR(TH("%s: " % sector_label),
         #                 table.sector_id.represent(record.sector_id))
         # else:
-        #    sectors = ""
+        #    sectors = None
 
         if record.website:
             website = TR(TH("%s: " % table.website.label),
                          A(record.website, _href=record.website))
         else:
-            website = ""
+            website = None
 
         if record.root_organisation != record.id:
             btable = s3db.org_organisation_branch
             query = (btable.branch_id == record.id) & \
                     (btable.organisation_id == table.id)
-            parent = current.db(query).select(table.id,
-                                              table.name,
-                                              limitby=(0, 1)
-                                              ).first()
-            if parent:
+            row = current.db(query).select(table.id,
+                                           table.name,
+                                           limitby=(0, 1)
+                                           ).first()
+            if row:
                 parent = TR(TH("%s: " % T("Branch of")),
-                             A(parent.name, _href=URL(args=[parent.id, "read"])))
+                            A(row.name, _href=URL(args=[row.id, "read"])),
+                            )
             else:
-                parent = ""
+                parent = None
         else:
-            parent = ""
+            parent = None
 
         rheader = DIV()
         logo = org_organisation_logo(record)
-        rData = TABLE(TR(TH("%s: " % table.name.label),
-                         record.name,
-                         ),
-                      parent,
-                      website,
-                      #sectors,
+
+        record_data = TABLE(TR(TH("%s: " % table.name.label),
+                               record.name,
+                               ),
                       )
+        for item in (parent, website): #, sectors):
+            if item is not None:
+                record_data.append(item)
+
         if logo:
-            rheader.append(TABLE(TR(TD(logo), TD(rData))))
+            rheader.append(TABLE(TR(TD(logo), TD(record_data))))
         else:
-            rheader.append(rData)
+            rheader.append(record_data)
+
         rheader.append(rheader_tabs)
 
     elif tablename in ("org_office", "org_facility"):
@@ -6357,13 +6407,22 @@ def org_office_controller():
                     field = table.organisation_id
                     field.default = org_id
                     field.readable = field.writable = False
+
             elif r.id:
                 table.obsolete.readable = table.obsolete.writable = True
-            elif r.representation == "geojson":
-                marker_fn = s3db.get_config("org_office", marker_fn)
-                if marker_fn:
-                    # Load these models now as they'll be needed when we encode
-                    mtable = s3db.gis_marker
+
+        elif r.representation == "geojson":
+            marker_fn = s3db.get_config("org_office", marker_fn)
+            if marker_fn:
+                # Load these models now as they'll be needed when we encode
+                mtable = s3db.gis_marker
+
+        elif r.representation == "xls":
+            list_fields = r.resource.get_config("list_fields")
+            list_fields += ["location_id$lat",
+                            "location_id$lon",
+                            "location_id$inherited",
+                            ]
 
         return True
     s3.prep = prep
@@ -6516,12 +6575,12 @@ def org_facility_controller():
     s3.prep = prep
 
     def postp(r, output):
-        if r.representation == "plain":
+        record = r.record
+        if r.representation == "plain" and record:
             # Custom Map Popup
             T = current.T
             output = TABLE()
             append = output.append
-            record = r.record
             # Edit button
             append(TR(TD(A(T("Edit"),
                            _target="_blank",

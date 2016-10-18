@@ -41,23 +41,47 @@ def event():
     # Pre-process
     def prep(r):
         if r.interactive:
+            method = r.method
             if r.component:
-                if r.component.name == "req":
-                    if r.method != "update" and r.method != "read":
+                cname = r.component_name
+                if cname == "collection":
+                    # @ToDo: Filter Locations available based on Event Locations
+                    #s3db.dc_collection.location_id.default = r.record.location_id
+                    s3.crud_strings["dc_collection"].label_create = T("Add Assessment")
+
+                #elif cname == "document":
+                #    # @ToDo: Filter Locations available based on Event Locations
+                #    #s3db.doc_document.location_id.default = r.record.location_id
+
+                #elif cname == "impact":
+                #    # @ToDo: Filter Locations available based on Event Locations
+                #    #s3db.stats_impact.location_id.default = r.record.location_id
+
+                #elif cname == "image":
+                #    # @ToDo: Filter Locations available based on Event Locations
+                #    #s3db.doc_document.location_id.default = r.record.location_id
+
+                elif cname == "req":
+                    if method != "update" and method != "read":
                         # Hide fields which don't make sense in a Create form
                         # inc list_create (list_fields over-rides)
                         s3db.req_create_form_mods()
 
-            elif r.method != "update" and r.method != "read":
-                # Create or ListCreate
+                elif cname == "target":
+                    # @ToDo: Filter Locations available based on Event Locations
+                    #s3db.dc_target.location_id.default = r.record.location_id
+                    s3.crud_strings["dc_target"].label_create = T("Add Target")
+
+            elif method in ("create", "list", "summary"):
+                # Create or ListCreate: Simplify
                 r.table.closed.writable = r.table.closed.readable = False
 
-            elif r.method == "update":
-                # Can't change details after event activation
-                table = r.table
-                table.exercise.writable = False
-                table.exercise.comment = None
-                table.start_date.writable = False
+            #elif method == "update":
+            #    # Can't change details after event activation
+            #    table = r.table
+            #    table.exercise.writable = False
+            #    table.exercise.comment = None
+            #    table.start_date.writable = False
 
         return True
     s3.prep = prep

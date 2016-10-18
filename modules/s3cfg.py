@@ -122,8 +122,11 @@ class S3Config(Storage):
         self.cms = Storage()
         self.cr = Storage()
         self.database = Storage()
+        self.dc = Storage()
         self.deploy = Storage()
+        self.doc = Storage()
         self.dvr = Storage()
+        self.edu = Storage()
         self.event = Storage()
         self.evr = Storage()
         self.fin = Storage()
@@ -394,6 +397,13 @@ class S3Config(Storage):
         """
         return self.auth.get("hmac_key", "akeytochange")
 
+    def get_auth_password_changes(self):
+        """
+            Are password changes allowed?
+            - set to False if passwords are being managed externally (OpenID / SMTP / LDAP)
+        """
+        return self.auth.get("password_changes", True)
+
     def get_auth_password_min_length(self):
         """
             To set the Minimum Password Length
@@ -403,6 +413,10 @@ class S3Config(Storage):
     def get_auth_gmail_domains(self):
         """ List of domains which can use GMail SMTP for Authentication """
         return self.auth.get("gmail_domains", [])
+
+    def get_auth_office365_domains(self):
+        """ List of domains which can use Office 365 SMTP for Authentication """
+        return self.auth.get("office365_domains", [])
 
     def get_auth_google(self):
         """
@@ -482,6 +496,7 @@ class S3Config(Storage):
 
     def get_auth_show_link(self):
         return self.auth.get("show_link", True)
+
     def get_auth_registration_link_user_to(self):
         """
             Link User accounts to none or more of:
@@ -490,6 +505,7 @@ class S3Config(Storage):
             * Member
         """
         return self.auth.get("registration_link_user_to")
+
     def get_auth_registration_link_user_to_default(self):
         """
             Link User accounts to none or more of:
@@ -603,14 +619,22 @@ class S3Config(Storage):
 
     def get_auth_registration_roles(self):
         """
-            A dictionary of realms, with lists of role UUIDs, to assign to newly-registered users
+            A dictionary of realms, with lists of role UUIDs, to assign to
+            newly-registered users
             Use key = 0 to have the roles not restricted to a realm
         """
         return self.auth.get("registration_roles", [])
 
+    def get_auth_org_admin_to_first(self):
+        """
+            Whether the first user to register for an Org should get the
+            ORG_ADMIN role for that Org
+        """
+        return self.auth.get("org_admin_to_first", False)
+
     def get_auth_terms_of_service(self):
         """
-            Force users to accept Terms of Servcie before Registering an account
+            Force users to accept Terms of Service before Registering an account
             - uses <template>/views/tos.html
         """
         return self.auth.get("terms_of_service", False)
@@ -2626,6 +2650,18 @@ class S3Config(Storage):
         return self.cr.get("tags", False)
 
     # -------------------------------------------------------------------------
+    # DC: Data Collection
+    #
+    def get_dc_collection_label(self):
+        """
+            Label for Data Collections
+            - default: 'Data Collection'
+            - 'Survey'
+            - 'Assessment;
+        """
+        return self.dc.get("collection_label", "Assessment")
+
+    # -------------------------------------------------------------------------
     # Deployments
     #
     def get_deploy_cc_groups(self):
@@ -2677,13 +2713,52 @@ class S3Config(Storage):
         return self.deploy.get("team_label", "Deployable")
 
     # -------------------------------------------------------------------------
+    # Doc Options
+    #
+    def get_doc_label(self):
+        """
+            label for Document/Attachment
+        """
+        return self.doc.get("label", "Document")
+
+    # -------------------------------------------------------------------------
     # DVR Options
     #
+    def get_dvr_label(self):
+        """
+            Whether Cases are called Cases or Beneficiaries
+            - default: None = Case
+            - valid options: "Beneficiary"
+        """
+        return self.dvr.get("label", None)
+
+    def get_dvr_track_transfer_sites(self):
+        """
+            Enable features to track transfer origin/destination sites
+        """
+        return self.dvr.get("track_transfer_sites", False)
+
+    def get_dvr_transfer_site_types(self):
+        """
+            Site types for case transfer origin/destination
+        """
+        default = ("cr_shelter",
+                   "org_office",
+                   "org_facility",
+                   )
+        return self.dvr.get("transfer_site_types", default)
+
     def get_dvr_manage_transferability(self):
         """
             Enable features to manage transferability of cases
         """
         return self.dvr.get("manage_transferability", False)
+
+    def get_dvr_case_flags(self):
+        """
+            Enable features to manage case flags
+        """
+        return self.dvr.get("case_flags", False)
 
     def get_dvr_household_size(self):
         """
@@ -2753,8 +2828,31 @@ class S3Config(Storage):
         return self.dvr.get("id_code_pattern", None)
 
     # -------------------------------------------------------------------------
+    # Education
+    #
+    def get_edu_school_code_unique(self):
+        """
+            Validate for Unique School Codes
+        """
+        return self.edu.get("school_code_unique", False)
+
+    # -------------------------------------------------------------------------
     # Events
     #
+    def get_event_label(self):
+        """
+            Whether Events are called Events or Disasters
+            - default: None = Event
+            - valid options: "Disaster"
+        """
+        return self.event.get("label", None)
+
+    def get_event_exercise(self):
+        """
+            Whether Events can be Exercises
+        """
+        return self.event.get("exercise", False)
+
     def get_event_types_hierarchical(self):
         """
             Whether Event Types are Hierarchical or not
@@ -2767,13 +2865,49 @@ class S3Config(Storage):
         """
         return self.event.get("incident_types_hierarchical", False)
 
-    def get_event_incident_impact_tab(self):
+    def get_event_collection_tab(self):
+        """
+            Whether to show the DC collection tab for events
+        """
+        return self.event.get("collection_tab", True)
+
+    def get_event_target_tab(self):
+        """
+            Whether to show the DC target tab for events
+        """
+        return self.event.get("target_tab", True)
+
+    def get_event_impact_tab(self):
+        """
+            Whether to show the impact tab for events
+        """
+        return self.event.get("impact_tab", True)
+
+    def get_incident_impact_tab(self):
         """
             Whether to show the impact tab for incidents
         """
         return self.event.get("incident_impact_tab", False)
 
-    def get_event_incident_teams_tab(self):
+    def get_event_dispatch_tab(self):
+        """
+            Whether to show the dispatch tab for events
+        """
+        if self.has_module("msg"):
+            return self.event.get("dispatch_tab", False)
+        else:
+            return False
+
+    def get_incident_dispatch_tab(self):
+        """
+            Whether to show the dispatch tab for incidents
+        """
+        if self.has_module("msg"):
+            return self.event.get("incident_dispatch_tab", True)
+        else:
+            return False
+
+    def get_incident_teams_tab(self):
         """
             Show tab with teams assigned for incidents, string to
             define the label of the tab or True to use default label
@@ -2873,7 +3007,7 @@ class S3Config(Storage):
     def get_hrm_email_required(self):
         """
             If set to True then Staff & Volunteers require an email address
-            NB Currently this also acts on Members!
+            NB Currently this also acts on Members & Beneficiaries!
         """
         return self.hrm.get("email_required", True)
 
@@ -3865,6 +3999,12 @@ class S3Config(Storage):
         """
         return self.project.get("activities", False)
 
+    def get_project_activity_sectors(self):
+        """
+            Use Sectors in Activities
+        """
+        return self.project.get("activity_sectors", False)
+
     def get_project_activity_types(self):
         """
             Use Activity Types in Activities & Projects
@@ -3993,17 +4133,23 @@ class S3Config(Storage):
         """
         return self.project.get("projects", False)
 
-    def get_project_sectors(self):
-        """
-            Use Sectors in Projects
-        """
-        return self.project.get("sectors", True)
-
     def get_project_programmes(self):
         """
             Use Programmes in Projects
         """
         return self.project.get("programmes", False)
+
+    def get_project_programme_budget(self):
+        """
+            Use Budgets in Programmes
+        """
+        return self.project.get("programme_budget", False)
+
+    def get_project_sectors(self):
+        """
+            Use Sectors in Projects
+        """
+        return self.project.get("sectors", True)
 
     def get_project_themes(self):
         """

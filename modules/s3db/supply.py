@@ -351,6 +351,9 @@ $.filterOptionsS3({
         #  These are Template items
         #  Instances of these become Inventory Items & Request items
         #
+
+        track_pack_values = settings.get_inv_track_pack_values()
+
         tablename = "supply_item"
         define_table(tablename,
                      catalog_id(),
@@ -371,6 +374,17 @@ $.filterOptionsS3({
                            label = T("Unit of Measure"),
                            requires = IS_NOT_EMPTY(),
                            ),
+                     Field("unit_value", "double",
+                           label = T("Value per Unit"),
+                           represent = lambda v: \
+                                IS_FLOAT_AMOUNT.represent(v, precision=2),
+                           readable = track_pack_values,
+                           writable = track_pack_values,
+                           ),
+                     # @ToDo: Move this into a Currency Widget for the pack_value field
+                     s3_currency(readable = track_pack_values,
+                                 writable = track_pack_values,
+                                 ),
                      brand_id(),
                      Field("kit", "boolean",
                            default = False,
@@ -523,6 +537,8 @@ $.filterOptionsS3({
                        supply_catalog_item = "item_id",
                        # Packs
                        supply_item_pack = "item_id",
+                       # Distribution Items
+                       supply_distribution_item = "item_id",
                        # Inventory Items
                        inv_inv_item = "item_id",
                        # Order Items
@@ -547,7 +563,7 @@ $.filterOptionsS3({
             add_components(tablename,
                            # Alternative Items
                            supply_item_alt="item_id",
-                          )
+                           )
 
         # =====================================================================
         # Catalog Item
@@ -561,7 +577,7 @@ $.filterOptionsS3({
                      item_category_id(
                         script = item_category_script
                      ),
-                     supply_item_id(script=None), # No Item Pack Filter
+                     supply_item_id(script = None), # No Item Pack Filter
                      s3_comments(), # These comments do *not* pull through to an Inventory's Items or a Request's Items
                      *s3_meta_fields())
 
@@ -625,7 +641,7 @@ $.filterOptionsS3({
         configure(tablename,
                   deduplicate = self.supply_catalog_item_duplicate,
                   filter_widgets = filter_widgets,
-                 )
+                  )
 
         # =====================================================================
         # Item Pack
@@ -647,6 +663,17 @@ $.filterOptionsS3({
                            represent = lambda v: \
                                        float_represent(v, precision=2),
                            ),
+                     Field("pack_value", "double",
+                           label = T("Value per Pack"),
+                           represent = lambda v: \
+                                IS_FLOAT_AMOUNT.represent(v, precision=2),
+                           readable = track_pack_values,
+                           writable = track_pack_values,
+                           ),
+                     # @ToDo: Move this into a Currency Widget for the pack_value field
+                     s3_currency(readable = track_pack_values,
+                                 writable = track_pack_values,
+                                 ),
                      s3_comments(),
                      *s3_meta_fields())
 
@@ -1259,6 +1286,7 @@ class S3SupplyDistributionModel(S3Model):
                                                       ),
                                 ),
                      self.gis_location_id(),
+                     # @ToDo: (Optionally) Populate this value based on the # Beneficiaries
                      Field("value", "integer",
                            label = T("Quantity"),
                            requires = IS_INT_IN_RANGE(0, None),
@@ -1274,6 +1302,10 @@ class S3SupplyDistributionModel(S3Model):
                              label = T("End Date"),
                              start_field = "supply_distribution_date",
                              default_interval = 12,
+                             # Most Distributions happen on a single day
+                             # Enable in-template if-required
+                             readable = False,
+                             writable = False,
                              ),
                      #self.stats_source_id(),
                      Field.Method("year", self.supply_distribution_year),

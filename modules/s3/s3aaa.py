@@ -230,6 +230,7 @@ Thank you"""
                                       hms_hospital = T("Hospital"),
                                       #fire_station = T("Fire Station"),
                                       dvi_morgue = T("Morgue"),
+                                      edu_school = T("School"),
                                       transport_seaport = T("Seaport"),
                                       inv_warehouse = T("Warehouse"),
                                       )
@@ -505,7 +506,7 @@ Thank you"""
               onaccept = DEFAULT,
               log = DEFAULT,
               inline = False, # Set to True to use an 'inline' variant of the style
-              lost_pw_link = True,
+              lost_pw_link = None,
               register_link = True,
               ):
         """
@@ -572,6 +573,8 @@ Thank you"""
                 buttons.append(register_link)
 
             # Lost-password action link
+            if lost_pw_link is None:
+                lost_pw_link = deployment_settings.get_auth_password_changes()
             if lost_pw_link:
                 lost_pw_link = A(T("Lost Password"),
                                  _href=URL(f="user", args="retrieve_password"),
@@ -579,10 +582,10 @@ Thank you"""
                                  )
                 buttons.append(lost_pw_link)
 
-            # If we have custom buttons, add submit button
-            if buttons:
-                submit_button = INPUT(_type="submit", _value=T("Login"))
-                buttons.insert(0, submit_button)
+            # Add submit button
+            #if buttons:
+            submit_button = INPUT(_type="submit", _value=T("Login"))
+            buttons.insert(0, submit_button)
 
             form = SQLFORM(utable,
                            fields = [userfield, passfield],
@@ -655,11 +658,19 @@ Thank you"""
                         if domain in gmail_domains:
                             settings.login_methods.append(
                                 email_auth("smtp.gmail.com:587", "@%s" % domain))
+                    office365_domains = current.deployment_settings.get_auth_office365_domains()
+                    if office365_domains:
+                        from gluon.contrib.login_methods.email_auth import email_auth
+                        domain = form.vars[userfield].split("@")[1]
+                        if domain in office365_domains:
+                            settings.login_methods.append(
+                                email_auth("smtp.office365.com:587", "@%s" % domain))
+
                 # Check for username in db
                 query = (utable[userfield] == form.vars[userfield])
                 user = db(query).select(limitby=(0, 1)).first()
                 if user:
-                    # user in db, check if registration pending or disabled
+                    # User in db, check if registration pending or disabled
                     temp_user = user
                     if temp_user.registration_key == "pending":
                         response.warning = deployment_settings.get_auth_registration_pending()
@@ -702,6 +713,15 @@ Thank you"""
                                 if not self in settings.login_methods:
                                     # Do not store password in db
                                     form.vars[passfield] = None
+                                # Ensure new users go through their post registration tasks
+                                register_onaccept = settings.register_onaccept
+                                if register_onaccept:
+                                    settings.register_onaccept = \
+                                        [self.s3_register_onaccept,
+                                         register_onaccept, # Used by DRRPP
+                                         ]
+                                else:
+                                    settings.register_onaccept = self.s3_register_onaccept
                                 user = self.get_or_create_user(form.vars)
                                 break
                 if not user:
@@ -724,11 +744,16 @@ Thank you"""
             cas_user = cas.get_user()
             if cas_user:
                 cas_user[passfield] = None
+                # Ensure new users go through their post registration tasks
+                register_onaccept = settings.register_onaccept
+                if register_onaccept:
+                    settings.register_onaccept = \
+                        [self.s3_register_onaccept,
+                         register_onaccept, # Used by DRRPP
+                         ]
+                else:
+                    settings.register_onaccept = self.s3_register_onaccept
                 user = self.get_or_create_user(utable._filter_fields(cas_user))
-                # @ToDo: Complete Registration for new users
-                #form = Storage()
-                #form.vars = user
-                #self.s3_user_register_onaccept(form)
             elif hasattr(cas, "login_form"):
                 return cas.login_form()
             else:
@@ -1319,7 +1344,7 @@ Thank you"""
 
         import time
         reset_password_key = str(int(time.time())) + '-' + web2py_uuid()
-        reset_password_url = "%s/default/user/reset_password/%s" % \
+        reset_password_url = "%s/default/user/reset_password?key=%s" % \
                              (current.response.s3.base_url, reset_password_key)
 
         message = self.messages.reset_password % dict(url=reset_password_url)
@@ -1370,7 +1395,6 @@ Thank you"""
         """
 
         settings = self.settings
-        messages = self.messages
         request = current.request
 
         # Customise the resource
@@ -1386,7 +1410,7 @@ Thank you"""
             redirect(settings.verify_email_next)
 
         if log == DEFAULT:
-            log = messages.verify_email_log
+            log = self.messages.verify_email_log
         if next == DEFAULT:
             next = settings.verify_email_next
 
@@ -2110,6 +2134,23 @@ $.filterOptionsS3({
                 chatdb.executesql(sql_query)
 
     # -------------------------------------------------------------------------
+    def s3_register_onaccept(self, form):
+        """
+            S3 framework function
+
+            Designed to be called when a user is created through:
+                - registration via OAuth, LDAP, etc
+
+            Does the following:
+                - Sets session.auth.user for authorstamp, etc
+                - Approves user (to set registration groups, such as AUTHENTICATED, link to Person)
+        """
+
+        user = form.vars
+        current.session.auth = Storage(user=user)
+        self.s3_approve_user(user)
+
+    # -------------------------------------------------------------------------
     def s3_user_register_onaccept(self, form):
         """
             S3 framework function
@@ -2331,49 +2372,70 @@ $.filterOptionsS3({
         db = current.db
         s3db = current.s3db
         deployment_settings = current.deployment_settings
+        settings = self.settings
 
-        utable = self.settings.table_user
+        utable = settings.table_user
 
         # Add to 'Authenticated' role
         authenticated = self.id_group("Authenticated")
-        self.add_membership(authenticated, user_id)
+        add_membership = self.add_membership
+        add_membership(authenticated, user_id)
+
+        organisation_id = user.organisation_id
 
         # Add User to required registration roles
         entity_roles = deployment_settings.get_auth_registration_roles()
         if entity_roles:
-            gtable = self.settings.table_group
+            gtable = settings.table_group
+            get_pe_id = s3db.pr_get_pe_id
             for entity in entity_roles.keys():
                 roles = entity_roles[entity]
 
                 # Get User's Organisation or Site pe_id
                 if entity in ("organisation_id", "org_group_id", "site_id"):
                     tablename = "org_%s" % entity.split("_")[0]
-                    entity = s3db.pr_get_pe_id(tablename, user[entity])
+                    entity = get_pe_id(tablename, user[entity])
                     if not entity:
                         continue
 
-                query = (gtable.uuid.belongs(roles))
-                rows = db(query).select(gtable.id)
+                rows = db(gtable.uuid.belongs(roles)).select(gtable.id)
                 for role in rows:
-                    self.add_membership(role.id, user_id, entity=entity)
+                    add_membership(role.id, user_id, entity=entity)
+
+        if organisation_id and \
+           deployment_settings.get_auth_org_admin_to_first():
+            # If this is the 1st user to register for an Org, give them ORG_ADMIN for that Org
+            entity = s3db.pr_get_pe_id("org_organisation", organisation_id)
+            gtable = settings.table_group
+            ORG_ADMIN = db(gtable.uuid == "ORG_ADMIN").select(gtable.id,
+                                                              limitby=(0, 1)
+                                                              ).first().id
+            mtable = settings.table_membership
+            query = (mtable.group_id == ORG_ADMIN) & \
+                    (mtable.pe_id == entity)
+            exists = db(query).select(mtable.id,
+                                      limitby=(0, 1))
+            if not exists:
+                add_membership(ORG_ADMIN, user_id, entity=entity)
 
         if deployment_settings.has_module("delphi"):
             # Add user as a participant of the default problem group
             table = s3db.delphi_group
-            query = (table.uuid == "DEFAULT")
-            group = db(query).select(table.id,
-                                     limitby=(0, 1)).first()
+            group = db(table.uuid == "DEFAULT").select(table.id,
+                                                       limitby=(0, 1)).first()
             if group:
                 table = s3db.delphi_membership
-                table.insert(group_id=group.id,
-                             user_id=user_id,
-                             status=3)
+                table.insert(group_id = group.id,
+                             user_id = user_id,
+                             status = 3,
+                             )
 
         self.s3_link_user(user)
 
         if current.response.s3.bulk is True:
             # Non-interactive imports should stop here
-            user_email = db(utable.id == user_id).select(utable.email).first().email
+            user_email = db(utable.id == user_id).select(utable.email,
+                                                         ).first().email
             self.auth_user_onaccept(user_email, user_id)
             return
 
@@ -2381,11 +2443,24 @@ $.filterOptionsS3({
         db(utable.id == user_id).update(registration_key = "")
 
         # Approve User's Organisation
-        if user.organisation_id and \
-           "org_organisation" in deployment_settings.get_auth_record_approval_required_for():
-            s3db.resource("org_organisation", user.organisation_id, unapproved=True).approve()
+        if organisation_id and \
+           "org_organisation" in \
+           deployment_settings.get_auth_record_approval_required_for():
+            org_resource = s3db.resource("org_organisation",
+                                         organisation_id,
+                                         # Do not re-approve (would
+                                         # overwrite original approver)
+                                         approved = False,
+                                         unapproved = True,
+                                         )
+            approved = org_resource.approve()
+            if not approved:
+                # User is verifying their email and is not yet
+                # logged-in, so approve by system authority
+                org_resource.approve(approved_by=0)
 
-        user_email = db(utable.id == user_id).select(utable.email).first().email
+        user_email = db(utable.id == user_id).select(utable.email,
+                                                     ).first().email
         self.auth_user_onaccept(user_email, user_id)
         # Send Welcome mail
         self.s3_send_welcome_email(user)

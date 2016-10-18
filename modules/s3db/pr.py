@@ -62,6 +62,7 @@ __all__ = ("S3PersonEntity",
            "pr_remove_affiliation",
            # PE Helpers
            "pr_get_pe_id",
+           "pr_import_prep",
            # Back-end Role Tools
            "pr_define_role",
            "pr_delete_role",
@@ -81,7 +82,7 @@ __all__ = ("S3PersonEntity",
            # Internal Path Tools
            "pr_rebuild_path",
            "pr_role_rebuild_path",
-           # Helpers for ImageLibrary
+           # Helper for ImageLibrary
            "pr_image_modify",
            #"pr_address_list_layout",
            #"pr_contact_list_layout",
@@ -1032,6 +1033,9 @@ class S3PersonModel(S3Model):
                                         },
                             dvr_case_activity = "person_id",
                             dvr_case_appointment = "person_id",
+                            dvr_case_details = {"joinby": "person_id",
+                                                "multiple": False,
+                                                },
                             dvr_case_event = "person_id",
                             dvr_case_flag = {"link": "dvr_case_flag_case",
                                              "joinby": "person_id",
@@ -1964,7 +1968,6 @@ class S3GroupModel(S3Model):
              "pr_group_id",
              "pr_group_membership",
              "pr_group_member_role",
-
              )
 
     def model(self):
@@ -3947,6 +3950,10 @@ class S3PersonDetailsModel(S3Model):
                                 ),
                           Field("military_service", "boolean",
                                 label = T("Military Service"),
+                                represent = s3_yes_no_represent,
+                                ),
+                          Field("disabled", "boolean",
+                                label = T("Disabled"),
                                 represent = s3_yes_no_represent,
                                 ),
                           Field("literacy", "integer",
@@ -7583,6 +7590,58 @@ def pr_image_modify(image_file,
         return True
     else:
         return False
+
+# =============================================================================
+def pr_import_prep(data):
+    """
+        Called when contacts are imported from CSV
+
+        Lookups Pseudo-reference Integer fields from Names
+        i.e. pr_contact.pe_id from <Org Name>
+
+        Based on auth.s3_import_prep
+
+        @ToDo: Add support for Sites
+    """
+
+    db = current.db
+    s3db = current.s3db
+    set_record_owner = current.auth.s3_set_record_owner
+    update_super = s3db.update_super
+    table = s3db.org_organisation
+
+    resource, tree = data
+
+    # Memberships
+    elements = tree.getroot().xpath("/s3xml//resource[@name='pr_contact']/data[@field='pe_id']")
+    looked_up = {}
+    for element in elements:
+        org = element.text
+
+        if not org:
+            continue
+
+        if org in looked_up:
+            # Replace string with pe_id
+            element.text = looked_up[org]
+            # Don't check again
+            continue
+
+        record = db(table.name == org).select(table.pe_id,
+                                              limitby=(0, 1)
+                                              ).first()
+        if not record:
+            # Add a new record
+            id = table.insert(**{"name": org})
+            update_super(table, Storage(id=id))
+            set_record_owner(table, id)
+            record = db(table.id == id).select(table.pe_id,
+                                               limitby=(0, 1)).first()
+        pe_id = record.pe_id
+        # Replace string with pe_id
+        element.text = str(pe_id)
+        # Store in case we get called again with same value
+        looked_up[org] = pe_id
 
 # =============================================================================
 def pr_address_list_layout(list_id, item_id, resource, rfields, record):

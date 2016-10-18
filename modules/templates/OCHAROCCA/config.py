@@ -137,6 +137,7 @@ def config(settings):
     # Events
     # Make Event Types Hierarchical
     settings.event.types_hierarchical = True
+    settings.event.impact_tab = False # Done inline
 
     # -------------------------------------------------------------------------
     # Vulnerability
@@ -441,9 +442,7 @@ def config(settings):
         table = r.table
         table.name.label = T("Disaster Number")
 
-        location_field = s3db.event_event_location.location_id
-        location_field.requires = IS_LOCATION()
-        location_field.widget = S3LocationSelector(levels=gis_levels)
+        s3db.event_event_location.location_id.widget = S3LocationSelector(levels=gis_levels)
 
         impact_fields = OrderedDict(killed = "Killed",
                                     total_affected = "Total Affected",
@@ -562,7 +561,7 @@ def config(settings):
     # -------------------------------------------------------------------------
     def customise_stats_demographic_data_resource(r, tablename):
         """
-            Customise event_event resource
+            Customise stats_demographic_data resource
             - Configure fields
             Runs after controller customisation
             But runs before prep
@@ -662,7 +661,7 @@ def config(settings):
     # -------------------------------------------------------------------------
     def customise_org_facility_resource(r, tablename):
         """
-            Customise event_event resource
+            Customise org_facility resource
             - List Fields
             - Form
             - Filter

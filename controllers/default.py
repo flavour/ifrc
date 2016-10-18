@@ -546,6 +546,12 @@ def user():
 
     current.menu.oauth = S3MainMenu.menu_oauth()
 
+    if not settings.get_auth_password_changes():
+        # Block Password changes as these are managed externally (OpenID / SMTP / LDAP)
+        auth_settings.actions_disabled = ("change_password",
+                                          "retrieve_password",
+                                          )
+
     # Check for template-specific customisations
     customise = settings.customise_auth_user_controller
     if customise:
@@ -928,7 +934,7 @@ def skill():
     """
         RESTful CRUD controller
         - needed when skill add form embedded in default/person
-        - only create method is allowed, when opened in a inline form.
+        - only create method is allowed, when opened in an inline form.
     """
 
     # Check if it is called from a inline form
