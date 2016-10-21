@@ -95,10 +95,88 @@ def config(settings):
     settings.fin.currency_default = "TRY"
 
     # =========================================================================
+    # DVR Case Management
+    #
+    def customise_dvr_case_resource(r, tablename):
+
+        s3db = current.s3db
+        s3 = current.response.s3
+
+        if r.component_name == "dvr_case":
+
+            table = r.component.table
+            field = table.human_resource_id
+            field.label = T("Person Responsible")
+            field.readable = field.writable = True
+            field.widget = None
+            field.comment = None
+
+            # Custom form
+            from s3 import S3SQLCustomForm
+            crud_form = S3SQLCustomForm("person_id",
+                                        "date",
+                                        "organisation_id",
+                                        "human_resource_id",
+                                        "status_id",
+                                        )
+
+            # Filter staff by organisation
+            script = '''$.filterOptionsS3({
+ 'trigger':'organisation_id',
+ 'target':'human_resource_id',
+ 'lookupPrefix':'hrm',
+ 'lookupResource':'human_resource',
+ 'lookupKey':'organisation_id',
+ 'fncRepresent': function(record){return record.person_id},
+ 'optional': true
+})'''
+            s3.jquery_ready.append(script)
+
+            s3db.configure("dvr_case",
+                           crud_form = crud_form,
+                           )
+
+        # Deleting cases is not allowed
+        s3db.configure("dvr_case",
+                       deletable = False,
+                       )
+
+    settings.customise_dvr_case_resource = customise_dvr_case_resource
+
+    # =========================================================================
     # Person Registry
     #
     # Allow third gender
     settings.pr.hide_third_gender = False
+
+    # -------------------------------------------------------------------------
+    def customise_pr_contact_resource(r, tablename):
+
+        table = current.s3db.pr_contact
+
+        field = table.contact_description
+        field.readable = field.writable = False
+
+        field = table.value
+        field.label = current.T("Number or Address")
+
+        field = table.contact_method
+        from gluon import IS_IN_SET
+        all_opts = current.msg.CONTACT_OPTS
+        subset = ("SMS",
+                  "EMAIL",
+                  "HOME_PHONE",
+                  "WORK_PHONE",
+                  "FACEBOOK",
+                  "TWITTER",
+                  "SKYPE",
+                  "OTHER",
+                  )
+        contact_methods = [(k, all_opts[k]) for k in subset if k in all_opts]
+        field.requires = IS_IN_SET(contact_methods, zero=None)
+        field.default = "SMS"
+
+    settings.customise_pr_contact_resource = customise_pr_contact_resource
 
     # -------------------------------------------------------------------------
     def customise_pr_person_resource(r, tablename):
@@ -113,6 +191,13 @@ def config(settings):
                                              "filterfor": ("FAMILY_ID",),
                                              "multiple": False,
                                              },
+                            )
+
+        # Add contacts-method
+        if r.controller == "dvr":
+            s3db.set_method("pr", "person",
+                            method = "contacts",
+                            action = s3db.pr_Contacts,
                             )
 
         table = s3db.pr_person
@@ -330,6 +415,21 @@ def config(settings):
             return result
         s3.prep = custom_prep
 
+        standard_postp = s3.postp
+        def custom_postp(r, output):
+
+            # Call standard postp
+            if callable(standard_postp):
+                output = standard_postp(r, output)
+
+            # Remove subtitle on case tab
+            if r.component_name == "dvr_case" and \
+               isinstance(output, dict) and "subtitle" in output:
+                output["subtitle"] = None
+
+            return output
+        s3.postp = custom_postp
+
         # Custom rheader tabs
         if current.request.controller == "dvr":
             attr = dict(attr)
@@ -434,6 +534,89 @@ def config(settings):
         return attr
 
     settings.customise_org_organisation_controller = customise_org_organisation_controller
+
+    # =========================================================================
+    # Project Module
+    #
+    settings.project.mode_3w = True
+    settings.project.codes = True
+    settings.project.sectors = False
+    settings.project.assign_staff_tab = False
+
+    # -------------------------------------------------------------------------
+    def customise_project_project_resource(r, tablename):
+
+        s3db = current.s3db
+
+        from s3 import S3SQLCustomForm, \
+                       S3TextFilter
+
+        # Simplified form
+        crud_form = S3SQLCustomForm("organisation_id",
+                                    "code",
+                                    "name",
+                                    "description",
+                                    "comments",
+                                    )
+
+        # Custom list fields
+        list_fields = ["code",
+                       "name",
+                       "organisation_id",
+                       ]
+
+        # Custom filter widgets
+        filter_widgets = [S3TextFilter(["name",
+                                        "code",
+                                        "description",
+                                        "organisation_id$name",
+                                        "comments",
+                                        ],
+                                        label = current.T("Search"),
+                                       ),
+                          ]
+
+        s3db.configure("project_project",
+                       crud_form = crud_form,
+                       filter_widgets = filter_widgets,
+                       list_fields = list_fields,
+                       )
+
+    settings.customise_project_project_resource = customise_project_project_resource
+
+    # -------------------------------------------------------------------------
+    def customise_project_project_controller(**attr):
+
+        T = current.T
+        s3db = current.db
+        s3 = current.response.s3
+
+        # Custom prep
+        standard_prep = s3.prep
+        def custom_prep(r):
+
+            # Call standard prep
+            if callable(standard_prep):
+                result = standard_prep(r)
+            else:
+                result = True
+
+            # Customise fields
+            table = s3db.project_project
+            field = table.code
+            field.label = T("Code")
+
+            return result
+        s3.prep = custom_prep
+
+
+        # Custom rheader
+        attr = dict(attr)
+        attr["rheader"] = stl_project_rheader
+
+        return attr
+
+    settings.customise_project_project_controller = customise_project_project_controller
 
     # =========================================================================
     # Modules
@@ -563,18 +746,18 @@ def config(settings):
         #   restricted = True,
         #    module_type = 10,
         #)),
-        #("project", Storage(
-        #    name_nice = T("Projects"),
-        #    #description = "Tracking of Projects, Activities and Tasks",
-        #    restricted = True,
-        #    module_type = 2
-        #)),
-        ("cr", Storage(
-            name_nice = T("Camps"),
-            #description = "Tracks the location, capacity and breakdown of victims in Shelters",
-            restricted = True,
-            module_type = 10
+        ("project", Storage(
+           name_nice = T("Projects"),
+           #description = "Tracking of Projects, Activities and Tasks",
+           restricted = True,
+           module_type = 2
         )),
+        #("cr", Storage(
+        #    name_nice = T("Camps"),
+        #    #description = "Tracks the location, capacity and breakdown of victims in Shelters",
+        #    restricted = True,
+        #    module_type = 10
+        #)),
         #("hms", Storage(
         #    name_nice = T("Hospitals"),
         #    #description = "Helps to monitor status of hospitals",
@@ -639,6 +822,8 @@ def stl_dvr_rheader(r, tabs=[]):
 
             if not tabs:
                 tabs = [(T("Basic Details"), None),
+                        (T("Case Information"), "dvr_case"),
+                        (T("Contact"), "contacts"),
                         ]
 
                 case = resource.select(["family_id.value",
@@ -663,6 +848,50 @@ def stl_dvr_rheader(r, tabs=[]):
                                    (T("Organisation"), organisation_id),
                                    ],
                                   ["date_of_birth",
+                                   ],
+                                  ]
+
+        rheader = S3ResourceHeader(rheader_fields, tabs)(r,
+                                                         table=resource.table,
+                                                         record=record,
+                                                         )
+
+    return rheader
+
+# =============================================================================
+def stl_project_rheader(r, tabs=[]):
+    """ PROJECT custom resource headers """
+
+    if r.representation != "html":
+        # Resource headers only used in interactive views
+        return None
+
+    from s3 import s3_rheader_resource, \
+                   S3ResourceHeader
+
+    tablename, record = s3_rheader_resource(r)
+    if tablename != r.tablename:
+        resource = current.s3db.resource(tablename, id=record.id)
+    else:
+        resource = r.resource
+
+    rheader = None
+    rheader_fields = []
+
+    if record:
+        T = current.T
+
+        if tablename == "project_project":
+
+            if not tabs:
+                tabs = [(T("Basic Details"), None),
+                        ]
+
+                rheader_fields = [[(T("Code"), "code"),
+                                   ],
+                                  [(T("Name"), "name"),
+                                   ],
+                                  [(T("Organisation"), "organisation_id"),
                                    ],
                                   ]
 

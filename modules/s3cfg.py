@@ -148,6 +148,7 @@ class S3Config(Storage):
         self.log = Storage()
         self.mail = Storage()
         self.member = Storage()
+        self.mobile = Storage()
         self.msg = Storage()
         self.org = Storage()
         self.pr = Storage()
@@ -2507,6 +2508,13 @@ class S3Config(Storage):
         """
         return self.cap.get("use_ack", False)
 
+    def get_cap_alert_hub_title(self):
+        """
+            Title for the Alert Hub Page
+        """
+
+        return self.cap.get("alert_hub_title", current.T("SAMBRO Alert Hub Common Operating Picture"))
+
     # -------------------------------------------------------------------------
     # CMS: Content Management System
     #
@@ -2836,6 +2844,13 @@ class S3Config(Storage):
         """
         return self.dvr.get("id_code_pattern", None)
 
+    def get_dvr_event_registration_checkin_warning(self):
+        """
+            Whether to warn during event registration when the person
+            is currently not checked-in
+        """
+        return self.dvr.get("event_registration_checkin_warning", False)
+
     # -------------------------------------------------------------------------
     # Education
     #
@@ -3011,7 +3026,20 @@ class S3Config(Storage):
         """
             Label for Organisations in Human Resources
         """
-        return current.T(self.hrm.get("organisation_label", "Organization"))
+
+        label = self.hrm.get("organisation_label")
+        if not label:
+            if self.get_org_branches():
+                label = "Organization / Branch"
+            else:
+                label = "Organization"
+        return current.T(label)
+
+    def get_hrm_root_organisation_label(self):
+        """
+            Label for Root Organisations in Human Resources
+        """
+        return current.T(self.hrm.get("root_organisation_label", "Top-level Organization"))
 
     def get_hrm_email_required(self):
         """
@@ -3535,6 +3563,33 @@ class S3Config(Storage):
         """
         return self.__lazy("member", "membership_types", default=True)
 
+
+    # -------------------------------------------------------------------------
+    # Mobile Forms
+    #
+    def get_mobile_forms(self):
+        """
+            Configure mobile forms, a list of items
+
+            Item formats:
+                "tablename"
+                ("Title", "tablename")
+                ("Title", "tablename", options)
+
+            Format for options:
+                {
+                    c = controller,      ...use this controller for form handling
+                    f = function,        ...use this function for form handling
+                    vars = vars,         ...add these vars to the download URL
+                 }
+
+            Example:
+                settings.xforms.resources = [("Request", "req_req")]
+
+            @todo: add "restrict" option to restrict forms to certain user
+                   roles (analogous to restrict-option in menu items)
+        """
+        return self.mobile.get("forms")
 
     # -------------------------------------------------------------------------
     # Organisations
