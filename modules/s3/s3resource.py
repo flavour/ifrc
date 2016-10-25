@@ -341,9 +341,10 @@ class S3Resource(object):
             hook.table = table
         else:
             table_alias = None
+            table = hook.table
 
         # Create as resource
-        component = S3Resource(hook.table,
+        component = S3Resource(table,
                                parent = self,
                                alias = alias,
                                linktable = hook.linktable,
@@ -369,44 +370,55 @@ class S3Resource(object):
         component.multiple = hook.multiple
         component.defaults = hook.defaults
 
-        if isinstance(filterby, dict):
+        if not filterby:
+            # Can use filterby=False to enforce table aliasing yet
+            # suppress component filtering (useful e.g. with two
+            # foreign key links from the same table)
+            component.filter = None
+
+        else:
             # Filter by multiple criteria
             query = None
-            table = hook.table
             for k, v in filterby.items():
-                is_list = isinstance(v, (tuple, list))
-                if is_list and len(v) == 1:
-                    filterfor = v[0]
-                    is_list = False
+                if isinstance(v, FS):
+                    # Match a field in the master table
+                    # => identify the field
+                    try:
+                        rfield = v.resolve(self)
+                    except (AttributeError, SyntaxError):
+                        if current.response.s3.debug:
+                            raise
+                        else:
+                            current.log.error(sys.exc_info()[1])
+                            continue
+                    # => must be a real field in the master table
+                    field = rfield.field
+                    if not field or field.table != self.table:
+                        current.log.error("Component filter for %s<=%s: "
+                                          "invalid lookup field '%s'" %
+                                          (self.tablename, alias, v.name))
+                        continue
+                    subquery = (table[k] == field)
                 else:
-                    filterfor = v
-                if not is_list:
-                    subquery = (table[k] == filterfor)
-                else:
-                    subquery = (table[k].belongs(set(filterfor)))
+                    is_list = isinstance(v, (tuple, list))
+                    if is_list and len(v) == 1:
+                        filterfor = v[0]
+                        is_list = False
+                    else:
+                        filterfor = v
+                    if not is_list:
+                        subquery = (table[k] == filterfor)
+                    elif filterfor:
+                        subquery = (table[k].belongs(set(filterfor)))
+                    else:
+                        continue
                 if subquery:
                     if query is None:
                         query = subquery
                     else:
                         query &= subquery
+
             component.filter = query
-        elif not filterby:
-            # Can use filterby=False to enforce table aliasing yet
-            # suppress component filtering (useful e.g. with two
-            # foreign key links from the same table)
-            component.filter = None
-        else:
-            filterfor = hook.filterfor
-            is_list = isinstance(filterfor, (tuple, list))
-            if is_list and len(filterfor) == 1:
-                is_list = False
-                filterfor = filterfor[0]
-            if not is_list:
-                component.filter = (hook.table[hook.filterby] == filterfor)
-            elif filterfor:
-                component.filter = (hook.table[hook.filterby].belongs(filterfor))
-            else:
-                component.filter = None
 
         # Copy properties to the link
         if component.link is not None:
@@ -422,7 +434,6 @@ class S3Resource(object):
             self.links[link.name] = link
 
         self.components[alias] = component
-        return
 
     # -------------------------------------------------------------------------
     # Query handling
@@ -4032,6 +4043,83 @@ class S3Resource(object):
             fields.insert(0, id_field)
 
         return fields
+
+    # -------------------------------------------------------------------------
+    def get_defaults(self, master, defaults=None, data=None):
+        """
+            Get implicit defaults for new component records
+
+            @param master: the master record
+            @param defaults: any explicit defaults
+            @param data: any actual values for the new record
+
+            @return: a dict of {fieldname: values} with the defaults
+        """
+
+        values = {}
+
+        parent = self.parent
+        if not parent:
+            # Not a component
+            return values
+
+        # Implicit defaults from component filters
+        hook = current.s3db.get_component(parent.tablename, self.alias)
+        filterby = hook.get("filterby")
+        if filterby:
+            for (k, v) in filterby.items():
+                if not isinstance(v, (tuple, list)):
+                    values[k] = v
+
+        # Explicit defaults from component hook
+        if self.defaults:
+            values.update(self.defaults)
+
+        # Explicit defaults from caller
+        if defaults:
+            values.update(defaults)
+
+        # Actual record values
+        if data:
+            values.update(data)
+
+        # Check for values to look up from master record
+        lookup = {}
+        for (k, v) in list(values.items()):
+            # Skip nonexistent fields and parent key (fkey)
+            if k not in self.fields or not self.link and k == self.fkey:
+                del values[k]
+                continue
+            # Resolve any field selectors
+            if isinstance(v, FS):
+                try:
+                    rfield = v.resolve(parent)
+                except (AttributeError, SyntaxError):
+                    continue
+                field = rfield.field
+                if not field or field.table != parent.table:
+                    continue
+                if field.name in master:
+                    values[k] = master[field.name]
+                else:
+                    del values[k]
+                    lookup[field.name] = k
+
+        # Do we need to reload the master record to look up values?
+        if lookup:
+            row = None
+            parent_id = parent._id
+            record_id = master.get(parent_id.name)
+            if record_id:
+                fields = [parent.table[f] for f in lookup]
+                row = current.db(parent_id == record_id).select(limitby = (0, 1),
+                                                                *fields).first()
+            if row:
+                for (k, v) in lookup.items():
+                    if k in row:
+                        values[v] = row[k]
+
+        return values
 
     # -------------------------------------------------------------------------
     @property

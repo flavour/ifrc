@@ -41,7 +41,7 @@ __all__ = ("S3HRModel",
            "S3HRProgrammeModel",
            "hrm_AssignMethod",
            "hrm_HumanResourceRepresent",
-           #"hrm_TrainingEventRepresent",
+           "hrm_TrainingEventRepresent",
            #"hrm_position_represent",
            "hrm_vars",
            "hrm_compose",
@@ -107,7 +107,7 @@ class S3HRModel(S3Model):
         messages = current.messages
         UNKNOWN_OPT = messages.UNKNOWN_OPT
         AUTOCOMPLETE_HELP = messages.AUTOCOMPLETE_HELP
-        ORGANISATION = messages.ORGANISATION
+        #ORGANISATION = messages.ORGANISATION
 
         add_components = self.add_components
         configure = self.configure
@@ -622,8 +622,9 @@ class S3HRModel(S3Model):
                                       "key": "pe_id",
                                       "fkey": "pe_id",
                                       "pkey": "person_id",
-                                      "filterby": "contact_method",
-                                      "filterfor": ("EMAIL",),
+                                      "filterby": {
+                                          "contact_method": "EMAIL",
+                                          },
                                       },
                                      # Mobile Phone
                                      {"name": "phone",
@@ -632,8 +633,9 @@ class S3HRModel(S3Model):
                                       "key": "pe_id",
                                       "fkey": "pe_id",
                                       "pkey": "person_id",
-                                      "filterby": "contact_method",
-                                      "filterfor": ("SMS",),
+                                      "filterby": {
+                                          "contact_method": "SMS",
+                                          },
                                       },
                                      ),
                         pr_contact_emergency = {"link": "pr_person",
@@ -648,8 +650,9 @@ class S3HRModel(S3Model):
                                        "key": "pe_id",
                                        "fkey": "pe_id",
                                        "pkey": "person_id",
-                                       "filterby": "type",
-                                       "filterfor": ("1",),
+                                       "filterby": {
+                                           "type": "1",
+                                           },
                                        },
                                       ),
                         # Experience & Skills
@@ -1981,6 +1984,7 @@ class S3HRSkillModel(S3Model):
         NONE = messages["NONE"]
         UNKNOWN_OPT = messages.UNKNOWN_OPT
         AUTOCOMPLETE_HELP = messages.AUTOCOMPLETE_HELP
+        ORGANISATION = settings.get_hrm_organisation_label()
 
         ADMIN = current.session.s3.system_roles.ADMIN
         is_admin = auth.s3_has_role(ADMIN)
@@ -2328,95 +2332,6 @@ class S3HRSkillModel(S3Model):
         #                           )
 
 
-        # =====================================================================
-        # Credentials
-        #
-        #   This determines whether an Organisation believes a person is suitable
-        #   to fulfil a role. It is determined based on a combination of
-        #   experience, training & a performance rating (medical fitness to come).
-        #   @ToDo: Workflow to make this easy for the person doing the credentialling
-        #
-        # http://www.dhs.gov/xlibrary/assets/st-credentialing-interoperability.pdf
-        #
-        # Component added in the hrm person() controller
-        #
-
-        # Used by Courses
-        # & 6-monthly rating (Portuguese Bombeiros)
-        hrm_pass_fail_opts = {8: T("Pass"),
-                              9: T("Fail"),
-                              }
-        # 12-monthly rating (Portuguese Bombeiros)
-        # - this is used to determine rank progression (need 4-5 for 5 years)
-        #hrm_five_rating_opts = {1: T("Poor"),
-        #                        2: T("Fair"),
-        #                        3: T("Good"),
-        #                        4: T("Very Good"),
-        #                        5: T("Excellent"),
-        #                        }
-        # Lookup to represent both sorts of ratings
-        hrm_performance_opts = {1: T("Poor"),
-                                2: T("Fair"),
-                                3: T("Good"),
-                                4: T("Very Good"),
-                                5: T("Excellent"),
-                                8: T("Pass"),
-                                9: T("Fail"),
-                                }
-
-        tablename = "hrm_credential"
-        define_table(tablename,
-                     person_id(),
-                     job_title_id(),
-                     organisation_id(label = T("Credentialling Organization"),
-                                     widget = widget,
-                                     ),
-                     Field("performance_rating", "integer",
-                           label = T("Performance Rating"),
-                           represent = lambda opt: \
-                                       hrm_performance_opts.get(opt,
-                                                                UNKNOWN_OPT),
-                           # Default to pass/fail (can override to 5-levels in Controller)
-                           # @ToDo: Build this onaccept of hrm_appraisal
-                           requires = IS_EMPTY_OR(IS_IN_SET(hrm_pass_fail_opts)),
-                           ),
-                     s3_date("start_date",
-                             default = "now",
-                             label = T("Date Received"),
-                             set_min = "#hrm_credential_end_date",
-                             ),
-                     s3_date("end_date",
-                             label = T("Expiry Date"),
-                             set_max = "#hrm_credential_start_date",
-                             start_field = "hrm_credential_start_date",
-                             default_interval = 12,
-                             default_explicit = True,
-                             ),
-                     *s3_meta_fields())
-
-        crud_strings[tablename] = Storage(
-            label_create = T("Add Credential"),
-            title_display = T("Credential Details"),
-            title_list = T("Credentials"),
-            title_update = T("Edit Credential"),
-            label_list_button = T("List Credentials"),
-            label_delete_button = T("Delete Credential"),
-            msg_record_created = T("Credential added"),
-            msg_record_modified = T("Credential updated"),
-            msg_record_deleted = T("Credential deleted"),
-            msg_no_match = T("No entries found"),
-            msg_list_empty = T("Currently no Credentials registered"))
-
-        configure(tablename,
-                  context = {"person": "person_id",
-                             },
-                  list_fields = ["job_title_id",
-                                 "start_date",
-                                 "end_date",
-                                 ],
-                  list_layout = hrm_credential_list_layout,
-                  )
-
         # =========================================================================
         # Courses
         #
@@ -2519,12 +2434,18 @@ class S3HRSkillModel(S3Model):
                                     #widget = S3AutocompleteWidget("hrm", "course")
                                     )
 
+        if settings.get_hrm_create_certificates_from_courses():
+            onaccept = self.hrm_course_onaccept
+        else:
+            onaccept = None
+
         configure(tablename,
                   create_next = URL(f="course",
                                     args=["[id]", "course_certificate"]),
                   deduplicate = S3Duplicate(primary = ("name",),
                                             secondary = ("organisation_id",),
                                             ),
+                  onaccept = onaccept,
                   )
 
         # Components
@@ -2863,11 +2784,22 @@ class S3HRSkillModel(S3Model):
                          ),
             ]
 
+        # NB training_event_controller overrides these for Participants
+        list_fields = ["course_id",
+                       "person_id",
+                       #(T("Job Title"), "job_title"),
+                       (ORGANISATION, "organisation"),
+                       "grade",
+                       ]
+        if course_pass_marks:
+            list_fields.append("grade_details")
+        list_fields.append("date")
+
         report_fields = [(T("Training Event"), "training_event_id"),
                          "person_id",
                          "course_id",
                          "grade",
-                         (messages.ORGANISATION, "organisation"),
+                         (ORGANISATION, "organisation"),
                          (T("Facility"), "training_event_id$site_id"),
                          (T("Month"), "month"),
                          (T("Year"), "year"),
@@ -2887,7 +2819,7 @@ class S3HRSkillModel(S3Model):
                                     fact = "count(training.person_id)",
                                     totals = True,
                                     )
-                                )
+                                 )
 
         # Resource Configuration
         configure(tablename,
@@ -2899,13 +2831,7 @@ class S3HRSkillModel(S3Model):
                                             secondary = ("date",),
                                             ),
                   filter_widgets = filter_widgets,
-                  list_fields = ["course_id",
-                                 "person_id",
-                                 #(T("Job Title"), "job_title"),
-                                 (current.messages.ORGANISATION, "organisation"),
-                                 "grade",
-                                 "date",
-                                 ],
+                  list_fields = list_fields,
                   list_layout = hrm_training_list_layout,
                   onaccept = hrm_training_onaccept,
                   ondelete = hrm_training_onaccept,
@@ -2915,6 +2841,13 @@ class S3HRSkillModel(S3Model):
                   report_options = report_options,
                   )
 
+        # Components
+        add_components(tablename,
+                       hrm_certification = {"joinby": "training_id",
+                                            "multiple": False,
+                                            },
+                       )
+
         # =====================================================================
         # Certificates
         #
@@ -2923,7 +2856,7 @@ class S3HRSkillModel(S3Model):
         #
         filter_certs = settings.get_hrm_filter_certificates()
         if filter_certs:
-            label = messages.ORGANISATION
+            label = ORGANISATION
         else:
             label = T("Certifying Organization")
 
@@ -3032,10 +2965,13 @@ class S3HRSkillModel(S3Model):
                                      widget = widget,
                                      writable = False,
                                      ),
-                     Field("from_training", "boolean",
-                           default = False,
+                     # Optional: When certification comes from a training
+                     Field("training_id", "reference hrm_training",
                            readable = False,
                            writable = False,
+                           requires = IS_EMPTY_OR(
+                                        IS_ONE_OF(db, "hrm_training.id",
+                                                  )),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -3065,6 +3001,95 @@ class S3HRSkillModel(S3Model):
             msg_record_deleted = T("Certification deleted"),
             msg_no_match = T("No entries found"),
             msg_list_empty = T("No entries currently registered"))
+
+        # =====================================================================
+        # Credentials
+        #
+        #   This determines whether an Organisation believes a person is suitable
+        #   to fulfil a role. It is determined based on a combination of
+        #   experience, training & a performance rating (medical fitness to come).
+        #   @ToDo: Workflow to make this easy for the person doing the credentialling
+        #
+        # http://www.dhs.gov/xlibrary/assets/st-credentialing-interoperability.pdf
+        #
+        # Component added in the hrm person() controller
+        #
+
+        # Used by Courses
+        # & 6-monthly rating (Portuguese Bombeiros)
+        hrm_pass_fail_opts = {8: T("Pass"),
+                              9: T("Fail"),
+                              }
+        # 12-monthly rating (Portuguese Bombeiros)
+        # - this is used to determine rank progression (need 4-5 for 5 years)
+        #hrm_five_rating_opts = {1: T("Poor"),
+        #                        2: T("Fair"),
+        #                        3: T("Good"),
+        #                        4: T("Very Good"),
+        #                        5: T("Excellent"),
+        #                        }
+        # Lookup to represent both sorts of ratings
+        hrm_performance_opts = {1: T("Poor"),
+                                2: T("Fair"),
+                                3: T("Good"),
+                                4: T("Very Good"),
+                                5: T("Excellent"),
+                                8: T("Pass"),
+                                9: T("Fail"),
+                                }
+
+        tablename = "hrm_credential"
+        define_table(tablename,
+                     person_id(),
+                     job_title_id(),
+                     organisation_id(label = T("Credentialling Organization"),
+                                     widget = widget,
+                                     ),
+                     Field("performance_rating", "integer",
+                           label = T("Performance Rating"),
+                           represent = lambda opt: \
+                                       hrm_performance_opts.get(opt,
+                                                                UNKNOWN_OPT),
+                           # Default to pass/fail (can override to 5-levels in Controller)
+                           # @ToDo: Build this onaccept of hrm_appraisal
+                           requires = IS_EMPTY_OR(IS_IN_SET(hrm_pass_fail_opts)),
+                           ),
+                     s3_date("start_date",
+                             default = "now",
+                             label = T("Date Received"),
+                             set_min = "#hrm_credential_end_date",
+                             ),
+                     s3_date("end_date",
+                             label = T("Expiry Date"),
+                             set_max = "#hrm_credential_start_date",
+                             start_field = "hrm_credential_start_date",
+                             default_interval = 12,
+                             default_explicit = True,
+                             ),
+                     *s3_meta_fields())
+
+        crud_strings[tablename] = Storage(
+            label_create = T("Add Credential"),
+            title_display = T("Credential Details"),
+            title_list = T("Credentials"),
+            title_update = T("Edit Credential"),
+            label_list_button = T("List Credentials"),
+            label_delete_button = T("Delete Credential"),
+            msg_record_created = T("Credential added"),
+            msg_record_modified = T("Credential updated"),
+            msg_record_deleted = T("Credential deleted"),
+            msg_no_match = T("No entries found"),
+            msg_list_empty = T("Currently no Credentials registered"))
+
+        configure(tablename,
+                  context = {"person": "person_id",
+                             },
+                  list_fields = ["job_title_id",
+                                 "start_date",
+                                 "end_date",
+                                 ],
+                  list_layout = hrm_credential_list_layout,
+                  )
 
         # =====================================================================
         # Skill Equivalence
@@ -3254,6 +3279,44 @@ class S3HRSkillModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def hrm_course_onaccept(form):
+        """
+            Ensure that there is a Certificate created for each Course
+            - only called when create_certificates_from_courses == True
+        """
+
+        form_vars = form.vars
+        course_id = form_vars.id
+
+        db = current.db
+        s3db = current.s3db
+        ltable = s3db.hrm_course_certificate
+        exists = db(ltable.course_id == course_id).select(ltable.id,
+                                                          limitby = (0, 1)
+                                                          )
+        if not exists:
+            name = form_vars.get("name")
+            if not name:
+                table = s3db.hrm_course
+                name = db(table.id == course_id).select(table.name,
+                                                        limitby = (0, 1)
+                                                        ).first().name
+            ctable = s3db.hrm_certificate
+            certificate = db(ctable.name == name).select(ctable.id,
+                                                         limitby = (0, 1)
+                                                         ).first()
+            if certificate:
+                certificate_id = certificate.id
+            else:
+                # @ToDo: Setting to decide whether certificate should be restricted to Org
+                certificate_id = ctable.insert(name = name)
+
+            ltable.insert(course_id = course_id,
+                          certificate_id = certificate_id,
+                          )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def hrm_certification_onaccept(record):
         """
             Ensure that Skills are Populated from Certifications
@@ -3262,13 +3325,13 @@ class S3HRSkillModel(S3Model):
 
         # Deletion and update have a different format
         try:
-            id = record.vars.id
+            certification_id = record.vars.id
         except:
-            id = record.id
+            certification_id = record.id
 
         db = current.db
         table = db.hrm_certification
-        data = table(table.id == id)
+        data = table(table.id == certification_id)
 
         try:
             if data.deleted:
@@ -3283,7 +3346,8 @@ class S3HRSkillModel(S3Model):
         cstable = db.hrm_certificate_skill
 
         # Drop all existing competencies which came from certification
-        # - this is a lot easier than selective deletion.
+        # - this is a lot easier than selective deletion
+        # @ToDo: Avoid this method as it will break Inline Component Updates if we ever use those
         query = (ctable.person_id == person_id) & \
                 (ctable.from_certification == True)
         db(query).delete()
@@ -3379,7 +3443,6 @@ class S3HRSkillModel(S3Model):
     def hrm_training_event_realm_entity(table, record):
         """ Set the training_event realm entity to the root Org of the Site """
 
-        training_event_id = record.id
         db = current.db
         stable = db.org_site
         query = (stable.site_id == record.site_id)
@@ -3449,41 +3512,43 @@ def hrm_training_onaccept(form):
 
     # Deletion and update have a different format
     try:
-        _id = form.vars.id
+        training_id = form.vars.id
         delete = False
     except:
-        _id = form.id
+        training_id = form.id
         delete = True
 
     # Get the full record
     db = current.db
     table = db.hrm_training
-    record = db(table.id == _id).select(table.id,
-                                        table.person_id,
-                                        table.course_id,
-                                        table.date,
-                                        table.hours,
-                                        table.grade,
-                                        table.grade_details,
-                                        table.deleted_fk,
-                                        limitby=(0, 1)).first()
+    record = db(table.id == training_id).select(table.id,
+                                                table.person_id,
+                                                table.course_id,
+                                                table.date,
+                                                table.hours,
+                                                table.grade,
+                                                table.grade_details,
+                                                table.deleted_fk,
+                                                limitby=(0, 1)).first()
 
     if delete:
         deleted_fks = json.loads(record.deleted_fk)
+        course_id = deleted_fks["course_id"]
         person_id = deleted_fks["person_id"]
     else:
+        course_id = record.course_id
         person_id = record.person_id
 
     s3db = current.s3db
+    course_table = db.hrm_course
     settings = current.deployment_settings
 
     course_pass_marks = settings.get_hrm_course_pass_marks()
     if course_pass_marks and not record.grade and record.grade_details:
         # Provide a Pass/Fail rating based on the Course's Pass Mark
-        ctable = db.hrm_course
-        course = db(ctable.id == record.course_id).select(ctable.pass_mark,
-                                                          limitby=(0, 1)
-                                                          ).first()
+        course = db(course_table.id == course_id).select(course_table.pass_mark,
+                                                         limitby=(0, 1)
+                                                         ).first()
         if course:
             if record.grade_details >= course.pass_mark:
                 # Pass
@@ -3504,7 +3569,7 @@ def hrm_training_onaccept(form):
         if vol and vol.type == 2:
             # Update Hours
             ptable = s3db.hrm_programme_hours
-            query = (ptable.training_id == _id)
+            query = (ptable.training_id == training_id)
             if delete:
                 resource = s3db.resource("hrm_programme_hours", filter=query)
                 # Automatically propagates to Active Status
@@ -3522,55 +3587,76 @@ def hrm_training_onaccept(form):
                     if date != exists.date or \
                        hours != exists.hours:
                         db(query).update(date=date, hours=hours)
-                        _id = exists.id
+                        ph_id = exists.id
                     else:
                         # Nothing to propagate
-                        _id = None
+                        ph_id = None
                 else:
-                    _id = ptable.insert(training_id = _id,
-                                        person_id = person_id,
-                                        date = date,
-                                        hours = hours,
-                                        training = True)
-                if _id:
+                    ph_id = ptable.insert(training_id = training_id,
+                                          person_id = person_id,
+                                          date = date,
+                                          hours = hours,
+                                          training = True)
+                if ph_id:
                     # Propagate to Active Status
                     form = Storage()
                     form.vars = Storage()
-                    form.vars.id = _id
+                    form.vars.id = ph_id
                     hrm_programme_hours_onaccept(form)
 
     # Update Certifications
     ctable = db.hrm_certification
-    cctable = db.hrm_course_certificate
-    _ctable = db.hrm_certificate
+    ltable = db.hrm_course_certificate
 
+    # Old: Breaks Inline Component Updates since record_id changes
     # Drop all existing certifications which came from trainings
     # - this is a lot easier than selective deletion.
-    query = (ctable.person_id == person_id) & \
-            (ctable.from_training == True)
-    db(query).delete()
 
-    # Figure out which certifications we're _supposed_ to have.
-    query = (table.person_id == person_id) & \
-            (table.course_id == cctable.course_id) & \
-            (cctable.certificate_id == _ctable.id)
-    trainings = db(query).select(_ctable.id)
-
-    # Add these certifications back in.
-    hrm_certification_onaccept = s3db.hrm_certification_onaccept
-    form = Storage()
-    form.vars = Storage()
-    form_vars = form.vars
-    for training in trainings:
-        _id = ctable.update_or_insert(
-                person_id = person_id,
-                certificate_id = training.id,
-                comments = "Added by training",
-                from_training = True
-                )
-        # Propagate to Skills
-        form_vars.id = _id
-        hrm_certification_onaccept(form)
+    if delete:
+        # Remove certifications if provided by this training and no other
+        # training led to it
+        query = (ctable.training_id == training_id) & \
+                (ctable.deleted == False)
+        certifications = db(query).select(ctable.id,
+                                          ctable.certificate_id)
+        for certification in certifications:
+            query = (ltable.certificate_id == certification.certificate_id) & \
+                    (ltable.deleted == False) & \
+                    (ltable.course_id == table.course_id) & \
+                    (table.deleted == False)
+            trainings = db(query).select(table.id,
+                                         table.date,
+                                         limitby = (0, 1),
+                                         orderby = "date desc",
+                                         )
+            if trainings:
+                # Update the training_id
+                certification.update_record(training_id = trainings.first().id)
+            else:
+                # Remove the certification
+                query = (ctable.id == certification.id)
+                resource = s3db.resource("hrm_certification", filter=query)
+                # Automatically propagates to Skills
+                resource.delete()
+    else:
+        # Which certificates does this course give?
+        query = (ltable.course_id == course_id) & \
+                (ltable.deleted == False)
+        certificates = db(query).select(ltable.certificate_id)
+        # Add any missing certifications
+        hrm_certification_onaccept = s3db.hrm_certification_onaccept
+        for certificate in certificates:
+            certification_id = ctable.update_or_insert(
+                    person_id = person_id,
+                    certificate_id = certificate.certificate_id,
+                    training_id = training_id,
+                    comments = "Added by training",
+                    )
+            # Propagate to Skills
+            form = Storage()
+            form.vars = Storage()
+            form.vars.id = certification_id
+            hrm_certification_onaccept(form)
 
 # =============================================================================
 class S3HRAppraisalModel(S3Model):
@@ -4924,13 +5010,15 @@ class hrm_TrainingEventRepresent(S3Represent):
                                                 lookup = "hrm_training_event")
 
     # -------------------------------------------------------------------------
-    def lookup_rows(self, key, values, fields=[]):
+    def lookup_rows(self, key, values, fields=[], pe_id=False):
         """
             Custom rows lookup
 
             @param key: the key Field
             @param values: the values
             @param fields: unused (retained for API compatibility)
+            @param pe_id: whether to include pe_id in the output rows
+                          (True when called from pr_PersonEntityRepresent)
         """
 
         s3db = current.s3db
@@ -4947,13 +5035,18 @@ class hrm_TrainingEventRepresent(S3Represent):
         else:
             query = key.belongs(values)
 
-        rows = current.db(query).select(etable.id,
-                                        etable.start_date,
-                                        etable.instructor,
-                                        etable.person_id,
-                                        ctable.name,
-                                        ctable.code,
-                                        stable.name,
+        fields = [etable.id,
+                  etable.start_date,
+                  etable.instructor,
+                  etable.person_id,
+                  ctable.name,
+                  ctable.code,
+                  stable.name,
+                  ]
+        if pe_id:
+            fields.insert(0, etable.pe_id)
+
+        rows = current.db(query).select(*fields,
                                         left = left)
 
         instructors = current.deployment_settings.get_hrm_training_instructors()
@@ -5325,31 +5418,31 @@ def hrm_compose():
 
     if "human_resource.id" in req_vars:
         fieldname = "human_resource.id"
-        id = req_vars.get(fieldname)
+        record_id = req_vars.get(fieldname)
         table = s3db.pr_person
         htable = s3db.hrm_human_resource
-        query = (htable.id == id) & \
+        query = (htable.id == record_id) & \
                 (htable.person_id == table.id)
         title = T("Send a message to this person")
         # URL to redirect to after message sent
         url = URL(f="compose",
-                  vars={fieldname: id})
+                  vars={fieldname: record_id})
     elif "group_id" in req_vars:
-        id = req_vars.group_id
         fieldname = "group_id"
+        record_id = req_vars.group_id
         table = s3db.pr_group
-        query = (table.id == id)
+        query = (table.id == record_id)
         title = T("Send a message to this team")
         # URL to redirect to after message sent
         url = URL(f="compose",
-                  vars={fieldname: id})
+                  vars={fieldname: record_id})
     elif "training_event.id" in req_vars:
         fieldname = "training_event.id"
-        id = req_vars.get(fieldname)
+        record_id = req_vars.get(fieldname)
         pe_id = req_vars.pe_id
         title = T("Message Participants")
         # URL to redirect to after message sent
-        url = URL(f="training_event", args=id)
+        url = URL(f="training_event", args=record_id)
 
     else:
         current.session.error = T("Record not found")
@@ -6075,7 +6168,8 @@ def hrm_rheader(r, tabs=[], profile=False):
                 (T("Participants"), "participant"),
                 ]
         rheader_tabs = s3_rheader_tabs(r, tabs)
-        if current.deployment_settings.has_module("msg") and \
+        settings = current.deployment_settings
+        if settings.has_module("msg") and \
                current.auth.permission.has_permission("update", c="hrm", f="compose"):
             # @ToDo: Be able to see who has been messaged, whether messages bounced, receive confirmation responses, etc
             action = A(T("Message Participants"),
@@ -6088,12 +6182,37 @@ def hrm_rheader(r, tabs=[], profile=False):
                        )
         else:
             action = None
-        rheader = DIV(TABLE(TR(TH("%s: " % table.course_id.label),
+        instructors = settings.get_hrm_training_instructors()
+        if instructors == "internal":
+            instructors = TR(TH("%s: " % table.person_id.label),
+                             table.person_id.represent(record.person_id))
+        elif instructors == "external":
+            instructors = TR(TH("%s: " % table.instructor.label),
+                             table.instructor.represent(record.instructor))
+        elif instructors == "both":
+            instructors = TAG[""](TR(TH("%s: " % table.person_id.label),
+                                     table.person_id.represent(record.person_id)),
+                                  TR(TH("%s: " % table.instructor.label),
+                                     table.instructor.represent(record.instructor)))
+        elif instructors == "multiple":
+            itable = current.s3db.hrm_training_event_instructor
+            pfield = itable.person_id
+            instructors = current.db(itable.training_event_id == r.id).select(pfield)
+            represent = pfield.represent
+            instructors = ",".join([represent(i.person_id) for i in instructors])
+            instructors = TR(TH("%s: " % T("Instructors")),
+                             instructors)
+        else:
+            instructors = ""
+        rheader = DIV(TABLE(TR(TH("%s: " % table.organisation_id.label),
+                               table.organisation_id.represent(record.organisation_id)),
+                            TR(TH("%s: " % table.course_id.label),
                                table.course_id.represent(record.course_id)),
                             TR(TH("%s: " % table.site_id.label),
                                table.site_id.represent(record.site_id)),
                             TR(TH("%s: " % table.start_date.label),
                                table.start_date.represent(record.start_date)),
+                            instructors,
                             TR(TH(action, _colspan=2)),
                             ),
                       rheader_tabs)
@@ -7385,7 +7504,7 @@ def hrm_training_event_controller():
     s3 = current.response.s3
 
     def prep(r):
-        if r.component and \
+        if r.component_name == "participant" and \
            (r.interactive or \
             r.representation in ("aadata", "pdf", "xls")):
 
@@ -7423,11 +7542,18 @@ def hrm_training_event_controller():
             field.default = record.hours
 
             # Suitable list_fields
+            settings = current.deployment_settings
             list_fields = ["person_id",
-                           (T("Job Title"), "job_title"),
-                           (current.messages.ORGANISATION, "organisation"),
-                           "grade",
                            ]
+            if settings.get_hrm_use_job_titles():
+                list_fields.append((T("Job Title"), "job_title"))                       # Field.Method
+            list_fields += [(settings.get_hrm_organisation_label(), "organisation"),    # Field.Method
+                            "grade",
+                            ]
+            if settings.get_hrm_course_pass_marks():
+                list_fields.append("grade_details")
+            if settings.get_hrm_use_certificates():
+                list_fields.append("certification.number")
 
             current.s3db.configure("hrm_training",
                                    list_fields = list_fields

@@ -380,11 +380,6 @@ def config(settings):
     # Uncomment to Disable the Postcode selector in the LocationSelector
     #settings.gis.postcode_selector = False
 
-    # Sync
-    # Uncomment to add roles which can register repos with accept_push = True
-    # @ToDo: Use approval framework instead
-    #settings.sync.roles_which_can_register_repos_with_accept_push = ("SYNC",)
-
     # Increase these if having scalability issues or slow connections
     #settings.ui.autocomplete_delay = 800
     #settings.ui.autocomplete_min_chars = 2
@@ -651,8 +646,8 @@ def config(settings):
     #settings.hrm.compose_button = False
     # Uncomment to allow HR records to be deletable rather than just marking them as obsolete
     #settings.hrm.deletable = True
-    # Uncomment to filter certificates by (root) Organisation & hence not allow Certificates from other orgs to be added to a profile (except by Admin)
-    #settings.hrm.filter_certificates = True
+    # Uncomment to hide Job Titles
+    #settings.hrm.use_job_titles = False
     # Uncomment to allow HRs to have multiple Job Titles
     #settings.hrm.multiple_job_titles = True
     # Uncomment to have each root Org use a different Job Title Catalog
@@ -690,6 +685,10 @@ def config(settings):
     #settings.hrm.use_awards = False
     # Uncomment to disable the use of HR Certificates
     #settings.hrm.use_certificates = False
+    # Uncomment to filter certificates by (root) Organisation & hence not allow Certificates from other orgs to be added to a profile (except by Admin)
+    #settings.hrm.filter_certificates = True
+    # Uncomment to auto-create certificates for courses
+    #settings.hrm.create_certificates_from_courses = True
     # Uncomment to enable the use of Staff/Volunteer IDs
     #settings.hrm.use_code = True
     # Uncomment to disable the use of HR Credentials

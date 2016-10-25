@@ -2315,15 +2315,6 @@ class S3Config(Storage):
 
         return self.sync.get("mcb_domain_identifiers", {})
 
-    def get_sync_roles_which_can_register_repos_with_accept_push(self):
-        """
-            A list of roles (in addition to ADMIN) which can register
-            Sync Repos with accept_push = True
-
-            @ToDo: Do this via Approval instead
-        """
-        return self.sync.get("roles_which_can_register_repos_with_accept_push", [])
-
     def get_sync_upload_filename(self):
         """
             Filename for upload via FTP Sync
@@ -3112,13 +3103,6 @@ class S3Config(Storage):
         """
         return self.hrm.get("deletable", True)
 
-    def get_hrm_filter_certificates(self):
-        """
-            If set to True then Certificates are filtered by (Root) Organisation
-            & hence certificates from other Organisations cannot be added to an HR's profile (except by Admins)
-        """
-        return self.hrm.get("filter_certificates", False)
-
     def get_hrm_multiple_job_titles(self):
         """
             If set to True then HRs can have multiple Job Titles
@@ -3253,6 +3237,28 @@ class S3Config(Storage):
         """
         return self.__lazy("hrm", "use_certificates", default=True)
 
+    def get_hrm_create_certificates_from_courses(self):
+        """
+            If set to True then Certificates are created automatically for each Course
+        """
+        return self.hrm.get("create_certificates_from_courses", False)
+
+    def get_hrm_filter_certificates(self):
+        """
+            If set to True then Certificates are filtered by (Root) Organisation
+            & hence certificates from other Organisations cannot be added to an HR's profile (except by Admins)
+        """
+        return self.hrm.get("filter_certificates", False)
+
+    def get_hrm_use_address(self):
+        """
+            Whether Human Resources should show address tab
+        """
+        use_address = self.hrm.get("use_address", None)
+        # Fall back to PR setting if not specified
+        if use_address is None:
+            return self.get_pr_use_address()
+
     def get_hrm_use_code(self):
         """
             Whether Human Resources should use Staff/Volunteer IDs,
@@ -3287,14 +3293,11 @@ class S3Config(Storage):
         """
         return self.hrm.get("use_id", True)
 
-    def get_hrm_use_address(self):
+    def get_hrm_use_job_titles(self):
         """
-            Whether Human Resources should show address tab
+            Whether Human Resources should show Job Titles
         """
-        use_address = self.hrm.get("use_address", None)
-        # Fall back to PR setting if not specified
-        if use_address is None:
-            return self.get_pr_use_address()
+        return self.hrm.get("use_job_titles", True)
 
     def get_hrm_use_skills(self):
         """
@@ -3316,9 +3319,12 @@ class S3Config(Storage):
 
     def get_hrm_training_instructors(self):
         """
-            Whether to track "internal" training instructors (=persons
-            from the registry), or "external" (=just names), or "both",
-            ...or None (=don't track instructors at all)
+            How training instructors are managed:
+                None: Don't track instructors at all
+                internal: Use persons from the registry
+                external: Just use free-text Names
+                both: Use both fields
+                multiple: Use multiple persons from the registry
         """
         return self.__lazy("hrm", "training_instructors", "external")
 
@@ -3569,7 +3575,8 @@ class S3Config(Storage):
     #
     def get_mobile_forms(self):
         """
-            Configure mobile forms, a list of items
+            Configure mobile forms - a list of items, or a callable returning
+            a list of items.
 
             Item formats:
                 "tablename"
@@ -3584,12 +3591,9 @@ class S3Config(Storage):
                  }
 
             Example:
-                settings.xforms.resources = [("Request", "req_req")]
-
-            @todo: add "restrict" option to restrict forms to certain user
-                   roles (analogous to restrict-option in menu items)
+                settings.mobile.forms = [("Request", "req_req")]
         """
-        return self.mobile.get("forms")
+        return self.__lazy("mobile", "forms", [])
 
     # -------------------------------------------------------------------------
     # Organisations
