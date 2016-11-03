@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 
-from gluon import current, URL
+from gluon import current, URL, SPAN
 from gluon.storage import Storage
 
 def config(settings):
@@ -125,12 +125,26 @@ def config(settings):
             field.comment = None
 
             # Custom form
-            from s3 import S3SQLCustomForm
+            from s3 import S3SQLCustomForm, \
+                           S3SQLInlineComponent, \
+                           S3SQLInlineLink
             crud_form = S3SQLCustomForm("person_id",
-                                        "date",
-                                        "organisation_id",
-                                        "human_resource_id",
-                                        "status_id",
+                                        S3SQLInlineLink("project",
+                                                        field = "project_id",
+                                                        multiple = False,
+                                                        ),
+                                        S3SQLInlineComponent("beneficiary_data",
+                                                             fields = ["beneficiary_type_id",
+                                                                       "female",
+                                                                       "male",
+                                                                       "other",
+                                                                       "in_school",
+                                                                       "employed",
+                                                                       ],
+                                                             label = T("Household Details"),
+                                                             explicit_add = T("Add Household Details"),
+                                                             ),
+                                        "comments",
                                         )
 
             # Filter staff by organisation
@@ -155,6 +169,16 @@ def config(settings):
                        )
 
     settings.customise_dvr_case_resource = customise_dvr_case_resource
+
+    # -------------------------------------------------------------------------
+    def customise_dvr_economy_resource(r, tablename):
+
+        table = current.s3db.dvr_economy
+        field = table.monthly_costs
+
+        field.label = current.T("Monthly Rent Expense")
+
+    settings.customise_dvr_economy_resource = customise_dvr_economy_resource
 
     # =========================================================================
     # Person Registry
@@ -293,6 +317,15 @@ def config(settings):
 })'''
                 s3.jquery_ready.append(script)
 
+                # Visibility and tooltip for consent flag
+                field = ctable.disclosure_consent
+                field.readable = field.writable = True
+                field.comment = DIV(_class="tooltip",
+                                    _title="%s|%s" % (T("Consenting to Data Disclosure"),
+                                                      T("Is the client consenting to disclosure of their data towards partner organisations and authorities?"),
+                                                      ),
+                                    )
+
                 # Custom label for registered-flag
                 dtable = s3db.dvr_case_details
                 field = dtable.registered
@@ -315,8 +348,9 @@ def config(settings):
 
                     # Custom CRUD form
                     crud_form = S3SQLCustomForm(
-                                "dvr_case.date",
                                 "dvr_case.organisation_id",
+                                "dvr_case.date",
+                                "dvr_case.status_id",
                                 "dvr_case.human_resource_id",
                                 "first_name",
                                 #"middle_name",
@@ -324,6 +358,7 @@ def config(settings):
                                 "person_details.nationality",
                                 "date_of_birth",
                                 "gender",
+                                "person_details.marital_status",
                                 "case_details.registered",
                                 (T("Individual ID Number"), "pe_label"),
                                 S3SQLInlineComponent(
@@ -359,6 +394,7 @@ def config(settings):
                                         multiple = False,
                                         name = "phone",
                                         ),
+                                "dvr_case.disclosure_consent",
                                 "dvr_case.comments",
                                 )
 
@@ -559,6 +595,21 @@ def config(settings):
     settings.project.codes = True
     settings.project.sectors = False
     settings.project.assign_staff_tab = False
+
+    # -------------------------------------------------------------------------
+    def customise_project_case_project_resource(r, tablename):
+
+        table = current.s3db.project_case_project
+        field = table.project_id
+
+        from s3 import IS_ONE_OF, S3Represent
+        represent = S3Represent(lookup="project_project", fields=["code"])
+        requires = IS_ONE_OF(current.db, "project_project.id", represent)
+
+        field.represent = represent
+        field.requires = requires
+
+    settings.customise_project_case_project_resource = customise_project_case_project_resource
 
     # -------------------------------------------------------------------------
     def customise_project_project_resource(r, tablename):
@@ -839,30 +890,49 @@ def stl_dvr_rheader(r, tabs=[]):
 
             if not tabs:
                 tabs = [(T("Basic Details"), None),
-                        (T("Case Information"), "dvr_case"),
+                        (T("Case Management"), "dvr_case"),
+                        (T("Economy"), "economy"),
                         (T("Contact"), "contacts"),
                         ]
 
                 case = resource.select(["family_id.value",
                                         "dvr_case.organisation_id",
+                                        "dvr_case.disclosure_consent",
+                                        "dvr_case.case_project.project_id",
                                         ],
                                         represent = True,
                                         raw_data = True,
                                         ).rows
 
-                if case:
-                    case = case[0]
-                    family_id = lambda row: case["pr_family_id_person_tag.value"]
-                    organisation_id = lambda row: case["dvr_case.organisation_id"]
-                else:
+                if not case:
                     return None
+
+                case = case[0]
+
+                family_id = lambda row: case["pr_family_id_person_tag.value"]
+                organisation_id = lambda row: case["dvr_case.organisation_id"]
+                project_id = lambda row: case["project_case_project.project_id"]
                 name = lambda row: s3_fullname(row)
 
+                raw = case._row
+
+                # Render disclosure consent flag as colored label
+                consent = raw["dvr_case.disclosure_consent"]
+                labels = {"Y": "success", "N/A": "warning", "N": "alert"}
+                def disclosure(row):
+                    _class = labels.get(consent, "secondary")
+                    return SPAN(case["dvr_case.disclosure_consent"],
+                                _class = "%s label" % _class,
+                                )
+
                 rheader_fields = [[(T("ID"), "pe_label"),
-                                   (T("Family ID"), family_id),
+                                   (T("Organisation"), organisation_id),
+                                   (T("Data Disclosure"), disclosure),
+                                   ],
+                                  [(T("Family ID"), family_id),
+                                   (T("Project Code"), project_id),
                                    ],
                                   [(T("Name"), name),
-                                   (T("Organisation"), organisation_id),
                                    ],
                                   ["date_of_birth",
                                    ],

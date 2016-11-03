@@ -257,6 +257,12 @@ class DVRCaseModel(S3Model):
                                  "HOUSEHOLD": T("Household"),
                                  }
 
+        # Consent flag options
+        consent_opts = {"N/A": T("n/a"),
+                        "Y": T("yes"),
+                        "N": T("no"),
+                        }
+
         SITE = settings.get_org_site_label()
         site_represent = self.org_SiteRepresent(show_link=False)
 
@@ -334,6 +340,13 @@ class DVRCaseModel(S3Model):
                                                 sort = False,
                                                 zero = None,
                                                 ),
+                           ),
+                     Field("disclosure_consent", "string", length=8,
+                           label = T("Consenting to Data Disclosure"),
+                           requires = IS_EMPTY_OR(IS_IN_SET(consent_opts)),
+                           represent = S3Represent(options=consent_opts),
+                           readable = False,
+                           writable = False,
                            ),
                      Field("archived", "boolean",
                            default = False,
@@ -530,6 +543,13 @@ class DVRCaseModel(S3Model):
                                          "joinby": "case_id",
                                          "key": "need_id",
                                          },
+                            project_project = {"link": "project_case_project",
+                                               "joinby": "case_id",
+                                               "key": "project_id",
+                                               "multiple": False,
+                                               "actuate": "link",
+                                               "autodelete": False,
+                                               },
                             )
 
         # Report options FIXME
@@ -1934,6 +1954,7 @@ class DVRCaseBeneficiaryModel(S3Model):
         # Beneficiary data
         #
         show_third_gender = not current.deployment_settings.get_pr_hide_third_gender()
+        int_represent = lambda v: str(v) if v is not None else "-"
 
         tablename = "dvr_beneficiary_data"
         define_table(tablename,
@@ -1950,30 +1971,36 @@ class DVRCaseBeneficiaryModel(S3Model):
                      Field("total", "integer",
                            label = T("Number of Beneficiaries"),
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
+                           represent = int_represent,
                            # Expose in templates when not using per-gender fields
                            readable = False,
                            writable = False,
                            ),
                      Field("female", "integer",
                            label = T("Number Female"),
+                           represent = int_represent,
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            ),
                      Field("male", "integer",
                            label = T("Number Male"),
+                           represent = int_represent,
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            ),
                      Field("other", "integer",
                            label = T("Number Other Gender"),
+                           represent = int_represent,
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            readable = show_third_gender,
                            writable = show_third_gender,
                            ),
                      Field("in_school", "integer",
                            label = T("Number in School"),
+                           represent = int_represent,
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            ),
                      Field("employed", "integer",
                            label = T("Number Employed"),
+                           represent = int_represent,
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                            ),
                      s3_comments(),
@@ -2193,13 +2220,13 @@ class DVRCaseEconomyInformationModel(S3Model):
         # CRUD Form
         crud_form = S3SQLCustomForm("housing_type_id",
                                     "monthly_costs",
+                                    "average_weekly_income",
+                                    "currency",
                                     S3SQLInlineLink("income_source",
                                                     field = "income_source_id",
                                                     label = T("Income Sources"),
                                                     cols = 3,
                                                     ),
-                                    "average_weekly_income",
-                                    "currency",
                                     "comments",
                                     )
 
@@ -2412,6 +2439,11 @@ class DVRCaseAllowanceModel(S3Model):
             else:
                 record_id = None
             if not record_id:
+                return
+
+            if current.response.s3.bulk and "status" not in form_vars:
+                # Import without status change won't affect last_seen_on,
+                # so we can skip this check for better performance
                 return
 
             # Get the person ID
@@ -4448,61 +4480,6 @@ class DVRRegisterCaseEvent(S3Method):
         return output
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def person_details(person):
-        """
-            Format the person details
-
-            @param person: the person record (Row)
-        """
-
-        T = current.T
-        settings = current.deployment_settings
-
-        name = s3_fullname(person)
-        dob = person.date_of_birth
-        if dob:
-            dob = S3DateTime.date_represent(dob)
-            details = "%s (%s %s)" % (name, T("Date of Birth"), dob)
-        else:
-            details = name
-
-        output = SPAN(details,
-                      _class = "person-details",
-                      )
-
-        if settings.get_dvr_event_registration_checkin_warning():
-
-            table = current.s3db.cr_shelter_registration
-            if table:
-                # Person counts as checked-out when checked-out
-                # somewhere and not checked-in somewhere else
-                query = (table.person_id == person.id) & \
-                        (table.deleted != True)
-                cnt = table.id.count()
-                status = table.registration_status
-                rows = current.db(query).select(status,
-                                                cnt,
-                                                groupby = status,
-                                                )
-                checked_in = checked_out = 0
-                for row in rows:
-                    s = row[status]
-                    if s == 2:
-                        checked_in = row[cnt]
-                    elif s == 3:
-                        checked_out = row[cnt]
-
-                if checked_out and not checked_in:
-                    output = TAG[""](output,
-                                     SPAN(ICON("hint"),
-                                          T("not checked-in!"),
-                                          _class = "check-in-warning",
-                                          ),
-                                     )
-        return output
-
-    # -------------------------------------------------------------------------
     # Common methods
     # -------------------------------------------------------------------------
     @classmethod
@@ -4646,6 +4623,61 @@ class DVRRegisterCaseEvent(S3Method):
                 person = rows[0]
 
         return person
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def person_details(person):
+        """
+            Format the person details
+
+            @param person: the person record (Row)
+        """
+
+        T = current.T
+        settings = current.deployment_settings
+
+        name = s3_fullname(person)
+        dob = person.date_of_birth
+        if dob:
+            dob = S3DateTime.date_represent(dob)
+            details = "%s (%s %s)" % (name, T("Date of Birth"), dob)
+        else:
+            details = name
+
+        output = SPAN(details,
+                      _class = "person-details",
+                      )
+
+        if settings.get_dvr_event_registration_checkin_warning():
+
+            table = current.s3db.cr_shelter_registration
+            if table:
+                # Person counts as checked-out when checked-out
+                # somewhere and not checked-in somewhere else
+                query = (table.person_id == person.id) & \
+                        (table.deleted != True)
+                cnt = table.id.count()
+                status = table.registration_status
+                rows = current.db(query).select(status,
+                                                cnt,
+                                                groupby = status,
+                                                )
+                checked_in = checked_out = 0
+                for row in rows:
+                    s = row[status]
+                    if s == 2:
+                        checked_in = row[cnt]
+                    elif s == 3:
+                        checked_out = row[cnt]
+
+                if checked_out and not checked_in:
+                    output = TAG[""](output,
+                                     SPAN(ICON("hint"),
+                                          T("not checked-in!"),
+                                          _class = "check-in-warning",
+                                          ),
+                                     )
+        return output
 
     # -------------------------------------------------------------------------
     def get_blocked_events(self, person_id, type_id=None):
@@ -4927,15 +4959,10 @@ class DVRRegisterPayment(DVRRegisterCaseEvent):
 
             check = data.get("c")
             if check:
-                name = s3_fullname(person)
-                dob = person.date_of_birth
-                if dob:
-                    dob = S3DateTime.date_represent(dob)
-                    person_data = "%s (%s %s)" % (name, T("Date of Birth"), dob)
-                else:
-                    person_data = name
+                # Person details
+                person_details = self.person_details(person)
 
-                output["p"] = s3_str(person_data)
+                output["p"] = s3_str(person_details)
                 output["l"] = person.pe_label
 
                 info = flag_info["info"]
