@@ -51,22 +51,32 @@ class S3OptionsMenu(default.S3OptionsMenu):
         ADMIN = current.session.s3.system_roles.ADMIN
 
         return M(c=("dvr", "project"))(
-                    M("Cases", c=("dvr", "pr"), f="person")(
+                    M("Current Cases", c=("dvr", "pr"), f="person",
+                      vars = {"closed": "0"})(
                         M("Create", m="create"),
-                        #M("Archived Cases", vars={"archived": "1"}),
-                    ),
+                        M("All Cases", vars = {}),
+                        ),
                     #M("Case Types", f="case_type")(
                     #    M("Create", m="create"),
                     #),
                     #M("Need Types", f="need")(
                     #   M("Create", m="create"),
                     #),
+                    M("Archive", link=False)(
+                        M("Closed Cases", f="person",
+                          vars={"closed": "1"},
+                          ),
+                        M("Invalid Cases", f="person",
+                          vars={"archived": "1"},
+                          ),
+                        ),
                     M("Administration", c="project", link=False,
                       restrict = [ADMIN])(
                         M("Projects", c="project", f="project"),
                         M("Beneficiary Types", c="dvr", f="beneficiary_type"),
                         M("Housing Types", c="dvr", f="housing_type"),
                         M("Income Sources", c="dvr", f="income_source"),
+                        M("SNF Justifications", c="dvr", f="case_funding_reason"),
                     ),
                 )
 

@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 
-from gluon import current, URL, SPAN
+from gluon import current, H3, SPAN, URL
 from gluon.storage import Storage
 
 def config(settings):
@@ -117,6 +117,11 @@ def config(settings):
 
         if r.component_name == "dvr_case":
 
+            from s3 import S3SQLCustomForm, \
+                           S3SQLInlineComponent, \
+                           S3SQLInlineLink, \
+                           s3_comments_widget
+
             table = r.component.table
             field = table.human_resource_id
             field.label = T("Person Responsible")
@@ -124,10 +129,17 @@ def config(settings):
             field.widget = None
             field.comment = None
 
+            ftable = current.s3db.dvr_case_funding
+            field = ftable.funding_required
+            field.label = T("Need for SNF")
+            field = ftable.reason_id
+            field.label = T("Justification for SNF")
+            field.comment = None
+            field = ftable.proposal
+            field.label = T("Proposed Assistance for SNF")
+            field.widget = s3_comments_widget
+
             # Custom form
-            from s3 import S3SQLCustomForm, \
-                           S3SQLInlineComponent, \
-                           S3SQLInlineLink
             crud_form = S3SQLCustomForm("person_id",
                                         S3SQLInlineLink("project",
                                                         field = "project_id",
@@ -144,6 +156,9 @@ def config(settings):
                                                              label = T("Household Details"),
                                                              explicit_add = T("Add Household Details"),
                                                              ),
+                                        "case_funding.funding_required",
+                                        "case_funding.reason_id",
+                                        "case_funding.proposal",
                                         "comments",
                                         )
 
@@ -179,6 +194,50 @@ def config(settings):
         field.label = current.T("Monthly Rent Expense")
 
     settings.customise_dvr_economy_resource = customise_dvr_economy_resource
+
+    # -------------------------------------------------------------------------
+    def customise_dvr_case_funding_reason_resource(r, tablename):
+
+        T = current.T
+
+        table = current.s3db.dvr_case_funding_reason
+
+        field = table.name
+        field.label = T("SNF Justification")
+
+        crud_strings = current.response.s3.crud_strings
+
+        # CRUD Strings
+        crud_strings["dvr_case_funding_reason"] = Storage(
+            label_create = T("Create SNF Justification"),
+            title_display = T("SNF Justification"),
+            title_list = T("SNF Justifications"),
+            title_update = T("Edit SNF Justification"),
+            label_list_button = T("List SNF Justifications"),
+            label_delete_button = T("Delete SNF Justification"),
+            msg_record_created = T("SNF Justification created"),
+            msg_record_modified = T("SNF Justification updated"),
+            msg_record_deleted = T("SNF Justification deleted"),
+            msg_list_empty = T("No SNF Justifications currently defined"),
+        )
+
+
+    settings.customise_dvr_case_funding_reason_resource = customise_dvr_case_funding_reason_resource
+
+    # -------------------------------------------------------------------------
+    def customise_dvr_case_funding_resource(r, tablename):
+
+        T = current.T
+
+        table = current.s3db.dvr_case_funding
+        field = table.funding_required
+        field.label = T("Need for SNF")
+        field = table.reason_id
+        field.label = T("Justification for SNF")
+        field = table.proposal
+        field.label = T("Proposed Assistance for SNF")
+
+    settings.customise_dvr_case_funding_resource = customise_dvr_case_funding_resource
 
     # =========================================================================
     # Person Registry
@@ -273,6 +332,11 @@ def config(settings):
                 result = True
 
             controller = r.controller
+
+            archived = r.get_vars.get("archived")
+            if archived in ("1", "true", "yes"):
+                crud_strings = s3.crud_strings["pr_person"]
+                crud_strings["title_list"] = T("Invalid Cases")
 
             if controller == "dvr" and not r.component:
 
@@ -396,6 +460,7 @@ def config(settings):
                                         ),
                                 "dvr_case.disclosure_consent",
                                 "dvr_case.comments",
+                                (T("Invalid"), "dvr_case.archived"),
                                 )
 
                     resource.configure(crud_form = crud_form,
@@ -409,12 +474,18 @@ def config(settings):
 
                     # Extend text filter with Family ID and case comments
                     filter_widgets = resource.get_config("filter_widgets")
+                    extend_text_filter = True
                     for fw in filter_widgets:
-                        if isinstance(fw, S3TextFilter):
+                        if fw.field == "dvr_case.status_id":
+                            if fw.field == "dvr_case.status_id" and "closed" in r.get_vars:
+                                fw.opts.default = None
+                                fw.opts.hidden = True
+                        if extend_text_filter and isinstance(fw, S3TextFilter):
                             fw.field.extend(("family_id.value",
                                              "dvr_case.comments",
                                              ))
-                            break
+                            fw.opts.comment = T("You can search by name, ID, family ID and comments")
+                            extend_text_filter = False
 
                     # Add filter for date of birth
                     dob_filter = S3DateFilter("date_of_birth",
@@ -888,6 +959,11 @@ def stl_dvr_rheader(r, tabs=[]):
 
         if tablename == "pr_person":
 
+            # "Invalid Case" warning
+            hint = lambda record: H3(T("Invalid Case"),
+                                     _class="alert label",
+                                     )
+
             if not tabs:
                 tabs = [(T("Basic Details"), None),
                         (T("Case Management"), "dvr_case"),
@@ -896,6 +972,8 @@ def stl_dvr_rheader(r, tabs=[]):
                         ]
 
                 case = resource.select(["family_id.value",
+                                        "dvr_case.status_id",
+                                        "dvr_case.archived",
                                         "dvr_case.organisation_id",
                                         "dvr_case.disclosure_consent",
                                         "dvr_case.case_project.project_id",
@@ -909,6 +987,8 @@ def stl_dvr_rheader(r, tabs=[]):
 
                 case = case[0]
 
+                case_status = lambda row: case["dvr_case.status_id"]
+                archived = case["_row"]["dvr_case.archived"]
                 family_id = lambda row: case["pr_family_id_person_tag.value"]
                 organisation_id = lambda row: case["dvr_case.organisation_id"]
                 project_id = lambda row: case["project_case_project.project_id"]
@@ -926,17 +1006,21 @@ def stl_dvr_rheader(r, tabs=[]):
                                 )
 
                 rheader_fields = [[(T("ID"), "pe_label"),
-                                   (T("Organisation"), organisation_id),
+                                   (T("Case Status"), case_status),
                                    (T("Data Disclosure"), disclosure),
                                    ],
                                   [(T("Family ID"), family_id),
-                                   (T("Project Code"), project_id),
+                                   (T("Organisation"), organisation_id),
                                    ],
                                   [(T("Name"), name),
+                                   (T("Project Code"), project_id),
                                    ],
                                   ["date_of_birth",
                                    ],
                                   ]
+
+                if archived:
+                    rheader_fields.insert(0, [(None, hint)])
 
         rheader = S3ResourceHeader(rheader_fields, tabs)(r,
                                                          table=resource.table,
