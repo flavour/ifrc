@@ -2452,6 +2452,7 @@ class S3OrganisationServiceModel(S3Model):
     """
 
     names = ("org_service",
+             "org_service_id",
              "org_service_organisation",
              "org_service_location",
              #"org_service_location_service",
@@ -2779,7 +2780,22 @@ class S3OrganisationServiceModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return {}
+        return {"org_service_id": service_id,
+                }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """ Safe defaults for names in case the module is disabled """
+
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False,
+                                )
+
+        return {"org_service_id": lambda name="service_id", **attr: \
+                                         dummy(name, **attr),
+                }
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3135,26 +3151,54 @@ class S3SiteModel(S3Model):
                        # Format for filter_widgets & imports
                        org_site_facility_type = "site_id",
 
+                       # Locations
+                       org_site_location = ({"name": "location",
+                                             "joinby": "site_id",
+                                            },
+                                            ),
+
+                       # Local Names
+                       org_site_name = {"name": "name",
+                                        "joinby": "site_id",
+                                        },
+
+                       # Status
+                       org_site_status = {"name": "status",
+                                          "joinby": "site_id",
+                                          "multiple": False,
+                                          },
+
+                       # Tags
+                       org_site_tag = {"name": "tag",
+                                       "joinby": "site_id",
+                                       },
+
+                       # Assets
+                       asset_asset = "site_id",
+
+                       # Documents
+                       doc_document = "site_id",
+                       doc_image = "site_id",
+
                        # Human Resources
                        # - direct component (suitable for Create/List)
                        hrm_human_resource = "site_id",
                        # - via link table (suitable for Assign)
                        hrm_human_resource_site = "site_id",
 
-                       # Documents
-                       doc_document = "site_id",
-                       doc_image = "site_id",
-
                        # Inventory
                        inv_inv_item = "site_id",
                        inv_recv = "site_id",
                        inv_send = "site_id",
 
-                       # Assets
-                       asset_asset = "site_id",
-
-                       # Procurement Plans
-                       proc_plan = "site_id",
+                       # Groups: Coalitions/Networks
+                       org_group = {"link": "org_site_org_group",
+                                    "joinby": "site_id",
+                                    "key": "group_id",
+                                    "actuate": "hide",
+                                    },
+                       # Format for InlineComponent/filter_widget
+                       org_site_org_group = "site_id",
 
                        # Needs
                        req_site_needs = (# with alias
@@ -3172,30 +3216,8 @@ class S3SiteModel(S3Model):
                        req_req = "site_id",
                        req_commit = "site_id",
 
-                       # Status
-                       org_site_status = {"name": "status",
-                                          "joinby": "site_id",
-                                          "multiple": False,
-                                          },
-
-                       # Local Names
-                       org_site_name = {"name": "name",
-                                        "joinby": "site_id",
-                                        },
-
-                       # Tags
-                       org_site_tag = {"name": "tag",
-                                       "joinby": "site_id",
-                                       },
-
-                       # Groups: Coalitions/Networks
-                       org_group = {"link": "org_site_org_group",
-                                    "joinby": "site_id",
-                                    "key": "group_id",
-                                    "actuate": "hide",
-                                    },
-                       # Format for InlineComponent/filter_widget
-                       org_site_org_group = "site_id",
+                       # Procurement Plans
+                       proc_plan = "site_id",
                        )
 
         # Pass names back to global scope (s3.*)

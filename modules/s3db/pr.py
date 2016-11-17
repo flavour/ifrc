@@ -160,9 +160,7 @@ class S3PersonEntity(S3Model):
                            deploy_alert = T("Deployment Alert"),
                            dvi_body = T("Body"),
                            dvi_morgue = T("Morgue"),
-                           # If we want this, then pe_id needs adding to the
-                           # table & configuring as a super-entity
-                           #fire_station = T("Fire Station"),
+                           fire_station = T("Fire Station"),
                            hms_hospital = T("Hospital"),
                            hrm_training_event = T("Training Event"),
                            inv_warehouse = T("Warehouse"),
@@ -170,10 +168,11 @@ class S3PersonEntity(S3Model):
                            org_group = org_group_label,
                            org_facility = T("Facility"),
                            org_office = T("Office"),
-                           pr_person = T("Person"),
-                           pr_group = T("Group"),
                            po_area = T("Recovery Outreach Area"),
                            po_household = T("Household"),
+                           police_station = T("Police Station"),
+                           pr_person = T("Person"),
+                           pr_group = T("Group"),
                            )
 
         pr_pentity_represent = pr_PersonEntityRepresent()
@@ -1021,7 +1020,6 @@ class S3PersonModel(S3Model):
                             cr_shelter_registration_history = "person_id",
                             # Case Management (Disaster Victim Registry)
                             dvr_allowance = "person_id",
-                            dvr_beneficiary_data = "person_id",
                             dvr_case = {"name": "dvr_case",
                                         "joinby": "person_id",
                                         "multiple": False,
@@ -1043,6 +1041,9 @@ class S3PersonModel(S3Model):
                             dvr_economy = {"joinby": "person_id",
                                            "multiple": False,
                                            },
+                            dvr_household = {"joinby": "person_id",
+                                             "multiple": False,
+                                             },
                             dvr_note = {"name": "case_note",
                                         "joinby": "person_id",
                                         },
@@ -1458,38 +1459,91 @@ class S3PersonModel(S3Model):
         # Names could be in the wrong order
         # Multiple Names could be in a single field
         # Each name field could be split into words in a different order
-        # @ToDo: deployment_setting for stricter matching? (& not |)
+        # @ToDo: deployment_setting for fully loose matching?
+        # Single search term
+        # Value can be (part of) any of first_name, middle_name or last_name
         query = (FS("first_name").lower().like(value + "%")) | \
                 (FS("last_name").lower().like(value + "%"))
         if middle_name:
-            query != (FS("middle_name").lower().like(value + "%"))
+            query |= (FS("middle_name").lower().like(value + "%"))
         if " " in value:
+            # Two search terms
+            # Values can be (part of) any of first_name, middle_name or last_name
+            # but we must have a (partial) match on both terms
+            # We must have a (partial) match on both terms
             value1, value2 = value.split(" ", 1)
-            query |= (FS("first_name").lower().like(value1 + "%")) | \
-                     (FS("first_name").lower().like(value2 + "%")) | \
-                     (FS("last_name").lower().like(value1 + "%")) | \
-                     (FS("last_name").lower().like(value2 + "%"))
+            query |= (((FS("first_name").lower().like(value1 + "%")) & \
+                       (FS("last_name").lower().like(value2 + "%"))) | \
+                      ((FS("first_name").lower().like(value2 + "%")) & \
+                       (FS("last_name").lower().like(value1 + "%"))))
             if middle_name:
-                query |= (FS("middle_name").lower().like(value1 + "%")) | \
-                         (FS("middle_name").lower().like(value2 + "%"))
+                query |= (((FS("first_name").lower().like(value1 + "%")) & \
+                           (FS("middle_name").lower().like(value2 + "%"))) | \
+                          ((FS("first_name").lower().like(value2 + "%")) & \
+                           (FS("middle_name").lower().like(value1 + "%"))) | \
+                          ((FS("middle_name").lower().like(value1 + "%")) & \
+                           (FS("last_name").lower().like(value2 + "%"))) | \
+                          ((FS("middle_name").lower().like(value2 + "%")) & \
+                           (FS("last_name").lower().like(value1 + "%"))))
             if " " in value2:
-                value2, value3 = value2.split(" ", 1)
-                query |= (FS("first_name").lower().like(value2 + "%")) | \
-                         (FS("first_name").lower().like(value3 + "%")) | \
-                         (FS("last_name").lower().like(value2 + "%")) | \
-                         (FS("last_name").lower().like(value3 + "%"))
+                # Three search terms
+                # Values can be (part of) any of first_name, middle_name or last_name
+                # but we must have a (partial) match on all terms
+                value21, value3 = value2.split(" ", 1)
+                value12 = "%s %s" % (value1, value21)
+                query |= (((FS("first_name").lower().like(value12 + "%")) & \
+                           (FS("last_name").lower().like(value3 + "%"))) | \
+                          ((FS("first_name").lower().like(value3 + "%")) & \
+                           (FS("last_name").lower().like(value12 + "%"))))
                 if middle_name:
-                    query |= (FS("middle_name").lower().like(value2 + "%")) | \
-                             (FS("middle_name").lower().like(value3 + "%"))
+                    query |= (((FS("first_name").lower().like(value1 + "%")) & \
+                               (FS("middle_name").lower().like(value21 + "%")) & \
+                               (FS("last_name").lower().like(value3 + "%"))) | \
+                              ((FS("first_name").lower().like(value1 + "%")) & \
+                               (FS("last_name").lower().like(value21 + "%")) & \
+                               (FS("middle_name").lower().like(value3 + "%"))) | \
+                              ((FS("last_name").lower().like(value1 + "%")) & \
+                               (FS("middle_name").lower().like(value21 + "%")) & \
+                               (FS("first_name").lower().like(value3 + "%"))) | \
+                              ((FS("last_name").lower().like(value1 + "%")) & \
+                               (FS("first_name").lower().like(value21 + "%")) & \
+                               (FS("middle_name").lower().like(value3 + "%"))))
                 if " " in value3:
-                    value3, value4 = value3.split(" ", 1)
-                    query |= (FS("first_name").lower().like(value3 + "%")) | \
-                             (FS("first_name").lower().like(value4 + "%")) | \
-                             (FS("last_name").lower().like(value3 + "%")) | \
-                             (FS("last_name").lower().like(value4 + "%"))
+                    # Four search terms
+                    # Values can be (part of) any of first_name, middle_name or last_name
+                    # but we must have a (partial) match on all terms
+                    value31, value4 = value3.split(" ", 1)
+                    value13 = "%s %s %s" % (value1, value21, value31)
+                    value22 = "%s %s" % (value21, value31)
+                    query |= (((FS("first_name").lower().like(value13 + "%")) & \
+                               (FS("last_name").lower().like(value4 + "%"))) | \
+                              ((FS("first_name").lower().like(value4 + "%")) & \
+                               (FS("last_name").lower().like(value13 + "%"))))
                     if middle_name:
-                        query |= (FS("middle_name").lower().like(value3 + "%")) | \
-                                 (FS("middle_name").lower().like(value4 + "%"))
+                        query |= (((FS("first_name").lower().like(value1 + "%")) & \
+                                   (FS("middle_name").lower().like(value22 + "%")) & \
+                                   (FS("last_name").lower().like(value4 + "%"))) | \
+                                  ((FS("first_name").lower().like(value1 + "%")) & \
+                                   (FS("last_name").lower().like(value22 + "%")) & \
+                                   (FS("middle_name").lower().like(value4 + "%"))) | \
+                                  ((FS("last_name").lower().like(value1 + "%")) & \
+                                   (FS("middle_name").lower().like(value22 + "%")) & \
+                                   (FS("first_name").lower().like(value4 + "%"))) | \
+                                  ((FS("last_name").lower().like(value1 + "%")) & \
+                                   (FS("first_name").lower().like(value22 + "%")) & \
+                                   (FS("middle_name").lower().like(value4 + "%"))) | \
+                                  ((FS("first_name").lower().like(value12 + "%")) & \
+                                   (FS("middle_name").lower().like(value31 + "%")) & \
+                                   (FS("last_name").lower().like(value4 + "%"))) | \
+                                  ((FS("first_name").lower().like(value12 + "%")) & \
+                                   (FS("last_name").lower().like(value31 + "%")) & \
+                                   (FS("middle_name").lower().like(value4 + "%"))) | \
+                                  ((FS("last_name").lower().like(value12 + "%")) & \
+                                   (FS("middle_name").lower().like(value31 + "%")) & \
+                                   (FS("first_name").lower().like(value4 + "%"))) | \
+                                  ((FS("last_name").lower().like(value12 + "%")) & \
+                                   (FS("first_name").lower().like(value31 + "%")) & \
+                                   (FS("middle_name").lower().like(value4 + "%"))))
 
         resource.add_filter(query)
 

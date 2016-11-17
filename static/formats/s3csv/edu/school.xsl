@@ -7,6 +7,7 @@
          Schools - CSV Import Stylesheet
 
          CSV fields:
+         Code....................edu_school
          Name....................edu_school
          Type....................edu_school_type
          Organisation............org_organisation
@@ -24,6 +25,7 @@
          Lon.....................gis_location.lon
          Phone...................edu_school
          Email...................edu_school
+         Website.................edu_school
          Comments................edu_school
 
     *********************************************************************** -->
@@ -234,9 +236,11 @@
             </xsl:if>
 
             <!-- School data -->
+            <data field="code"><xsl:value-of select="col[@field='Code']"/></data>
             <data field="name"><xsl:value-of select="$SchoolName"/></data>
             <data field="phone"><xsl:value-of select="col[@field='Phone']"/></data>
             <data field="email"><xsl:value-of select="col[@field='Email']"/></data>
+            <data field="website"><xsl:value-of select="col[@field='Website']"/></data>
             <data field="comments"><xsl:value-of select="col[@field='Comments']"/></data>
         </resource>
 

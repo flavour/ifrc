@@ -132,6 +132,7 @@ class S3Config(Storage):
         self.fin = Storage()
         # Allow templates to append rather than replace
         self.fin.currencies = {}
+        self.fire = Storage()
         # @ToDo: Move to self.ui
         self.frontpage = Storage()
         self.frontpage.rss = []
@@ -151,6 +152,7 @@ class S3Config(Storage):
         self.mobile = Storage()
         self.msg = Storage()
         self.org = Storage()
+        self.police = Storage()
         self.pr = Storage()
         self.proc = Storage()
         self.project = Storage()
@@ -2876,10 +2878,34 @@ class S3Config(Storage):
 
     def get_dvr_event_registration_checkin_warning(self):
         """
-            Whether to warn during event registration when the person
-            is currently not checked-in
+            Warn during event registration when the person is currently
+            not checked-in
         """
         return self.dvr.get("event_registration_checkin_warning", False)
+
+    def get_dvr_activity_use_service_type(self):
+        """
+            Use service type in case activities
+        """
+        return self.dvr.get("activity_use_service_type", False)
+
+    def get_dvr_activity_types(self):
+        """
+            Use activity types in case activities
+        """
+        return self.dvr.get("activity_types", False)
+
+    def get_dvr_activity_types_hierarchical(self):
+        """
+            Case activity types are hierarchical
+        """
+        return self.dvr.get("activity_types_hierarchical", False)
+
+    def get_dvr_needs_hierarchical(self):
+        """
+            Need types are hierarchical
+        """
+        return self.dvr.get("needs_hierarchical", False)
 
     # -------------------------------------------------------------------------
     # Education
@@ -2999,6 +3025,16 @@ class S3Config(Storage):
         """
         return self.evr.get("link_to_organisation", False)
 
+
+    # -------------------------------------------------------------------------
+    # Fire
+    #
+
+    def get_fire_station_code_unique(self):
+        """
+            Whether Fire Station code is unique
+        """
+        return self.fire.get("fire_station_unique", False)
 
     # -------------------------------------------------------------------------
     # Hospital Registry
@@ -3922,6 +3958,16 @@ class S3Config(Storage):
             Whether Organisations, Offices & Facilities should show a Tags tab
         """
         return self.org.get("tags", False)
+
+    # -------------------------------------------------------------------------
+    # Police
+    #
+
+    def get_police_station_code_unique(self):
+        """
+            Whether Police Station code is unique
+        """
+        return self.police.get("police_station_unique", False)
 
     # -------------------------------------------------------------------------
     # Persons
