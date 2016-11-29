@@ -52,7 +52,7 @@ from s3datetime import S3DateTime
 from s3export import S3Exporter
 from s3forms import S3SQLDefaultForm
 from s3rest import S3Method
-from s3utils import s3_unicode, s3_validate, s3_represent_value, s3_set_extension
+from s3utils import s3_str, s3_unicode, s3_validate, s3_represent_value, s3_set_extension
 from s3widgets import S3EmbeddedComponentWidget, S3Selector, ICON
 
 # Compact JSON encoding
@@ -407,7 +407,14 @@ class S3CRUD(S3Method):
                 elif r.http == "POST" and "save_close" in r.post_vars:
                     create_next = _config("create_next_close")
                 elif session.s3.rapid_data_entry and not r.component:
+                    if "w" in r.get_vars:
+                        # Don't redirect to form tab from summary page
+                        w = r.get_vars.pop("w")
+                    else:
+                        w = None
                     create_next = r.url()
+                    if w:
+                        r.get_vars["w"] = w
                 else:
                     create_next = _config("create_next")
 
@@ -1861,7 +1868,7 @@ class S3CRUD(S3Method):
                                     dt_pageLength=display_length,
                                     dt_dom = dt_dom,
                                     )
-                s3.actions = [{"label": str(current.T("Review")),
+                s3.actions = [{"label": s3_str(current.T("Review")),
                                "url": r.url(id="[id]", method="review"),
                                "_class": "action-btn"}]
 
@@ -2480,7 +2487,7 @@ class S3CRUD(S3Method):
         """
 
         link = dict(attr)
-        link["label"] = str(label) #s3_unicode(label).encode("utf8")
+        link["label"] = s3_str(label)
         link["url"] = url
         if icon and current.deployment_settings.get_ui_use_button_icons():
             link["icon"] = ICON.css_class(icon)
@@ -2627,7 +2634,6 @@ class S3CRUD(S3Method):
         # Append custom actions
         if custom_actions:
             s3.actions = s3.actions + custom_actions
-        return
 
     # -------------------------------------------------------------------------
     def _default_cancel_button(self, r):

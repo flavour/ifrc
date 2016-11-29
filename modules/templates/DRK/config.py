@@ -7,7 +7,7 @@ from collections import OrderedDict
 from gluon import current, SPAN
 from gluon.storage import Storage
 
-from s3 import S3Method
+from s3 import S3DateTime, S3Method, s3_str, s3_unicode
 
 # Limit after which a checked-out resident is reported overdue (days)
 ABSENCE_LIMIT = 5
@@ -393,57 +393,24 @@ def config(settings):
     settings.ui.profile_header = profile_header
 
     # -------------------------------------------------------------------------
-    def show_flag_instructions(site_id, person_id, action=None):
+    def check_in_status(site, person):
         """
-            Show advise/instructions for checkpoint staff if
-            such flags are set for this persons
+            Determine the current check-in status for a person
 
-            @param site_id: the site ID (currently unused)
-            @param person_id: the person record ID
-        """
+            @param site: the site record (instance!)
+            @param person: the person record
 
-        s3db = current.s3db
-
-        flag_info = current.s3db.dvr_get_flag_instructions(person_id,
-                                                           action = action,
-                                                           )
-
-        from gluon import DIV, H4, P
-
-        info = DIV(_class="checkpoint-advise")
-        append = info.append
-
-        for flagname, instructions in flag_info["info"]:
-            append(DIV(H4(T(flagname)),
-                       P(instructions),
-                       _class="checkpoint-instructions",
-                       ))
-
-        from s3 import S3CustomController, s3_fullname
-        S3CustomController._view("DRK", "advise.html")
-
-        output = {"person": DIV(s3_fullname(person_id),
-                                _class="checkpoint-person",
-                                ),
-                  "info": info,
-                  }
-
-        return output
-
-    # -------------------------------------------------------------------------
-    def site_check_in(site_id, person_id):
-        """
-            When a person is checked-in to a Shelter then update the Shelter Registration
-            (We assume they are checked-in during initial registration)
+            see org_SiteCheckInMethod for details of the return value
         """
 
-        from s3 import s3_str
-
-        s3db = current.s3db
         db = current.db
+        s3db = current.s3db
 
-        warnings = []
-        wappend = warnings.append
+        result = {"valid": False,
+                  "check_in_allowed": False,
+                  "check_out_allowed": False,
+                  }
+        person_id = person.id
 
         # Check the case status
         ctable = s3db.dvr_case
@@ -455,7 +422,41 @@ def config(settings):
                                   ).first()
 
         if status and status.is_closed:
-            wappend(T("Not currently a resident"))
+            result["error"] = T("Not currently a resident")
+            return result
+
+        # Find the Registration
+        stable = s3db.cr_shelter
+        rtable = s3db.cr_shelter_registration
+        query = (stable.site_id == site.site_id) & \
+                (stable.id == rtable.shelter_id) & \
+                (rtable.person_id == person_id) & \
+                (rtable.deleted != True)
+        registration = db(query).select(rtable.id,
+                                        rtable.registration_status,
+                                        limitby=(0, 1),
+                                        ).first()
+        if not registration:
+            result["error"] = T("Registration not found")
+            return result
+
+        result["valid"] = True
+
+        # Check current status
+        reg_status = registration.registration_status
+        if reg_status == 2:
+            # Currently checked-in at this site
+            status = 1
+        elif reg_status == 3:
+            # Currently checked-out from this site
+            status = 2
+        else:
+            # No previous status
+            status = None
+        result["status"] = status
+
+        check_in_allowed = True
+        check_out_allowed = True
 
         # Check if we have any case flag to deny check-in or to show advise
         ftable = s3db.dvr_case_flag
@@ -464,118 +465,119 @@ def config(settings):
                 (ltable.deleted != True) & \
                 (ftable.id == ltable.flag_id) & \
                 (ftable.deleted != True)
-        flags = db(query).select(ftable.advise_at_check_in,
-                                 ftable.instructions,
+        flags = db(query).select(ftable.name,
                                  ftable.deny_check_in,
+                                 ftable.deny_check_out,
+                                 ftable.advise_at_check_in,
+                                 ftable.advise_at_check_out,
+                                 ftable.advise_at_id_check,
+                                 ftable.instructions,
                                  )
-        callback = None
-        deny_check_in = False
+
+        from gluon import DIV, H4, P
+        info = []
+        append = info.append
         for flag in flags:
             if flag.deny_check_in:
-                deny_check_in = True
-            if flag.advise_at_check_in:
-                callback = show_flag_instructions
+                check_in_allowed = False
+            if flag.deny_check_out:
+                check_out_allowed = False
 
-        if not deny_check_in:
+            # Show flag instructions?
+            if status == 1:
+                advise = flag.advise_at_check_out
+            elif status == 2:
+                advise = flag.advise_at_check_in
+            else:
+                advise = flag.advise_at_check_in or flag.advise_at_check_out
+            if advise:
+                instructions = flag.instructions
+                if instructions is not None:
+                    instructions = instructions.strip()
+                if not instructions:
+                    instructions = current.T("No instructions for this flag")
+                append(DIV(H4(T(flag.name)),
+                           P(instructions),
+                           _class="checkpoint-instructions",
+                           ))
+        if info:
+            result["info"] = DIV(_class="checkpoint-advise", *info)
 
-            # Find the Registration
-            stable = s3db.cr_shelter
-            rtable = s3db.cr_shelter_registration
+        result["check_in_allowed"] = check_in_allowed
+        result["check_out_allowed"] = check_out_allowed
 
-            query = (stable.site_id == site_id) & \
-                    (stable.id == rtable.shelter_id) & \
-                    (rtable.person_id == person_id) & \
-                    (rtable.deleted != True)
-            registration = db(query).select(rtable.id,
-                                            rtable.registration_status,
-                                            limitby=(0, 1),
-                                            ).first()
-            if not registration:
-                error = T("Registration not found")
-                return error, ", ".join(s3_str(w) for w in warnings)
-
-            error = None
-
-            if registration.registration_status == 2:
-                wappend(T("Client was already checked-in"))
-
-            # Update the Shelter Registration
-            registration.update_record(check_in_date = current.request.utcnow,
-                                       registration_status = 2,
-                                       )
-            onaccept = s3db.get_config("cr_shelter_registration", "onaccept")
-            if onaccept:
-                onaccept(registration)
-
-        else:
-            # @todo: log as case event anyway?
-            error = T("Check-in denied")
-
-        return error, ", ".join(s3_str(w) for w in warnings), callback
+        return result
 
     # -------------------------------------------------------------------------
-    def site_check_out(site_id, person_id):
+    def site_check_in(site_id, person_id):
         """
-            When a person is checked-out from a Shelter then update the Shelter Registration
+            When a person is checked-in to a Shelter then update the
+            Shelter Registration
+
+            @param site_id: the site_id of the shelter
+            @param person_id: the person_id to check-in
         """
 
         s3db = current.s3db
         db = current.db
 
-        # Check if we have any case flag to deny check-in or to show advise
-        ftable = s3db.dvr_case_flag
-        ltable = s3db.dvr_case_flag_case
-        query = (ltable.person_id == person_id) & \
-                (ltable.deleted != True) & \
-                (ftable.id == ltable.flag_id) & \
-                (ftable.deleted != True)
-        flags = db(query).select(ftable.advise_at_check_out,
-                                 ftable.instructions,
-                                 ftable.deny_check_out,
-                                 )
-        callback = None
-        deny_check_out = False
-        for flag in flags:
-            if flag.deny_check_out:
-                deny_check_out = True
-            if flag.advise_at_check_out:
-                callback = show_flag_instructions
+        # Find the Registration
+        stable = s3db.cr_shelter
+        rtable = s3db.cr_shelter_registration
 
-        warning = None
-        if not deny_check_out:
+        query = (stable.site_id == site_id) & \
+                (stable.id == rtable.shelter_id) & \
+                (rtable.person_id == person_id) & \
+                (rtable.deleted != True)
+        registration = db(query).select(rtable.id,
+                                        rtable.registration_status,
+                                        limitby=(0, 1),
+                                        ).first()
+        if not registration:
+            return
 
-            # Find the Registration
-            stable = s3db.cr_shelter
-            rtable = s3db.cr_shelter_registration
-            query = (stable.site_id == site_id) & \
-                    (stable.id == rtable.shelter_id) & \
-                    (rtable.person_id == person_id) & \
-                    (rtable.deleted != True)
-            registration = db(query).select(rtable.id,
-                                            rtable.registration_status,
-                                            limitby=(0, 1),
-                                            ).first()
-            if not registration:
-                error = T("Registration not found")
-                return error, warning
+        # Update the Shelter Registration
+        registration.update_record(check_in_date = current.request.utcnow,
+                                   registration_status = 2,
+                                   )
+        onaccept = s3db.get_config("cr_shelter_registration", "onaccept")
+        if onaccept:
+            onaccept(registration)
 
-            error = None
-            if registration.registration_status == 3:
-                warning = T("Client was already checked-out")
+    # -------------------------------------------------------------------------
+    def site_check_out(site_id, person_id):
+        """
+            When a person is checked-out from a Shelter then update the
+            Shelter Registration
 
-            # Update the Shelter Registration
-            registration.update_record(check_out_date = current.request.utcnow,
-                                       registration_status = 3,
-                                       )
-            onaccept = s3db.get_config("cr_shelter_registration", "onaccept")
-            if onaccept:
-                onaccept(registration)
+            @param site_id: the site_id of the shelter
+            @param person_id: the person_id to check-in
+        """
 
-        else:
-            # @todo: log as case event anyway?
-            error = T("Check-out denied")
+        s3db = current.s3db
+        db = current.db
 
-        return error, warning, callback
+        # Find the Registration
+        stable = s3db.cr_shelter
+        rtable = s3db.cr_shelter_registration
+        query = (stable.site_id == site_id) & \
+                (stable.id == rtable.shelter_id) & \
+                (rtable.person_id == person_id) & \
+                (rtable.deleted != True)
+        registration = db(query).select(rtable.id,
+                                        rtable.registration_status,
+                                        limitby=(0, 1),
+                                        ).first()
+        if not registration:
+            return
+
+        # Update the Shelter Registration
+        registration.update_record(check_out_date = current.request.utcnow,
+                                    registration_status = 3,
+                                    )
+        onaccept = s3db.get_config("cr_shelter_registration", "onaccept")
+        if onaccept:
+            onaccept(registration)
 
     # -------------------------------------------------------------------------
     def org_site_check(site_id):
@@ -644,6 +646,7 @@ def config(settings):
                 current.s3db.configure("cr_shelter",
                                        site_check_in = site_check_in,
                                        site_check_out = site_check_out,
+                                       check_in_status = check_in_status,
                                        )
             else:
                 has_role = current.auth.s3_has_role
@@ -703,7 +706,8 @@ def config(settings):
             # Hide side menu and rheader for check-in
             if r.method == "check-in":
                 current.menu.options = None
-                output["rheader"] = ""
+                if isinstance(output, dict):
+                    output["rheader"] = ""
 
             return output
         s3.postp = custom_postp
@@ -1419,9 +1423,6 @@ def config(settings):
             if QUARTIERMANAGER:
                 # Add Action Button to assign Housing Unit to the Resident
                 from gluon import URL
-                #from s3 import S3CRUD, s3_str
-                from s3 import s3_str
-                #S3CRUD.action_buttons(r)
                 s3.actions = [dict(label=s3_str(T("Assign Shelter")),
                                     _class="action-btn",
                                     url=URL(c="cr",
@@ -2190,94 +2191,7 @@ def config(settings):
         resource.configure(**{hook: callback})
 
     settings.customise_dvr_case_event_resource = customise_dvr_case_event_resource
-
     # -------------------------------------------------------------------------
-    def case_event_date_day(row):
-        """
-            Field method to reduce case event date/time to just date,
-            used in pivot table reports to group case events by day
-        """
-
-        if hasattr(row, "dvr_case_event"):
-            row = row.dvr_case_event
-        try:
-            date = row.date
-        except AttributeError:
-            date = None
-        if date:
-            # Get local hour
-            from dateutil import tz
-            date = date.replace(tzinfo=tz.gettz("UTC"))
-            date = date.astimezone(tz.gettz("Europe/Berlin"))
-            hour = date.time().hour
-
-            # Convert to date
-            date = date.date()
-            if hour <= 7:
-                # Map early hours to previous day
-                return date - datetime.timedelta(days=1)
-        else:
-            date = None
-        return date
-
-    def case_event_date_day_represent(value):
-        """
-            Representation method for case_event_date_day, needed in order
-            to sort pivot axis values by raw date, but show them in locale
-            format (default DD.MM.YYYY, doesn't sort properly).
-        """
-
-        from s3 import S3DateTime
-        return S3DateTime.date_represent(value, utc=True)
-
-    def case_event_time_of_day(row):
-        """
-            Field method to group events by time of day
-        """
-
-        if hasattr(row, "dvr_case_event"):
-            event = row.dvr_case_event
-        else:
-            event = row
-        if hasattr(row, "dvr_case_event_type"):
-            event_type = row.dvr_case_event_type
-        else:
-            event_type = None
-
-        try:
-            date = event.date
-        except AttributeError:
-            date = None
-
-        person_id = 0
-        event_code = None
-        if event_type:
-            try:
-                person_id = event.person_id
-                event_code = event_type.code
-            except AttributeError:
-                pass
-
-        if date:
-            if event_code == "FOOD" and person_id is None:
-                from s3 import s3_str
-                tod = s3_str(current.T("Surplus Meals"))
-            else:
-                from dateutil import tz
-                date = date.replace(tzinfo=tz.gettz("UTC"))
-                date = date.astimezone(tz.gettz("Europe/Berlin"))
-                hour = date.time().hour
-
-                if 7 <= hour < 11:
-                    tod = "07:00 - 11:00"
-                elif 11 <= hour < 15:
-                    tod = "11:00 - 15:00"
-                else:
-                    tod = "15:00 - 07:00"
-        else:
-            tod = "-"
-        return tod
-
     def case_event_report_default_filters(event_code=None):
         """
             Set default filters for case event report
@@ -2303,7 +2217,7 @@ def config(settings):
         # Minimum date: one week
         WEEK_AGO = datetime.datetime.now() - \
                     datetime.timedelta(days=7)
-        min_date = WEEK_AGO.replace(hour=8, minute=0, second=0)
+        min_date = WEEK_AGO.replace(hour=7, minute=0, second=0)
 
         s3_set_default_filter("~.date",
                               {"ge": min_date,
@@ -2332,16 +2246,18 @@ def config(settings):
                 event_code = r.get_vars.get("code")
                 case_event_report_default_filters(event_code)
 
+                dates = DRKCaseEventDateAxes()
+
                 # Field method for day-date of events
                 from s3 import s3_fieldmethod
                 table.date_day = s3_fieldmethod(
                                     "date_day",
-                                    case_event_date_day,
-                                    represent = case_event_date_day_represent,
+                                    dates.case_event_date_day,
+                                    represent = dates.case_event_date_day_represent,
                                     )
                 table.date_tod = s3_fieldmethod(
                                     "date_tod",
-                                    case_event_time_of_day,
+                                    dates.case_event_time_of_day,
                                     )
 
                 # Pivot axis options
@@ -2367,7 +2283,7 @@ def config(settings):
                 resource.configure(report_options = report_options,
                                    extra_fields = ["date",
                                                    "person_id",
-                                                   "type_id$code",
+                                                   "type_id",
                                                    ],
                                    )
             return result
@@ -3114,6 +3030,110 @@ class DRKCreateSiteActivityReport(S3Method):
         formvars.date = date
 
 # =============================================================================
+class DRKCaseEventDateAxes(object):
+    """
+        Helper class for virtual date axes in case event statistics
+    """
+
+    def __init__(self):
+        """
+            Constructor; perform all slow lookups outside of the field methods
+        """
+
+        from dateutil import tz
+
+        # Get timezone descriptions
+        self.UTC = tz.tzutc()
+        self.LOCAL = tz.gettz("Europe/Berlin")
+
+        # Lookup FOOD event type_id
+        table = current.s3db.dvr_case_event_type
+        query = (table.code == "FOOD") & \
+                (table.deleted != True)
+        row = current.db(query).select(table.id, limitby=(0, 1)).first()
+        self.FOOD = row.id if row else None
+
+        self.SURPLUS_MEALS = s3_str(current.T("Surplus Meals"))
+
+    # -------------------------------------------------------------------------
+    def case_event_date_day(self, row):
+        """
+            Field method to reduce case event date/time to just date,
+            used in pivot table reports to group case events by day
+        """
+
+        if hasattr(row, "dvr_case_event"):
+            row = row.dvr_case_event
+
+        try:
+            date = row.date
+        except AttributeError:
+            date = None
+
+        if date:
+            # Get local hour
+            date = date.replace(tzinfo=self.UTC).astimezone(self.LOCAL)
+            hour = date.time().hour
+
+            # Convert to date
+            date = date.date()
+            if hour <= 7:
+                # Map early hours to previous day
+                return date - datetime.timedelta(days=1)
+        else:
+            date = None
+        return date
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def case_event_date_day_represent(value):
+        """
+            Representation method for case_event_date_day, needed in order
+            to sort pivot axis values by raw date, but show them in locale
+            format (default DD.MM.YYYY, doesn't sort properly).
+        """
+
+        return S3DateTime.date_represent(value, utc=True)
+
+    # -------------------------------------------------------------------------
+    def case_event_time_of_day(self, row):
+        """
+            Field method to group events by time of day
+        """
+
+        if hasattr(row, "dvr_case_event"):
+            row = row.dvr_case_event
+
+        try:
+            date = row.date
+        except AttributeError:
+            date = None
+
+        if date:
+            try:
+                person_id = row.person_id
+                type_id = row.type_id
+            except AttributeError:
+                person_id = 0
+                type_id = None
+
+            if type_id == self.FOOD and person_id is None:
+                tod = self.SURPLUS_MEALS
+            else:
+                date = date.replace(tzinfo=self.UTC).astimezone(self.LOCAL)
+                hour = date.time().hour
+
+                if 7 <= hour < 11:
+                    tod = "07:00 - 11:00"
+                elif 11 <= hour < 15:
+                    tod = "11:00 - 15:00"
+                else:
+                    tod = "15:00 - 07:00"
+        else:
+            tod = "-"
+        return tod
+
+# =============================================================================
 class DRKSiteActivityReport(object):
     """
         Helper class to produce site activity reports ("Residents Report")
@@ -3220,7 +3240,6 @@ class DRKSiteActivityReport(object):
 
         # Represent paid_on as date
         atable = s3db.dvr_allowance
-        from s3 import S3DateTime
         atable.paid_on.represent = lambda dt: \
                                    S3DateTime.date_represent(dt,
                                                              utc=True,
@@ -3342,7 +3361,6 @@ class DRKSiteActivityReport(object):
 
         # Post-process rows
         rows = []
-        from s3 import s3_str
         for row in data.rows:
 
             flags = "dvr_case_flag_case.flag_id"
@@ -3482,7 +3500,6 @@ class DRKSiteActivityReport(object):
         if sheet is not None and data is not None:
 
             T = current.T
-            from s3 import S3DateTime, s3_unicode
             output = (("Date", S3DateTime.date_represent(self.date, utc=True)),
                       ("Previous Total", data["old_total"]),
                       ("Admissions", data["ins"]),

@@ -2901,6 +2901,12 @@ class S3Config(Storage):
         """
         return self.dvr.get("activity_types_hierarchical", False)
 
+    def get_dvr_needs_use_service_type(self):
+        """
+            Use service type in needs
+        """
+        return self.dvr.get("needs_use_service_type", False)
+
     def get_dvr_needs_hierarchical(self):
         """
             Need types are hierarchical
@@ -2926,6 +2932,17 @@ class S3Config(Storage):
             - valid options: "Disaster"
         """
         return self.event.get("label", None)
+
+    def get_event_cascade_delete_incidents(self):
+        """
+            Whether deleting an Event cascades to deleting all Incidents or whether it sets NULL
+            - 'normal' workflow is where an Event is created and within that various Incidents,
+              aso cascading the delete makes sense here ("delete everything associated with this event")
+            - WA COP uses Events to group existing Incidents, so here we don't wish to delete the Incidents if the Event is deleted
+
+            NB Changing this setting requires a DB migration
+        """
+        return self.event.get("cascade_delete_incidents", True)
 
     def get_event_exercise(self):
         """
@@ -3402,6 +3419,16 @@ class S3Config(Storage):
                 multiple: Use multiple persons from the registry
         """
         return self.__lazy("hrm", "training_instructors", "external")
+
+    def get_hrm_training_filter_and(self):
+        """
+            How people are filtered based on their Trainings:
+                False (default): Std options filter where we do an OR
+                    - i.e. we see all people who have done either (or both) Course A or Course B
+                True: Contains options filter (basically an AND)
+                    - i.e. we see only people who have done both Course A and Course B
+        """
+        return self.__lazy("hrm", "training_filter_and", False)
 
     def get_hrm_activity_types(self):
         """

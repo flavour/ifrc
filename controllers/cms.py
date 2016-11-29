@@ -134,7 +134,7 @@ def post():
                     field.readable = field.writable = False
 
                 page = get_vars.get("page", None)
-                url = get_vars.get("url") # custom redirect?
+                url = get_vars.get("url") # custom redirect
                 if page:
                     table.name.default = page
                     table.name.readable = table.name.writable = False
@@ -578,7 +578,7 @@ def newsfeed():
                            "series_id",
                            ]
             cappend = crud_fields.append
-            if settings.get_cms_show_tags():
+            if settings.get_cms_show_titles():
                 cappend("title")
             crud_fields.extend(("body",
                                 "location_id",

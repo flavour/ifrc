@@ -134,6 +134,9 @@ textarea {
     resize: both;
     max-width: 100%;
 }
+select {
+    padding-right: 1rem !important;
+}
 /* Form and Item containers */
 #last_update {
     float: none;
@@ -143,6 +146,9 @@ textarea {
     form {
         background: $form_container_bgcolor;
         padding: 5px 10px;
+        tr td {
+                padding: rem-calc(3);
+        }
     }
     width: auto;
     overflow: inherit;

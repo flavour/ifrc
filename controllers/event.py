@@ -141,7 +141,7 @@ def incident():
                 table.scenario_id.writable = False
                 table.exercise.writable = False
                 table.exercise.comment = None
-                table.zero_hour.writable = False
+                table.date.writable = False
 
         return True
     s3.prep = prep
@@ -290,17 +290,13 @@ def group():
 
 # -----------------------------------------------------------------------------
 def team():
-    """ Controller for event_team option lookups (popups) """
+    """ Events <> Teams """
 
-    # /options.s3json only
-    s3.prep = lambda r: r.method == "options" and \
-                        r.representation == "s3json"
-
-    return s3_rest_controller("event", "team")
+    return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
 def team_status():
-    """ Team status taxonomy controller (for Admin and lookups) """
+    """ Team statuses """
 
     return s3_rest_controller()
 

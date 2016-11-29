@@ -22,8 +22,13 @@
          * Default options
          *
          * @prop {string} tablename - the tablename used for the form
-         * @prop {bool} ajax - data submission using Ajax
+         * @prop {boolean} ajax - data submission using Ajax
          * @prop {string} ajaxURL - the URL to send Ajax requests to
+         *
+         * @prop {boolean} showPicture - true=always show profile picture
+         *                               false=show profile picture on demand
+         * @prop {string} showPictureText - button label for "Show Picture"
+         * @prop {string} hidePictureText - button label for "Hide Picture"
          */
         options: {
 
@@ -161,6 +166,9 @@
                 // Show a throbber
                 throbber = $('<div class="inline-throbber">').insertAfter(personInfo),
                 self = this;
+
+            // Remove profile picture
+            this._removeProfilePicture();
 
             // Clear action details
             this._clearDetails();
@@ -621,8 +629,8 @@
         },
 
         /**
-        * Helper function to hide any alert messages that are currently shown
-        */
+         * Helper function to hide any alert messages that are currently shown
+         */
         _clearAlert: function() {
 
             $('.alert-error, .alert-warning, .alert-info, .alert-success').fadeOut('fast');
@@ -630,12 +638,12 @@
         },
 
         /**
-        * Helper function to remove the person data and empty the label input,
-        * also re-enabling the ID check button while hiding the registration button
-        *
-        * @param {bool} keepAlerts - do not clear the alert space
-        * @param {bool} keepLabel - do not clear the label input field
-        */
+         * Helper function to remove the person data and empty the label input,
+         * also re-enabling the ID check button while hiding the registration button
+         *
+         * @param {bool} keepAlerts - do not clear the alert space
+         * @param {bool} keepLabel - do not clear the label input field
+         */
         _clearForm: function(keepAlerts, keepLabel) {
 
             var prefix = this.idPrefix;
