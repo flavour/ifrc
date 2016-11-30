@@ -35,13 +35,20 @@ __all__ = ("S3MobileFormList",
            )
 
 import json
+import sys
+
+try:
+    from lxml import etree
+except ImportError:
+    print >> sys.stderr, "ERROR: lxml module needed for XML handling"
+    raise
 
 from gluon import *
+from s3error import S3PermissionError
 from s3forms import S3SQLDefaultForm, S3SQLField
 from s3rest import S3Method
-from s3utils import s3_str
-
-SEPARATORS = (",", ":")
+from s3utils import s3_str, s3_unicode
+from s3validators import JSONERRORS, SEPARATORS
 
 # =============================================================================
 class S3MobileFormList(object):
@@ -310,9 +317,7 @@ class S3MobileCRUD(S3Method):
 
                 elif http == "POST":
                     # Data upload
-                    # @todo: implement this
-                    r.error(501, current.ERROR.NOT_IMPLEMENTED)
-
+                    output = self.mobile_data(r, **attr)
                 else:
                     r.error(405, current.ERROR.BAD_METHOD)
             else:
@@ -361,5 +366,128 @@ class S3MobileCRUD(S3Method):
         current.response.headers = {"Content-Type": "application/json"}
         return output
 
+    # -------------------------------------------------------------------------
+    def mobile_data(self, r, **attr):
+        """
+            Process data submission from mobile app
+
+            @param r: the S3Request instance
+            @param attr: controller attributes
+
+            @returns: JSON message
+        """
+
+        output = {}
+
+        # Extract the data
+        content_type = r.env.get("content_type")
+        if content_type and content_type.startswith("multipart/"):
+            s = r.post_vars.get("data")
+            try:
+                data = json.loads(s)
+            except JSONERRORS:
+                msg = sys.exc_info()[1]
+                r.error(400, msg)
+        else:
+            s = r.body
+            s.seek(0)
+            try:
+                data = json.load(s)
+            except JSONERRORS:
+                msg = sys.exc_info()[1]
+                r.error(400, msg)
+
+        xml = current.xml
+
+        resource = r.resource
+        tablename = resource.tablename
+
+        records = data.get(tablename)
+        if records:
+
+            # Create import tree
+            TAG = xml.TAG
+            ATTRIBUTE = xml.ATTRIBUTE
+            IGNORE_FIELDS = xml.IGNORE_FIELDS
+            FIELDS_TO_ATTRIBUTES = xml.FIELDS_TO_ATTRIBUTES
+
+            root = etree.Element(xml.TAG.root)
+
+            for record in records:
+
+                row = etree.SubElement(root, TAG.resource)
+                row.set(ATTRIBUTE.name, tablename)
+
+                for fieldname, value in record.items():
+                    if value is None:
+                        continue
+                    if fieldname not in resource.fields:
+                        continue
+                    elif fieldname in IGNORE_FIELDS:
+                        continue
+                    elif fieldname in FIELDS_TO_ATTRIBUTES:
+                        row.set(fieldname, value)
+                    else:
+                        col = etree.SubElement(row, TAG.data)
+                        col.set(ATTRIBUTE.field, fieldname)
+                        col.text = s3_unicode(value)
+
+            tree = etree.ElementTree(root)
+
+            # Try importing the tree
+            # @todo: error handling
+            try:
+                resource.import_xml(tree)
+            except IOError:
+                r.unauthorised()
+            else:
+                import_result = self.import_result(resource)
+
+            output = xml.json_message(**import_result)
+        else:
+            output = xml.json_message(True, 200, "No records to import")
+
+        current.response.headers = {"Content-Type": "application/json"}
+        return output
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def import_result(resource):
+        """
+            Extract import results from the resource to report back
+            to the mobile client
+
+            @param resource: the S3Resource that has been imported to
+
+            @returns: a dict with import result details
+        """
+
+        info = {}
+
+        if "uuid" not in resource.fields:
+            return info
+
+        db = current.db
+
+        created_ids = resource.import_created
+        updated_ids = resource.import_updated
+
+        uuid = resource.table.uuid
+
+        if created_ids:
+            query = (resource._id.belongs(created_ids))
+            rows = db(query).select(uuid,
+                                    limitby = (0, len(created_ids)),
+                                    )
+            info["created"] = [row.uuid for row in rows]
+
+        if updated_ids:
+            query = (resource._id.belongs(updated_ids))
+            rows = db(query).select(uuid,
+                                    limitby = (0, len(updated_ids)),
+                                    )
+            info["updated"] = [row.uuid for row in rows]
+
+        return info
 
 # END =========================================================================

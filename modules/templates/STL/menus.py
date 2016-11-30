@@ -147,14 +147,16 @@ class S3OptionsMenu(default.S3OptionsMenu):
                       vars = {"closed": "0"})(
                         M("Create", m="create"),
                         M("All Cases", vars = {}),
-                        ),
-                    M("Activities", f="case_activity")(
-                       #M("Create", m="create"),
                         M(follow_up_label, f="due_followups"),
-                    ),
-                    #M("Need Types", f="need")(
-                    #   M("Create", m="create"),
-                    #),
+                        ),
+                    M("Activities", link=False)(
+                        M("Psychosocial Support", f="activity",
+                          vars={"service_type": "PSS"},
+                          ),
+                        M("Mental Health Support", f="activity",
+                          vars={"service_type": "MH"},
+                          ),
+                        ),
                     M("Archive", link=False)(
                         M("Closed Cases", f="person",
                           vars={"closed": "1"},
@@ -168,8 +170,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Beneficiary Types", f="beneficiary_type"),
                         M("Housing Types", f="housing_type"),
                         M("Income Sources", f="income_source"),
-                        M("SNF Justifications", f="case_funding_reason"),
-                    ),
+                        M("Need Types", f="need"),
+                        M("SNF Justifications", f="activity_funding_reason"),
+                        ),
                 )
 
     # -------------------------------------------------------------------------

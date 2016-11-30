@@ -217,6 +217,12 @@ class S3EventModel(S3Model):
                            requires = IS_NOT_EMPTY(),
                            ),
                      event_type_id(),
+                     #Field("intensity",
+                     #      label = T("Intensity"),
+                     #      comment = DIV(_class="tooltip",
+                     #                    _title="%s|%s" % (T("Intensity"),
+                     #                                      T("e.g. Category for a Typhoon or Magnitude for an Earthquake"))),
+                     #      ),
                      self.org_organisation_id(
                         comment = DIV(_class="tooltip",
                                        _title="%s|%s" % (T("Organization"),
@@ -2916,7 +2922,7 @@ def event_event_list_layout(list_id, item_id, resource, rfields, record,
     description = record["event_event.comments"]
     start_date = record["event_event.start_date"]
 
-    location = record["event_event.location_id"] or ""
+    location = record["event_event_location.location_id"] or ""
     #location_id = raw["event_event.location_id"]
 
     comments = raw["event_event.comments"]
