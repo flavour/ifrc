@@ -3390,7 +3390,7 @@ def config(settings):
                     msg_record_deleted=T("Sector deleted"),
                     msg_list_empty=T("No Sectors currently registered"))
 
-            else:
+            elif current.auth.s3_has_role("ADMIN"):
                 from s3 import S3OptionsFilter, S3TextFilter
                 filter_widgets = [S3TextFilter(["name",
                                                 ],

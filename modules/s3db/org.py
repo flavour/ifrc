@@ -134,7 +134,9 @@ class S3OrganisationModel(S3Model):
         define_table(tablename,
                      Field("name", length=128, notnull=True, unique=True,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
                            ),
                      Field("parent", "reference org_organisation_type", # This form of hierarchy may not work on all Databases
                            label = T("SubType of"),
@@ -237,6 +239,9 @@ class S3OrganisationModel(S3Model):
             define_table(tablename,
                          Field("name", length=128,
                                label = T("Name"),
+                               requires = [IS_NOT_EMPTY(),
+                                           IS_LENGTH(64),
+                                           ],
                                ),
                          Field("parent", "reference org_region", # This form of hierarchy may not work on all Databases
                                # Label hard-coded for IFRC currently
@@ -339,6 +344,7 @@ class S3OrganisationModel(S3Model):
         define_table(tablename,
                      self.super_link("pe_id", "pr_pentity"),
                      Field("root_organisation", "reference org_organisation",
+                           ondelete = "CASCADE",
                            readable = False,
                            writable = False,
                            represent = S3Represent(lookup="org_organisation"),
@@ -346,12 +352,15 @@ class S3OrganisationModel(S3Model):
                      Field("name", notnull=True,
                            length=128, # Mayon Compatibility
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
                            ),
                      # http://hxl.humanitarianresponse.info/#abbreviation
                      Field("acronym", length=16,
                            label = T("Acronym"),
                            represent = lambda val: val or "",
+                           requires = IS_LENGTH(16),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Acronym"),
                                                            T("Acronym of the organization's name, eg. IFRC.")))
@@ -504,7 +513,8 @@ class S3OrganisationModel(S3Model):
             configure(tablename,
                       # link table alias (organisation_branch) is ambiguous here
                       # => need to specify the full join
-                      hierarchy = "branch_id:org_organisation_branch.organisation_id",
+                      hierarchy = "parent__link.organisation_id",
+                      hierarchy_link = "parent",
                       )
             org_widgets["hierarchy"] = S3HierarchyWidget(lookup="org_organisation",
                                                          represent=org_organisation_represent,
@@ -1545,7 +1555,9 @@ class S3OrganisationGroupModel(S3Model):
                      super_link("pe_id", "pr_pentity"),
                      Field("name", notnull=True, unique=True, length=128,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
                            ),
                      Field("mission",
                            label = T("Mission"),
@@ -1659,7 +1671,9 @@ class S3OrganisationGroupModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, unique=True, length=128,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
                            ),
                      s3_comments(),
                      *s3_meta_fields()
@@ -1777,7 +1791,9 @@ class S3OrganisationGroupPersonModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, unique=True, length=128,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
                            ),
                      s3_comments(),
                      *s3_meta_fields()
@@ -2180,10 +2196,13 @@ class S3OrganisationSectorModel(S3Model):
                            label = T("Name"),
                            represent = lambda v: T(v) if v is not None \
                                                     else NONE,
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
                            ),
                      Field("abrv", length=64, #notnull=True,
                            label = T("Abbreviation"),
+                           requires = IS_LENGTH(64),
                            ),
                      self.gis_location_id(
                         requires = IS_EMPTY_OR(IS_LOCATION()),
@@ -2285,10 +2304,14 @@ class S3OrganisationSectorModel(S3Model):
         # define_table(tablename,
         #              sector_id(),
         #              Field("name", length=128,
-        #                    label = T("Name")),
+        #                    label = T("Name"),
+        #                    requires = IS_LENGTH(128),
+        #                    ),
         #              Field("abrv", length=64,
         #                    notnull=True, unique=True,
-        #                    label = T("Abbreviation")),
+        #                    label = T("Abbreviation"),
+        #                    requires = IS_LENGTH(64),
+        #                    ),
         #              *s3_meta_fields())
 
         ##CRUD strings
@@ -2478,14 +2501,19 @@ class S3OrganisationServiceModel(S3Model):
         #
         tablename = "org_service"
         define_table(tablename,
-                     Field("name", length=128, notnull=True,
-                           # Comment this if we need to support the same
-                           # service at different locations in hierarchy
-                           unique = True,
-                           label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                     Field("root_service", "reference org_service",
+                           ondelete = "CASCADE",
+                           readable = False,
+                           writable = False,
                            ),
-                     Field("parent", "reference org_service", # This form of hierarchy may not work on all Databases
+                     Field("name", length=128, notnull=True,
+                           label = T("Name"),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
+                           ),
+                     # This form of hierarchy may not work on all Databases:
+                     Field("parent", "reference org_service",
                            label = T("SubType of"),
                            ondelete = "RESTRICT",
                            readable = hierarchical_service_types,
@@ -2504,6 +2532,8 @@ class S3OrganisationServiceModel(S3Model):
             hierarchy = "parent"
             # Can't be defined in-line as otherwise get a circular reference
             table = db[tablename]
+            table.root_service.represent = represent
+            onaccept = self.org_service_onaccept
             table.parent.represent = represent
             table.parent.requires = IS_EMPTY_OR(
                                         IS_ONE_OF(db, "org_service.id",
@@ -2514,6 +2544,7 @@ class S3OrganisationServiceModel(S3Model):
                                                   orderby="org_service.name"))
         else:
             hierarchy = None
+            onaccept = None
 
         # CRUD Strings
         crud_strings[tablename] = Storage(
@@ -2542,13 +2573,11 @@ class S3OrganisationServiceModel(S3Model):
                                      )
 
         configure(tablename,
-                  # Currently deduplicated by unique names, switch to
-                  # S3Duplicate if we need to support the same service
-                  # at different locations in hierarchy:
-                  #deduplicate = S3Duplicate(primary = ("name",),
-                  #                          secondary = ("parent",),
-                  #                          ),
+                  deduplicate = S3Duplicate(primary = ("name",),
+                                            secondary = ("parent",),
+                                            ),
                   hierarchy = hierarchy,
+                  onaccept = onaccept,
                   )
 
         # ---------------------------------------------------------------------
@@ -2799,6 +2828,13 @@ class S3OrganisationServiceModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
+    def org_service_onaccept(form):
+        """ Update the root_service """
+
+        org_service_root_service(form.vars["id"])
+
+    # -------------------------------------------------------------------------
+    @staticmethod
     def org_service_location_deduplicate(item):
         """ Import item de-duplication """
 
@@ -2830,6 +2866,59 @@ class S3OrganisationServiceModel(S3Model):
             if duplicate:
                 item.id = duplicate.id
                 item.method = item.METHOD.UPDATE
+
+# =============================================================================
+def org_service_root_service(service_id):
+    """ Update the root_service """
+
+    db = current.db
+    table = current.s3db.org_service
+
+    # Read the record
+    record = db(table.id == service_id).select(table.id,
+                                               table.root_service,
+                                               table.parent,
+                                               ).first()
+
+    try:
+        parent = record.parent
+        current_root = record.root_service
+    except AttributeError:
+        current.log.error("Cannot find record with service_id: %s" % service_id)
+        raise
+
+    if parent:
+        # Lookup the parent record recursively
+        if parent == service_id:
+            # Error caused by non-unique tuids in import XSLT (fixed now,
+            # but catching it anyway for the sake of a proper error message)
+            raise KeyError("Service #%s showing with parent #%s" % (service_id, parent))
+
+        new_root = org_service_root_service(parent)
+    else:
+        # We are the root
+        new_root = service_id
+
+    if current_root != new_root:
+
+        # Update this record and all its descendants
+        def descendants(ids):
+
+            rows = db(table.parent.belongs(ids)).select(table.id)
+            children = set(row.id for row in rows)
+
+            if children:
+                children |= descendants(children)
+                return ids | children
+            else:
+                return ids
+
+        # If this node doesn't have the correct root, the children
+        # won't have either, so update them all
+        nodes = descendants(set([service_id]))
+        db(table.id.belongs(nodes)).update(root_service=new_root)
+
+    return new_root
 
 # =============================================================================
 class S3OrganisationSummaryModel(S3Model):
@@ -3053,13 +3142,16 @@ class S3SiteModel(S3Model):
                           Field("code",
                                 label = T("Code"),
                                 length = 10, # Mayon compatibility
+                                requires = IS_LENGTH(10),
                                 writable = False,
                                 ),
                           Field("name", notnull=True,
                                 length = 64, # Mayon compatibility
                                 #unique=True,
                                 label = T("Name"),
-                                requires = IS_NOT_EMPTY(),
+                                requires = [IS_NOT_EMPTY(),
+                                            IS_LENGTH(64),
+                                            ],
                                 ),
                           self.gis_location_id(),
                           self.org_organisation_id(),
@@ -3859,7 +3951,7 @@ class S3FacilityModel(S3Model):
                                          IS_NOT_IN_DB(db, "org_facility.code"),
                                          ])
         else:
-            code_requires = IS_EMPTY_OR(IS_LENGTH(10))
+            code_requires = IS_LENGTH(10)
 
         tablename = "org_facility"
         define_table(tablename,
@@ -3870,7 +3962,9 @@ class S3FacilityModel(S3Model):
                      Field("name", notnull=True,
                            length = 64, # Mayon Compatibility
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
+                                       ],
                            ),
                      Field("code", length=10, # Mayon compatibility
                            #notnull=True,
@@ -4412,7 +4506,9 @@ class S3RoomModel(S3Model):
                           self.org_site_id, # site_id
                           Field("name", length=128, notnull=True,
                                 label = T("Name"),
-                                requires = IS_NOT_EMPTY(),
+                                requires = [IS_NOT_EMPTY(),
+                                            IS_LENGTH(128),
+                                            ],
                                 ),
                           *s3_meta_fields())
 
@@ -4508,7 +4604,9 @@ class S3OfficeModel(S3Model):
         define_table(tablename,
                      Field("name", length=128, notnull=True,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
+                                       ],
                            ),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
@@ -4576,7 +4674,7 @@ class S3OfficeModel(S3Model):
                                          IS_NOT_IN_DB(db, "org_office.code"),
                                          ])
         else:
-            code_requires = IS_EMPTY_OR(IS_LENGTH(10))
+            code_requires = IS_LENGTH(10)
 
         tablename = "org_office"
         define_table(tablename,
@@ -4586,7 +4684,9 @@ class S3OfficeModel(S3Model):
                      Field("name", notnull=True,
                            length=64, # Mayon Compatibility
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
+                                       ],
                            ),
                      Field("code", length=10, # Mayon compatibility
                            label = T("Code"),
@@ -6827,7 +6927,7 @@ def org_office_controller():
                 table.obsolete.readable = table.obsolete.writable = True
 
         elif r.representation == "geojson":
-            marker_fn = s3db.get_config("org_office", marker_fn)
+            marker_fn = s3db.get_config("org_office", "marker_fn")
             if marker_fn:
                 # Load these models now as they'll be needed when we encode
                 mtable = s3db.gis_marker

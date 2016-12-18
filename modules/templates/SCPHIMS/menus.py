@@ -60,6 +60,20 @@ class S3MainMenu(default.S3MainMenu):
 
     # -------------------------------------------------------------------------
     @classmethod
+    def menu_admin(cls, **attr):
+        """ Custom Admin Menu """
+
+        menu = super(S3MainMenu, cls).menu_admin(**attr)
+        if menu:
+            item = MM("Edit Contacts", c="cms", f="post",
+                      args = ["update"],
+                      vars = {"~.title": "Contacts"},
+                      )
+            menu.append(item)
+        return menu
+
+    # -------------------------------------------------------------------------
+    @classmethod
     def menu_modules(cls):
         """ Custom Modules Menu """
 
@@ -217,7 +231,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
     def doc(self):
         """ DOC / Documents Module """
 
-        if current.auth.s3_is_logged_in():
+        if current.auth.s3_logged_in():
             return super(S3OptionsMenu, self).doc()
         else:
             return None
@@ -316,6 +330,8 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Import Project Organizations", f="organisation",
                           m="import", p="create"),
                         M("Import Project Locations", f="location",
+                          m="import", p="create"),
+                        M("Import Activities", f="activity",
                           m="import", p="create"),
                      ),
                      M("Partner Organizations",  f="partners")(

@@ -275,8 +275,11 @@ class S3PersonEntity(S3Model):
         # Reusable fields
         pr_pe_label = S3ReusableField("pe_label", length=128,
                                       label = T("ID Tag Number"),
-                                      requires = IS_EMPTY_OR(IS_NOT_ONE_OF(db,
-                                                             "pr_pentity.pe_label")),
+                                      requires = IS_EMPTY_OR(
+                                                    [IS_LENGTH(128),
+                                                     IS_NOT_ONE_OF(db,
+                                                        "pr_pentity.pe_label"),
+                                                     ]),
                                       )
 
         # Custom Method for S3AutocompleteWidget
@@ -763,9 +766,11 @@ class S3PersonModel(S3Model):
                                     )
 
         if settings.get_L10n_mandatory_lastname():
-            last_name_validate = IS_NOT_EMPTY(error_message = T("Please enter a last name"))
+            last_name_validate = [IS_NOT_EMPTY(error_message = T("Please enter a last name")),
+                                  IS_LENGTH(64),
+                                  ]
         else:
-            last_name_validate = None
+            last_name_validate = IS_LENGTH(64)
 
         # Add an opt-in clause to receive emails depending on the
         # deployment settings
@@ -805,7 +810,9 @@ class S3PersonModel(S3Model):
                   label = T("First Name"),
                   # NB Not possible to have an IS_NAME() validator here
                   # http://eden.sahanafoundation.org/ticket/834
-                  requires = IS_NOT_EMPTY(error_message = T("Please enter a first name")),
+                  requires = [IS_NOT_EMPTY(error_message = T("Please enter a first name")),
+                              IS_LENGTH(64),
+                              ],
                   comment =  DIV(_class="tooltip",
                                  _title="%s|%s" % (T("First Name"),
                                                    T("The first or only name of the person (mandatory)."))),
@@ -813,6 +820,7 @@ class S3PersonModel(S3Model):
             Field("middle_name", length=64, # Mayon Compatibility
                   label = T("Middle Name"),
                   represent = lambda v: v or NONE,
+                  requires = IS_LENGTH(64),
                   ),
             Field("last_name", length=64, # Mayon Compatibility
                   label = T("Last Name"),
@@ -822,6 +830,7 @@ class S3PersonModel(S3Model):
             # @ToDo: Move to person_details & hide by default
             Field("initials", length=8,
                   label = T("Initials"),
+                  requires = IS_LENGTH(8),
                   ),
             # @ToDo: Move to person_details & hide by default
             Field("preferred_name", length=64, # Mayon Compatibility
@@ -829,6 +838,7 @@ class S3PersonModel(S3Model):
                   comment = DIV(_class="tooltip",
                                 _title="%s|%s" % (T("Preferred Name"),
                                                   T("The name to be used when calling for or directly addressing the person (optional)."))),
+                  requires = IS_LENGTH(64),
                   ),
             # @ToDo: Move to person_details & hide by default
             Field("local_name",
@@ -2136,13 +2146,13 @@ class S3GroupModel(S3Model):
         define_table(tablename,
                      Field("code", length=16,
                            label = T("Code"),
-                           # Set in template if-required
-                           #requires = IS_NOT_EMPTY(),
+                           # Make mandatory in template if-required
+                           requires = IS_LENGTH(16),
                            ),
                      Field("name", length=64,
                            label = T("Name"),
-                           # Set in template if-required
-                           #requires = IS_NOT_EMPTY(),
+                           # Make mandatory in template if-required
+                           requires = IS_LENGTH(64),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -2340,7 +2350,9 @@ class S3GroupModel(S3Model):
         define_table(tablename,
                      Field("name", length=64,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
+                                       ],
                            ),
                      Field("group_type", "integer",
                            default = 4,
@@ -3097,16 +3109,21 @@ class S3AddressModel(S3Model):
         """
 
         form_vars = form.vars
-        location_id = form_vars.location_id
+        location_id = form_vars.get("location_id")
         if not location_id:
             return
 
+        try:
+            record_id = form_vars["id"]
+        except:
+            # Nothing we can do
+            return
         db = current.db
         s3db = current.s3db
         atable = db.pr_address
-        pe_id = db(atable.id == form_vars.id).select(atable.pe_id,
-                                                     limitby=(0, 1)
-                                                     ).first().pe_id
+        pe_id = db(atable.id == record_id).select(atable.pe_id,
+                                                  limitby=(0, 1)
+                                                  ).first().pe_id
         requestvars = current.request.form_vars
         settings = current.deployment_settings
         person = None
@@ -3127,7 +3144,7 @@ class S3AddressModel(S3Model):
                 # Hasn't yet been set so use this
                 S3Tracker()(db.pr_pentity, pe_id).set_base_location(location_id)
 
-        if person and str(form_vars.type) == "1": # Home Address
+        if person and str(form_vars.get("type")) == "1": # Home Address
             if settings.has_module("hrm"):
                 # Also check for relevant HRM record(s)
                 staff_settings = settings.get_hrm_location_staff()
@@ -3840,7 +3857,9 @@ class S3PersonEducationModel(S3Model):
         define_table(tablename,
                      Field("name", length=64, notnull=True,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
+                                       ],
                            ),
                      # Only included in order to be able to set
                      # realm_entity to filter appropriately
@@ -4141,6 +4160,7 @@ class S3PersonDetailsModel(S3Model):
                           Field("occupation", length=128, # Mayon Compatibility
                                 label = T("Profession"),
                                 represent = lambda v: v or NONE,
+                                requires = IS_LENGTH(128),
                                 ),
                           Field("company",
                                 label = T("Company"),
@@ -4391,6 +4411,11 @@ class S3SubscriptionModel(S3Model):
                                 requires = IS_EMPTY_OR(
                                             IS_IN_SET(email_format_opts,
                                                       zero=None)),
+                                ),
+                          Field("attachment", "boolean",
+                                default = False,
+                                readable = False,
+                                writable = False,
                                 ),
                           s3_comments(),
                           *s3_meta_fields())
@@ -5051,6 +5076,7 @@ class S3PersonDescription(S3Model):
                      Field("ethnicity", length=64, # Mayon Compatibility
                            label = T("Ethnicity"),
                            #requires = IS_EMPTY_OR(IS_IN_SET(pr_ethnicity_opts)),
+                           requires = IS_LENGTH(64),
                            ),
                      # Height and weight
                      Field("height", "integer",

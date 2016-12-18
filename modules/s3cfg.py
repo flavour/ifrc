@@ -2285,6 +2285,20 @@ class S3Config(Storage):
         """
         return self.msg.get("notify_renderer")
 
+    def get_msg_notify_attachment(self):
+        """
+            Custom function that returns the list of document_ids to be sent
+            as attachment in email
+            
+            The function may be of the form:
+            custom_msg_notify_attachment(resource, data, meta_data), where
+            resource is the S3Resource, data: the data returned from 
+            S3Resource.select and meta_data: the meta data for the notification
+            (see s3notify for the metadata)
+        """
+
+        return self.msg.get("notify_attachment")
+
     # -------------------------------------------------------------------------
     # SMS
     #
@@ -2888,18 +2902,6 @@ class S3Config(Storage):
             Use service type in case activities
         """
         return self.dvr.get("activity_use_service_type", False)
-
-    def get_dvr_activity_types(self):
-        """
-            Use activity types in case activities
-        """
-        return self.dvr.get("activity_types", False)
-
-    def get_dvr_activity_types_hierarchical(self):
-        """
-            Case activity types are hierarchical
-        """
-        return self.dvr.get("activity_types_hierarchical", False)
 
     def get_dvr_needs_use_service_type(self):
         """
@@ -4239,6 +4241,12 @@ class S3Config(Storage):
             Group Tabs on Projects into a single 'Details' page
         """
         return self.project.get("details_tab", False)
+
+    def get_project_event_activities(self):
+        """
+            Link Activities to Events
+        """
+        return self.project.get("event_activities", False)
 
     def get_project_goals(self):
         """

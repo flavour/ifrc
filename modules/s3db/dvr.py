@@ -148,6 +148,7 @@ class DVRCaseModel(S3Model):
                      Field("code", length=64, notnull=True, unique=True,
                            label = T("Status Code"),
                            requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
                                        IS_NOT_ONE_OF(db,
                                                      "%s.code" % tablename,
                                                      ),
@@ -599,6 +600,9 @@ class DVRCaseModel(S3Model):
                            label = T("Officially Registered"),
                            represent = s3_yes_no_represent,
                            ),
+                     s3_date("arrival_date",
+                             label = T("Arrival Date"),
+                             ),
                      *s3_meta_fields())
 
         # ---------------------------------------------------------------------
@@ -1183,6 +1187,7 @@ class DVRNotesModel(S3Model):
                      Field("name", length=128, unique=True,
                            label = T("Name"),
                            requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(128),
                                        IS_NOT_ONE_OF(db,
                                                      "dvr_note_type.name",
                                                      ),
@@ -1264,9 +1269,7 @@ class DVRNotesModel(S3Model):
 class DVRCaseActivityModel(S3Model):
     """ Model for Case Activities """
 
-    names = ("dvr_activity_type",
-             "dvr_activity_type_represent",
-             "dvr_activity",
+    names = ("dvr_activity",
              "dvr_case_activity",
              "dvr_case_activity_id",
              "dvr_case_service_contact",
@@ -1286,81 +1289,6 @@ class DVRCaseActivityModel(S3Model):
         service_type = settings.get_dvr_activity_use_service_type()
         service_id = self.org_service_id
 
-        activity_types = settings.get_dvr_activity_types()
-        hierarchical_activity_types = settings.get_dvr_activity_types_hierarchical()
-
-        # ---------------------------------------------------------------------
-        # Activity Type
-        #
-        tablename = "dvr_activity_type"
-        define_table(tablename,
-                     Field("name", length=128, notnull=True,
-                           label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
-                           ),
-                     service_id(label = T("Service Type"),
-                                ondelete = "SET NULL",
-                                readable = service_type,
-                                writable = service_type,
-                                ),
-                     # This form of hierarchy may not work on all Databases:
-                     Field("parent", "reference dvr_activity_type",
-                           label = T("Subtype of"),
-                           ondelete = "RESTRICT",
-                           readable = hierarchical_activity_types,
-                           writable = hierarchical_activity_types,
-                           ),
-                     s3_comments(),
-                     *s3_meta_fields())
-
-        if hierarchical_activity_types:
-            hierarchy = "parent"
-            widget = S3HierarchyWidget(multiple = False,
-                                       )
-        else:
-            hierarchy = None
-            widget = None
-
-        # Table configuration
-        configure(tablename,
-                  deduplicate = S3Duplicate(primary = ("name",),
-                                            secondary = ("parent",),
-                                            ),
-                  hierarchy = hierarchy,
-                  onaccept = self.activity_type_onaccept
-                  )
-
-        # CRUD Strings
-        crud_strings[tablename] = Storage(
-            label_create = T("Create Activity Type"),
-            title_display = T("Activity Type Details"),
-            title_list = T("Activity Types"),
-            title_update = T("Edit Activity Types"),
-            label_list_button = T("List Activity Types"),
-            label_delete_button = T("Delete Activity Type"),
-            msg_record_created = T("Activity Type added"),
-            msg_record_modified = T("Activity Type updated"),
-            msg_record_deleted = T("Activity Type deleted"),
-            msg_list_empty = T("No Activity Types currently defined"),
-            )
-
-        # Reusable field
-        activity_type_represent = S3Represent(lookup = tablename,
-                                              translate = True,
-                                              )
-        activity_type_id = S3ReusableField("activity_type_id", "reference %s" % tablename,
-                                           label = T("Activity Type"),
-                                           ondelete = "CASCADE",
-                                           represent = activity_type_represent,
-                                           requires = IS_EMPTY_OR(
-                                                        IS_ONE_OF(db, "%s.id" % tablename,
-                                                                  activity_type_represent,
-                                                                  sort=True,
-                                                                  )),
-                                           sortby = "name",
-                                           widget = widget,
-                                           )
-
         # ---------------------------------------------------------------------
         # Activity (not case-specific)
         #
@@ -1375,9 +1303,11 @@ class DVRCaseActivityModel(S3Model):
 
         tablename = "dvr_activity"
         define_table(tablename,
-                     activity_type_id(readable = activity_types,
-                                      writable = activity_types,
-                                      ),
+                     service_id(label = T("Service Type"),
+                                ondelete = "SET NULL",
+                                readable = service_type,
+                                writable = service_type,
+                                ),
                      Field("name",
                            label = T("Title"),
                            ),
@@ -1400,7 +1330,7 @@ class DVRCaseActivityModel(S3Model):
                             represent = site_represent,
                             updateable = True,
                             ),
-                     # Field("room"), @todo: link to room (org_site)
+                     self.org_room_id(),
                      # @todo: have alternative lookup field (hrm)
                      Field("facilitator",
                            label = T("Facilitator"),
@@ -1443,7 +1373,7 @@ class DVRCaseActivityModel(S3Model):
                                                               represent,
                                                               sort = True,
                                                               )),
-                                      sortby = "activity_type_id",
+                                      sortby = "service_id",
                                       )
 
         # ---------------------------------------------------------------------
@@ -1486,6 +1416,10 @@ class DVRCaseActivityModel(S3Model):
                                               readable = False,
                                               writable = False,
                                               ),
+                     self.hrm_human_resource_id(label = T("Assigned to"),
+                                                readable = False,
+                                                writable = False,
+                                                ),
                      self.project_project_id(ondelete = "SET NULL",
                                              readable = False,
                                              writable = False,
@@ -1495,9 +1429,6 @@ class DVRCaseActivityModel(S3Model):
                                 readable = service_type,
                                 writable = service_type,
                                 ),
-                     activity_type_id(readable = activity_types,
-                                      writable = activity_types,
-                                      ),
                      activity_id(readable=False,
                                  writable=False,
                                  ),
@@ -1688,8 +1619,7 @@ class DVRCaseActivityModel(S3Model):
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return {"dvr_activity_type_represent": activity_type_represent,
-                "dvr_case_activity_id": case_activity_id,
+        return {"dvr_case_activity_id": case_activity_id,
                 }
 
     # -------------------------------------------------------------------------
@@ -1702,46 +1632,9 @@ class DVRCaseActivityModel(S3Model):
                                 writable = False,
                                 )
 
-        return {"dvr_activity_type_represent": lambda v: "",
-                "dvr_case_activity_id": lambda name="activity_id", **attr: \
+        return {"dvr_case_activity_id": lambda name="activity_id", **attr: \
                                                dummy(name, **attr),
                 }
-
-    # -------------------------------------------------------------------------
-    @staticmethod
-    def activity_type_onaccept(form):
-
-
-        if current.deployment_settings.get_dvr_activity_types_hierarchical():
-
-            # Read form data
-            formvars = form.vars
-            if "id" in formvars:
-                record_id = formvars.id
-            elif hasattr(form, "record_id"):
-                record_id = form.record_id
-            else:
-                record_id = None
-            if not record_id:
-                return
-
-            db = current.db
-            s3db = current.s3db
-            table = s3db.dvr_activity_type
-
-            # Load record
-            row = db(table.id == record_id).select(table.service_id,
-                                                   table.parent,
-                                                   limitby = (0, 1),
-                                                   ).first()
-
-            if row and not row.service_id and row.parent:
-
-                parent = db(table.id == row.parent).select(table.service_id,
-                                                           limitby = (0, 1),
-                                                           ).first()
-                if parent and parent.service_id:
-                    row.update_record(service_id = parent.service_id)
 
 # =============================================================================
 class DVRCaseAppointmentModel(S3Model):
@@ -1779,6 +1672,7 @@ class DVRCaseAppointmentModel(S3Model):
         define_table(tablename,
                      Field("name", length=64, notnull=True, unique=True,
                            requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
                                        IS_NOT_ONE_OF(db,
                                                      "%s.name" % tablename,
                                                      ),
@@ -2802,6 +2696,7 @@ class DVRCaseEventModel(S3Model):
                      Field("code", notnull=True, length=64, unique=True,
                            label = T("Code"),
                            requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
                                        IS_NOT_ONE_OF(db,
                                                      "dvr_case_event_type.code",
                                                      ),
@@ -3644,20 +3539,20 @@ class dvr_ActivityRepresent(S3Represent):
                                         table.name,
                                         table.start_date,
                                         table.end_date,
-                                        table.activity_type_id,
+                                        table.service_id,
                                         limitby = (0, count),
                                         )
         self.queries += 1
 
-        types = set()
+        services = set()
         for row in rows:
-            activity_type_id = row.activity_type_id
-            if activity_type_id:
-                types.add(activity_type_id)
+            service_id = row.service_id
+            if service_id:
+                services.add(service_id)
 
-        if types:
-            represent = table.activity_type_id.represent
-            represent.bulk(list(types))
+        if services:
+            represent = table.service_id.represent
+            represent.bulk(list(services))
 
         return rows
 
@@ -3673,20 +3568,23 @@ class dvr_ActivityRepresent(S3Represent):
             title = row.name
         else:
             table = current.s3db.dvr_activity
-            title = table.activity_type_id.represent(row.activity_type_id)
+            title = table.service_id.represent(row.service_id)
 
+        template = "%(title)s"
         data = {"title": title,
-                "start": "..",
-                "end": "..",
                 }
 
-        date_represent = S3DateTime.date_represent
-        if row.start_date:
-            data["start"] = date_represent(row.start_date)
-        if row.end_date:
-            data["end"] = date_represent(row.end_date)
+        start_date = row.start_date
+        end_date = row.end_date
+        if start_date or end_date:
+            date_represent = S3DateTime.date_represent
+            if start_date:
+                data["start"] = date_represent(start_date)
+            if end_date:
+                data["end"] = date_represent(end_date)
+            template = "%(title)s (%(start)s - %(end)s)"
 
-        return "%(title)s (%(start)s - %(end)s)" % data
+        return template % data
 
     # -------------------------------------------------------------------------
     def link(self, k, v, row=None):
@@ -6279,13 +6177,19 @@ def dvr_rheader(r, tabs=[]):
 
         elif tablename == "dvr_activity":
 
+            label = current.deployment_settings.get_dvr_label()
+            if label == "Beneficiary":
+                CASES = T("Beneficiaries")
+            else:
+                CASES = T("Cases")
+
             if not tabs:
                 tabs = [(T("Basic Details"), None),
-                        (T("Cases"), "case_activity"),
+                        (CASES, "case_activity"),
                         ]
 
             rheader_fields = [["name"],
-                              ["activity_type_id"],
+                              ["service_id"],
                               ]
 
         rheader = S3ResourceHeader(rheader_fields, tabs)(r,

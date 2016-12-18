@@ -111,7 +111,9 @@ class S3EventModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, length=64,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
+                                       ],
                            ),
                      Field("parent", "reference event_event_type", # This form of hierarchy may not work on all Databases
                            label = T("SubType of"),
@@ -214,7 +216,9 @@ class S3EventModel(S3Model):
                      Field("name",      # Name could be a code
                            length = 64,   # Mayon compatibility
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
+                                       ],
                            ),
                      event_type_id(),
                      #Field("intensity",
@@ -454,6 +458,14 @@ class S3EventModel(S3Model):
                                             "key": "location_id",
                                             "actuate": "hide",
                                             },
+                            event_activity = {"name": "event_activity",
+                                              "joinby": "event_id",
+                                              },
+                            project_activity = {"link": "event_activity",
+                                                "joinby": "event_id",
+                                                "key": "activity_id",
+                                                "actuate": "replace",
+                                                },
                             event_event_location = "event_id",
                             event_post = "event_id",
                             event_event_tag = {"name": "tag",
@@ -655,7 +667,9 @@ class S3IncidentModel(S3Model):
                           Field("name", notnull=True, # Name could be a code
                                 length = 64,
                                 label = T("Name"),
-                                requires = IS_NOT_EMPTY(),
+                                requires = [IS_NOT_EMPTY(),
+                                            IS_LENGTH(64),
+                                            ],
                                 ),
                           Field("exercise", "boolean",
                                 label = T("Exercise?"),
@@ -1539,7 +1553,9 @@ class S3IncidentTypeModel(S3Model):
         self.define_table(tablename,
                           Field("name", notnull=True, length=64,
                                 label = T("Name"),
-                                requires = IS_NOT_EMPTY(),
+                                requires = [IS_NOT_EMPTY(),
+                                            IS_LENGTH(64),
+                                            ],
                                 ),
                           Field("parent", "reference event_incident_type", # This form of hierarchy may not work on all Databases
                                 label = T("SubType of"),
@@ -1674,9 +1690,6 @@ class S3EventActivityModel(S3Model):
 
     def model(self):
 
-        if not current.deployment_settings.has_module("project"):
-            return None
-
         tablename = "event_activity"
         self.define_table(tablename,
                           self.event_event_id(empty = False,
@@ -1720,6 +1733,7 @@ class S3EventAlertModel(S3Model):
                      Field("subject", length=78,    # RFC 2822
                            comment = T("The subject of the alert (optional)"),
                            label = T("Subject"),
+                           requires = IS_LENGTH(78),
                            ),
                      Field("body", "text",
                            label = T("Message"),
@@ -2138,7 +2152,9 @@ class S3EventTeamModel(S3Model):
                      Field("name",
                            length = 64,
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
+                           requires = [IS_NOT_EMPTY(),
+                                       IS_LENGTH(64),
+                                       ],
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -3242,6 +3258,8 @@ def event_rheader(r):
                 tabs.append((T("Targets"), "target"))
             if settings.get_event_collection_tab():
                 tabs.append((T("Assessments"), "collection"))
+            if settings.get_project_event_activities():
+                tabs.append((T("Activities"), "activity"))
             if settings.has_module("cr"):
                 tabs.append((T("Shelters"), "event_shelter"))
             #if settings.has_module("req"):

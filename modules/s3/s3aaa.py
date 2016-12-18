@@ -6467,7 +6467,7 @@ class S3Permission(object):
                 # RFC1945/2617 compliance:
                 # Must raise an HTTP Auth challenge with status 401
                 challenge = {"WWW-Authenticate":
-                             u"Basic realm=%s" % current.request.application}
+                             u"Basic realm=\"%s\"" % current.request.application}
                 raise HTTP(401, body=self.AUTHENTICATION_REQUIRED, **challenge)
 
     # -------------------------------------------------------------------------
@@ -8783,7 +8783,7 @@ class S3EntityRoleManager(S3Method):
 
         T = current.T
 
-        # organisation or office entity
+        # organisation or site entity
         self.entity = self.get_entity()
 
         # user account to assigned roles to
@@ -9198,7 +9198,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
     # -------------------------------------------------------------------------
     def get_user(self):
         """
-            We are on a person account so we need to find the associated user
+            We are on a person record so we need to find the associated user
             account.
 
             @return: dictionary with ID and username/email of the user account

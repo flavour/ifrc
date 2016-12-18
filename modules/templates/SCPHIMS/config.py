@@ -125,6 +125,20 @@ def config(settings):
     #settings.mail.login = "username:password"
 
     # =========================================================================
+    # CMS
+    #
+
+    settings.cms.richtext = True
+
+    # =========================================================================
+    # Mobile
+    #
+
+    settings.mobile.forms = [("Beneficiaries", "pr_person", {"c": "dvr",
+                                                             }),
+                             ]
+
+    # =========================================================================
     # Data Collection
     #
 
@@ -460,67 +474,117 @@ def config(settings):
         else:
             s3db.dvr_case.organisation_id.default = SCI
 
-        from s3 import S3SQLCustomForm, S3SQLInlineComponent
-        crud_form = S3SQLCustomForm(
-                        # @ToDo: Scan this in from barcode on preprinted card
-                        "dvr_case.reference",
-                        "dvr_case.date",
-                        "first_name",
-                        "middle_name",
-                        "last_name",
-                        "date_of_birth",
-                        "gender",
-                        "person_details.disabled",
-                        S3SQLInlineComponent(
-                                "contact",
-                                fields = [("", "value"),
-                                          ],
-                                filterby = {"field": "contact_method",
-                                            "options": "SMS",
-                                            },
-                                label = T("Mobile Phone"),
-                                multiple = False,
-                                name = "phone",
-                                ),
-                        S3SQLInlineComponent(
-                                "contact",
-                                fields = [("", "value"),
-                                          ],
-                                filterby = {"field": "contact_method",
-                                            "options": "EMAIL",
-                                            },
-                                label = T("Email"),
-                                multiple = False,
-                                name = "email",
-                                ),
-                        S3SQLInlineComponent(
-                                "address",
-                                label = T("Current Address"),
-                                fields = [("", "location_id"),
-                                          ],
-                                filterby = {"field": "type",
-                                            "options": "1",
-                                            },
-                                link = False,
-                                multiple = False,
-                                ),
-                        "dvr_case.comments",
-                        )
+        mobile_list_fields = [# No need for Mobile client to know which Activity a Case is linked to
+                              #"project_case_activity.activity_id$name",
+                              "dvr_case.reference",
+                              "dvr_case.date",
+                              "first_name",
+                              "middle_name",
+                              "last_name",
+                              "date_of_birth",
+                              "gender",
+                              "person_details.disabled",
+                              "phone.value",
+                              "email.value",
+                              # @ToDo: Use just parent in Mobile LocationSelector
+                              #"address.location_id$L1",
+                              #"address.location_id$L2",
+                              #"address.location_id$L3",
+                              #"address.location_id$L4",
+                              "address.location_id$parent",
+                              # Restore once list_fields working
+                              #"address.location_id$parent$uuid",
+                              "address.location_id$addr_street",
+                              "dvr_case.comments",
+                              ]
 
         s3db.configure("pr_person",
-                       crud_form = crud_form,
+                       # TESTING - remove when done
+                       #list_fields = [#"address.location_id",
+                       #               #"address.location_id$id",
+                       #               #"address.location_id$uuid",
+                       #               #"address.location_id$parent",
+                       #               #"address.location_id$parent$id",
+                       #               "address.location_id$parent$name",
+                       #               #"address.location_id$parent$uuid",
+                       #               ],
+                       mobile_list_fields = mobile_list_fields,
                        )
+
+        from s3 import S3SQLInlineComponent
+        crud_fields = [# @ToDo: Scan this in from barcode on preprinted card
+                       "dvr_case.reference",
+                       "dvr_case.date",
+                       "first_name",
+                       "middle_name",
+                       "last_name",
+                       "date_of_birth",
+                       "gender",
+                       "person_details.disabled",
+                       S3SQLInlineComponent(
+                            "phone",
+                            fields = [("", "value"),
+                                      ],
+                            #filterby = {"field": "contact_method",
+                            #            "options": "SMS",
+                            #            },
+                            label = T("Mobile Phone"),
+                            multiple = False,
+                            #name = "phone",
+                            ),
+                       S3SQLInlineComponent(
+                            "email",
+                            fields = [("", "value"),
+                                      ],
+                            #filterby = {"field": "contact_method",
+                            #            "options": "EMAIL",
+                            #            },
+                            label = T("Email"),
+                            multiple = False,
+                            #name = "email",
+                            ),
+                       S3SQLInlineComponent(
+                            "address",
+                            label = T("Current Address"),
+                            fields = [("", "location_id"),
+                                      ],
+                            filterby = {"field": "type",
+                                        "options": "1",
+                                        },
+                            link = False,
+                            multiple = False,
+                            ),
+                       "dvr_case.comments",
+                       ]
+
+        return crud_fields
 
     def customise_pr_person_resource(r, tablename):
 
         if r.function == "distribution":
             # Beneficiaries
-            customise_beneficiary_form()
+            from s3 import S3SQLCustomForm
+            s3db = current.s3db
+            crud_fields = customise_beneficiary_form()
+            s3db.configure("pr_person",
+                           crud_form = S3SQLCustomForm(*crud_fields),
+                           )
+
             s3db.pr_address.location_id.default = r.record.location_id
 
     settings.customise_pr_person_resource = customise_pr_person_resource
 
     def customise_pr_person_controller(**attr):
+
+        s3db = current.s3db
+        s3db.add_components("pr_person",
+                            project_case_activity = {"name": "project_case_activity", # Avoid conflict with dvr_case_activity
+                                                     "link": "dvr_case",
+                                                     "joinby": "person_id",
+                                                     "key": "id",
+                                                     "fkey": "case_id",
+                                                     },
+                            )
 
         s3 = current.response.s3
         standard_prep = s3.prep
@@ -532,7 +596,23 @@ def config(settings):
 
             if r.controller == "dvr":
                 # Beneficiaries
-                customise_beneficiary_form()
+                from s3 import S3SQLCustomForm, S3SQLInlineComponent
+                crud_fields = customise_beneficiary_form()
+                crud_fields.insert(0,
+                                   # @ToDo: Create isn't refreshing the dropdown
+                                   S3SQLInlineComponent(
+                                    "project_case_activity",
+                                    fields = [("", "activity_id"),
+                                              ],
+                                    label = T("Activity"),
+                                    link = False,
+                                    multiple = False,
+                                    )
+                                   )
+                s3db.configure("pr_person",
+                               crud_form = S3SQLCustomForm(*crud_fields),
+                               )
+
             return True
         s3.prep = custom_prep
 
@@ -544,6 +624,62 @@ def config(settings):
     # Events
     #
     settings.event.label = "Disaster"
+
+    def response_locations():
+        """
+            Called onaccept/ondelete from events & activities
+            - calculates which L3 locations have SC activities linked to open events & sets their Sectors tag
+        """
+
+        db = current.db
+        s3db = current.s3db
+        gtable = s3db.gis_location
+        ttable = s3db.gis_location_tag
+        etable = s3db.event_event
+        ltable = s3db.event_activity
+        atable = s3db.project_activity
+        aotable = s3db.project_activity_organisation
+        otable = s3db.org_organisation
+        stable = s3db.org_sector
+        satable = s3db.project_sector_activity
+
+        # Clear all old Data
+        db(ttable.tag == "sectors").delete()
+
+        # Find all (L4) Locations with Activities linked to Open Events
+        query = (gtable.id == atable.location_id) & \
+                (atable.deleted == False) & \
+                (atable.id == aotable.activity_id) & \
+                (aotable.organisation_id == otable.id) & \
+                (otable.name == SAVE) & \
+                (atable.id == ltable.activity_id) & \
+                (ltable.event_id == etable.id) & \
+                (etable.closed == False) & \
+                (etable.deleted == False)
+        left = stable.on((stable.id == satable.sector_id) & \
+                         (satable.activity_id == atable.id))
+        L4s = db(query).select(gtable.parent,
+                               stable.name,
+                               left = left,
+                               )
+
+        # Aggregate these to L3
+        L3s = {}
+        for L4 in L4s:
+            sector = L4["org_sector.name"]
+            if sector:
+                L3 = L4["gis_location.parent"]
+                if L3 in L3s:
+                    L3s[L3].append(sector)
+                else:
+                    L3s[L3] = [sector]
+
+        # Store the Sectors in the DB
+        for L3 in L3s:
+            ttable.insert(location_id = L3,
+                          tag = "sectors",
+                          value = ", ".join(set(L3s[L3])),
+                          )
 
     def customise_event_event_controller(**attr):
 
@@ -559,9 +695,55 @@ def config(settings):
 
     def customise_event_event_resource(r, tablename):
 
-        from s3 import S3LocationSelector
-        current.s3db.event_event_location.location_id.widget = \
+        from gluon import IS_EMPTY_OR, IS_INT_IN_RANGE
+        from s3 import S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
+        s3db = current.s3db
+        s3db.event_event_location.location_id.widget = \
                                     S3LocationSelector(levels=("L1", "L2"))
+        # Cat 1: Extra-ordinary
+        # Cat 2: Large
+        # Cat 3: Medium
+        # Cat 4: Small
+        s3db.event_event_tag.value.requires = IS_EMPTY_OR(IS_INT_IN_RANGE(1, 5))
+        crud_form = S3SQLCustomForm("name",
+                                    "event_type_id",
+                                    "start_date",
+                                    S3SQLInlineComponent(
+                                        "tag",
+                                        fields = [("", "value"),
+                                                  ],
+                                        filterby = {"field": "tag",
+                                                    "options": "category",
+                                                    },
+                                        label = T("Category"),
+                                        multiple = False,
+                                        ),
+                                    "closed",
+                                    "comments",
+                                    )
+
+        list_fields = ["name",
+                       "event_type_id",
+                       "start_date",
+                       (T("Category"), "tag.value"),
+                       "closed",
+                       "comments",
+                       ]
+
+        # If we have default ones defined then need to add them in a cascade:
+        #onaccept = s3db.get_config("event_event", "onaccept")
+        #ondelete = s3db.get_config("event_event", "ondelete")
+        onaccept = lambda form: response_locations()
+        update_onaccept = s3db.get_config("event_event", "update_onaccept")
+        update_onaccept = [update_onaccept, onaccept]
+        
+        s3db.configure("event_event",
+                       crud_form = crud_form,
+                       list_fields = list_fields,
+                       onaccept = onaccept,
+                       ondelete = onaccept,
+                       update_onaccept = update_onaccept,
+                       )
 
     settings.customise_event_event_resource = customise_event_event_resource
 
@@ -574,6 +756,7 @@ def config(settings):
     settings.project.activities = True
     settings.project.activity_sectors = True
     settings.project.codes = True
+    settings.project.event_activities = True
     settings.project.hazards = False
     settings.project.hfa = False
     settings.project.programmes = True
@@ -591,7 +774,45 @@ def config(settings):
 
     def customise_project_activity_resource(r, tablename):
 
-        current.s3db.gis_location.addr_street.label = T("Precise Location")
+        s3db = current.s3db
+        s3db.gis_location.addr_street.label = T("Precise Location")
+
+        from s3 import S3SQLCustomForm, S3SQLInlineComponent
+
+        crud_form = S3SQLCustomForm("name",
+                                    "date",
+                                    "status_id",
+                                    S3SQLInlineComponent("sector_activity",
+                                                         label = T("Sectors"),
+                                                         fields = [("", "sector_id")],
+                                                         ),
+                                    "location_id",
+                                    "comments",
+                                    )
+
+        list_fields = ["name",
+                       "date",
+                       "status_id",
+                       (T("Sectors"), "sector_activity.sector_id"),
+                       (T("Items"), "distribution.parameter_id"),
+                       "location_id$L1",
+                       "location_id$L2",
+                       "location_id$L3",
+                       "location_id$L4",
+                       #"comments",
+                       ]
+
+        # If we have default ones defined then need to add them in a cascade:
+        #onaccept = s3db.get_config("project_activity", "onaccept")
+        #ondelete = s3db.get_config("project_activity", "ondelete")
+        onaccept = lambda form: response_locations()
+        
+        s3db.configure("project_activity",
+                       crud_form = crud_form,
+                       list_fields = list_fields,
+                       onaccept = onaccept,
+                       ondelete = onaccept,
+                       )
 
     settings.customise_project_activity_resource = customise_project_activity_resource
 
