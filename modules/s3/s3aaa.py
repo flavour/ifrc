@@ -6503,13 +6503,6 @@ class S3Permission(object):
         else:
             acls = {}
 
-        db = current.db
-        table = self.table
-
-        c = c or self.controller
-        f = f or self.function
-        page_restricted = self.page_restricted(c=c, f=f)
-
         # Get all roles
         if realms:
             roles = set(realms.keys())
@@ -6519,6 +6512,13 @@ class S3Permission(object):
         else:
             # No roles available (deny all)
             return acls
+
+        db = current.db
+        table = self.table
+
+        c = c or self.controller
+        f = f or self.function
+        page_restricted = self.page_restricted(c=c, f=f)
 
         # Base query
         query = (table.deleted != True) & \
@@ -8614,6 +8614,7 @@ class S3EntityRoleManager(S3Method):
                     "org_office",
                     "inv_warehouse",
                     "hms_hospital",
+                    "po_area",
                     "pr_group",
                     ]
 
@@ -9244,7 +9245,7 @@ class S3PersonRoleManager(S3EntityRoleManager):
     def get_form_fields(self):
         """
             Return a list of fields, including a field for selecting
-            an organisation or office.
+            a realm entity (such as an organisation or office).
 
             @return: list of Fields
         """

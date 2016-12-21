@@ -73,7 +73,6 @@ class OutreachAreaModel(S3Model):
                                                     feature_required = True,
                                                     ),
                      ),
-                     # Only included to set realm entity:
                      self.org_organisation_id(default = auth.user and auth.user.organisation_id,
                                               #default = root_org,
                                               #readable = is_admin,
@@ -284,7 +283,6 @@ class OutreachHouseholdModel(S3Model):
 
         s3 = current.response.s3
         crud_strings = s3.crud_strings
-        settings = current.deployment_settings
 
         person_id = self.pr_person_id
 
@@ -709,7 +707,6 @@ class OutreachReferralModel(S3Model):
     def model(self):
 
         T = current.T
-        db = current.db
 
         define_table = self.define_table
         configure = self.configure
@@ -772,7 +769,7 @@ class OutreachReferralModel(S3Model):
         )
 
         # ---------------------------------------------------------------------
-        # Referral Household=>Agency
+        # Referral Household => Agency
         #
         tablename = "po_organisation_household"
         define_table(tablename,
@@ -838,7 +835,6 @@ class po_HouseholdRepresent(S3Represent):
             @param fields: unused (retained for API compatibility)
         """
 
-        s3db = current.s3db
         table = self.table
 
         count = len(values)
@@ -936,9 +932,10 @@ def po_rheader(r, tabs=[]):
 # =============================================================================
 def po_organisation_onaccept(form):
     """
-        Create a po_referral_organisation record onaccept of
-        an org_organisation to link it to this module.
-
+        1. Set the owned_by_group to PO_ADMIN so that they can see these
+           agencies in the household referrals dropdown
+        2. Create a po_referral_organisation record onaccept of
+           an org_organisation to link it to this module.
         @param form: the form
     """
 
@@ -947,11 +944,32 @@ def po_organisation_onaccept(form):
     except AttributeError:
         return
 
-    rtable = current.s3db.po_referral_organisation
+    db = current.db
+    s3db = current.s3db
+    otable = s3db.org_organisation
+    record = db(otable.id == organisation_id).select(otable.id,
+                                                     otable.owned_by_group,
+                                                     limitby=(0, 1)
+                                                     ).first()
+    if record:
+        gtable = db.auth_group
+        role = db(gtable.uuid == "PO_ADMIN").select(gtable.id,
+                                                    limitby = (0, 1)
+                                                    ).first()
+        try:
+            PO_ADMIN = role.id
+        except:
+            # No PO_ADMIN role prepopped
+            pass
+        else:
+            if record.owned_by_group != PO_ADMIN:
+                record.update(owned_by_group = PO_ADMIN)
+
+    rtable = s3db.po_referral_organisation
     query = (rtable.organisation_id == organisation_id) & \
             (rtable.deleted != True)
-    row = current.db(query).select(rtable.id, limitby=(0, 1)).first()
-    if not row:
+    exists = db(query).select(rtable.id, limitby=(0, 1)).first()
+    if not exists:
         rtable.insert(organisation_id=organisation_id)
 
 # =============================================================================

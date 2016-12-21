@@ -150,7 +150,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M(follow_up_label, f="due_followups"),
                         ),
                     M("Activities", link=False)(
-                        M("Psychosocial Support", f="activity",
+                        M("Group Activities", f="activity",
                           vars={"service_type": "PSS"},
                           ),
                         M("Mental Health Support", f="activity",
@@ -168,6 +168,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     M("Administration", c="dvr", link=False,
                       restrict = [ADMIN])(
                         M("Beneficiary Types", f="beneficiary_type"),
+                        M("Evaluation Questions", f="evaluation_question"),
                         M("Housing Types", f="housing_type"),
                         M("Income Sources", f="income_source"),
                         M("Need Types", f="need"),
