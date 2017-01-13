@@ -169,13 +169,13 @@ class S3OptionsMenu(default.S3OptionsMenu):
                           ),
                         ),
                     M("Administration", c="dvr", link=False,
-                      restrict = [ADMIN])(
+                      restrict = (ADMIN, "ORG_ADMIN"))(
                         M("Beneficiary Types", f="beneficiary_type"),
                         M("Evaluation Questions", f="evaluation_question"),
                         M("Housing Types", f="housing_type"),
                         M("Income Sources", f="income_source"),
                         M("Need Types", f="need"),
-                        M("SNF Justifications", f="activity_funding_reason"),
+                        M("Vulnerability Types", f="Vulnerability_type"),
                         M("Activity Group Types", f="activity_group_type"),
                         M("Activity Age Groups", f="activity_age_group"),
                         ),
@@ -211,7 +211,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                        #M("Import", m="import"),
                     ),
                     M("Administration", c=("org", "project"), link=False,
-                      restrict = [ADMIN])(
+                      restrict = (ADMIN, "ORG_ADMIN"))(
                         M("Organization Types", f="organisation_type"),
                         M("Service Types", f="service"),
                         M("Facility Types", f="facility_type"),

@@ -184,6 +184,8 @@ def config(settings):
     #
     # Case activities use service types
     settings.dvr.activity_use_service_type = True
+    # Case activities use multiple Needs
+    settings.dvr.case_activity_needs_multiple = True
 
     # Needs differentiated by service type, and hierarchical
     settings.dvr.needs_use_service_type = True
@@ -267,6 +269,8 @@ def config(settings):
                 # Custom list fields
                 list_fields = ["name",
                                "service_id",
+                               "start_date",
+                               "end_date",
                                (T("Type of Group"), "group_type_id"),
                                "gender",
                                "age_group_id",
@@ -278,6 +282,8 @@ def config(settings):
                 # Custom form
                 crud_form = S3SQLCustomForm("name",
                                             "service_id",
+                                            "start_date",
+                                            "end_date",
                                             (T("Type of Group"), "group_type_id"),
                                             "gender",
                                             "age_group_id",
@@ -462,6 +468,7 @@ def config(settings):
                        S3Represent, \
                        S3SQLCustomForm, \
                        S3SQLInlineComponent, \
+                       S3SQLInlineLink, \
                        s3_comments_widget
 
         db = current.db
@@ -508,14 +515,18 @@ def config(settings):
             # Custom list fields
             list_fields = ["person_id$pe_label",
                            "person_id",
-                           "need_id",
+                           "case_activity_need.need_id",
                            "project_id",
                            "followup",
                            "followup_date",
                            ]
 
             crud_form = S3SQLCustomForm("person_id",
-                                        "need_id",
+                                        S3SQLInlineLink("need",
+                                                        label = T("Needs"),
+                                                        field = "need_id",
+                                                        widget = "hierarchy",
+                                                        ),
                                         "need_details",
                                         "project_id",
                                         "followup",
@@ -554,12 +565,15 @@ def config(settings):
 
             if r.function == "due_followups":
                 table = r.table
+                component = r.resource
                 # Filter activities by root service
                 query = (FS("service_id$root_service") == root_service_id)
-                r.resource.add_filter(query)
+                component.add_filter(query)
             else:
                 table = r.component.table
                 component = r.component
+
+            component.configure(orderby=~table.start_date)
 
             expose_project_id(table)
             expose_human_resource_id(table)
@@ -583,21 +597,28 @@ def config(settings):
             query = (stable.root_service == root_service_id) & \
                     (stable.deleted != True)
 
-            field = table.need_id
-            field.label = T("Sector for DS/IS")
+            #field = table.need_id
+            field = s3db.dvr_case_activity_need.need_id
+            field.label = T("Sectors for DS/IS")
             field.comment = None
             field.requires = IS_ONE_OF(db(query), "dvr_need.id",
                                        field.represent,
                                        left = left,
                                        )
+            FILTER = (FS("service_id$root_service") == root_service_id)
             field.widget = S3HierarchyWidget(multiple = False,
                                              leafonly = False,
-                                             filter = (FS("service_id$root_service") == root_service_id),
+                                             filter = FILTER,
                                              )
 
             # Customise Need Details
             field = table.need_details
             field.label = T("DS/IS Case Explanation")
+            field.readable = field.writable = True
+
+            # Customise Priority
+            field = table.priority
+            field.label = T("Priority for DS")
             field.readable = field.writable = True
 
             # Customise date fields
@@ -627,11 +648,8 @@ def config(settings):
             ftable = s3db.dvr_activity_funding
             field = ftable.funding_required
             field.label = T("Need for SNF")
-            field = ftable.reason_id
+            field = ftable.reason
             field.label = T("Justification for SNF")
-            field.comment = None
-            field = ftable.proposal
-            field.label = T("Proposed Assistance for SNF")
             field.widget = s3_comments_widget
 
             # Custom CRUD form
@@ -639,16 +657,26 @@ def config(settings):
                                         "service_id",
                                         "human_resource_id",
                                         "project_id",
-                                        "need_id",
+                                        S3SQLInlineLink("vulnerability_type",
+                                                        label = T("Types of Vulnerability"),
+                                                        field = "vulnerability_type_id",
+                                                        ),
+                                        S3SQLInlineLink("need",
+                                                        label = T("Sectors for DS/IS"),
+                                                        field = "need_id",
+                                                        widget = "hierarchy",
+                                                        filter = FILTER,
+                                                        ),
                                         "need_details",
+                                        "priority",
                                         "start_date",
                                         "followup",
                                         "followup_date",
                                         "completed",
                                         "end_date",
+                                        (T("Outcome for DS"), "outcome"),
                                         "activity_funding.funding_required",
-                                        "activity_funding.reason_id",
-                                        "activity_funding.proposal",
+                                        "activity_funding.reason",
                                         S3SQLInlineComponent(
                                             "document",
                                             name = "file",
@@ -665,8 +693,9 @@ def config(settings):
                            "service_id",
                            "human_resource_id",
                            "project_id",
-                           "need_id",
+                           "need__link.need_id",
                            "start_date",
+                           "priority",
                            "followup",
                            "followup_date",
                            "completed",
@@ -735,6 +764,16 @@ def config(settings):
                                         "project_id",
                                         "service_id",
                                         "activity_id",
+                                        S3SQLInlineComponent(
+                                            "document",
+                                            name = "file",
+                                            label = T("Attachments"),
+                                            fields = ["file", "comments"],
+                                            filterby = {"field": "file",
+                                                        "options": "",
+                                                        "invert": True,
+                                                        },
+                                            ),
                                         "comments",
                                         )
             # Custom list fields
@@ -778,16 +817,18 @@ def config(settings):
             left = stable.on(stable.id == ntable.service_id)
             query = (stable.root_service == root_service_id) & \
                     (stable.deleted != True)
-            field = table.need_id
-            field.label = T("MH Complaint Type")
+            #field = table.need_id
+            field = s3db.dvr_case_activity_need.need_id
+            field.label = T("MH Complaint Types")
             field.comment = None
             field.requires = IS_ONE_OF(db(query), "dvr_need.id",
                                        field.represent,
                                        left = left,
                                        )
+            FILTER = (FS("service_id$root_service") == root_service_id)
             field.widget = S3HierarchyWidget(multiple = False,
                                              leafonly = False,
-                                             filter = (FS("service_id$root_service") == root_service_id),
+                                             filter = FILTER,
                                              )
 
             # Filter activities
@@ -817,19 +858,39 @@ def config(settings):
             table.followup.default = False
             table.followup_date.default = None
 
+            # Expose achievement field
+            field = table.achievement
+            field.readable = field.writable = True
+
             # Custom CRUD form
             crud_form = S3SQLCustomForm("person_id",
-                                        "need_id",
+                                        S3SQLInlineLink("need",
+                                                        label = T("MH Complaint Types"),
+                                                        field = "need_id",
+                                                        widget = "hierarchy",
+                                                        filter = FILTER,
+                                                        ),
                                         "service_id",
                                         "human_resource_id",
                                         "project_id",
                                         "activity_id",
+                                        (T("Status of main complaint at last visit"), "achievement"),
+                                        S3SQLInlineComponent(
+                                            "document",
+                                            name = "file",
+                                            label = T("Attachments"),
+                                            fields = ["file", "comments"],
+                                            filterby = {"field": "file",
+                                                        "options": "",
+                                                        "invert": True,
+                                                        },
+                                            ),
                                         "comments",
                                         )
 
             # Custom list fields
             list_fields = ["person_id",
-                           "need_id",
+                           "need__link.need_id",
                            "service_id",
                            "human_resource_id",
                            "project_id",
@@ -837,7 +898,7 @@ def config(settings):
                            ]
 
         else:
-            # Activity list
+            # Activity list (or counting due follow-ups)
             expose_project_id(s3db.dvr_case_activity)
 
             crud_form = S3SQLCustomForm("person_id",
@@ -847,8 +908,7 @@ def config(settings):
                                         "followup",
                                         "followup_date",
                                         "activity_funding.funding_required",
-                                        "activity_funding.reason_id",
-                                        "activity_funding.proposal",
+                                        "activity_funding.reason",
                                         "comments",
                                         )
             # Custom list fields
@@ -893,9 +953,9 @@ def config(settings):
                 table.person_id.represent = s3db.pr_PersonRepresent(show_link=True)
 
                 # Custom list fields
-                list_fields = [(T("ID"), "person_id$pe_label"),
+                list_fields = [(T("Ref.No."), "person_id$pe_label"),
                                "person_id",
-                               (T("Sector for DS/IS"), "need_id"),
+                               (T("Sectors for DS/IS"), "case_activity_need.need_id"),
                                "service_id",
                                "followup_date",
                                ]
@@ -905,7 +965,7 @@ def config(settings):
                 filter_widgets = [S3TextFilter(["person_id$pe_label",
                                                 "person_id$first_name",
                                                 "person_id$last_name",
-                                                "need_id$name",
+                                                "case_activity_need.need_id$name",
                                                 "service_id$name",
                                                 ],
                                                 label = T("Search"),
@@ -929,35 +989,6 @@ def config(settings):
     settings.customise_dvr_case_activity_controller = customise_dvr_case_activity_controller
 
     # -------------------------------------------------------------------------
-    def customise_dvr_activity_funding_reason_resource(r, tablename):
-
-        T = current.T
-
-        table = current.s3db.dvr_activity_funding_reason
-
-        field = table.name
-        field.label = T("SNF Justification")
-
-        crud_strings = current.response.s3.crud_strings
-
-        # CRUD Strings
-        crud_strings["dvr_activity_funding_reason"] = Storage(
-            label_create = T("Create SNF Justification"),
-            title_display = T("SNF Justification"),
-            title_list = T("SNF Justifications"),
-            title_update = T("Edit SNF Justification"),
-            label_list_button = T("List SNF Justifications"),
-            label_delete_button = T("Delete SNF Justification"),
-            msg_record_created = T("SNF Justification created"),
-            msg_record_modified = T("SNF Justification updated"),
-            msg_record_deleted = T("SNF Justification deleted"),
-            msg_list_empty = T("No SNF Justifications currently defined"),
-        )
-
-
-    settings.customise_dvr_activity_funding_reason_resource = customise_dvr_activity_funding_reason_resource
-
-    # -------------------------------------------------------------------------
     def customise_dvr_activity_funding_resource(r, tablename):
 
         T = current.T
@@ -965,10 +996,8 @@ def config(settings):
         table = current.s3db.dvr_activity_funding
         field = table.funding_required
         field.label = T("Need for SNF")
-        field = table.reason_id
+        field = table.reason
         field.label = T("Justification for SNF")
-        field = table.proposal
-        field.label = T("Proposed Assistance for SNF")
 
     settings.customise_dvr_activity_funding_resource = customise_dvr_activity_funding_resource
 
@@ -1067,13 +1096,21 @@ def config(settings):
 
         # Person tag for Family ID Number
         s3db.add_components("pr_person",
-                            pr_person_tag = {"name": "family_id",
-                                             "joinby": "person_id",
-                                             "filterby": {
-                                                 "tag": "FAMILY_ID",
-                                                 },
-                                             "multiple": False,
-                                             },
+                            pr_person_tag = ({"name": "family_id",
+                                              "joinby": "person_id",
+                                              "filterby": {
+                                                  "tag": "FAMILY_ID",
+                                                  },
+                                              "multiple": False,
+                                              },
+                                             {"name": "individual_id",
+                                              "joinby": "person_id",
+                                              "filterby": {
+                                                  "tag": "INDIVIDUAL_ID",
+                                                  },
+                                              "multiple": False,
+                                              },
+                                             ),
                             )
 
         # Add contacts-method
@@ -1091,7 +1128,11 @@ def config(settings):
 
             # ID label is required, remove tooltip
             field = table.pe_label
-            field.comment = None
+            field.comment = DIV(_class = "tooltip",
+                                _title = "%s|%s" % (T("Reference Number"),
+                                                    T("The STL Individual Reference Number for this Beneficiary"),
+                                                    ),
+                                )
             requires = field.requires
             if isinstance(requires, IS_EMPTY_OR):
                 field.requires = requires.other
@@ -1151,7 +1192,21 @@ def config(settings):
         group = set()
         root_service = None
         for row in rows:
+            # Rows are ordered by root service, so they come in
+            # groups each of which contains one root service
+
+            if row.root_service != root_service:
+                # Different root service => new group
+                if group:
+                    # Add previous group to its service_ids array
+                    service_ids.extend(group)
+                # Start new group
+                group = set()
+                root_service = row.root_service
+
             if row.parent is None:
+                # This is the root service of the current group
+                # => choose the right service_ids array for the group
                 name = row.name
                 if name == INDIVIDUAL_SUPPORT:
                     service_ids = is_service_ids
@@ -1160,12 +1215,10 @@ def config(settings):
                 else:
                     # Everything else is PSS
                     service_ids = pss_service_ids
-            if row.root_service != root_service:
-                if group:
-                    service_ids.extend(group)
-                group = set()
-                root_service = row.root_service
+
             group.add(row.id)
+
+        # Add the last group to its service_ids array
         service_ids.extend(group)
 
         # Custom activity components (differentiated by service type)
@@ -1273,7 +1326,7 @@ def config(settings):
                         field.requires = requires.other
                     field.comment = DIV(_class="tooltip",
                                         _title="%s|%s" % (T("Consenting to Data Disclosure"),
-                                                          T("Is the client consenting to disclosure of their data towards partner organisations and authorities?"),
+                                                          T("Is the beneficiary consenting to disclosure of their data towards partner organisations and authorities?"),
                                                           ),
                                         )
 
@@ -1285,7 +1338,7 @@ def config(settings):
                     field.label = T("Registered with Turkish Authorities")
                     field.comment = DIV(_class="tooltip",
                                         _title="%s|%s" % (T("Registered with Turkish Authorities"),
-                                                          T("Is the client officially registered with AFAD/DGMM?"),
+                                                          T("Is the beneficiary officially registered with AFAD/DGMM?"),
                                                           ),
                                         )
 
@@ -1300,6 +1353,7 @@ def config(settings):
 
                         # Custom CRUD form
                         crud_form = S3SQLCustomForm(
+                                        (T("Reference Number"), "pe_label"),
                                         "dvr_case.status_id",
                                         "dvr_case.date",
                                         "dvr_case.organisation_id",
@@ -1313,7 +1367,18 @@ def config(settings):
                                         "gender",
                                         "person_details.marital_status",
                                         "case_details.registered",
-                                        (T("Individual ID Number"), "pe_label"),
+                                        S3SQLInlineComponent(
+                                                "individual_id",
+                                                fields = [("", "value"),
+                                                          ],
+                                                filterby = {"field": "tag",
+                                                            "options": "INDIVIDUAL_ID",
+                                                            },
+                                                label = T("Individual ID Number"),
+                                                multiple = False,
+                                                name = "individual_id",
+                                                #required = True,
+                                                ),
                                         S3SQLInlineComponent(
                                                 "family_id",
                                                 fields = [("", "value"),
@@ -1324,7 +1389,7 @@ def config(settings):
                                                 label = T("Family ID Number"),
                                                 multiple = False,
                                                 name = "family_id",
-                                                required = True,
+                                                #required = True,
                                                 ),
                                         S3SQLInlineComponent(
                                                 "address",
@@ -1365,10 +1430,11 @@ def config(settings):
                                     fw.opts.default = None
                                     fw.opts.hidden = True
                             if extend_text_filter and isinstance(fw, S3TextFilter):
-                                fw.field.extend(("family_id.value",
+                                fw.field.extend(("individual_id.value",
+                                                 "family_id.value",
                                                  "dvr_case.comments",
                                                  ))
-                                fw.opts.comment = T("You can search by name, ID, family ID and comments")
+                                fw.opts.comment = T("You can search by name, ID numbers and comments")
                                 extend_text_filter = False
 
                         # Add filter for date of birth
@@ -1384,14 +1450,15 @@ def config(settings):
                         filter_widgets.append(reg_filter)
 
                     # Custom list fields (must be outside of r.interactive)
-                    list_fields = [(T("ID"), "pe_label"),
-                                   (T("Family ID"), "family_id.value"),
+                    list_fields = [(T("Ref.No."), "pe_label"),
                                    "first_name",
                                    #"middle_name",
                                    "last_name",
                                    "date_of_birth",
                                    "gender",
                                    "person_details.nationality",
+                                   (T("ID"), "individual_id.value"),
+                                   (T("Family ID"), "family_id.value"),
                                    "dvr_case.date",
                                    "dvr_case.status_id",
                                    ]
@@ -1867,7 +1934,8 @@ def stl_dvr_rheader(r, tabs=[]):
 
                 #tabs.append((T("Evaluation"), "evaluation"))
 
-                case = resource.select(["family_id.value",
+                case = resource.select(["individual_id.value",
+                                        "family_id.value",
                                         "dvr_case.status_id",
                                         "dvr_case.archived",
                                         "dvr_case.organisation_id",
@@ -1884,6 +1952,7 @@ def stl_dvr_rheader(r, tabs=[]):
 
                 case_status = lambda row: case["dvr_case.status_id"]
                 archived = case["_row"]["dvr_case.archived"]
+                individual_id = lambda row: case["pr_individual_id_person_tag.value"]
                 family_id = lambda row: case["pr_family_id_person_tag.value"]
                 organisation_id = lambda row: case["dvr_case.organisation_id"]
                 name = lambda row: s3_fullname(row)
@@ -1899,14 +1968,14 @@ def stl_dvr_rheader(r, tabs=[]):
                                 _class = "%s label" % _class,
                                 )
 
-                rheader_fields = [[(T("ID"), "pe_label"),
-                                   (T("Case Status"), case_status),
+                rheader_fields = [[(T("Ref.No."), "pe_label"),
+                                   (T("ID"), individual_id),
+                                   (T("Organisation"), organisation_id),
                                    (T("Data Disclosure"), disclosure),
                                    ],
-                                  [(T("Family ID"), family_id),
-                                   (T("Organisation"), organisation_id),
-                                   ],
                                   [(T("Name"), name),
+                                   (T("Family ID"), family_id),
+                                   (T("Case Status"), case_status),
                                    ],
                                   ["date_of_birth",
                                    ],

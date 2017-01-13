@@ -249,6 +249,7 @@ def person():
                 resource.configure(crud_form = crud_form,
                                    filter_widgets = filter_widgets,
                                    )
+
             elif r.component_name == "allowance" and \
                  r.method in (None, "update"):
 
@@ -271,6 +272,7 @@ def person():
                             field = table[fn]
                             field.writable = False
                             field.comment = None
+
             elif r.component_name == "evaluation":
                 S3SQLInlineComponent = s3base.S3SQLInlineComponent
 
@@ -755,8 +757,8 @@ def case_event():
     return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
-def activity_funding_reason():
-    """ Activity Funding Reasons: RESTful CRUD Controller """
+def vulnerability_type():
+    """ Vulnerability Types: RESTful CRUD Controller """
 
     return s3_rest_controller()
 
