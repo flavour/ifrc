@@ -149,11 +149,11 @@ def config(settings):
            access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
            module_type = None  # This item is handled separately for the menu
        )),
-        ("translate", Storage(
-            name_nice = "Translation Functionality",
-            #description = "Selective translation of strings based on module.",
-            module_type = None,
-        )),
+        #("translate", Storage(
+        #    name_nice = "Translation Functionality",
+        #    #description = "Selective translation of strings based on module.",
+        #    module_type = None,
+        #)),
         ("gis", Storage(
             name_nice = "Map",
             #description = "Situation Awareness & Geospatial Analysis",
@@ -256,6 +256,7 @@ def config(settings):
     def customise_event_event_controller(**attr):
 
         s3db = current.s3db
+        s3 = current.response.s3
 
         # Modify Components
         s3db.add_components("event_event",
@@ -273,6 +274,47 @@ def config(settings):
         #s3db.set_method("event", "event",
         #                method = "custom",
         #                action = event_Profile)
+
+        # Custom prep
+        standard_prep = s3.prep
+        def custom_prep(r):
+            # Call standard postp
+            if callable(standard_prep):
+                result = standard_prep(r)
+
+            if r.representation == "popup":
+                # Popups for lists in Parent Event of Incident Screen
+
+                # No Title since this is on the Popup
+                s3.crud_strings["event_event"].title_display = ""
+                # No create button & Tweak list_fields
+                cname = r.component_name
+                if cname == "incident":
+                    list_fields = ["date",
+                                   "name",
+                                   "incident_type_id",
+                                   ]
+                elif cname == "team":
+                    list_fields = ["incident_id",
+                                   "group_id",
+                                   "status_id",
+                                   ]
+                elif cname == "post":
+                    list_fields = ["date",
+                                   "series_id",
+                                   "priority",
+                                   "status_id",
+                                   "body",
+                                   ]
+                else:
+                    # Shouldn't get here but want to avoid crashes
+                    list_fields = []
+                r.component.configure(insertable = False,
+                                      list_fields = list_fields,
+                                      )
+
+            return True
+        s3.prep = custom_prep
 
         # Custom rheader tabs
         attr = dict(attr)
@@ -341,11 +383,11 @@ def config(settings):
                                        )
 
                 from s3 import S3DateFilter, S3OptionsFilter, S3TextFilter
-                from templates.WACOP.controllers import filter_formstyle, text_filter_formstyle
+                from templates.WACOP.controllers import filter_formstyle_summary, text_filter_formstyle
 
                 # @ToDo: This should use date/end_date not just date
                 date_filter = S3DateFilter("date",
-                                           #formstyle = filter_formstyle,
+                                           #formstyle = filter_formstyle_summary,
                                            label = "",
                                            #hide_time = True,
                                            )
@@ -364,7 +406,7 @@ def config(settings):
                                                   widget = "multiselect",
                                                   ),
                                   S3OptionsFilter("closed",
-                                                  formstyle = filter_formstyle,
+                                                  formstyle = filter_formstyle_summary,
                                                   options = {"*": T("All"),
                                                              False: T("Open"),
                                                              True: T("Closed"),
@@ -373,7 +415,7 @@ def config(settings):
                                                   multiple = False,
                                                   ),
                                   S3OptionsFilter("incident_type_id",
-                                                  formstyle = filter_formstyle,
+                                                  formstyle = filter_formstyle_summary,
                                                   label = T("Incident Type"),
                                                   noneSelectedText = "All",
                                                   widget = "multiselect",
