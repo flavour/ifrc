@@ -68,6 +68,8 @@ def config(settings):
                                                "volunteer": T("Volunteer"),
                                                #"member": T("Member")
                                                }
+    # This hides the options from the UI
+    #settings.auth.registration_link_user_to_default = "volunteer"
 
     #settings.auth.record_approval = True
 
@@ -1246,6 +1248,22 @@ def config(settings):
     settings.customise_hrm_experience_resource = customise_hrm_experience_resource
 
     # -------------------------------------------------------------------------
+    def generate_password():
+        """
+            Generate a Random Password
+        """
+
+        import random
+        import string
+        from gluon import CRYPT
+        N = 8
+        password = "".join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(N))
+        crypted, error = CRYPT(key=current.auth.settings.hmac_key,
+                               min_length=settings.get_auth_password_min_length(),
+                               digest_alg="sha512")(password)
+        return password, crypted
+
+    # -------------------------------------------------------------------------
     def hrm_human_resource_create_onaccept(form):
         """
             If the Staff/Volunteer is RC then create them a user account with a random password
@@ -1268,7 +1286,8 @@ def config(settings):
                 return
 
             htable = s3db.hrm_human_resource
-            hr = db(htable.id == hr_id).select(htable.person_id,
+            hr = db(htable.id == hr_id).select(htable.id,
+                                               htable.person_id,
                                                htable.type,
                                                htable.organisation_id,
                                                limitby = (0, 1),
@@ -1304,7 +1323,8 @@ def config(settings):
                     return
 
                 htable = s3db.hrm_human_resource
-                hr = db(htable.id == hr_id).select(htable.person_id,
+                hr = db(htable.id == hr_id).select(htable.id,
+                                                   htable.person_id,
                                                    htable.type,
                                                    limitby = (0, 1),
                                                    ).first()
@@ -1315,7 +1335,8 @@ def config(settings):
                 return
 
         ptable = s3db.pr_person
-        person = db(ptable.id == person_id).select(ptable.first_name,
+        person = db(ptable.id == person_id).select(ptable.id,
+                                                   ptable.first_name,
                                                    ptable.middle_name, # NB We use middle_name for User in RMS Americas!
                                                    ptable.pe_id,
                                                    limitby = (0, 1),
@@ -1336,6 +1357,7 @@ def config(settings):
             email = contact.value
         except:
             # Nothing we can do!
+            hr_id = form_vars.get("id")
             current.log.warning("Cannot create user for HR %s as cannot find Email" % hr_id)
             return
 
@@ -1349,7 +1371,8 @@ def config(settings):
                     return
 
                 htable = s3db.hrm_human_resource
-                hr = db(htable.id == hr_id).select(htable.type,
+                hr = db(htable.id == hr_id).select(htable.id,
+                                                   htable.type,
                                                    limitby = (0, 1),
                                                    ).first()
             try:
@@ -1370,14 +1393,7 @@ def config(settings):
         auth = current.auth
 
         # Generate a password
-        import random
-        import string
-        from gluon import CRYPT
-        N = 8
-        password = "".join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(N))
-        crypted, error = CRYPT(key=auth.settings.hmac_key,
-                               min_length=settings.get_auth_password_min_length(),
-                               digest_alg="sha512")(password)
+        password, crypted = generate_password()
 
         # Create User
         user = Storage(organisation_id = organisation_id,
@@ -1391,6 +1407,23 @@ def config(settings):
 
         #user = auth.get_or_create_user(user, login=False)
         user_id = db.auth_user.insert(**user)
+
+        # Set the HR record to be owned by this user
+        if hr:
+            hr.update_record(owned_by_user=user_id)
+        else:
+            hr_id = form_vars.get("id")
+            db(s3db.hrm_human_resource.id == hr_id).update(owned_by_user=user_id)
+
+        # Set the Person record to be owned by this user
+        person.update_record(owned_by_user=user_id)
+
+        # Cascade down to components
+        # pr_address
+        atable = s3db.pr_address
+        db(atable.pe_id == pe_id).update(owned_by_user=user_id)
+        # pr_contact
+        db(ctable.pe_id == pe_id).update(owned_by_user=user_id)
 
         # Link to Person so that we find this in the 'Link'
         ltable = s3db.pr_person_user
@@ -1499,6 +1532,11 @@ Thank you"""
             new_requires = f.requires.other
             new_requires.dbset = dbset
             f.requires = IS_EMPTY_OR(new_requires)
+
+            table = s3db.pr_person
+            table.first_name.label = T("Forenames")
+            table.middle_name.label = T("Father's Surname")
+            table.last_name.label = T("Mother's Surname")
 
             # For the filter
             s3db.hrm_competency.skill_id.label = T("Language")
@@ -1724,17 +1762,143 @@ Thank you"""
             dtable.insert(human_resource_id = human_resource_id)
 
     # -------------------------------------------------------------------------
-    #def customise_hrm_training_controller(**attr):
+    def hrm_training_postimport(import_info):
+        """
+            Create Users for Persons created
+        """
 
-    #    # Default Filter
-    #    from s3 import s3_set_default_filter
-    #    s3_set_default_filter("~.person_id$human_resource.organisation_id",
-    #                          user_org_default_filter,
-    #                          tablename = "hrm_training")
+        training_ids = import_info["created"]
+        if not training_ids:
+            # No new people created
+            return
 
-    #    return attr
+        db = current.db
+        s3db = current.s3db
 
-    #settings.customise_hrm_training_controller = customise_hrm_training_controller
+        # Find all the Persons
+        ttable = s3db.hrm_training
+        ptable = s3db.pr_person
+        query = (ttable.id.belongs(training_ids)) & \
+                (ttable.person_id == ptable.id)
+        trainings = db(query).select(ptable.pe_id)
+        person_pe_ids = set([p.pe_id for p in trainings])
+
+        if not person_pe_ids:
+            # No people?
+            return
+
+        # Remove those with a User Account
+        ltable = s3db.pr_person_user
+        users = db(ltable.pe_id.belongs(person_pe_ids)).select(ltable.pe_id)
+        user_pe_ids = [u.pe_id for u in users]
+        discard = person_pe_ids.discard
+        for pe_id in user_pe_ids:
+            discard(pe_id)
+
+        if not person_pe_ids:
+            # Nobody without a User Account already
+            return
+
+        # Read Person Details
+        ctable = s3db.pr_contact
+        dtable = s3db.pr_person_details
+        htable = s3db.hrm_human_resource
+        left = [ctable.on((ctable.pe_id == ptable.pe_id) & \
+                          (ctable.contact_method == "EMAIL")
+                          ),
+                dtable.on(dtable.person_id == ptable.id),
+                htable.on(htable.person_id == ptable.id),
+                ]
+        persons = db(ptable.pe_id.belongs(person_pe_ids)).select(ptable.id,
+                                                                 ptable.first_name,
+                                                                 # RMSAmericas uses Apellido Paterno for Last Name
+                                                                 ptable.middle_name,
+                                                                 #ptable.last_name,
+                                                                 ctable.value,
+                                                                 dtable.language,
+                                                                 htable.type,
+                                                                 htable.organisation_id,
+                                                                 left=left,
+                                                                 )
+        utable = db.auth_user
+        create_user = utable.insert
+        approve_user = current.auth.s3_approve_user
+        cert_table = s3db.hrm_certification
+        # For each Person
+        for p in persons:
+            person = p["pr_person"]
+            hr = p["hrm_human_resource"]
+
+            if hr.type == 1:
+                link_user_to = "staff"
+            else:
+                link_user_to = "volunteer"
+
+            # Set random password
+            password, crypted = generate_password()
+
+            # Create a User Account
+            user = Storage(first_name = person.first_name,
+                           last_name = person.middle_name,
+                           #last_name = person.last_name,
+                           email = p["pr_contact.value"],
+                           language = p["pr_person_details.language"],
+                           password = crypted,
+                           organisation_id = hr.organisation_id,
+                           link_user_to = link_user_to,
+                           )
+            user_id = create_user(**user)
+
+            # Standard Approval (inc Link to Person/HR and Send out Welcome Email with password)
+            user["id"] = user_id
+            approve_user(user, password)
+
+            # Fixup permissions
+            person_id = person.id
+            db(htable.person_id == person_id).update(owned_by_user = user_id)
+            db(ttable.person_id == person_id).update(owned_by_user = user_id)
+            db(cert_table.person_id == person_id).update(owned_by_user = user_id)
+
+    # -------------------------------------------------------------------------
+    def customise_hrm_training_controller(**attr):
+
+        # Default Filter
+        #from s3 import s3_set_default_filter
+        #s3_set_default_filter("~.person_id$human_resource.organisation_id",
+        #                      user_org_default_filter,
+        #                      tablename = "hrm_training")
+
+        s3 = current.response.s3
+
+        # Custom prep
+        standard_prep = s3.prep
+        def custom_prep(r):
+            # Call standard prep
+            if callable(standard_prep):
+                result = standard_prep(r)
+                if not result:
+                    return False
+
+            if r.method == "import":
+                # HR records may be created via importing them as participants
+                s3db = current.s3db
+                # Default to Volunteers
+                s3db.hrm_human_resource.type.default = 2
+                # Doesn't work as email created after human_resource
+                #s3db.configure("hrm_human_resource",
+                #               create_onaccept = hrm_human_resource_create_onaccept,
+                #               )
+                # Create User Accounts for those Persons without them
+                s3db.configure("hrm_training",
+                               postimport = hrm_training_postimport,
+                               )
+
+            return True
+        s3.prep = custom_prep
+
+        return attr
+
+    settings.customise_hrm_training_controller = customise_hrm_training_controller
 
     # -------------------------------------------------------------------------
     def customise_hrm_training_resource(r, tablename):
@@ -2467,9 +2631,34 @@ Thank you"""
                 if not result:
                     return False
 
+            mode = current.session.s3.hrm.mode
+            if mode is not None:
+                # Configure for personal mode
+                # People can edit their own HR data
+                configure = s3db.configure
+                configure("hrm_human_resource",
+                          editable = True,
+                          )
+                configure("hrm_competency",
+                          editable = True,
+                          )
+                configure("hrm_experience",
+                          editable = True,
+                          insertable = True,
+                          )
+
             component_name = r.component_name
             method = r.method
-            if method =="record" or component_name == "human_resource":
+            if method == "import":
+                # HR records may be created via import
+                # Default to Volunteers
+                s3db.hrm_human_resource.type.default = 2
+                # Doesn't work as email created after human_resource
+                #s3db.configure("hrm_human_resource",
+                #               create_onaccept = hrm_human_resource_create_onaccept,
+                #               )
+                pass
+            elif method =="record" or component_name == "human_resource":
                 # Organisation needs to be an NS/Branch
                 ns_only("hrm_human_resource",
                         required = True,
@@ -2490,6 +2679,8 @@ Thank you"""
                                )
 
                 # Basic Details tab
+                f = s3db.pr_person.middle_name
+                f.readable = f.writable = True
                 f = s3db.pr_person_details.nationality2
                 f.readable = f.writable = True
                 from s3 import S3SQLCustomForm

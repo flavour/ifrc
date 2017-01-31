@@ -381,11 +381,11 @@ def department():
 def job_title():
     """ Job Titles Controller """
 
-    mode = session.s3.hrm.mode
+    #mode = session.s3.hrm.mode
     def prep(r):
-        if mode is not None:
-            auth.permission.fail()
-        elif r.representation == "xls":
+        #if mode is not None:
+        #    auth.permission.fail()
+        if r.representation == "xls":
             # Export format should match Import format
             current.messages["NONE"] = ""
             table = s3db.hrm_job_title
@@ -604,7 +604,7 @@ def training_center():
 
 # -----------------------------------------------------------------------------
 def training():
-    """ Training Controller - used for Searching for Participants """
+    """ Training Controller - used for Importing/Searching for Participants """
 
     s3.filter = FS("person_id$human_resource.type") == 1
     return s3db.hrm_training_controller()

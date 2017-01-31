@@ -1570,6 +1570,7 @@ class S3Config(Storage):
             e.g. Apellido Paterno in Hispanic names
 
             Setting this means that auth_user.last_name matches with pr_person.middle_name
+            e.g. RMSAmericas
         """
         return self.__lazy("L10n", "mandatory_middlename", False)
 

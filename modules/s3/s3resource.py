@@ -2865,15 +2865,30 @@ class S3Resource(object):
             import_info["deleted"] = deleted
 
         if success is True:
+            # 2nd phase of 2-phase import
+            # Execute postimport if-defined
+            postimport = self.get_config("postimport")
+            if postimport:
+                #try:
+                callback(postimport, import_info, tablename=self.tablename)
+                #except:
+                #    error = "postimport failed: %s" % postimport
+                #    current.log.error(error)
+                #    raise RuntimeError
+
             return xml.json_message(message=self.error, tree=tree,
                                     **import_info)
+
         elif success and hasattr(success, "job_id"):
+            # 1st phase of 2-phase import
+            # NB import_info is meaningless here as IDs have been rolled-back
             self.job = success
             return xml.json_message(message=self.error, tree=tree,
                                     **import_info)
-        else:
-            return xml.json_message(False, 400,
-                                    message=self.error, tree=tree)
+
+        # Failure
+        return xml.json_message(False, 400,
+                                message=self.error, tree=tree)
 
     # -------------------------------------------------------------------------
     def import_tree(self, id, tree,

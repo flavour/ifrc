@@ -1383,6 +1383,51 @@ class DVRCaseActivityModel(S3Model):
         service_id = self.org_service_id
 
         # ---------------------------------------------------------------------
+        # Provider Type
+        #
+        tablename = "dvr_provider_type"
+        define_table(tablename,
+                     Field("name", notnull=True,
+                           label = T("Type"),
+                           requires = IS_NOT_EMPTY(),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # Table configuration
+        configure(tablename,
+                  deduplicate = S3Duplicate(),
+                  )
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Provider Type"),
+            title_display = T("Provider Type Details"),
+            title_list = T("Provider Types"),
+            title_update = T("Edit Provider Type"),
+            label_list_button = T("List Provider Types"),
+            label_delete_button = T("Delete Provider Type"),
+            msg_record_created = T("Provider Type added"),
+            msg_record_modified = T("Provider Type updated"),
+            msg_record_deleted = T("Provider Type deleted"),
+            msg_list_empty = T("No Provider Types currently defined"),
+            )
+
+        # Reusable Field
+        represent = S3Represent(lookup=tablename)
+        provider_type_id = S3ReusableField("provider_type_id", "reference %s" % tablename,
+                                           label = T("Provider Type"),
+                                           ondelete = "CASCADE",
+                                           represent = represent,
+                                           requires = IS_EMPTY_OR(
+                                                        IS_ONE_OF(db, "%s.id" % tablename,
+                                                                  represent,
+                                                                  sort = True,
+                                                                  )),
+                                           sortby = "name",
+                                           )
+
+        # ---------------------------------------------------------------------
         # Activity Group Type
         #
         tablename = "dvr_activity_group_type"
@@ -1687,12 +1732,38 @@ class DVRCaseActivityModel(S3Model):
                                 readable = service_type,
                                 writable = service_type,
                                 ),
+                     # Alternatives to document the actions performed
+                     # under this activity:
                      activity_id(readable=False,
                                  writable=False,
                                  ),
+                     provider_type_id(label = T("Referred to"),
+                                      ondelete = "RESTRICT",
+                                      readable = False,
+                                      writable = False,
+                                      ),
+                     Field("activity_details", "text",
+                           label = T("Support provided"),
+                           represent = s3_text_represent,
+                           widget = s3_comments_widget,
+                           ),
+                     # Support received by the beneficiary independently
+                     # of the managed activity:
+                     Field("outside_support", "text",
+                           label = T("Outside Support"),
+                           represent = s3_text_represent,
+                           widget = s3_comments_widget,
+                           readable = False,
+                           writable = False,
+                           ),
+                     # Details about referrals made under this activity
+                     # @deprecate: should use activity_details instead
+                     # @todo: remove once templates have been migrated?
                      Field("referral_details", "text",
                            label = T("Support provided"),
                            represent = s3_text_represent,
+                           readable = False,
+                           writable = False,
                            ),
                      Field("followup", "boolean",
                            default = True,
@@ -1744,7 +1815,7 @@ class DVRCaseActivityModel(S3Model):
                        need_field,
                        "need_details",
                        "emergency",
-                       "referral_details",
+                       "activity_details",
                        "followup",
                        "followup_date",
                        "completed",
@@ -1756,7 +1827,7 @@ class DVRCaseActivityModel(S3Model):
                                         "person_id$last_name",
                                         "case_id$reference",
                                         "need_details",
-                                        "referral_details",
+                                        "activity_details",
                                         ],
                                         label = T("Search"),
                                         ),
@@ -3766,6 +3837,10 @@ class DVRActivityFundingModel(S3Model):
                            ),
                      Field("proposal", "text",
                            label = T("Proposed Assistance"),
+                           ),
+                     Field("approved", "boolean",
+                           label = T("Approved"),
+                           represent = s3_yes_no_represent,
                            ),
                      s3_comments(),
                      *s3_meta_fields())

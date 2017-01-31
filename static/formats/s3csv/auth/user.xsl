@@ -16,6 +16,7 @@
          Branch.........................optional.....branch organisation name
          ...SubBranch,SubSubBranch...etc (indefinite depth, must specify all from root)
 
+         Link....................auth_user.link_user_to (=> human_resource.type)L Staff, Volunteer or Member
          Facility Type...........s3db[tablename]
          Office..................org_site.name
          Organisation Group......org_group.name
@@ -73,6 +74,7 @@
         <xsl:variable name="GroupName" select="col[@field='Organisation Group']/text()"/>
         <xsl:variable name="OfficeName" select="col[@field='Office']/text()"/>
         <xsl:variable name="FacilityType" select="col[@field='Facility Type']/text()"/>
+        <xsl:variable name="Link" select="col[@field='Link']/text()"/>
 
         <!-- Create the User -->
         <resource name="auth_user">
@@ -82,6 +84,7 @@
                     <data field="last_name"><xsl:value-of select="col[@field='Last Name']"/></data>
                 </xsl:when>
                 <xsl:when test="col[@field='Middle Name']!=''">
+                    <!-- Apellido Paterno -->
                     <data field="last_name"><xsl:value-of select="col[@field='Middle Name']"/></data>
                 </xsl:when>
             </xsl:choose>
@@ -93,6 +96,15 @@
             </data>
             <xsl:if test="col[@field='Language']!=''">
                 <data field="language"><xsl:value-of select="col[@field='Language']"/></data>
+            </xsl:if>
+            <xsl:if test="$Link!=''">
+                <data field="link_user_to">
+                    <xsl:call-template name="lowercase">
+                        <xsl:with-param name="string">
+                           <xsl:value-of select="$Link"/>
+                        </xsl:with-param>
+                    </xsl:call-template>
+                </data>
             </xsl:if>
 
             <!-- Add other roles as per list -->
