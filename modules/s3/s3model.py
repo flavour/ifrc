@@ -85,7 +85,8 @@ class S3Model(object):
                             "gis",
                             "pr",
                             "sit",
-                            "org")
+                            "org",
+                            )
 
         if module is not None:
             if self.__loaded():
@@ -663,17 +664,16 @@ class S3Model(object):
             @param exclude: names to exclude (static components)
         """
 
-        ttable = cls.table("s3_table")
-        ftable = cls.table("s3_field")
-
         mtable = cls.table(tablename)
         if mtable is None:
             return
 
-        loaded = cls.get_config(tablename, "dynamic_components_loaded")
-        if loaded:
+        if cls.get_config(tablename, "dynamic_components_loaded"):
             # Already loaded
             return
+
+        ttable = cls.table("s3_table")
+        ftable = cls.table("s3_field")
 
         join = ttable.on(ttable.id == ftable.table_id)
         query = (ftable.master == tablename) & \
@@ -682,6 +682,7 @@ class S3Model(object):
         rows = current.db(query).select(ftable.name,
                                         ftable.field_type,
                                         ftable.component_alias,
+                                        ftable.settings,
                                         ttable.name,
                                         join = join,
                                         )
@@ -710,6 +711,12 @@ class S3Model(object):
                 hook["name"] = alias
 
             hook["joinby"] = field.name
+
+            settings = field.settings
+            if settings:
+                multiple = settings.get("component_multiple", DEFAULT)
+                if multiple is not DEFAULT:
+                    hook["multiple"] = multiple
 
             # Get the primary key
             field_type = field.field_type
@@ -805,6 +812,7 @@ class S3Model(object):
             if names is None or names:
                 # Add hooks for dynamic components
                 cls.add_dynamic_components(tablename, exclude=hooks)
+                direct_components = components.get(tablename)
                 if direct_components:
                     names = get_hooks(hooks, direct_components, names=names)
 
@@ -1554,11 +1562,26 @@ class S3DynamicModel(object):
 
         # Define the table
         if fields:
+            # Enable migrate
+            # => is globally disabled when settings.base.migrate
+            #    is False, overriding the table parameter
+            migrate_enabled = db._migrate_enabled
+            db._migrate_enabled = True
+
+            # Define the table
             db.define_table(tablename,
                             migrate = True,
                             redefine = redefine,
                             *fields)
-            return db[tablename]
+
+            # Instantiate table
+            # => otherwise lazy_tables may prevent it
+            table = db[tablename]
+
+            # Restore global migrate_enabled
+            db._migrate_enabled = migrate_enabled
+
+            return table
         else:
             return None
 

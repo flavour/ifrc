@@ -234,6 +234,22 @@ def shelter():
 
     return s3_rest_controller(rheader = s3db.cr_shelter_rheader)
 
+# -----------------------------------------------------------------------------
+def shelter_flag():
+    """
+        Shelter Flags - RESTful CRUD controller
+    """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def shelter_inspection():
+    """
+        Shelter Inspections - RESTful CRUD controller
+    """
+
+    return s3_rest_controller()
+
 # =============================================================================
 def incoming():
     """

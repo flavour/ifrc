@@ -678,11 +678,13 @@ class S3OptionsMenu(object):
         return M(c="dc")(
                     M("Templates", f="template")(
                         M("Create", m="create"),
+                        M("Import", f="question", m="import"),
                     ),
-                    M("Questions", f="question")(
+                    M("Targets", f="target")(
                         M("Create", m="create"),
                     ),
-                    M("Data Collections", f="collection")(
+                    # @ToDo: Use settings for label
+                    M("Responses", f="respnse")(
                         M("Create", m="create"),
                     ),
                 )
@@ -1592,6 +1594,12 @@ class S3OptionsMenu(object):
                     M("Referral Agencies", f="organisation")(
                         M("Create", m="create"),
                     ),
+                    M("Emotional Needs", f="emotional_need")(
+                        M("Create", m="create"),
+                    ),
+                    M("Practical Needs", f="practical_need")(
+                        M("Create", m="create"),
+                    ),
                 )
 
     # -------------------------------------------------------------------------
@@ -1866,6 +1874,30 @@ class S3OptionsMenu(object):
                         # Not usually dis-aggregated
                         M("Time Plot", m="timeplot"),
                         M("Import", m="import"),
+                    ),
+                )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def stdm():
+        """ Social Tenure Domain Model """
+
+        return M(c="stdm")(
+                    M("Tenures", f="tenure")(
+                        M("Create", m="create"),
+                    ),
+                    M("Locations", f="location")(
+                        M("Create", m="create"),
+                    ),
+                    M("Parties")(
+                        M("People", f="person"),
+                        M("Groups", f="group"),
+                    ),
+                    M("Tenure Types", f="tenure_type")(
+                        M("Create", m="create"),
+                    ),
+                    M("Tenure Roles", f="tenure_role")(
+                        M("Create", m="create"),
                     ),
                 )
 
