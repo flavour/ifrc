@@ -279,7 +279,59 @@ class S3MobileForm(object):
         if form_fields:
             schema["_form"] = form_fields
 
+        strings = self.strings()
+        if strings:
+            schema["_strings"] = strings
+
         return schema
+
+    # -------------------------------------------------------------------------
+    def strings(self):
+        """
+            Add CRUD strings for mobile form
+
+            @return: a dict with CRUD strings for the resource
+        """
+
+        tablename = self.resource.tablename
+
+        title = None
+
+        # Look up the form title in deployment setting
+        forms = current.deployment_settings.get_mobile_forms()
+        if forms:
+            for form in forms:
+                if isinstance(form, (tuple, list)):
+                    if len(form) >= 2:
+                        title_, tablename_ = form[:2]
+                        if isinstance(tablename_, dict):
+                            tablename_ = title_
+                            title_ = None
+                    else:
+                        continue
+                if tablename_ == tablename:
+                    title = title_
+                    break
+
+        # Fall back to CRUD title_list
+        if not title:
+            crud_strings = current.response.s3.crud_strings.get(tablename)
+            if crud_strings:
+                title = crud_strings.get("title_list")
+
+        # Fall back to capitalized table name
+        if not title:
+            name = tablename.split("_", 1)[-1]
+            title = " ".join(word.capitalize() for word in name.split("_"))
+
+        # Build strings-dict
+        strings = {}
+        if title:
+            title = s3_str(title)
+            strings["name"] = title
+            strings["namePlural"] = title
+
+        return strings
 
     # -------------------------------------------------------------------------
     def describe(self, rfield):
@@ -613,14 +665,24 @@ class S3MobileCRUD(S3Method):
         output = {}
 
         # Extract the data
+        files = {}
         content_type = r.env.get("content_type")
         if content_type and content_type.startswith("multipart/"):
+
+            # Record data
             s = r.post_vars.get("data")
             try:
                 data = json.loads(s)
             except JSONERRORS:
                 msg = sys.exc_info()[1]
                 r.error(400, msg)
+
+            # Attached files
+            import cgi
+            for key in r.post_vars:
+                value = r.post_vars[key]
+                if isinstance(value, cgi.FieldStorage) and value.filename:
+                    files[value.filename] = value.file
         else:
             s = r.body
             s.seek(0)
@@ -650,6 +712,7 @@ class S3MobileCRUD(S3Method):
             FIELD = ATTRIBUTE.field
 
             rfields = resource.fields
+            table = resource.table
 
             root = etree.Element(TAG.root)
             SubElement = etree.SubElement
@@ -671,14 +734,21 @@ class S3MobileCRUD(S3Method):
                     else:
                         col = SubElement(row, DATA)
                         col.set(FIELD, fieldname)
-                        col.text = s3_unicode(value)
+                        ftype = table[fieldname].type
+                        if ftype == "upload":
+                            # Field value is name of attached file
+                            filename = s3_unicode(value)
+                            if filename in files:
+                                col.set("filename", filename)
+                        else:
+                            col.text = s3_unicode(value)
 
             tree = etree.ElementTree(root)
 
             # Try importing the tree
             # @todo: error handling
             try:
-                resource.import_xml(tree)
+                resource.import_xml(tree, files=files)
             except IOError:
                 r.unauthorised()
             else:

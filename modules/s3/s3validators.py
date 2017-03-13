@@ -2222,7 +2222,8 @@ class IS_ADD_PERSON_WIDGET2(Validator):
 
                 # No email?
                 if not value:
-                    email_required = settings.get_hrm_email_required()
+                    email_required = settings.get_pr_request_email() and \
+                                     settings.get_hrm_email_required()
                     if email_required:
                         return (value, error_message)
                     return (value, None)
@@ -3386,13 +3387,14 @@ class IS_DYNAMIC_FIELDTYPE(Validator):
     """ Validator for field types in dynamic tables """
 
     SUPPORTED_TYPES = ("boolean",
-                       "string",
-                       "text",
-                       "integer",
-                       "double",
                        "date",
                        "datetime",
+                       "double",
+                       "integer",
                        "reference",
+                       "string",
+                       "text",
+                       "upload",
                        )
 
     def __init__(self,

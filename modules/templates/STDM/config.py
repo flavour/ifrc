@@ -17,8 +17,7 @@ def config(settings):
     settings.base.system_name_short = T("STDM")
 
     # PrePopulate data
-    #settings.base.prepopulate = ("skeleton", "default/users")
-    settings.base.prepopulate += ("STDM", "default/users")
+    settings.base.prepopulate += ("STDM", "default/users", "STDM/Demo")
 
     # Theme (folder to use for views/layout.html)
     settings.base.theme = "STDM"
@@ -26,7 +25,7 @@ def config(settings):
 
     # Authentication settings
     # Should users be allowed to register themselves?
-    #settings.security.self_registration = False
+    settings.security.self_registration = False
     # Do new users need to verify their email address?
     #settings.auth.registration_requires_verification = True
     # Do new users need to be approved by an administrator prior to being able to login?
@@ -43,7 +42,7 @@ def config(settings):
     # Uncomment to display the Map Legend as a floating DIV
     settings.gis.legend = "float"
     # Uncomment to Disable the Postcode selector in the LocationSelector
-    #settings.gis.postcode_selector = False # @ToDo: Vary by country (include in the gis_config!)
+    settings.gis.postcode_selector = False # @ToDo: Vary by country (include in the gis_config!)
     # Uncomment to show the Print control:
     # http://eden.sahanafoundation.org/wiki/UserGuidelines/Admin/MapPrinting
     #settings.gis.print_button = True
@@ -51,20 +50,20 @@ def config(settings):
     # L10n settings
     # Languages used in the deployment (used for Language Toolbar & GIS Locations)
     # http://www.loc.gov/standards/iso639-2/php/code_list.php
-    #settings.L10n.languages = OrderedDict([
+    settings.L10n.languages = OrderedDict([
     #    ("ar", "العربية"),
     #    ("bs", "Bosanski"),
-    #    ("en", "English"),
+        ("en", "English"),
     #    ("fr", "Français"),
     #    ("de", "Deutsch"),
     #    ("el", "ελληνικά"),
-    #    ("es", "Español"),
+        ("es", "Español"),
     #    ("it", "Italiano"),
     #    ("ja", "日本語"),
     #    ("km", "ភាសាខ្មែរ"),
     #    ("ko", "한국어"),
-    #    ("ne", "नेपाली"),          # Nepali
-    #    ("prs", "دری"), # Dari
+        ("ne", "नेपाली"),          # Nepali
+        ("prs", "دری"), # Dari
     #    ("ps", "پښتو"), # Pashto
     #    ("pt", "Português"),
     #    ("pt-br", "Português (Brasil)"),
@@ -76,7 +75,7 @@ def config(settings):
     #    ("vi", "Tiếng Việt"),
     #    ("zh-cn", "中文 (简体)"),
     #    ("zh-tw", "中文 (繁體)"),
-    #])
+    ])
     # Default language for Language Toolbar (& GIS Locations in future)
     #settings.L10n.default_language = "en"
     # Uncomment to Hide the language toolbar
@@ -104,6 +103,10 @@ def config(settings):
     #}
     #settings.fin.currency_default = "USD"
 
+    # Email isn't required
+    settings.pr.request_email = False
+    #settings.hrm.email_required = False
+
     # Security Policy
     # http://eden.sahanafoundation.org/wiki/S3AAA#System-widePolicy
     # 1: Simple (default): Global as Reader, Authenticated as Editor
@@ -115,7 +118,149 @@ def config(settings):
     # 7: Apply Controller, Function, Table ACLs and Entity Realm + Hierarchy
     # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
     #
-    #settings.security.policy = 7 # Organisation-ACLs
+    settings.security.policy = 4 # Controller & Function ACLs
+
+    # -------------------------------------------------------------------------
+    def customise_pr_person_resource(r, tablename):
+
+        s3db = current.s3db
+
+        list_fields = ["first_name",
+                       "middle_name",
+                       "last_name",
+                       (T("National ID"), "national_id.value"),
+                       "gender",
+                       "date_of_birth",
+                       "person_details.marital_status",
+                       (T("Telephone"), "phone.value"),
+                       (T("Address"), "address.location_id$addr_street"),
+                       # @ToDo: Residence Area...which is Lx
+                       ]
+        if current.auth.s3_has_role("INFORMAL_SETTLEMENT"):
+            list_fields.insert(7, (T("Household Relation"), "group_membership.role_id"))
+
+        from s3 import S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponent
+
+        s3db.pr_address.location_id.widget = S3LocationSelector(show_address = True,
+                                                                #show_postcode = False,
+                                                                show_map = False,
+                                                                )
+
+        crud_form = S3SQLCustomForm("first_name",
+                                    "middle_name",
+                                    "last_name",
+                                    S3SQLInlineComponent("identity",
+                                                         label = T("National ID"),
+                                                         fields = [("", "value")],
+                                                         filterby = dict(field = "type",
+                                                                         options = 2,
+                                                                         ),
+                                                         multiple = False,
+                                                         ),
+                                    "gender",
+                                    "date_of_birth",
+                                    "person_details.marital_status",
+                                    S3SQLInlineComponent("contact",
+                                                         label = T("Telephone"),
+                                                         fields = [("", "value")],
+                                                         filterby = dict(field = "contact_method",
+                                                                         options = "SMS",
+                                                                         ),
+                                                         multiple = False,
+                                                         ),
+                                    S3SQLInlineComponent("address",
+                                                         label = T("Address"),
+                                                         fields = [("", "location_id")],
+                                                         multiple = False,
+                                                         ),
+                                    "comments",
+                                    )
+
+        s3db.configure("pr_person",
+                       crud_form = crud_form,
+                       list_fields = list_fields,
+                       )
+
+    settings.customise_pr_person_resource = customise_pr_person_resource
+
+    # -------------------------------------------------------------------------
+    def customise_pr_person_controller(**attr):
+
+        s3 = current.response.s3
+        standard_prep = s3.prep
+        def custom_prep(r):
+            # Call standard prep
+            if callable(standard_prep):
+                if not standard_prep(r):
+                    return False
+
+            if r.component_name == "tenure_relationship":
+
+                list_fields = ["tenure_id$spatial_unit_id",
+                               "tenure_type_id",
+                               ]
+
+                current.s3db.configure("stdm_tenure_relationship",
+                                       # No decent CRUD form possible
+                                       insertable = False,
+                                       list_fields = list_fields,
+                                       )
+
+            return True
+        s3.prep = custom_prep
+
+        return attr
+
+    settings.customise_pr_person_controller = customise_pr_person_controller
+
+    # -------------------------------------------------------------------------
+    def customise_pr_group_resource(r, tablename):
+
+        list_fields = [(T("Name"), "name"),
+                       "comments",
+                       ]
+
+        from s3 import S3SQLCustomForm
+        crud_form = S3SQLCustomForm((T("Name"), "name"),
+                                    "comments",
+                                    )
+
+        current.s3db.configure("pr_group",
+                               crud_form = crud_form,
+                               list_fields = list_fields,
+                               )
+
+    settings.customise_pr_group_resource = customise_pr_group_resource
+
+    # -------------------------------------------------------------------------
+    def customise_pr_group_controller(**attr):
+
+        s3 = current.response.s3
+        standard_prep = s3.prep
+        def custom_prep(r):
+            # Call standard prep
+            if callable(standard_prep):
+                if not standard_prep(r):
+                    return False
+
+            if r.component_name == "tenure_relationship":
+
+                list_fields = ["tenure_id$spatial_unit_id",
+                               "tenure_type_id",
+                               ]
+
+                current.s3db.configure("stdm_tenure_relationship",
+                                       # No decent CRUD form possible
+                                       insertable = False,
+                                       list_fields = list_fields,
+                                       )
+
+            return True
+        s3.prep = custom_prep
+
+        return attr
+
+    settings.customise_pr_group_controller = customise_pr_group_controller
 
     # -------------------------------------------------------------------------
     # Comment/uncomment modules here to disable/enable them
