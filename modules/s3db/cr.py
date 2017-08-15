@@ -2,7 +2,7 @@
 
 """ Shelter (Camp) Registry, model
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -36,6 +36,7 @@ __all__ = ("CRShelterModel",
            "cr_update_capacity_from_housing_units",
            "cr_check_population_availability",
            "cr_notification_dispatcher",
+           "cr_resolve_shelter_flags",
            )
 
 import json
@@ -59,6 +60,7 @@ class CRShelterModel(S3Model):
              "cr_shelter_person",
              "cr_shelter_allocation",
              "cr_shelter_unit",
+             "cr_shelter_unit_id",
              )
 
     def model(self):
@@ -88,6 +90,8 @@ class CRShelterModel(S3Model):
                      Field("name", notnull=True,
                            label = NAME,
                            requires = [IS_NOT_EMPTY(),
+                                       # @todo: add unique-constraint, otherwise
+                                       # IS_NOT_ONE_OF blocks reference imports
                                        IS_NOT_ONE_OF(db,
                                                      "%s.name" % tablename,
                                                      ),
@@ -243,7 +247,12 @@ class CRShelterModel(S3Model):
         # Shelters
         #
         cr_shelter_opts = {1 : T("Closed"),
-                           2 : T("Open"),
+                           # In many languages, translations of "Open" differ
+                           # between the verb and the adjective, as well as
+                           # between grammatical moods or genders etc - so
+                           # adding a context-comment for T() here to clarify
+                           # which "Open" we mean (will not be rendered):
+                           2 : T("Open##the_shelter_is"),
                            }
 
         day_and_night = settings.get_cr_day_and_night()
@@ -431,7 +440,7 @@ class CRShelterModel(S3Model):
 
         # Text filter fields
         text_fields = ["name",
-                       "code",
+                       #"code",
                        "comments",
                        "organisation_id$name",
                        "organisation_id$acronym",
@@ -894,7 +903,7 @@ class CRShelterModel(S3Model):
 
         # Reusable Field
         represent = S3Represent(lookup="cr_shelter_unit")
-        housing_unit_id = S3ReusableField("shelter_unit_id", db.cr_shelter_unit,
+        shelter_unit_id = S3ReusableField("shelter_unit_id", db.cr_shelter_unit,
                                           label = T("Housing Unit"),
                                           ondelete = "RESTRICT",
                                           represent = represent,
@@ -912,7 +921,7 @@ class CRShelterModel(S3Model):
         return dict(ADD_SHELTER = ADD_SHELTER,
                     SHELTER_LABEL = SHELTER_LABEL,
                     cr_shelter_id = shelter_id,
-                    cr_housing_unit_id = housing_unit_id,
+                    cr_shelter_unit_id = shelter_unit_id,
                     )
 
     # -------------------------------------------------------------------------
@@ -1062,6 +1071,7 @@ class CRShelterInspectionModel(S3Model):
              "cr_shelter_flag_id",
              "cr_shelter_inspection",
              "cr_shelter_inspection_flag",
+             "cr_shelter_inspection_task",
              )
 
     def model(self):
@@ -1070,9 +1080,19 @@ class CRShelterInspectionModel(S3Model):
 
         db = current.db
         s3 = current.response.s3
+        settings = current.deployment_settings
+
+        crud_strings = s3.crud_strings
 
         define_table = self.define_table
-        crud_strings = s3.crud_strings
+        configure = self.configure
+
+        shelter_inspection_tasks = settings.get_cr_shelter_inspection_tasks()
+        task_priority_opts = settings.get_project_task_priority_opts()
+
+        assignee_represent = self.pr_PersonEntityRepresent(show_label = False,
+                                                           #show_type = False,
+                                                           )
 
         # ---------------------------------------------------------------------
         # Flags - flags that can be set for a shelter / housing unit
@@ -1082,13 +1102,51 @@ class CRShelterInspectionModel(S3Model):
                      Field("name",
                            requires = IS_NOT_EMPTY(),
                            ),
+                     Field("create_task", "boolean",
+                           label = T("Create Task"),
+                           default = False,
+                           represent = s3_yes_no_represent,
+                           readable = shelter_inspection_tasks,
+                           writable = shelter_inspection_tasks,
+                           ),
+                     Field("task_description", length=100,
+                           label = T("Task Description"),
+                           requires = IS_EMPTY_OR(IS_LENGTH(100)),
+                           represent = lambda v: v if v else "",
+                           readable = shelter_inspection_tasks,
+                           writable = shelter_inspection_tasks,
+                           ),
+                     Field("task_priority", "integer",
+                           default = 3,
+                           label = T("Priority"),
+                           represent = S3Represent(options=task_priority_opts),
+                           requires = IS_IN_SET(task_priority_opts,
+                                                zero = None,
+                                                ),
+                           ),
+                     # Task Assignee
+                     Field("task_assign_to", "reference pr_pentity",
+                           label = T("Assign to"),
+                           represent = assignee_represent,
+                           requires = IS_EMPTY_OR(
+                                           IS_ONE_OF(db, "pr_pentity.pe_id",
+                                                     assignee_represent,
+                                                     filterby = "instance_type",
+                                                     filter_opts = ("pr_person",
+                                                                    "pr_group",
+                                                                    #"org_organisation",
+                                                                    ),
+                                                     ),
+                                           ),
+                           ),
                      s3_comments(),
                      *s3_meta_fields())
 
         # Table settings
-        self.configure(tablename,
-                       deduplicate = S3Duplicate(),
-                       )
+        configure(tablename,
+                  deduplicate = S3Duplicate(),
+                  onvalidation = self.shelter_flag_onvalidation,
+                  )
 
         # CRUD Strings
         crud_strings[tablename] = Storage(
@@ -1124,7 +1182,7 @@ class CRShelterInspectionModel(S3Model):
                      #                   readable = False,
                      #                   writable = False,
                      #                   ),
-                     self.cr_housing_unit_id(ondelete = "CASCADE"),
+                     self.cr_shelter_unit_id(ondelete = "CASCADE"),
                      s3_date(default = "now",
                              ),
                      s3_comments(),
@@ -1145,15 +1203,16 @@ class CRShelterInspectionModel(S3Model):
         list_fields = ["shelter_unit_id",
                        "date",
                        (T("Flags"), "shelter_flag__link.flag_id"),
+                       (T("Registered by"), "modified_by"),
                        "comments",
                        ]
 
         # Table configuration
-        self.configure(tablename,
-                       crud_form = crud_form,
-                       list_fields = list_fields,
-                       orderby = "%s.date desc" % tablename,
-                       )
+        configure(tablename,
+                  crud_form = crud_form,
+                  list_fields = list_fields,
+                  orderby = "%s.date desc" % tablename,
+                  )
 
         # CRUD Strings
         crud_strings[tablename] = Storage(
@@ -1180,15 +1239,101 @@ class CRShelterInspectionModel(S3Model):
         # ---------------------------------------------------------------------
         # Shelter Inspection <=> Flag link table
         #
+        represent = ShelterInspectionRepresent(show_link=True)
         tablename = "cr_shelter_inspection_flag"
         define_table(tablename,
                      Field("inspection_id", "reference cr_shelter_inspection",
+                           label = T("Shelter Inspection"),
                            ondelete = "CASCADE",
+                           represent = represent,
                            requires = IS_ONE_OF(db, "cr_shelter_inspection.id",
+                                                represent,
                                                 ),
                            ),
-                     flag_id(),
+                     flag_id(label = T("Defect found")),
+                     Field("resolved", "boolean",
+                           label = T("Resolved"),
+                           default = False,
+                           represent = s3_yes_no_represent,
+                           ),
                      *s3_meta_fields())
+
+        # List fields
+        list_fields = ["id",
+                       "inspection_id$shelter_unit_id$name",
+                       "inspection_id$date",
+                       (T("Registered by"), "inspection_id$modified_by"),
+                       (T("Defect"), "flag_id"),
+                       "resolved",
+                       ]
+
+        # Filter widgets
+        filter_widgets = [S3OptionsFilter("inspection_id$shelter_unit_id",
+                                          filter = 10,
+                                          header = True,
+                                          ),
+                          S3OptionsFilter("flag_id",
+                                          label = T("Defect"),
+                                          options = s3_get_filter_opts("cr_shelter_flag"),
+                                          ),
+                          S3OptionsFilter("resolved",
+                                          label = T("Resolved"),
+                                          options = {False: T("No"),
+                                                     True: T("Yes"),
+                                                     },
+                                          default = False,
+                                          cols = 2,
+                                          ),
+                          ]
+
+        # Table Configuration
+        configure(tablename,
+                  filter_widgets = filter_widgets,
+                  list_fields = list_fields,
+                  # Can not be directly inserted nor edited
+                  insertable = False,
+                  editable = False,
+                  create_onaccept = self.shelter_inspection_flag_onaccept,
+                  )
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Register Defect"),
+            title_display = T("Defect Details"),
+            title_list = T("Defects"),
+            title_update = T("Edit Defect"),
+            label_list_button = T("List Defects"),
+            label_delete_button = T("Delete Defect"),
+            msg_record_created = T("Defect created"),
+            msg_record_modified = T("Defect updated"),
+            msg_record_deleted = T("Defect deleted"),
+            msg_list_empty = T("No Defects currently registered"),
+        )
+
+        # ---------------------------------------------------------------------
+        # Inspection Flag <=> Project Task link table
+        #
+        tablename = "cr_shelter_inspection_task"
+        define_table(tablename,
+                     Field("inspection_flag_id", "reference cr_shelter_inspection_flag",
+                           label = T("Defects"),
+                           ondelete = "CASCADE",
+                           represent = ShelterInspectionFlagRepresent(show_link=True),
+                           requires = IS_ONE_OF(db, "cr_shelter_inspection_flag.id"),
+                           ),
+                     self.project_task_id(ondelete = "RESTRICT",
+                                          ),
+                     *s3_meta_fields())
+
+        # Table Configuration
+        configure(tablename,
+                  list_fields = ["id",
+                                 "task_id",
+                                 "inspection_flag_id",
+                                 "inspection_flag_id$resolved",
+                                 ],
+                  ondelete_cascade = self.shelter_inspection_task_ondelete_cascade,
+                  )
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
@@ -1208,6 +1353,187 @@ class CRShelterInspectionModel(S3Model):
 
         return {"cr_shelter_flag_id":  lambda **attr: dummy("flag_id"),
                 }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def shelter_flag_onvalidation(form):
+        """
+            Shelter Flag form validation:
+                - if create_task=True, then task_description is required
+        """
+
+        T = current.T
+        formvars = form.vars
+
+        create_task = formvars.get("create_task")
+        task_description = formvars.get("task_description")
+
+        if create_task and not task_description:
+            form.errors["task_description"] = T("Task Description required")
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def shelter_inspection_flag_onaccept(form):
+        """
+            Shelter inspection flag onaccept:
+                - auto-create task if/as configured
+        """
+
+        settings = current.deployment_settings
+
+        if not settings.get_cr_shelter_inspection_tasks():
+            # Automatic task creation disabled
+            return
+
+        formvars = form.vars
+        try:
+            record_id = formvars.id
+        except AttributeError:
+            # Nothing we can do
+            return
+
+        db = current.db
+        s3db = current.s3db
+
+        # Tables
+        table = s3db.cr_shelter_inspection_flag
+        ftable = s3db.cr_shelter_flag
+        itable = s3db.cr_shelter_inspection
+        utable = s3db.cr_shelter_unit
+        ltable = s3db.cr_shelter_inspection_task
+        ttable = s3db.project_task
+
+        # Get the record
+        join = (itable.on(itable.id == table.inspection_id),
+                utable.on(utable.id == itable.shelter_unit_id),
+                ftable.on(ftable.id == table.flag_id),
+                )
+        left = ltable.on(ltable.inspection_flag_id == table.id)
+        query = (table.id == record_id)
+        row = db(query).select(table.id,
+                               table.flag_id,
+                               ftable.create_task,
+                               ftable.task_description,
+                               ftable.task_priority,
+                               ftable.task_assign_to,
+                               ltable.task_id,
+                               itable.shelter_unit_id,
+                               utable.name,
+                               join = join,
+                               left = left,
+                               limitby = (0, 1),
+                               ).first()
+        if not row:
+            return
+
+        create_task = False
+        create_link = None
+
+        flag = row.cr_shelter_flag
+        task_description = flag.task_description
+        task_priority = flag.task_priority
+        task_assign_to = flag.task_assign_to
+
+        shelter_unit = row.cr_shelter_unit.name
+
+        if flag.create_task:
+
+            inspection_task = row.cr_shelter_inspection_task
+            if inspection_task.task_id is None:
+
+                shelter_unit_id = row.cr_shelter_inspection.shelter_unit_id
+                flag_id = row.cr_shelter_inspection_flag.flag_id
+
+                # Do we have any active task for the same problem
+                # in the same shelter unit?
+                active_statuses = settings.get_cr_shelter_inspection_task_active_statuses()
+                left = (itable.on(itable.id == table.inspection_id),
+                        ltable.on(ltable.inspection_flag_id == table.id),
+                        ttable.on(ttable.id == ltable.task_id),
+                        )
+                query = (table.flag_id == flag_id) & \
+                        (table.deleted == False) & \
+                        (ttable.name == task_description) & \
+                        (ttable.status.belongs(active_statuses)) & \
+                        (ttable.deleted == False) & \
+                        (itable.shelter_unit_id == shelter_unit_id) & \
+                        (itable.deleted == False)
+                row = db(query).select(ttable.id,
+                                       left = left,
+                                       limitby = (0, 1),
+                                       ).first()
+                if row:
+                    # Yes => link to this task
+                    create_link = row.id
+                else:
+                    # No => create a new task
+                    create_task = True
+
+        if create_task:
+
+            # Create a new task
+            task = {"name": "%s: %s" % (shelter_unit, task_description),
+                    "priority": task_priority,
+                    "pe_id": task_assign_to,
+                    }
+            task_id = ttable.insert(**task)
+            if task_id:
+                task["id"] = task_id
+
+                # Post-process create
+                s3db.update_super(ttable, task)
+                auth = current.auth
+                auth.s3_set_record_owner(ttable, task_id)
+                auth.s3_make_session_owner(ttable, task_id)
+                s3db.onaccept(ttable, task, method="create")
+
+                create_link = task_id
+
+        if create_link:
+
+            # Create the cr_shelter_inspection_task link
+            ltable.insert(inspection_flag_id = record_id,
+                          task_id = create_link,
+                          )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def shelter_inspection_task_ondelete_cascade(row, tablename=None):
+        """
+            Ondelete-cascade method for inspection task links:
+                - close the linked task if there are no other
+                  unresolved flags linked to it
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        # Get the task_id
+        ltable = s3db.cr_shelter_inspection_task
+        query = (ltable.id == row.id)
+        link = db(query).select(ltable.id,
+                                ltable.task_id,
+                                limitby = (0, 1),
+                                ).first()
+        task_id = link.task_id
+
+        # Are there any other unresolved flags linked to the same task?
+        ftable = s3db.cr_shelter_inspection_flag
+        ttable = s3db.project_task
+        query = (ltable.task_id == task_id) & \
+                (ltable.id != link.id) & \
+                (ltable.deleted != True) & \
+                (ftable.id == ltable.inspection_flag_id) & \
+                ((ftable.resolved == False) | (ftable.resolved == None))
+        other = db(query).select(ltable.id, limitby=(0, 1)).first()
+        if not other:
+            # Set task to completed status
+            closed = current.deployment_settings \
+                            .get_cr_shelter_inspection_task_completed_status()
+            db(ttable.id==task_id).update(status=closed)
+
+            # Remove task_id (to allow deletion of the link)
+            link.update_record(task_id = None)
 
 # =============================================================================
 class CRShelterRegistrationModel(S3Model):
@@ -1322,7 +1648,7 @@ class CRShelterRegistrationModel(S3Model):
                                                          )
                                        ),
                          ),
-                     self.cr_housing_unit_id(readable = housing_unit,
+                     self.cr_shelter_unit_id(readable = housing_unit,
                                              writable = housing_unit,
                                              ),
                      Field("day_or_night", "integer",
@@ -2150,6 +2476,177 @@ class cr_AssignUnit(S3CRUD):
         return output
 
 # =============================================================================
+class ShelterInspectionFlagRepresent(S3Represent):
+    """ Representations of Shelter Inspection Flags """
+
+    def __init__(self, show_link=False):
+        """
+            Constructor
+
+            @param show_link: represent as link to the shelter inspection
+        """
+
+        super(ShelterInspectionFlagRepresent, self).__init__(
+                                       lookup="cr_shelter_inspection_flag",
+                                       show_link=show_link,
+                                       )
+
+    # ---------------------------------------------------------------------
+    def link(self, k, v, row=None):
+        """
+            Link inspection flag representations to the inspection record
+
+            @param k: the inspection flag ID
+            @param v: the representation
+            @param row: the row from lookup_rows
+        """
+
+        if row:
+            inspection_id = row.cr_shelter_inspection.id
+            if inspection_id:
+                return A(v, _href=URL(c="cr",
+                                      f="shelter_inspection",
+                                      args=[inspection_id],
+                                      ),
+                         )
+        return v
+
+    # ---------------------------------------------------------------------
+    def represent_row(self, row):
+        """
+            Represent a Row
+
+            @param row: the Row
+        """
+
+        details = {"unit": row.cr_shelter_unit.name,
+                   "date": row.cr_shelter_inspection.date,
+                   "flag": row.cr_shelter_flag.name,
+                   }
+
+        return "%(unit)s (%(date)s): %(flag)s" % details
+
+    # ---------------------------------------------------------------------
+    def lookup_rows(self, key, values, fields=[]):
+        """
+            Lookup all rows referenced by values.
+
+            @param key: the key Field
+            @param values: the values
+            @param fields: the fields to retrieve
+        """
+
+        s3db = current.s3db
+
+        table = self.table
+        ftable = s3db.cr_shelter_flag
+        itable = s3db.cr_shelter_inspection
+        utable = s3db.cr_shelter_unit
+
+        left = (ftable.on(ftable.id == table.flag_id),
+                itable.on(itable.id == table.inspection_id),
+                utable.on(utable.id == itable.shelter_unit_id),
+                )
+        count = len(values)
+        if count == 1:
+            query = (table.id == values[0])
+        else:
+            query = (table.id.belongs(values))
+        limitby = (0, count)
+
+        rows = current.db(query).select(table.id,
+                                        utable.name,
+                                        itable.id,
+                                        itable.date,
+                                        ftable.name,
+                                        left = left,
+                                        limitby = limitby,
+                                        )
+        return rows
+
+# =============================================================================
+class ShelterInspectionRepresent(S3Represent):
+    """ Representations of Shelter Inspections """
+
+    def __init__(self, show_link=False):
+        """
+            Constructor
+
+            @param show_link: represent as link to the shelter inspection
+        """
+
+        super(ShelterInspectionRepresent, self).__init__(
+                                       lookup="cr_shelter_inspection",
+                                       show_link=show_link,
+                                       )
+
+    # ---------------------------------------------------------------------
+    def link(self, k, v, row=None):
+        """
+            Link inspection flag representations to the inspection record
+
+            @param k: the inspection flag ID
+            @param v: the representation
+            @param row: the row from lookup_rows
+        """
+
+        if row:
+            inspection_id = row.cr_shelter_inspection.id
+            if inspection_id:
+                return A(v, _href=URL(c="cr",
+                                      f="shelter_inspection",
+                                      args=[inspection_id],
+                                      ),
+                         )
+        return v
+
+    # ---------------------------------------------------------------------
+    def represent_row(self, row):
+        """
+            Represent a Row
+
+            @param row: the Row
+        """
+
+        details = {"unit": row.cr_shelter_unit.name,
+                   "date": row.cr_shelter_inspection.date,
+                   }
+
+        return "%(date)s: %(unit)s" % details
+
+    # ---------------------------------------------------------------------
+    def lookup_rows(self, key, values, fields=[]):
+        """
+            Lookup all rows referenced by values.
+
+            @param key: the key Field
+            @param values: the values
+            @param fields: the fields to retrieve
+        """
+
+        s3db = current.s3db
+
+        table = self.table
+
+        utable = s3db.cr_shelter_unit
+        left = utable.on(utable.id == table.shelter_unit_id)
+
+        count = len(values)
+        if count == 1:
+            query = (table.id == values[0])
+        else:
+            query = (table.id.belongs(values))
+        limitby = (0, count)
+
+        rows = current.db(query).select(table.id,
+                                        table.date,
+                                        utable.name,
+                                        left = left,
+                                        limitby = limitby,
+                                        )
+        return rows
+
+# =============================================================================
 class CRShelterInspection(S3Method):
     """
         Mobile-optimized UI for shelter inspection
@@ -2235,9 +2732,12 @@ class CRShelterInspection(S3Method):
                                                  shelter_unit_represent,
                                                  orderby = "shelter_id",
                                                  ),
+                            widget = S3MultiSelectWidget(multiple=False,
+                                                         filter=True,
+                                                         ),
                             ),
                       Field("shelter_flags",
-                            label = T("Shortcomings"),
+                            label = T("Defects"),
                             requires = IS_ONE_OF(db, "cr_shelter_flag.id",
                                                  shelter_flag_represent,
                                                  multiple = True,
@@ -2247,6 +2747,7 @@ class CRShelterInspection(S3Method):
                                         size = None,
                                         ),
                             ),
+                      s3_comments(comment=None),
                       ]
 
         # Buttons
@@ -2298,6 +2799,8 @@ class CRShelterInspection(S3Method):
         """
 
         T = current.T
+
+        db = current.db
         s3db = current.s3db
 
         # Load JSON data from request body
@@ -2313,22 +2816,70 @@ class CRShelterInspection(S3Method):
             # Register shelter inspection
             error = False
 
-            # Create inspection record
+            # Read comments
+            comments = data.get("c")
+
+            # Find inspection record
+            update = False
             itable = s3db.cr_shelter_inspection
-            inspection_id = itable.insert(shelter_unit_id = shelter_unit_id,
-                                          )
+            query = (itable.shelter_unit_id == shelter_unit_id) & \
+                    (itable.date == current.request.utcnow.date()) & \
+                    (itable.deleted != True)
+            row = db(query).select(itable.id,
+                                   limitby = (0, 1),
+                                   ).first()
+            if row:
+                # Update this inspection
+                update = True
+                inspection_id = row.id
+                row.update_record(comments = comments)
+            else:
+                # Create a new inspection
+                inspection_id = itable.insert(shelter_unit_id = shelter_unit_id,
+                                              comments = comments,
+                                              )
             if inspection_id:
+                # Currently selected flags
                 flag_ids = data.get("f")
+
+                if update:
+                    # Remove all flags linked to the current inspection
+                    # which are not in the current selection
+                    query = (FS("inspection_id") == inspection_id)
+                    if flag_ids:
+                        query &= ~(FS("flag_id").belongs(flag_ids))
+                    fresource = s3db.resource("cr_shelter_inspection_flag",
+                                              filter = query,
+                                              )
+                    fresource.delete(cascade=True)
+
                 if flag_ids:
-                    # Create links to flags
+
+                    # Determine which flags have been newly selected
                     ftable = s3db.cr_shelter_inspection_flag
-                    for flag_id in flag_ids:
-                        success = ftable.insert(inspection_id = inspection_id,
-                                                flag_id = flag_id,
-                                                )
+                    if update:
+                        query = (ftable.inspection_id == inspection_id) & \
+                                (ftable.deleted == False)
+                        rows = db(query).select(ftable.flag_id)
+                        new = set(flag_ids) - set(row.flag_id for row in rows)
+                    else:
+                        new = set(flag_ids)
+
+                    # Create links to newly selected flags
+                    ftable = s3db.cr_shelter_inspection_flag
+                    data = {"inspection_id": inspection_id,
+                            }
+                    for flag_id in new:
+                        data["flag_id"] = flag_id
+                        success = ftable.insert(**data)
                         if not success:
                             error = True
                             break
+                        else:
+                            # Call onaccept to auto-create tasks
+                            record = Storage(data)
+                            record["id"] = success
+                            s3db.onaccept(ftable, record)
             else:
                 error = True
 
@@ -2374,5 +2925,40 @@ class CRShelterInspection(S3Method):
                  {"id": widget_id, "options": json.dumps(options)}
         if script not in scripts:
             scripts.append(script)
+
+# -------------------------------------------------------------------------
+def cr_resolve_shelter_flags(task_id):
+    """
+        If a task is set to an inactive status, then mark all linked
+        shelter inspection flags as resolved
+
+        @param task_id: the task record ID
+    """
+
+    db = current.db
+    s3db = current.s3db
+
+    active_statuses = current.deployment_settings \
+                             .get_cr_shelter_inspection_task_active_statuses()
+
+    # Get the task
+    ttable = s3db.project_task
+    query = (ttable.id == task_id)
+    task = db(query).select(ttable.id,
+                            ttable.status,
+                            limitby = (0, 1),
+                            ).first()
+
+    if task and task.status not in active_statuses:
+
+        # Mark all shelter inspection flags as resolved
+        ltable = s3db.cr_shelter_inspection_task
+        ftable = s3db.cr_shelter_inspection_flag
+        query = (ltable.task_id == task.id) & \
+                (ftable.id == ltable.inspection_flag_id) & \
+                ((ftable.resolved == False) | (ftable.resolved == None))
+        rows = db(query).select(ftable.id)
+        ids = set(row.id for row in rows)
+        db(ftable.id.belongs(ids)).update(resolved=True)
 
 # END =========================================================================

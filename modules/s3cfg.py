@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1038,12 +1038,9 @@ class S3Config(Storage):
 
     def get_gis_api_google(self):
         """
-            API key for Google
-            - needed for Earth, MapMaker & GeoCoder
-            - defaults to localhost
+            API key for Google Maps
         """
-        return self.gis.get("api_google",
-                            "ABQIAAAAgB-1pyZu7pKAZrMGv3nksRTpH3CbXHjuCVmaTc5MkkU4wO1RRhQWqp1VGwrG8yPE2KhLCPYhD7itFw")
+        return self.gis.get("api_google", "")
 
     def get_gis_bbox_min_size(self):
         """
@@ -1828,6 +1825,13 @@ class S3Config(Storage):
         """
         return self.ui.get("icon_layout")
 
+    def get_ui_calendar_clear_icon(self):
+        """
+            Render clear-button for calendar inputs just as an icon
+            (S3CalendarWidget, requires Foundation + font-awesome)
+        """
+        return self.ui.get("calendar_clear_icon", False)
+
     # -------------------------------------------------------------------------
     def get_ui_auto_keyvalue(self):
         """
@@ -2329,6 +2333,17 @@ class S3Config(Storage):
         """
         return self.search.get("max_results", 200)
 
+    def get_search_dates_auto_range(self):
+        """
+            Date filters to apply introspective range limits (by
+            looking up actual minimum/maximum dates from the records)
+
+            NB has scalability problems, so disabled by default =>
+               can be overridden per-widget using the "auto_range"
+               option (S3DateFilter)
+        """
+        return self.search.get("dates_auto_range", False)
+
     # -------------------------------------------------------------------------
     # Filter Manager Widget
     def get_search_filter_manager(self):
@@ -2405,12 +2420,6 @@ class S3Config(Storage):
     # -------------------------------------------------------------------------
     # CAP: Common Alerting Protocol
     #
-    def get_cap_identifier_prefix(self):
-        """
-            Prefix to be prepended to identifiers of CAP alerts
-        """
-        return self.cap.get("identifier_prefix", "")
-
     def get_cap_identifier_oid(self):
         """
             OID for the CAP issuing authority
@@ -2430,12 +2439,6 @@ class S3Config(Storage):
 
         # Else fallback to the default OID
         return self.cap.get("identifier_oid", "")
-
-    def get_cap_identifier_suffix(self):
-        """
-            Suffix to be appended to identifiers of CAP alerts
-        """
-        return self.cap.get("identifier_suffix", "")
 
     def get_cap_expire_offset(self):
         """
@@ -2567,6 +2570,15 @@ class S3Config(Storage):
         """
 
         return self.cap.get("alert_hub_title", current.T("SAMBRO Alert Hub Common Operating Picture"))
+
+    def get_cap_area_default(self):
+        """
+            During importing from XML, which element(s) to use for the
+            record in cap_area_location table
+            elements are <polygon> and <geocode>
+        """
+
+        return self.cap.get("area_default", ["geocode", "polygon"])
 
     # -------------------------------------------------------------------------
     # CMS: Content Management System
@@ -2719,6 +2731,31 @@ class S3Config(Storage):
         """
         return self.cr.get("tags", False)
 
+    def get_cr_shelter_inspection_tasks(self):
+        """
+            Generate tasks from shelter inspections (requires project module)
+        """
+        if self.has_module("project"):
+            return self.cr.get("shelter_inspection_tasks", False)
+        else:
+            return False
+
+    def get_cr_shelter_inspection_task_active_statuses(self):
+        """
+            List of active statuses of shelter inspection tasks
+            (subset of project_task_status_opts)
+        """
+        default = (1, 2, 3, 4, 5, 6, 11)
+        return self.cr.get("shelter_inspection_tasks_active_statuses", default)
+
+    def get_cr_shelter_inspection_task_completed_status(self):
+        """
+            Completed-status for shelter inspection tasks (one value
+            of project_task_status_opts), will be set when inspection
+            flag is marked as resolved
+        """
+        return self.cr.get("shelter_inspection_tasks_completed_status", 12)
+
     # -------------------------------------------------------------------------
     # DC: Data Collection
     #
@@ -2730,6 +2767,13 @@ class S3Config(Storage):
             - 'Survey'
         """
         return self.dc.get("response_label", "Assessment")
+
+    def get_dc_mobile_data(self):
+        """
+            Whether Mobile Clients should download Assessments
+            - e.g. when these are created through Targetting
+        """
+        return self.dc.get("mobile_data", False)
 
     # -------------------------------------------------------------------------
     # Deployments
@@ -2802,6 +2846,12 @@ class S3Config(Storage):
         """
         return self.dvr.get("label", None)
 
+    def get_dvr_case_flags(self):
+        """
+            Enable features to manage case flags
+        """
+        return self.dvr.get("case_flags", False)
+
     def get_dvr_track_transfer_sites(self):
         """
             Enable features to track transfer origin/destination sites
@@ -2824,25 +2874,11 @@ class S3Config(Storage):
         """
         return self.dvr.get("manage_transferability", False)
 
-    def get_dvr_case_activity_needs_multiple(self):
+    def get_dvr_multiple_case_groups(self):
         """
-            Whether Case Activities link to Multiple Needs
-            - e.g. DRK: False
-            - e.g. STL: True
+            Whether a case can belong to multiple case groups at the same time
         """
-        return self.dvr.get("case_activity_needs_multiple", False)
-
-    def get_dvr_case_events_close_appointments(self):
-        """
-            Whether case events automatically close appointments
-        """
-        return self.dvr.get("case_events_close_appointments", False)
-
-    def get_dvr_case_flags(self):
-        """
-            Enable features to manage case flags
-        """
-        return self.dvr.get("case_flags", False)
+        return self.dvr.get("multiple_case_groups", False)
 
     def get_dvr_household_size(self):
         """
@@ -2859,6 +2895,12 @@ class S3Config(Storage):
             Expose flags to mark appointment types as mandatory
         """
         return self.dvr.get("mandatory_appointments", False)
+
+    def get_dvr_case_events_close_appointments(self):
+        """
+            Whether case events automatically close appointments
+        """
+        return self.dvr.get("case_events_close_appointments", False)
 
     def get_dvr_appointments_update_last_seen_on(self):
         """
@@ -2881,12 +2923,6 @@ class S3Config(Storage):
             the "last seen on" date when set to "paid"
         """
         return self.dvr.get("payments_update_last_seen_on", False)
-
-    def get_dvr_multiple_case_groups(self):
-        """
-            Whether a case can belong to multiple case groups at the same time
-        """
-        return self.dvr.get("multiple_case_groups", False)
 
     def get_dvr_id_code_pattern(self):
         """
@@ -2912,11 +2948,51 @@ class S3Config(Storage):
         """
         return self.dvr.get("event_registration_checkin_warning", False)
 
+    def get_dvr_event_registration_show_picture(self):
+        """
+            Event registration UI to show profile picture
+            by default (True), or only on demand (False):
+            - can be set to False (selectively) in order to improve
+              responsiveness of the UI and reduce network traffic
+        """
+        return self.dvr.get("event_registration_show_picture", True)
+
+    def get_dvr_event_registration_exclude_codes(self):
+        """
+            List of case event type codes to exclude from
+            the event registration UI; can use * as wildcard
+
+            Example:
+                settings.dvr.event_registration_exclude_codes = ("FOOD*",)
+        """
+        return self.dvr.get("event_registration_exclude_codes", None)
+
     def get_dvr_activity_use_service_type(self):
         """
-            Use service type in case activities
+            Use service type in group/case activities
         """
         return self.dvr.get("activity_use_service_type", False)
+
+    def get_dvr_activity_sectors(self):
+        """
+            Use sectors in group/case activities
+        """
+        return self.dvr.get("activity_sectors", False)
+
+    def get_dvr_case_activity_use_status(self):
+        """
+            Use configurable statuses in case activities
+            instead of simple completed-flag
+        """
+        return self.dvr.get("case_activity_use_status", False)
+
+    def get_dvr_case_activity_needs_multiple(self):
+        """
+            Whether Case Activities link to Multiple Needs
+            - e.g. DRK: False
+            - e.g. STL: True
+        """
+        return self.dvr.get("case_activity_needs_multiple", False)
 
     def get_dvr_needs_use_service_type(self):
         """
@@ -2935,6 +3011,12 @@ class S3Config(Storage):
             Vulnerability types are hierarchical
         """
         return self.dvr.get("vulnerability_types_hierarchical", False)
+
+    def get_dvr_manage_response_actions(self):
+        """
+            Manage individual response actions in case activities
+        """
+        return self.dvr.get("manage_response_actions", False)
 
     def get_dvr_response_types_hierarchical(self):
         """
@@ -4322,6 +4404,18 @@ class S3Config(Storage):
         """
         return self.project.get("indicators", False)
 
+    def get_project_indicator_criteria(self):
+        """
+            Use Indicator Criteria in Projects
+        """
+        return self.project.get("indicator_criteria", False)
+
+    def get_project_status_from_activities(self):
+        """
+            Use Activity Statuses to build Project Status (instead of Indicator Data)
+        """
+        return self.project.get("status_from_activities", False)
+
     #def get_project_locations_from_countries(self):
     #    """
     #        Create a project_location for each country that a Project is
@@ -4478,6 +4572,12 @@ class S3Config(Storage):
             Whether to use hours logging for tasks
         """
         return self.project.get("task_time", True)
+
+    def get_project_my_tasks_include_team_tasks(self):
+        """
+            "My Open Tasks" to include team tasks
+        """
+        return self.project.get("my_tasks_include_team_tasks", False)
 
     # -------------------------------------------------------------------------
     # Requests Management Settings

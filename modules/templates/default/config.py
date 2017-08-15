@@ -484,17 +484,28 @@ def config(settings):
     #settings.cr.people_registration = False
     # Uncomment to use Tags for Shelters
     #settings.cr.tags = True
+    # Uncomment to generate tasks from shelter inspections (requires project module)
+    #settings.cr.shelter_inspection_tasks = True
+    # Configure active statuses for shelter inspection tasks (subset of project.task_status_opts)
+    #settings.cr.shelter_inspection_task_active_statuses = (2, 3, 6)
 
     # -------------------------------------------------------------------------
     # Disaster Victim Registry / Case Management
+
     # Uncomment to use the term Beneficiary instead of Case
     #settings.dvr.label = "Beneficiary"
+
+    # Uncomment this to allow cases to belong to multiple case groups ("households")
+    #settings.dvr.multiple_case_groups = True
+
     # Uncomment this to enable tracking of transfer origin/destination sites
     #settings.dvr.track_transfer_sites = True
     # Uncomment this to enable features to manage transferability of cases
     #settings.dvr.manage_transferability = True
+
     # Uncomment this to enable household size in cases, set to "auto" for automatic counting
     #settings.dvr.household_size = True
+
     # Uncomment this to expose flags to mark appointment types as mandatory
     #settings.dvr.mandatory_appointments = True
     # Uncomment this to have appointments with personal presence update last_seen_on
@@ -503,18 +514,21 @@ def config(settings):
     #settings.dvr.appointments_update_case_status = True
     # Uncomment this to automatically close appointments when registering certain case events
     #settings.dvr.case_events_close_appointments = True
+
     # Uncomment this to have allowance payments update last_seen_on
     #settings.dvr.payments_update_last_seen_on = True
-    # Uncomment this to allow cases to belong to multiple case groups ("households")
-    #settings.dvr.multiple_case_groups = True
-    # Configure a regular expression pattern for ID Codes (QR Codes)
-    #settings.dvr.id_code_pattern = "(?P<label>[^,]*),(?P<first_name>[^,]*),(?P<last_name>[^,]*),(?P<date_of_birth>[^,]*)"
-    # Uncomment this to use service types for case activites
+
+    # Uncomment this to use service types for group/case activites
     #settings.dvr.activity_use_service_type = True
+    # Uncomment this to use sectors in group/case activities
+    #settings.dvr.activity_sectors = True
     # Uncomment this to use case activity types
     #settings.dvr.activity_types = True
     # Uncomment this to use hierarchical case activity types
     #settings.dvr.activity_types_hierarchical = True
+    # Uncomment this to use status field in case activities
+    #settings.dvr.case_activity_use_status = True
+
     # Uncomment this if Case activities use multiple Needs
     #settings.dvr.case_activity_needs_multiple = True
     # Uncomment this to use service types for needs
@@ -523,6 +537,16 @@ def config(settings):
     #settings.dvr.needs_hierarchical = True
     # Uncomment this to use hierarchical vulnerability types
     #settings.dvr.vulnerability_types_hierarchical = True
+
+    # Uncomment this to manage individual response actions in case activities
+    #settings.dvr.manage_response_actions = True
+
+    # Configure a regular expression pattern for ID Codes (QR Codes)
+    #settings.dvr.id_code_pattern = "(?P<label>[^,]*),(?P<first_name>[^,]*),(?P<last_name>[^,]*),(?P<date_of_birth>[^,]*)"
+    # Uncomment this to show a warning during event registration if the person is not currently checked-in
+    #settings.dvr.event_registration_checkin_warning = True
+    # Uncomment this to show profile pictures in event registration UI only on demand
+    #settings.dvr.event_registration_show_picture = False
 
     # -------------------------------------------------------------------------
     # Events

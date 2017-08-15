@@ -2,7 +2,7 @@
 
 """ S3 Resources
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -36,7 +36,6 @@ __all__ = ("S3AxisFilter",
            "S3ResourceFilter",
            )
 
-import datetime
 import json
 import sys
 
@@ -55,7 +54,6 @@ except ImportError:
 
 from gluon import current
 from gluon.html import A, TAG
-from gluon.http import HTTP
 from gluon.validators import IS_EMPTY_OR
 from gluon.storage import Storage
 from gluon.tools import callback
@@ -1581,6 +1579,8 @@ class S3Resource(object):
         if self._rows is not None:
             self.clear()
 
+        pagination = limit is not None or start
+
         rfilter = self.rfilter
         multiple = rfilter.multiple if rfilter is not None else True
         if not multiple and self.parent and self.parent.count() == 1:
@@ -1598,11 +1598,11 @@ class S3Resource(object):
         new_id = ids.append
 
         self._uids = []
-        new_uid = self._uids.append
         self._rows = []
-        new_row = self._rows.append
 
         if rows:
+            new_uid = self._uids.append
+            new_row = self._rows.append
             pkey = table._id.name
             for row in rows:
                 if hasattr(row, tablename):
@@ -1615,7 +1615,13 @@ class S3Resource(object):
                     new_row(row)
                     if load_uids:
                         new_uid(ogetattr(row, UID))
-            self._length = len(self._rows)
+
+        # If this is an unlimited load, or the first page with no
+        # rows, then the result length is equal to the total number
+        # of matching records => store length for subsequent count()s
+        length = len(self._rows)
+        if not pagination or not start and not length:
+            self._length = length
 
         return self._rows
 
@@ -3476,12 +3482,13 @@ class S3Resource(object):
 
         # Collect extra fields from virtual tables
         if extra_fields:
-            append = slist.append
-            extra = self.get_config("extra_fields", [])
-            for selector in extra:
-                s = prefix(selector)
-                if s not in display_fields:
-                    append(s)
+            extra = self.get_config("extra_fields")
+            if extra:
+                append = slist.append
+                for selector in extra:
+                    s = prefix(selector)
+                    if s not in display_fields:
+                        append(s)
 
         joins = {}
         left = {}
@@ -3636,6 +3643,18 @@ class S3Resource(object):
         """
 
         return current.s3db.get_config(self.tablename, key, default=default)
+
+    # -------------------------------------------------------------------------
+    def clear_config(self, *keys):
+        """
+            Clear configuration settings for this resource
+
+            @param keys: keys to remove (can be multiple)
+
+            @note: no keys specified removes all settings for this resource
+        """
+
+        current.s3db.clear_config(self.tablename, *keys)
 
     # -------------------------------------------------------------------------
     def limitby(self, start=0, limit=0):
@@ -3904,7 +3923,12 @@ class S3Resource(object):
                     except (KeyError, IndexError):
                         continue
                     if field is None:
-                        continue
+                        # Virtual
+                        if hasattr(rfield, "search_field"):
+                            field = db[rfield.tname][rfield.search_field]
+                        else:
+                            # Cannot search
+                            continue
                     ftype = str(field.type)
 
                     # Add left joins
@@ -4626,10 +4650,10 @@ class S3ResourceFilter(object):
                 # @todo: Alternative concept (inconsistent?):
                 # Interpret all URL filters in the context of filter_component:
                 #if filter_component and \
-                   #filter_component in resource.components:
-                    #context = resource.components[filter_component]
+                #   filter_component in resource.components:
+                #    context = resource.components[filter_component]
                 #else:
-                    #context = resource
+                #    context = resource
                 #queries = S3URLQuery.parse(context, vars)
 
                 for alias in queries:
@@ -4792,12 +4816,20 @@ class S3ResourceFilter(object):
 
             # Add to query
             rfltr = self.rfltr
-            if rfltr is not None:
-                if isinstance(rfltr, S3ResourceQuery):
-                    query &= rfltr.query(resource)
-                else:
-                    # Combination of virtual field filter and web2py Query
-                    query &= rfltr
+            if isinstance(rfltr, S3ResourceQuery):
+
+                # Resolve query against the resource
+                rq = rfltr.query(resource)
+
+                # False indicates that the subquery shall be ignored
+                # (e.g. if not supported by platform)
+                if rq is not False:
+                    query &= rq
+
+            elif rfltr is not None:
+
+                # Combination of virtual field filter and web2py Query
+                query &= rfltr
 
         self.query = query
         return query

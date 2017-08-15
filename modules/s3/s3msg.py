@@ -9,7 +9,7 @@
     Messages get sent to the Outbox (& Log)
     From there, the Scheduler tasks collect them & send them
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -126,6 +126,7 @@ class S3Msg(object):
                              "SKYPE":       T("Skype"),
                              "SMS":         MOBILE,
                              "TWITTER":     T("Twitter"),
+                             "WHATSAPP":    T("WhatsApp"),
                              #"XMPP":       "XMPP",
                              #"WEB":        T("Website"),
                              "WORK_PHONE":  T("Work phone"),

@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1349,6 +1349,12 @@ class S3CalendarWidget(FormWidget):
         @note: this widget must be combined with the IS_UTC_DATE or
                IS_UTC_DATETIME validators to have the value properly
                converted from/to local timezone and format.
+
+        - control script is s3.ui.calendar.js
+        - uses jQuery UI DatePicker for Gregorian calendars: https://jqueryui.com/datepicker/
+        - uses jQuery UI Timepicker-addon if using times: http://trentrichardson.com/examples/timepicker
+        - uses Calendars for non-Gregorian calendars: http://keith-wood.name/calendars.html
+            (ensure that calendars/ui-smoothness.calendars.picker.css is in css.cfg for that)
     """
 
     def __init__(self,
@@ -1372,6 +1378,7 @@ class S3CalendarWidget(FormWidget):
                  minute_step=5,
                  set_min=None,
                  set_max=None,
+                 clear_text=None,
                  ):
         """
             Constructor
@@ -1436,6 +1443,8 @@ class S3CalendarWidget(FormWidget):
         self.set_min = set_min
         self.set_max = set_max
 
+        self.clear_text = clear_text
+
         self._class = "s3-calendar-widget datetimepicker"
 
     # -------------------------------------------------------------------------
@@ -1494,9 +1503,17 @@ class S3CalendarWidget(FormWidget):
         c = current.calendar if not self.calendar else S3Calendar(self.calendar)
         firstDOW = c.first_dow
 
-        extremes = self.extremes(time_format=time_format)
+        dtformat = separator.join([date_format, time_format])
+        extremes = self.extremes(dtformat=dtformat)
 
         T = current.T
+
+        clear_text = self.clear_text
+        if clear_text is None:
+            clear_text = s3_str(T("Clear"))
+        else:
+            clear_text = s3_str(T(clear_text))
+
         options = {"calendar": calendar,
                    "dateFormat": str(date_format),
                    "timeFormat": str(time_format),
@@ -1508,14 +1525,17 @@ class S3CalendarWidget(FormWidget):
                    "weekNumber": self.week_number,
                    "timepicker": self.timepicker,
                    "minuteStep": self.minute_step,
-                   "todayText": str(T("Today")),
-                   "nowText": str(T("Now")),
-                   "closeText": str(T("Done")),
-                   "clearText": str(T("Clear")),
+                   "todayText": s3_str(T("Today")),
+                   "nowText": s3_str(T("Now")),
+                   "closeText": s3_str(T("Done")),
+                   "clearText": clear_text,
                    "setMin": self.set_min,
                    "setMax": self.set_max,
                    }
         options.update(extremes)
+
+        if settings.get_ui_calendar_clear_icon():
+            options["clearButton"] = "icon"
 
         # Inject JS
         self.inject_script(input_id, options)
@@ -1531,12 +1551,12 @@ class S3CalendarWidget(FormWidget):
                        )
 
     # -------------------------------------------------------------------------
-    def extremes(self, time_format=None):
+    def extremes(self, dtformat=None):
         """
             Compute the minimum/maximum selectable date/time, as well as
             the default time (=the minute-step closest to now)
 
-            @param time_format: the user time format
+            @param dtformat: the user datetime format
 
             @return: a dict {minDateTime, maxDateTime, defaultValue, yearRange}
                      with the min/max options as ISO-formatted strings, and the
@@ -1599,7 +1619,7 @@ class S3CalendarWidget(FormWidget):
             extremes["maxDateTime"] = latest.isoformat()
 
         # Default date/time
-        if self.timepicker and time_format:
+        if self.timepicker and dtformat:
             # Pick a start date/time
             if earliest <= now <= latest:
                 start = now
@@ -1623,8 +1643,8 @@ class S3CalendarWidget(FormWidget):
             # Translate into local time
             if offset:
                 rounded += datetime.timedelta(seconds=offset)
-            # Convert into user format (time part only)
-            default = rounded.strftime(time_format)
+            # Convert into user format
+            default = rounded.strftime(dtformat)
             extremes["defaultValue"] = default
 
         # Year range
@@ -5265,7 +5285,8 @@ class S3LocationSelector(S3Selector):
 
         # Inject map
         if show_map:
-            map_icon = self._map(fieldname,
+            map_icon = self._map(field,
+                                 fieldname,
                                  lat,
                                  lon,
                                  wkt,
@@ -5385,27 +5406,29 @@ class S3LocationSelector(S3Selector):
             @param config: the current GIS config
 
             @return: dict of location data, ready for JSON output
+
+            @ToDo: DRY with controllers/gis.py ldata()
         """
 
+        db = current.db
         s3db = current.s3db
+        settings = current.deployment_settings
 
         L0 = values.get("L0")
         L1 = values.get("L1")
         L2 = values.get("L2")
         L3 = values.get("L3")
         L4 = values.get("L4")
-        L5 = values.get("L5")
-
-        settings = current.deployment_settings
-        countries = settings.get_gis_countries()
+        #L5 = values.get("L5")
 
         # Read all visible levels
         # NB (level != None) is to handle Missing Levels
         gtable = s3db.gis_location
-        query = None
+
         # @todo: DRY this:
         if "L0" in levels:
             query = (gtable.level == "L0")
+            countries = settings.get_gis_countries()
             if len(countries):
                 ttable = s3db.gis_location_tag
                 query &= ((ttable.tag == "ISO2") & \
@@ -5471,18 +5494,20 @@ class S3LocationSelector(S3Selector):
         elif L4 and "L5" in levels:
             query = (gtable.level != None) & \
                     (gtable.parent == L4)
+        else:
+            query = None
 
         # Translate options using gis_location_name?
-        settings = current.deployment_settings
-        translate = settings.get_L10n_translate_gis_location()
         language = current.session.s3.language
-        #if language == settings.get_L10n_default_language():
-        if language == "en": # Can have a default language for system & yet still want to translate from base English
+        if language in ("en", "en-gb"):
+            # We assume that Location names default to the English version 
             translate = False
+        else:
+            translate = settings.get_L10n_translate_gis_location()
 
-        db = current.db
         if query is not None:
-            query &= (gtable.deleted == False)
+            query &= (gtable.deleted == False) & \
+                     (gtable.end_date == None)
             fields = [gtable.id,
                       gtable.name,
                       gtable.level,
@@ -5524,13 +5549,15 @@ class S3LocationSelector(S3Selector):
                                                 gtable.lon_max,
                                                 cache=s3db.cache,
                                                 limitby=(0, 1)).first()
-            if not record:
+            try:
+                bounds = [record.lon_min,
+                          record.lat_min,
+                          record.lon_max,
+                          record.lat_max
+                          ]
+            except:
+                # Record not found!
                 raise ValueError
-            bounds = [record.lon_min,
-                      record.lat_min,
-                      record.lon_max,
-                      record.lat_max
-                      ]
 
             location_dict["d"] = dict(id=lx, b=bounds)
             location_dict[lx] = dict(b=bounds, l=int(lowest_lx[1:]))
@@ -5705,7 +5732,7 @@ class S3LocationSelector(S3Selector):
         # 1st level is always hidden until populated
         hidden = True
 
-        T = current.T
+        #T = current.T
         required_levels = self.required_levels
         for level in levels:
 
@@ -5792,6 +5819,7 @@ class S3LocationSelector(S3Selector):
 
     # -------------------------------------------------------------------------
     def _map(self,
+             field,
              fieldname,
              lat,
              lon,
@@ -5803,6 +5831,7 @@ class S3LocationSelector(S3Selector):
         """
             Initialize the map
 
+            @param field: the field
             @param fieldname: the field name (to construct HTML IDs)
             @param lat: the Latitude of the current point location
             @param lon: the Longitude of the current point location
@@ -5825,18 +5854,6 @@ class S3LocationSelector(S3Selector):
         points = self.points
         polygons = self.polygons
         circles = self.circles
-        use_wkt = polygons or lines or circles
-
-        db = current.db
-        gis = current.gis
-        s3db = current.s3db
-
-        s3 = current.response.s3
-        global_append = s3.js_global.append
-
-        location_selector_loaded = s3.gis.location_selector_loaded
-
-        settings = current.deployment_settings
 
         # Toolbar options
         add_points_active = add_polygon_active = add_line_active = add_circle_active = False
@@ -5916,9 +5933,11 @@ class S3LocationSelector(S3Selector):
             # No Valid options!
             raise SyntaxError
 
+        s3 = current.response.s3
+
         # ColorPicker options
-        colorpicker = self.color_picker
-        if colorpicker:
+        color_picker = self.color_picker
+        if color_picker:
             toolbar = True
             # Requires the custom controller to store this before calling the widget
             # - a bit hacky, but can't think of a better option currently without
@@ -5930,6 +5949,8 @@ class S3LocationSelector(S3Selector):
             else:
                 # Do we have a style defined for this record?
                 # @ToDo: Support Layers using alternate controllers/functions
+                db = current.db
+                s3db = current.s3db
                 c, f = field.tablename.split("_", 1)
                 ftable = s3db.gis_layer_feature
                 query = (ftable.deleted == False) & \
@@ -5955,34 +5976,36 @@ class S3LocationSelector(S3Selector):
                         # Show Color Picker with default Style
                         color_picker = True
         else:
-            colorpicker = False
+            color_picker = False
+
+        settings = current.deployment_settings
 
         # Create the map
-        _map = gis.show_map(id = "location_selector_%s" % fieldname,
-                            collapsed = True,
-                            height = settings.get_gis_map_selector_height(),
-                            width = settings.get_gis_map_selector_width(),
-                            add_feature = points,
-                            add_feature_active = add_points_active,
-                            add_line = lines,
-                            add_line_active = add_line_active,
-                            add_polygon = polygons,
-                            add_polygon_active = add_polygon_active,
-                            add_circle = circles,
-                            add_circle_active = add_circle_active,
-                            catalogue_layers = self.catalog_layers,
-                            color_picker = colorpicker,
-                            toolbar = toolbar,
-                            # Hide controls from toolbar
-                            clear_layers = False,
-                            nav = False,
-                            print_control = False,
-                            area = False,
-                            zoomWheelEnabled = False,
-                            # Don't use normal callback (since we postpone rendering Map until DIV unhidden)
-                            # but use our one if we need to display a map by default
-                            callback = callback,
-                            )
+        _map = current.gis.show_map(id = "location_selector_%s" % fieldname,
+                                    collapsed = True,
+                                    height = settings.get_gis_map_selector_height(),
+                                    width = settings.get_gis_map_selector_width(),
+                                    add_feature = points,
+                                    add_feature_active = add_points_active,
+                                    add_line = lines,
+                                    add_line_active = add_line_active,
+                                    add_polygon = polygons,
+                                    add_polygon_active = add_polygon_active,
+                                    add_circle = circles,
+                                    add_circle_active = add_circle_active,
+                                    catalogue_layers = self.catalog_layers,
+                                    color_picker = color_picker,
+                                    toolbar = toolbar,
+                                    # Hide controls from toolbar
+                                    clear_layers = False,
+                                    nav = False,
+                                    print_control = False,
+                                    area = False,
+                                    zoomWheelEnabled = False,
+                                    # Don't use normal callback (since we postpone rendering Map until DIV unhidden)
+                                    # but use our one if we need to display a map by default
+                                    callback = callback,
+                                    )
 
         # Inject map icon labels
         if polygons or lines:
@@ -6001,6 +6024,9 @@ class S3LocationSelector(S3Selector):
                 label = show_map_add
 
         T = current.T
+        global_append = s3.js_global.append
+        location_selector_loaded = s3.gis.location_selector_loaded
+
         if not location_selector_loaded:
             global_append('''i18n.show_map_add="%s"
 i18n.show_map_view="%s"
@@ -6601,7 +6627,7 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                     current.log.error(error)
             if form.errors:
                 errors = form.errors
-                error = "\n".join(errors[fn] for fn in errors)
+                error = "\n".join(s3_str(errors[fn]) for fn in errors)
                 return (values, error)
             elif feature:
                 # gis_location_onvalidation adds/updates form vars (e.g.
@@ -8794,6 +8820,8 @@ class ICON(I):
     # - "_base" can be used to define a common CSS class for all icons
     #
     icons = {
+        # Font-Awesome 4
+        # http://fontawesome.io/icons/
         "font-awesome": {
             "_base": "fa",
             "active": "fa-check",
@@ -8811,6 +8839,7 @@ class ICON(I):
             "bookmark-empty": "fa-bookmark-o",
             "briefcase": "fa-briefcase",
             "calendar": "fa-calendar",
+            "caret-right": "fa-caret-right",
             "certificate": "fa-certificate",
             "comment-alt": "fa-comment-o",
             "commit": "fa-check-square-o",
@@ -8850,10 +8879,13 @@ class ICON(I):
             "org-network": "fa-umbrella",
             "other": "fa-circle",
             "paper-clip": "fa-paperclip",
+            "pause": "fa-pause",
             "pencil": "fa-pencil",
             "phone": "fa-phone",
+            "play": "fa-play",
             "plus": "fa-plus",
             "plus-sign": "fa-plus-sign",
+            "print": "fa-print",
             "project": "fa-dashboard",
             "radio": "fa-microphone",
             "remove": "fa-remove",
@@ -8868,6 +8900,7 @@ class ICON(I):
             "skype": "fa-skype",
             "staff": "fa-user",
             "star": "fa-star",
+            "stop": "fa-stop",
             "table": "fa-table",
             "tag": "fa-tag",
             "tags": "fa-tags",
@@ -8884,6 +8917,8 @@ class ICON(I):
             "zoomin": "fa-zoomin",
             "zoomout": "fa-zoomout",
         },
+        # Foundation Icon Fonts 3
+        # http://zurb.com/playground/foundation-icon-fonts-3
         "foundation": {
             "active": "fi-check",
             "activity": "fi-price-tag",
@@ -8895,6 +8930,7 @@ class ICON(I):
             "bookmark": "fi-bookmark",
             "bookmark-empty": "fi-bookmark-empty",
             "calendar": "fi-calendar",
+            "caret-right": "fi-play",
             "certificate": "fi-burst",
             "comment-alt": "fi-comment",
             "commit": "fi-check",
@@ -8925,8 +8961,10 @@ class ICON(I):
             "org-network": "fi-asterisk",
             "other": "fi-asterisk",
             "paper-clip": "fi-paperclip",
+            "pause": "fi-pause",
             "pencil": "fi-pencil",
             "phone": "fi-telephone",
+            "play": "fi-play",
             "plus": "fi-plus",
             "plus-sign": "fi-plus",
             "print": "fi-print",
@@ -8941,6 +8979,7 @@ class ICON(I):
             "site": "fi-home",
             "skype": "fi-social-skype",
             "star": "fi-star",
+            "stop": "fi-stop",
             "table": "fi-list-thumbnails",
             "tag": "fi-price-tag",
             "tags": "fi-pricetag-multiple",
@@ -8953,6 +8992,8 @@ class ICON(I):
             "zoomin": "fi-zoom-in",
             "zoomout": "fi-zoom-out",
         },
+        # Font-Awesome 3
+        # http://fontawesome.io/3.2.1/icons/
         "font-awesome3": {
             "_base": "icon",
             "active": "icon-check",
@@ -8967,6 +9008,7 @@ class ICON(I):
             "bookmark-empty": "icon-bookmark-empty",
             "briefcase": "icon-briefcase",
             "calendar": "icon-calendar",
+            "caret-right": "icon-caret-right",
             "certificate": "icon-certificate",
             "comment-alt": "icon-comment-alt",
             "commit": "icon-truck",
@@ -8998,8 +9040,10 @@ class ICON(I):
             "org-network": "icon-umbrella",
             "other": "icon-circle",
             "paper-clip": "icon-paper-clip",
+            "pause": "icon-pause",
             "pencil": "icon-pencil",
             "phone": "icon-phone",
+            "play": "icon-play",
             "plus": "icon-plus",
             "plus-sign": "icon-plus-sign",
             "print": "icon-print",
@@ -9014,6 +9058,7 @@ class ICON(I):
             "site": "icon-home",
             "skype": "icon-skype",
             "star": "icon-star",
+            "stop": "icon-stop",
             "table": "icon-table",
             "tag": "icon-tag",
             "tags": "icon-tags",

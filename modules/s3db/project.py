@@ -2,7 +2,7 @@
 
 """ Sahana Eden Project Model
 
-    @copyright: 2011-2016 (c) Sahana Software Foundation
+    @copyright: 2011-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -131,6 +131,7 @@ class S3ProjectModel(S3Model):
         programmes = settings.get_project_programmes()
         use_codes = settings.get_project_codes()
         use_indicators = settings.get_project_indicators()
+        status_from_activities = settings.get_project_status_from_activities()
 
         add_components = self.add_components
         configure = self.configure
@@ -233,14 +234,42 @@ class S3ProjectModel(S3Model):
                            default = 0.0,
                            label = T("Current Indicators Status"),
                            represent = project_status_represent,
-                           readable = use_indicators,
+                           readable = use_indicators and not status_from_activities,
                            writable = False,
                            ),
                      Field("overall_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Overall Indicators Status"),
                            represent = project_status_represent,
-                           readable = use_indicators,
+                           readable = use_indicators and not status_from_activities,
+                           writable = False,
+                           ),
+                     Field("actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Actual Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Planned Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("years_actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Actual Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("years_planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Planned Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
                            writable = False,
                            ),
                      #Field("current_status_by_budget", "float",
@@ -506,13 +535,13 @@ class S3ProjectModel(S3Model):
                    method = "project_progress_report",
                    action = project_progress_report)
 
-        set_method("project", "project",
-                   method = "budget_progress_report",
-                   action = project_budget_progress_report)
+        #set_method("project", "project",
+        #           method = "budget_progress_report",
+        #           action = project_budget_progress_report)
 
-        set_method("project", "project",
-                   method = "indicator_progress_report",
-                   action = project_indicator_progress_report)
+        #set_method("project", "project",
+        #           method = "indicator_progress_report",
+        #           action = project_indicator_progress_report)
 
         # Components
         add_components(tablename,
@@ -539,6 +568,9 @@ class S3ProjectModel(S3Model):
                        project_indicator = "project_id",
                        project_indicator_data = "project_id",
                        #project_indicator_data = "project_id",
+                       # Indicator Criteria
+                       project_indicator_criteria = "project_id",
+                       project_criteria_activity = "project_id",
                        # Milestones
                        project_milestone = "project_id",
                        # Outcomes
@@ -578,7 +610,7 @@ class S3ProjectModel(S3Model):
                                      "key": "sector_id",
                                      "actuate": "hide",
                                      },
-                       # Format needed by S3Filter
+                       # Format needed by S3Filter (unless using $link)
                        project_sector_project = ("project_id",
                                                  {"joinby": "project_id",
                                                   "multiple": False,
@@ -590,6 +622,8 @@ class S3ProjectModel(S3Model):
                                         "key": "theme_id",
                                         "actuate": "hide",
                                         },
+                       # Format needed by S3Filter (unless using $link)
+                       project_theme_project = "project_id",
                        # Programmes
                        project_programme = {"link": "project_programme_project",
                                             "joinby": "project_id",
@@ -597,8 +631,8 @@ class S3ProjectModel(S3Model):
                                             "actuate": "hide",
                                             "multiple": False,
                                             },
-                       # Format needed by S3Filter
-                       project_theme_project = "project_id",
+                       # Format needed by S3Filter (unless using $link)
+                       project_programme_project = "project_id",
 
                        # Project Needs (e.g. Funding, Volunteers)
                        req_project_needs = {"joinby": "project_id",
@@ -1215,10 +1249,11 @@ class S3ProjectActivityModel(S3Model):
         # @ToDo: deployment_setting
         if settings.has_module("supply"):
             rappend("distribution.parameter_id")
-            fact_fields.insert(0,
-                               (T("Number of Items"), "sum(distribution.value)")
-                               )
-            default_fact = "sum(distribution.value)"
+            # This has the wrong perspective to be meaningful, use supply/distribution/report instead
+            #fact_fields.insert(0,
+            #                   (T("Number of Items"), "sum(distribution.value)")
+            #                   )
+            #default_fact = "sum(distribution.value)"
             filter_widgets.append(
                     S3OptionsFilter("distribution.parameter_id",
                                     # Doesn't support translation
@@ -1231,10 +1266,11 @@ class S3ProjectActivityModel(S3Model):
         # @ToDo: deployment_setting
         if settings.has_module("stats"):
             rappend("beneficiary.parameter_id")
-            fact_fields.insert(0,
-                               (T("Number of Beneficiaries"), "sum(beneficiary.value)")
-                               )
-            default_fact = "sum(beneficiary.value)"
+            # This has the wrong perspective to be meaningful, use project/beneficiary/report instead
+            #fact_fields.insert(0,
+            #                   (T("Number of Beneficiaries"), "sum(beneficiary.value)")
+            #                   )
+            #default_fact = "sum(beneficiary.value)"
             filter_widgets.append(
                     S3OptionsFilter("beneficiary.parameter_id",
                                     # Doesn't support translation
@@ -1357,7 +1393,7 @@ class S3ProjectActivityModel(S3Model):
                        project_beneficiary = {"link": "project_beneficiary_activity",
                                               "joinby": "activity_id",
                                               "key": "beneficiary_id",
-                                              "actuate": "hide",
+                                              "actuate": "replace",
                                               },
                        # Format for InlineComponent/filter_widget
                        project_beneficiary_activity = "activity_id",
@@ -2023,6 +2059,7 @@ class S3ProjectBeneficiaryModel(S3Model):
 
         if not current.deployment_settings.has_module("stats"):
             current.log.warning("Project Beneficiary Model needs Stats module enabling")
+            #return self.defaults()
             return {}
 
         T = current.T
@@ -2443,6 +2480,7 @@ class S3ProjectCampaignModel(S3Model):
 
         if not current.deployment_settings.has_module("stats"):
             # Campaigns Model needs Stats module enabling
+            #return self.defaults()
             return {}
 
         T = current.T
@@ -3059,6 +3097,7 @@ class S3ProjectIndicatorModel(S3Model):
 
         if not current.deployment_settings.has_module("stats"):
             current.log.warning("Project Indicator Model needs Stats module enabling")
+            #return self.defaults()
             return {}
 
         T = current.T
@@ -3976,13 +4015,21 @@ class S3ProjectOrganisationModel(S3Model):
 # =============================================================================
 class S3ProjectPlanningModel(S3Model):
     """
-        Project Planning Model
+        Project Planning Model:
             Goals (Objectives)
                 Outcomes
                     Outputs
                         Indicators
+                            Indicator Criteria
+                                Activities
+
         This module currently assumes discrete values for each period
         @ToDo: deployment_setting to use cumulative?
+
+        status_from_activities is used by CRH (Cruz Roja Hondureña)
+        Status from Indicator Data is no longer in active use & hasn't been fully tested since the switch to status_from_activities
+
+        There has been some work done to make the different levels optional, but this is incomplete
     """
 
     names = ("project_goal",
@@ -3998,6 +4045,10 @@ class S3ProjectPlanningModel(S3Model):
              #"project_indicator_id",
              "project_indicator_represent",
              "project_indicator_data",
+             "project_indicator_criteria",
+             "project_criteria_represent",
+             "project_criteria_activity",
+             "project_planning_status_update",
              )
 
     def model(self):
@@ -4008,6 +4059,7 @@ class S3ProjectPlanningModel(S3Model):
 
         NONE = current.messages["NONE"]
 
+        add_components = self.add_components
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
@@ -4017,6 +4069,7 @@ class S3ProjectPlanningModel(S3Model):
         use_outcomes = settings.get_project_outcomes()
         use_outputs = settings.get_project_outputs()
         inline = use_outputs == "inline"
+        status_from_activities = settings.get_project_status_from_activities()
 
         project_id = self.project_project_id
 
@@ -4040,24 +4093,48 @@ class S3ProjectPlanningModel(S3Model):
                            label = T("Weighting"),
                            requires = IS_FLOAT_IN_RANGE(0, 1),
                            ),
-                     # Used to highlight cells with issues?
-                     #Field("weightings_ok", "boolean",
-                     #      default = True,
-                     #      readable = False,
-                     #      writable = False,
-                     #      ),
-                     Field("current_status", "float",
+                     Field("current_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Current Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
                            writable = False,
                            ),
-                     Field("overall_status", "float",
+                     Field("overall_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Overall Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
+                           writable = False,
+                           ),
+                     Field("actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Actual Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Planned Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("years_actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Actual Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("years_planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Planned Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
                            writable = False,
                            ),
                      *s3_meta_fields())
@@ -4075,15 +4152,23 @@ class S3ProjectPlanningModel(S3Model):
             msg_list_empty = T("No goals defined")
         )
 
+        list_fields = ["code",
+                       "name",
+                       "weighting",
+                       ]
+        if status_from_activities:
+            list_fields += ["actual_progress_by_activities",
+                            "planned_progress_by_activities",
+                            ]
+        else:
+            list_fields += ["current_status_by_indicators",
+                            "overall_status_by_indicators",
+                            ]
+
         configure(tablename,
                   create_onaccept = self.project_goal_create_onaccept,
                   deduplicate = self.project_goal_deduplicate,
-                  list_fields = ["code",
-                                 "name",
-                                 "weighting",
-                                 "current_status",
-                                 "overall_status",
-                                 ],
+                  list_fields = list_fields,
                   onaccept = self.project_goal_onaccept,
                   )
 
@@ -4126,18 +4211,48 @@ class S3ProjectPlanningModel(S3Model):
                            label = T("Weighting"),
                            requires = IS_FLOAT_IN_RANGE(0, 1),
                            ),
-                     Field("current_status", "float",
+                     Field("current_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Current Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
                            writable = False,
                            ),
-                     Field("overall_status", "float",
+                     Field("overall_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Overall Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
+                           writable = False,
+                           ),
+                     Field("actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Actual Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Planned Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("years_actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Actual Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("years_planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Planned Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
                            writable = False,
                            ),
                      *s3_meta_fields())
@@ -4155,16 +4270,24 @@ class S3ProjectPlanningModel(S3Model):
             msg_list_empty = T("No outcomes defined")
         )
 
+        list_fields = ["goal_id",
+                       "code",
+                       "name",
+                       "weighting",
+                       ]
+        if status_from_activities:
+            list_fields += ["actual_progress_by_activities",
+                            "planned_progress_by_activities",
+                            ]
+        else:
+            list_fields += ["current_status_by_indicators",
+                            "overall_status_by_indicators",
+                            ]
+
         configure(tablename,
                   create_onaccept = self.project_outcome_create_onaccept,
                   deduplicate = self.project_outcome_deduplicate,
-                  list_fields = ["goal_id",
-                                 "code",
-                                 "name",
-                                 "weighting",
-                                 "current_status",
-                                 "overall_status",
-                                 ],
+                  list_fields = list_fields,
                   onaccept = self.project_outcome_onaccept,
                   )
 
@@ -4218,18 +4341,48 @@ class S3ProjectPlanningModel(S3Model):
                            label = T("Weighting"),
                            requires = IS_FLOAT_IN_RANGE(0, 1),
                            ),
-                     Field("current_status", "float",
+                     Field("current_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Current Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
                            writable = False,
                            ),
-                     Field("overall_status", "float",
+                     Field("overall_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Overall Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
+                           writable = False,
+                           ),
+                     Field("actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Actual Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Planned Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("years_actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Actual Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("years_planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Planned Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
                            writable = False,
                            ),
                      # Legacy field from DRRPP
@@ -4254,16 +4407,24 @@ class S3ProjectPlanningModel(S3Model):
             msg_list_empty = T("No outputs defined")
         )
 
+        list_fields = ["outcome_id",
+                       "code",
+                       "name",
+                       "weighting",
+                       ]
+        if status_from_activities:
+            list_fields += ["actual_progress_by_activities",
+                            "planned_progress_by_activities",
+                            ]
+        else:
+            list_fields += ["current_status_by_indicators",
+                            "overall_status_by_indicators",
+                            ]
+
         configure(tablename,
                   create_onaccept = self.project_output_create_onaccept if not inline else None,
                   deduplicate = self.project_output_deduplicate,
-                  list_fields = ["outcome_id",
-                                 "code",
-                                 "name",
-                                 "weighting",
-                                 "current_status",
-                                 "overall_status",
-                                 ],
+                  list_fields = list_fields,
                   onaccept = self.project_output_onaccept if not inline else None,
                   )
 
@@ -4302,22 +4463,38 @@ class S3ProjectPlanningModel(S3Model):
                            label = T("Code"),
                            represent = lambda v: v or NONE,
                            ),
-                     Field("name",
+                     Field("name", "text",
                            label = T("Description"),
                            represent = lambda v: v or NONE,
+                           widget = s3_comments_widget,
                            ),
                      Field("definition", "text",
                            label = T("Definition"),
                            represent = lambda v: v or NONE,
                            widget = s3_comments_widget,
                            ),
-                     Field("measures", "text",
-                           label = T("Measurement Criteria"),
+                     Field("numerator",
+                           label = T("Numerator"),
                            represent = lambda v: v or NONE,
-                           widget = s3_comments_widget,
+                           ),
+                     Field("denominator",
+                           label = T("Denominator"),
+                           represent = lambda v: v or NONE,
+                           ),
+                     Field("duration",
+                           label = T("Duration"),
+                           represent = lambda v: v or NONE,
+                           ),
+                     Field("frequency",
+                           label = T("Measurement Frequency"),
+                           represent = lambda v: v or NONE,
+                           ),
+                     Field("responsible",
+                           label = T("Responsible for collecting the information"),
+                           represent = lambda v: v or NONE,
                            ),
                      Field("verification", "text",
-                           label = T("Sources of Verification"),
+                           label = T("Means of Verification"),
                            represent = lambda v: v or NONE,
                            widget = s3_comments_widget,
                            ),
@@ -4326,18 +4503,48 @@ class S3ProjectPlanningModel(S3Model):
                            label = T("Weighting"),
                            requires = IS_FLOAT_IN_RANGE(0, 1),
                            ),
-                     Field("current_status", "float",
+                     Field("current_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Current Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
                            writable = False,
                            ),
-                     Field("overall_status", "float",
+                     Field("overall_status_by_indicators", "float",
                            default = 0.0,
                            label = T("Overall Status"),
                            represent = project_status_represent,
-                           # Calculated onaccept of Indicator Data
+                           readable = not status_from_activities,
+                           writable = False,
+                           ),
+                     Field("actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Actual Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Planned Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("years_actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Actual Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("years_planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Planned Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
                            writable = False,
                            ),
                      *s3_meta_fields())
@@ -4355,18 +4562,28 @@ class S3ProjectPlanningModel(S3Model):
             msg_list_empty = T("No indicators defined")
         )
 
+        list_fields = ["output_id",
+                       "code",
+                       "name",
+                       "weighting",
+                       ]
+        if status_from_activities:
+            list_fields += ["actual_progress_by_activities",
+                            "planned_progress_by_activities",
+                            ]
+        else:
+            list_fields += ["current_status_by_indicators",
+                            "overall_status_by_indicators",
+                            ]
+
         configure(tablename,
                   create_onaccept = self.project_indicator_create_onaccept,
                   deduplicate = self.project_indicator_deduplicate,
-                  list_fields = ["output_id",
-                                 "code",
-                                 "name",
-                                 "weighting",
-                                 "current_status",
-                                 "overall_status",
-                                 ],
+                  list_fields = list_fields,
                   onaccept = self.project_indicator_onaccept,
                   orderby = "project_indicator.output_id",
+                  subheadings = {T("Measurement Procedure"): "numerator",
+                                 },
                   )
 
         # Reusable Field
@@ -4388,10 +4605,10 @@ class S3ProjectPlanningModel(S3Model):
                                        #comment = S3PopupLink(c="project", f="indicator"),
                                        )
 
-        self.add_components(tablename,
-                            project_indicator_data = {"joinby": "indicator_id",
-                                                      }
-                            )
+        add_components(tablename,
+                       project_indicator_data = {"joinby": "indicator_id",
+                                                 }
+                       )
 
         # ---------------------------------------------------------------------
         # Indicator Data
@@ -4425,6 +4642,9 @@ class S3ProjectPlanningModel(S3Model):
                            label = T("Actual Value"),
                            represent = lambda v: IS_INT_AMOUNT.represent(v),
                            requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, 99999999)),
+                           ),
+                     Field("unit",
+                           label = T("Unit"),
                            ),
                      Field.Method("percentage", self.project_indicator_percentage),
                      s3_comments(),
@@ -4479,6 +4699,202 @@ class S3ProjectPlanningModel(S3Model):
                   report_options = report_options,
                   )
 
+        # ---------------------------------------------------------------------
+        # Indicator Criteria
+        #
+        tablename = "project_indicator_criteria"
+        define_table(tablename,
+                     project_id(ondelete = ondelete),
+                     goal_id(readable = use_goals and not use_outcomes and not use_outputs,
+                             writable = use_goals and not use_outcomes and not use_outputs,
+                             ),
+                     outcome_id(readable = use_outcomes and not use_outputs,
+                                writable = use_outcomes and not use_outputs,
+                                ),
+                     output_id(readable = False, #use_outputs and not inline,
+                               writable = False, #use_outputs and not inline,
+                               ),
+                     indicator_id(),
+                     Field("name", "text",
+                           label = T("Description"),
+                           represent = lambda v: v or NONE,
+                           requires = IS_NOT_EMPTY(),
+                           widget = s3_comments_widget,
+                           ),
+                     Field("weighting", "float",
+                           default = 0.0,
+                           label = T("Weighting"),
+                           requires = IS_FLOAT_IN_RANGE(0, 1),
+                           ),
+                     Field("actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Actual Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Planned Progress"),
+                           represent = project_status_represent,
+                           readable = status_from_activities,
+                           writable = False,
+                           ),
+                     Field("years_actual_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Actual Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("years_planned_progress_by_activities", "float",
+                           default = 0.0,
+                           label = T("Current Year's Planned Progress"),
+                           represent = project_status_represent,
+                           #readable = status_from_activities,
+                           readable = False,
+                           writable = False,
+                           ),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Add Indicator Criterion"),
+            title_display = T("Indicator Criterion"),
+            title_list = T("Indicator Criteria"),
+            title_update = T("Edit Indicator Criterion"),
+            label_list_button = T("List Indicator Criteria"),
+            msg_record_created = T("Indicator Criterion added"),
+            msg_record_modified = T("Indicator Criterion updated"),
+            msg_record_deleted = T("Indicator Criterion deleted"),
+            msg_list_empty = T("No Indicator Criteria defined")
+        )
+
+        configure(tablename,
+                  create_onaccept = self.project_indicator_criteria_create_onaccept,
+                  deduplicate = self.project_indicator_criteria_deduplicate,
+                  list_fields = [indicator_id,
+                                 (T("Description"), "name"),
+                                 "weighting",
+                                 "actual_progress_by_activities",
+                                 "planned_progress_by_activities",
+                                 ],
+                  onaccept = self.project_indicator_criteria_onaccept,
+                  orderby = "project_indicator_criteria.indicator_id",
+                  )
+
+        # Reusable Field
+        # @ToDo: deployment_setting as to whether to show hierarchy or not
+        criteria_represent = S3Represent(lookup=tablename)
+        criteria_id = S3ReusableField("criteria_id", "reference %s" % tablename,
+                                      label = T("Indicator Criterion"),
+                                      ondelete = ondelete,
+                                      represent = criteria_represent,
+                                      requires = IS_EMPTY_OR(
+                                                    IS_ONE_OF(db, "project_indicator_criteria.id",
+                                                              criteria_represent,
+                                                              sort = True,
+                                                              )
+                                                    ),
+                                     # Match the Represent
+                                     sortby = "name",
+                                     #comment = S3PopupLink(c="project", f="indictator_criteria"),
+                                     )
+
+        # ---------------------------------------------------------------------
+        # Indicator Criteria <> Activities link table 1
+        #
+        tablename = "project_criteria_activity"
+        define_table(tablename,
+                     project_id(ondelete = ondelete),
+                     goal_id(readable = use_goals and not use_outcomes and not use_outputs,
+                             writable = use_goals and not use_outcomes and not use_outputs,
+                             ),
+                     outcome_id(readable = use_outcomes and not use_outputs,
+                                writable = use_outcomes and not use_outputs,
+                                ),
+                     output_id(readable = False, #use_outputs and not inline,
+                               writable = False, #use_outputs and not inline,
+                               ),
+                     indicator_id(readable = False,
+                                  writable = False,
+                                  ),
+                     criteria_id(empty = False,
+                                 ),
+                     Field("weighting", "float",
+                           default = 0.0,
+                           label = T("Weighting"),
+                           requires = IS_FLOAT_IN_RANGE(0, 1),
+                           ),
+                     Field("actual_progress", "float",
+                           label = T("Actual Progress"),
+                           requires = IS_FLOAT_IN_RANGE(0, 100),
+                           represent = lambda v: \
+                                    IS_FLOAT_AMOUNT.represent(v, precision=2),
+                           ),
+                     Field("planned_progress", "float",
+                           label = T("Planned Progress"),
+                           requires = IS_FLOAT_IN_RANGE(0, 100),
+                           represent = lambda v: \
+                                    IS_FLOAT_AMOUNT.represent(v, precision=2),
+                           ),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Add Activity"),
+            title_display = T("Activity"),
+            title_list = T("Activities"),
+            title_update = T("Edit Activity"),
+            label_list_button = T("List Activities"),
+            msg_record_created = T("Activity added"),
+            msg_record_modified = T("Activity updated"),
+            msg_record_deleted = T("Activity deleted"),
+            msg_list_empty = T("No Activities defined")
+        )
+
+        crud_form = S3SQLCustomForm("criteria_id",
+                                    (T("Description"), "activity.name"),
+                                    (T("Completion Date"), "activity.end_date"),
+                                    "weighting",
+                                    "actual_progress",
+                                    "planned_progress",
+                                    postprocess = self.project_criteria_activity_postprocess,
+                                    )
+
+        configure(tablename,
+                  create_onaccept = self.project_criteria_activity_create_onaccept,
+                  crud_form = crud_form,
+                  list_fields = ["criteria_id",
+                                 (T("Description"), "activity.name"),
+                                 (T("Completion Date"), "activity.end_date"),
+                                 "weighting",
+                                 "actual_progress",
+                                 "planned_progress",
+                                 ],
+                  onaccept = self.project_criteria_activity_onaccept,
+                  )
+
+        add_components(tablename,
+                       project_activity = {"link": "project_criteria_activity_activity",
+                                           "joinby": "criteria_activity_id",
+                                           "key": "activity_id",
+                                           "multiple": False,
+                                           },
+                       )
+
+        # ---------------------------------------------------------------------
+        # Indicator Criteria <> Activities link table 2
+        #
+        tablename = "project_criteria_activity_activity"
+        define_table(tablename,
+                     Field("criteria_activity_id", "reference project_criteria_activity",
+                           ),
+                     self.project_activity_id(empty = False,
+                                              ),
+                     *s3_meta_fields())
+
         # Pass names back to global scope (s3.*)
         return dict(#project_goal_id = goal_id,
                     project_goal_represent = goal_represent,
@@ -4488,6 +4904,8 @@ class S3ProjectPlanningModel(S3Model):
                     project_output_represent = output_represent,
                     #project_indicator_id = indicator_id,
                     project_indicator_represent = indicator_represent,
+                    project_criteria_represent = criteria_represent,
+                    project_planning_status_update = self.project_planning_status_update,
                     )
 
     # -------------------------------------------------------------------------
@@ -4496,11 +4914,15 @@ class S3ProjectPlanningModel(S3Model):
         """
             Update the status fields of the different Project levels
             Fired onaccept of:
+                project_activity_criteria (if status_from_activities)
+                project_indicator_criteria (if status_from_activities: weightings may have changed)
                 project_indicator_data
                 project_indicator (weightings may have changed)
                 project_output (weightings may have changed)
                 project_outcome (weightings may have changed)
                 project_goal (weightings may have changed)
+
+            @param project_id: the ID of the project record to update
 
             @ToDo: Handle deployment_settings for which levels are exposed
         """
@@ -4508,6 +4930,333 @@ class S3ProjectPlanningModel(S3Model):
         db = current.db
         s3db = current.s3db
 
+        if current.deployment_settings.get_project_status_from_activities():
+            # Progress from Activities
+            now = current.request.utcnow
+            # Read all of the past Activity Data for this Project
+            # (We ignore future values)
+            atable = s3db.project_activity
+            table = s3db.project_criteria_activity
+            ltable = s3db.project_criteria_activity_activity
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False) & \
+                    (table.id == ltable.criteria_activity_id) & \
+                    (atable.id == ltable.activity_id) & \
+                    (atable.end_date < now) & \
+                    (table.actual_progress != None) & \
+                    (table.planned_progress != None)
+            activity_data = db(query).select(table.criteria_id,
+                                             table.actual_progress,
+                                             table.planned_progress,
+                                             table.weighting,
+                                             atable.end_date,
+                                             )
+            if activity_data:
+                year_start = datetime.datetime(now.year, 1, 1)
+
+                project = None
+                goals = {}
+                outcomes = {}
+                outputs = {}
+                indicators = {}
+                criteria = {}
+
+                # Populate Criteria dict
+                for a in activity_data:
+                    end_date = a["project_activity.end_date"]
+                    end_date = datetime.datetime(end_date.year, end_date.month, end_date.day)
+                    a = a["project_criteria_activity"]
+                    criteria_id = a.criteria_id
+                    weighting = a.weighting
+                    actual_progress = a.actual_progress * weighting
+                    planned_progress = a.planned_progress * weighting
+                    if end_date > year_start:
+                        years_actual_progress = actual_progress
+                        years_planned_progress = planned_progress
+                    else:
+                        years_actual_progress = 0
+                        years_planned_progress = 0
+                    if criteria_id not in criteria:
+                        criteria[criteria_id] = {"actual_progress": actual_progress,
+                                                 "planned_progress": planned_progress,
+                                                 "years_actual_progress": years_actual_progress,
+                                                 "years_planned_progress": years_planned_progress,
+                                                 }
+                    else:
+                        # Add this data to Totals
+                        c = criteria[criteria_id]
+                        c["actual_progress"] += actual_progress
+                        c["planned_progress"] += planned_progress
+                        c["years_actual_progress"] += years_actual_progress
+                        c["years_planned_progress"] += years_planned_progress
+
+                # Read all of the Indicator Criteria for this Project
+                table = s3db.project_indicator_criteria
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+                rows = db(query).select(table.id,
+                                        #table.goal_id,
+                                        #table.outcome_id,
+                                        #table.output_id,
+                                        table.indicator_id,
+                                        table.weighting,
+                                        )
+                for r in rows:
+                    criteria_id = r.id
+                    if criteria_id not in criteria:
+                        # We have no data for this criterion, so ignore (not actually ignored due to weighting!)
+                        actual_progress = planned_progress = years_actual_progress = years_planned_progress = 0
+                    else:
+                        c = criteria[criteria_id]
+                        actual_progress = c["actual_progress"]
+                        planned_progress = c["planned_progress"]
+                        years_actual_progress = c["years_actual_progress"]
+                        years_planned_progress = c["years_planned_progress"]
+
+                    # Update Criteria Progress
+                    r.update_record(actual_progress_by_activities = actual_progress,
+                                    planned_progress_by_activities = planned_progress,
+                                    years_actual_progress_by_activities = years_actual_progress,
+                                    years_planned_progress_by_activities = years_planned_progress,
+                                    )
+
+                    # Populate Indicators dict
+                    indicator_id = r.indicator_id
+                    weighting = r.weighting
+                    actual_progress = actual_progress * weighting
+                    planned_progress = planned_progress * weighting
+                    years_actual_progress = years_actual_progress * weighting
+                    years_planned_progress = years_planned_progress * weighting
+                    if indicator_id not in indicators:
+                        indicators[indicator_id] = {"actual_progress": actual_progress,
+                                                    "planned_progress": planned_progress,
+                                                    "years_actual_progress": years_actual_progress,
+                                                    "years_planned_progress": years_planned_progress,
+                                                    }
+                    else:
+                        # Add this data to Totals
+                        i = indicators[indicator_id]
+                        i["actual_progress"] += actual_progress
+                        i["planned_progress"] += planned_progress
+                        i["years_actual_progress"] += years_actual_progress
+                        i["years_planned_progress"] += years_planned_progress
+
+                # Read all of the Indicators for this Project
+                table = s3db.project_indicator
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+                rows = db(query).select(table.id,
+                                        #table.goal_id,
+                                        #table.outcome_id,
+                                        table.output_id,
+                                        table.weighting,
+                                        )
+                for r in rows:
+                    indicator_id = r.id
+                    if indicator_id not in indicators:
+                        # We have no data for this indicator, so ignore (not actually ignored due to weighting!)
+                        actual_progress = planned_progress = years_actual_progress = years_planned_progress = None
+                    else:
+                        i = indicators[indicator_id]
+                        actual_progress = i["actual_progress"]
+                        planned_progress = i["planned_progress"]
+                        years_actual_progress = i["years_actual_progress"]
+                        years_planned_progress = i["years_planned_progress"]
+
+                    # Update Indicator Progress
+                    r.update_record(actual_progress_by_activities = actual_progress,
+                                    planned_progress_by_activities = planned_progress,
+                                    years_actual_progress_by_activities = years_actual_progress,
+                                    years_planned_progress_by_activities = years_planned_progress,
+                                    )
+
+                    if actual_progress is not None:
+                        # Populate Outputs dict
+                        output_id = r.output_id
+                        weighting = r.weighting
+                        actual_progress = actual_progress * weighting
+                        planned_progress = planned_progress * weighting
+                        years_actual_progress = years_actual_progress * weighting
+                        years_planned_progress = years_planned_progress * weighting
+                        if output_id not in outputs:
+                            outputs[output_id] = {"actual_progress": actual_progress,
+                                                  "planned_progress": planned_progress,
+                                                  "years_actual_progress": years_actual_progress,
+                                                  "years_planned_progress": years_planned_progress,
+                                                  }
+                        else:
+                            # Add this data to Totals
+                            o = outputs[output_id]
+                            o["actual_progress"] += actual_progress
+                            o["planned_progress"] += planned_progress
+                            o["years_actual_progress"] += years_actual_progress
+                            o["years_planned_progress"] += years_planned_progress
+
+                # Read all of the Outputs for this Project
+                table = s3db.project_output
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+                rows = db(query).select(table.id,
+                                        #table.goal_id,
+                                        table.outcome_id,
+                                        table.weighting,
+                                        )
+                for r in rows:
+                    output_id = r.id
+                    if output_id not in outputs:
+                        # We have no data for this output, so ignore (not actually ignored due to weighting!)
+                        actual_progress = planned_progress = years_actual_progress = years_planned_progress = None
+                    else:
+                        o = outputs[output_id]
+                        actual_progress = o["actual_progress"]
+                        planned_progress = o["planned_progress"]
+                        years_actual_progress = o["years_actual_progress"]
+                        years_planned_progress = o["years_planned_progress"]
+
+                    # Update Indicator Progress
+                    r.update_record(actual_progress_by_activities = actual_progress,
+                                    planned_progress_by_activities = planned_progress,
+                                    years_actual_progress_by_activities = years_actual_progress,
+                                    years_planned_progress_by_activities = years_planned_progress,
+                                    )
+
+                    if actual_progress is not None:
+                        # Populate Outcomes dict
+                        outcome_id = r.outcome_id
+                        weighting = r.weighting
+                        actual_progress = actual_progress * weighting
+                        planned_progress = planned_progress * weighting
+                        years_actual_progress = years_actual_progress * weighting
+                        years_planned_progress = years_planned_progress * weighting
+                        if outcome_id not in outcomes:
+                            outcomes[outcome_id] = {"actual_progress": actual_progress,
+                                                    "planned_progress": planned_progress,
+                                                    "years_actual_progress": years_actual_progress,
+                                                    "years_planned_progress": years_planned_progress,
+                                                    }
+                        else:
+                            # Add this data to Totals
+                            o = outcomes[outcome_id]
+                            o["actual_progress"] += actual_progress
+                            o["planned_progress"] += planned_progress
+                            o["years_actual_progress"] += years_actual_progress
+                            o["years_planned_progress"] += years_planned_progress
+
+                # Read all of the Outcomes for this Project
+                table = s3db.project_outcome
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+                rows = db(query).select(table.id,
+                                        table.goal_id,
+                                        table.weighting,
+                                        )
+                for r in rows:
+                    outcome_id = r.id
+                    if outcome_id not in outcomes:
+                        # We have no data for this outcome, so ignore (not actually ignored due to weighting!)
+                        actual_progress = planned_progress = years_actual_progress = years_planned_progress = None
+                    else:
+                        o = outcomes[outcome_id]
+                        actual_progress = o["actual_progress"]
+                        planned_progress = o["planned_progress"]
+                        years_actual_progress = o["years_actual_progress"]
+                        years_planned_progress = o["years_planned_progress"]
+
+                    # Update Indicator Progress
+                    r.update_record(actual_progress_by_activities = actual_progress,
+                                    planned_progress_by_activities = planned_progress,
+                                    years_actual_progress_by_activities = years_actual_progress,
+                                    years_planned_progress_by_activities = years_planned_progress,
+                                    )
+
+                    if actual_progress is not None:
+                        # Populate Goals dict
+                        goal_id = r.goal_id
+                        weighting = r.weighting
+                        actual_progress = actual_progress * weighting
+                        planned_progress = planned_progress * weighting
+                        years_actual_progress = years_actual_progress * weighting
+                        years_planned_progress = years_planned_progress * weighting
+                        if goal_id not in goals:
+                            goals[goal_id] = {"actual_progress": actual_progress,
+                                              "planned_progress": planned_progress,
+                                              "years_actual_progress": years_actual_progress,
+                                              "years_planned_progress": years_planned_progress,
+                                              }
+                        else:
+                            # Add this data to Totals
+                            g = goals[goal_id]
+                            g["actual_progress"] += actual_progress
+                            g["planned_progress"] += planned_progress
+                            g["years_actual_progress"] += years_actual_progress
+                            g["years_planned_progress"] += years_planned_progress
+
+                # Read all of the Goals for this Project
+                table = s3db.project_goal
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+                rows = db(query).select(table.id,
+                                        table.weighting,
+                                        )
+                for r in rows:
+                    goal_id = r.id
+                    if goal_id not in goals:
+                        # We have no data for this goal, so ignore (not actually ignored due to weighting!)
+                        actual_progress = planned_progress = years_actual_progress = years_planned_progress = None
+                    else:
+                        g = goals[goal_id]
+                        actual_progress = g["actual_progress"]
+                        planned_progress = g["planned_progress"]
+                        years_actual_progress = g["years_actual_progress"]
+                        years_planned_progress = g["years_planned_progress"]
+
+                    # Update Indicator Progress
+                    r.update_record(actual_progress_by_activities = actual_progress,
+                                    planned_progress_by_activities = planned_progress,
+                                    years_actual_progress_by_activities = years_actual_progress,
+                                    years_planned_progress_by_activities = years_planned_progress,
+                                    )
+
+                    if actual_progress is not None:
+                        # Populate Project dict
+                        weighting = r.weighting
+                        actual_progress = actual_progress * weighting
+                        planned_progress = planned_progress * weighting
+                        years_actual_progress = years_actual_progress * weighting
+                        years_planned_progress = years_planned_progress * weighting
+                        if project is None:
+                            project = {"actual_progress": actual_progress,
+                                       "planned_progress": planned_progress,
+                                       "years_actual_progress": years_actual_progress,
+                                       "years_planned_progress": years_planned_progress,
+                                       }
+                        else:
+                            # Add this data to Totals
+                            project["actual_progress"] += actual_progress
+                            project["planned_progress"] += planned_progress
+                            project["years_actual_progress"] += years_actual_progress
+                            project["years_planned_progress"] += years_planned_progress
+
+                # Update project Progress
+                table = s3db.project_project
+                pset = db(table.id == project_id)
+                if project is None:
+                    pset.update(actual_progress_by_activities = None,
+                                planned_progress_by_activities = None,
+                                years_actual_progress_by_activities = None,
+                                years_planned_progress_by_activities = None,
+                                )
+                else:
+                    pset.update(actual_progress_by_activities = project["actual_progress"],
+                                planned_progress_by_activities = project["planned_progress"],
+                                years_actual_progress_by_activities = project["years_actual_progress"],
+                                years_planned_progress_by_activities = project["years_planned_progress"],
+                                )
+            # Currently we always build the status_by_indicators as used by the Indicator Status Report
+            #return
+
+
+        # Status from Indicator Data
         # Read all of the past Indicator Data for this Project
         # (We ignore future values)
         table = s3db.project_indicator_data
@@ -4533,6 +5282,7 @@ class S3ProjectPlanningModel(S3Model):
         outputs = {}
         indicators = {}
 
+        # Populate Indicators dict
         latest_date = None
         for d in indicator_data:
             target_value = d.target_value
@@ -4555,8 +5305,8 @@ class S3ProjectPlanningModel(S3Model):
                 else:
                     # Add this data to Totals
                     i = indicators[indicator_id]
-                    i["total_target"] = i["total_target"] + target_value
-                    i["total_value"] = i["total_value"] + value
+                    i["total_target"] += target_value
+                    i["total_value"] += value
                     # Should never happen due to the orderby:
                     #if end_date > i["current_date"]:
                     #    # Replace the Current data
@@ -4627,8 +5377,8 @@ class S3ProjectPlanningModel(S3Model):
                     current_status = current_value / current_target * 100
 
             # Update Indicator Status
-            r.update_record(current_status = current_status,
-                            overall_status = overall_status,
+            r.update_record(current_status_by_indicators = current_status,
+                            overall_status_by_indicators = overall_status,
                             )
 
             # Populate Outputs dict
@@ -4692,8 +5442,8 @@ class S3ProjectPlanningModel(S3Model):
                     overall_status = None
 
             # Update Output Status
-            r.update_record(current_status = current_status,
-                            overall_status = overall_status,
+            r.update_record(current_status_by_indicators = current_status,
+                            overall_status_by_indicators = overall_status,
                             )
 
             # Populate Outcomes dict
@@ -4752,8 +5502,8 @@ class S3ProjectPlanningModel(S3Model):
                     overall_status = None
 
             # Update Outcome Status
-            r.update_record(current_status = current_status,
-                            overall_status = overall_status,
+            r.update_record(current_status_by_indicators = current_status,
+                            overall_status_by_indicators = overall_status,
                             )
 
             # Populate Goals dict
@@ -4811,8 +5561,8 @@ class S3ProjectPlanningModel(S3Model):
                     overall_status = None
 
             # Update Goal Status
-            r.update_record(current_status = current_status,
-                            overall_status = overall_status,
+            r.update_record(current_status_by_indicators = current_status,
+                            overall_status_by_indicators = overall_status,
                             )
 
             # Populate Project dict
@@ -4834,12 +5584,11 @@ class S3ProjectPlanningModel(S3Model):
                            "total_overall_weighting": overall_weighting,
                            }
             else:
-                project.update(current_status = project["current_status"] + current_status,
-                               overall_status = project["overall_status"] + overall_status,
-                               total_current_weighting = project["total_current_weighting"] + current_weighting,
-                               total_overall_weighting = project["total_overall_weighting"] + overall_weighting,
-                               )
-
+                project["current_status"] += current_status
+                project["overall_status"] += overall_status
+                project["total_current_weighting"] += current_weighting
+                project["total_overall_weighting"] += overall_weighting
+                               
         # Update Project Status
         total_current_weighting = project["total_current_weighting"]
         if total_current_weighting:
@@ -5162,9 +5911,11 @@ class S3ProjectPlanningModel(S3Model):
                                                limitby=(0, 1)
                                                ).first()
         try:
-            self.project_planning_status_update(row.project_id)
+            project_id = row.project_id
         except:
             current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
+        else:
+            self.project_planning_status_update(project_id)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -5289,9 +6040,11 @@ class S3ProjectPlanningModel(S3Model):
                                                limitby=(0, 1)
                                                ).first()
         try:
-            self.project_planning_status_update(row.project_id)
+            project_id = row.project_id
         except:
             current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
+        else:
+            self.project_planning_status_update(project_id)
 
     # -------------------------------------------------------------------------
     def project_indicator_data_onaccept(self, form):
@@ -5347,6 +6100,7 @@ class S3ProjectPlanningModel(S3Model):
             # Update that record's start_date
             db(table.id == record.id).update(start_date = end_date)
 
+        #if not current.deployment_settings.get_project_status_from_activities():
         # Update Statuses
         table = s3db.project_indicator
         row = db(table.id == indicator_id).select(table.project_id,
@@ -5416,15 +6170,245 @@ class S3ProjectPlanningModel(S3Model):
             # Update that record's start_date
             db(table.id == record.id).update(start_date = end_date)
 
+        #if not current.deployment_settings.get_project_status_from_activities():
         # Update Statuses
         table = s3db.project_indicator
         row = db(table.id == indicator_id).select(table.project_id,
                                                   limitby=(0, 1)
                                                   ).first()
         try:
-            self.project_planning_status_update(row.project_id)
+            project_id = row.project_id
         except:
             current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
+        else:
+            self.project_planning_status_update(project_id)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def project_indicator_criteria_deduplicate(item):
+        """ Import item de-duplication """
+
+        data = item.data
+        name = data.get("name")
+        if name:
+            table = item.table
+            query = (table.name == name)
+            project_id = data.get("project_id")
+            if project_id:
+                query &= ((table.project_id == project_id) | \
+                          (table.project_id == None))
+
+            duplicate = current.db(query).select(table.id,
+                                                 limitby=(0, 1)).first()
+            if duplicate:
+                item.id = duplicate.id
+                item.method = item.METHOD.UPDATE
+
+    # -------------------------------------------------------------------------
+    def project_indicator_criteria_create_onaccept(self, form):
+        """
+            Default all weightings to an even spread
+        """
+
+        db = current.db
+        record_id = form.vars.id
+
+        # Find the indicator_id
+        table = current.s3db.project_indicator_criteria
+        record = db(table.id == record_id).select(table.indicator_id,
+                                                  limitby=(0, 1)
+                                                  ).first()
+        try:
+            indicator_id = record.indicator_id
+        except:
+            current.log.error("Cannot find Project Indicator Criteria record (no record for this ID), so cannot setup default weightings")
+            return
+
+        # Read the records
+        query = (table.indicator_id == indicator_id) & \
+                (table.deleted == False)
+        records = db(query).select(table.id)
+        weighting = 1.0 / len(records)
+        for r in records:
+            # Set the weighting
+            r.update_record(weighting = weighting)
+
+        # Fire normal onaccept
+        self.project_indicator_criteria_onaccept(form, create=True)
+
+    # -------------------------------------------------------------------------
+    def project_indicator_criteria_onaccept(self, form, create=False):
+        """
+            Update all ancestor fields from immediate parent
+        """
+
+        form_vars = form.vars
+
+        indicator_id = form_vars.get("indicator_id")
+        if indicator_id:
+            # Populate the Output, Goal &/or Outcome from the Indicator
+            db = current.db
+            s3db = current.s3db
+            record_id = form_vars.id
+            table = s3db.project_indicator_criteria
+            itable = s3db.project_indicator
+            indicator = db(itable.id == indicator_id).select(itable.goal_id,
+                                                             itable.outcome_id,
+                                                             itable.output_id,
+                                                             limitby=(0, 1)
+                                                             ).first()
+            if indicator:
+                db(table.id == record_id).update(goal_id = indicator.goal_id,
+                                                 outcome_id = indicator.outcome_id,
+                                                 output_id = indicator.output_id,
+                                                 )
+
+                if not create:
+                    # Read the total Weightings
+                    query = (table.indicator_id == indicator_id) & \
+                            (table.deleted == False) & \
+                            (table.id != record_id)
+                    records = db(query).select(table.weighting)
+                    total = 0
+                    for r in records:
+                        total += r.weighting
+                    # Add what we're trying to add
+                    total += form_vars.weighting
+
+                    # Check if we're on 1.0
+                    if total <> 1.0:
+                        current.response.warning = current.T("Weightings should add up to 1.0")
+
+        if current.deployment_settings.get_project_status_from_activities():
+            # Update Statuses
+            row = db(table.id == record_id).select(table.project_id,
+                                                   limitby=(0, 1)
+                                                   ).first()
+            try:
+                project_id = row.project_id
+            except:
+                current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
+            else:
+                self.project_planning_status_update(project_id)
+
+    # -------------------------------------------------------------------------
+    def project_criteria_activity_create_onaccept(self, form):
+        """
+            Default all weightings to an even spread
+        """
+
+        db = current.db
+        record_id = form.vars.id
+
+        # Find the criteria_id
+        table = current.s3db.project_criteria_activity
+        record = db(table.id == record_id).select(table.criteria_id,
+                                                  limitby=(0, 1)
+                                                  ).first()
+        try:
+            criteria_id = record.criteria_id
+        except:
+            current.log.error("Cannot find Project Criteria Activity record (no record for this ID), so cannot setup default weightings")
+            return
+
+        # Read the records
+        query = (table.criteria_id == criteria_id) & \
+                (table.deleted == False)
+        records = db(query).select(table.id)
+        weighting = 1.0 / len(records)
+        for r in records:
+            # Set the weighting
+            r.update_record(weighting = weighting)
+
+        # Fire normal onaccept
+        self.project_criteria_activity_onaccept(form, create=True)
+
+    # -------------------------------------------------------------------------
+    def project_criteria_activity_onaccept(self, form, create=False):
+        """
+            Update all ancestor fields from immediate parent
+
+            Update Status of Criterion
+        """
+
+        form_vars = form.vars
+
+        criteria_id = form_vars.get("criteria_id")
+        if criteria_id:
+            # Populate the Indicator, Output, Goal &/or Outcome from the Criterion
+            db = current.db
+            s3db = current.s3db
+            record_id = form_vars.id
+            table = s3db.project_criteria_activity
+            ctable = s3db.project_indicator_criteria
+            criterion = db(ctable.id == criteria_id).select(ctable.id,
+                                                            ctable.goal_id,
+                                                            ctable.outcome_id,
+                                                            ctable.output_id,
+                                                            ctable.indicator_id,
+                                                            limitby=(0, 1)
+                                                            ).first()
+            if criterion:
+                db(table.id == record_id).update(goal_id = criterion.goal_id,
+                                                 outcome_id = criterion.outcome_id,
+                                                 output_id = criterion.output_id,
+                                                 indicator_id = criterion.indicator_id,
+                                                 )
+
+                if not create:
+                    # Read the total Weightings
+                    query = (table.criteria_id == criteria_id) & \
+                            (table.deleted == False) & \
+                            (table.id != record_id)
+                    records = db(query).select(table.weighting)
+                    total = 0
+                    for r in records:
+                        total += r.weighting
+                    # Add what we're trying to add
+                    total += form_vars.weighting
+
+                    # Check if we're on 1.0
+                    if total <> 1.0:
+                        current.response.warning = current.T("Weightings should add up to 1.0")
+
+        if current.deployment_settings.get_project_status_from_activities():
+            # Update Statuses
+            row = db(table.id == record_id).select(table.project_id,
+                                                   limitby=(0, 1)
+                                                   ).first()
+            try:
+                project_id = row.project_id
+            except:
+                current.log.error("Cannot find Project record (no record for this ID), so cannot update statuses")
+            else:
+                self.project_planning_status_update(project_id)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def project_criteria_activity_postprocess(form):
+        """
+            Set the Activity's project_id when created via this Custom Form
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        vars_get = form.vars.get
+        criteria_id = vars_get("criteria_id")
+        ctable = s3db.project_indicator_criteria
+        criterion = db(ctable.id == criteria_id).select(ctable.project_id,
+                                                        limitby=(0, 1)
+                                                        ).first()
+        if criterion:
+            criteria_activity_id = vars_get("id")
+
+            ltable = s3db.project_criteria_activity_activity
+            link = db(ltable.criteria_activity_id == criteria_activity_id).select(ltable.activity_id,
+                                                                                  limitby=(0, 1)
+                                                                                  ).first()
+            if link:
+                atable = s3db.project_activity
+                db(atable.id == link.activity_id).update(project_id = criterion.project_id)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -5486,8 +6470,15 @@ def project_status_represent(value):
         @ToDo: Configurable thresholds
     """
 
-    if current.auth.permission.format == "geojson":
+    representation = current.auth.permission.format
+    if representation == "geojson":
         return value
+
+    # Represent the number
+    represent = IS_FLOAT_AMOUNT.represent(value, precision=2)
+
+    if representation in ("pdf", "xls"):
+        return represent
 
     if value >= 80:
         colour = "00ff00" # Green
@@ -5495,9 +6486,6 @@ def project_status_represent(value):
         colour = "ffff00" # Yellow
     else:
         colour = "ff0000" # Red
-
-    # Represent the number
-    represent = IS_FLOAT_AMOUNT.represent(value, precision=2)
 
     return SPAN(represent,
                 _class = "project_status",
@@ -5508,7 +6496,7 @@ def project_status_represent(value):
 # =============================================================================
 class project_SummaryReport(S3Method):
     """
-        Display the a Summary of the Project
+        Display a Summary of the Project
 
        @ToDo: Handle deployments which miss a step
     """
@@ -5523,7 +6511,11 @@ class project_SummaryReport(S3Method):
         """
 
         if r.name == "project":
-            if r.representation == "pdf":
+            representation = r.representation
+            if representation == "html":
+                output = self.html(r, **attr)
+                return output
+            elif representation == "pdf":
                 output = self.pdf(r, **attr)
                 return output
         raise HTTP(405, current.ERROR.BAD_METHOD)
@@ -5532,13 +6524,1167 @@ class project_SummaryReport(S3Method):
     def _extract(self, r, **attr):
         """
             Extract the Data
-        """
 
+            @ToDo: Read the filters from the HTML view
+        """
 
         db = current.db
         s3db = current.s3db
 
-        NONE = current.messages["NONE"]
+        #NONE = current.messages["NONE"]
+
+        status_from_activities = current.deployment_settings.get_project_status_from_activities()
+
+        project_id = r.id
+
+        # Are we filtered?
+        vars_get = r.get_vars.get
+        start_date = vars_get("date__ge")
+        end_date = vars_get("date__le")
+        goal_ids = vars_get("goal_id__belongs", [])
+        indicator_ids = vars_get("indicator_id__belongs", [])
+        activity_ids = vars_get("activity_id__belongs", [])
+
+        if not start_date and \
+           not end_date and \
+           not goal_ids and \
+           not indicator_ids and \
+           not activity_ids:
+            # Unfiltered, so can use pre-prepared values from project_planning_status_update
+            record = r.record
+            end_date = current.request.utcnow
+            end_date = end_date.date()
+            
+            project = {"start_date": None, #record.start_date,
+                       "end_date": end_date,
+                       }
+            if status_from_activities:
+                project.update(actual_progress = record.actual_progress_by_activities,
+                               planned_progress = record.planned_progress_by_activities,
+                               )
+            else:
+                project.update(current_status = record.current_status_by_indicators,
+                               overall_status = record.overall_status_by_indicators,
+                               )
+
+            # Goals
+            goals = {}
+            table = s3db.project_goal
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+
+            fields = [table.id,
+                      table.code,
+                      table.name,
+                      ]
+            if status_from_activities:
+                fields += [table.actual_progress_by_activities,
+                           table.planned_progress_by_activities,
+                           ]
+            else:
+                fields += [table.current_status_by_indicators,
+                           table.overall_status_by_indicators,
+                           ]
+
+            rows = db(query).select(*fields)
+
+            if status_from_activities:
+                for row in rows:
+                    goals[row.id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             outcomes = {},
+                             actual_progress = row.actual_progress_by_activities,
+                             planned_progress = row.planned_progress_by_activities,
+                             )
+            else:
+                for row in rows:
+                    goals[row.id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             outcomes = {},
+                             current_status = row.current_status_by_indicators,
+                             overall_status = row.overall_status_by_indicators,
+                             )
+
+            # Outcomes
+            table = s3db.project_outcome
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+
+            fields = [table.id,
+                      table.goal_id,
+                      table.code,
+                      table.name,
+                      ]
+            if status_from_activities:
+                fields += [table.actual_progress_by_activities,
+                           table.planned_progress_by_activities,
+                           ]
+            else:
+                fields += [table.current_status_by_indicators,
+                           table.overall_status_by_indicators,
+                           ]
+
+            rows = db(query).select(*fields)
+
+            if status_from_activities:
+                for row in rows:
+                    goals[row.goal_id]["outcomes"][row.id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             outputs = {},
+                             actual_progress = row.actual_progress_by_activities,
+                             planned_progress = row.planned_progress_by_activities,
+                             )
+            else:
+                for row in rows:
+                    goals[row.goal_id]["outcomes"][row.id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             outputs = {},
+                             current_status = row.current_status_by_indicators,
+                             overall_status = row.overall_status_by_indicators,
+                             )
+
+            # Outputs
+            table = s3db.project_output
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+
+            fields = [table.id,
+                      table.goal_id,
+                      table.outcome_id,
+                      table.code,
+                      table.name,
+                      ]
+            if status_from_activities:
+                fields += [table.actual_progress_by_activities,
+                           table.planned_progress_by_activities,
+                           ]
+            else:
+                fields += [table.current_status_by_indicators,
+                           table.overall_status_by_indicators,
+                           ]
+
+            rows = db(query).select(*fields)
+
+            if status_from_activities:
+                for row in rows:
+                    goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             indicators = {},
+                             actual_progress = row.actual_progress_by_activities,
+                             planned_progress = row.planned_progress_by_activities,
+                             )
+            else:
+                for row in rows:
+                    goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             indicators = {},
+                             current_status = row.current_status_by_indicators,
+                             overall_status = row.overall_status_by_indicators,
+                             )
+
+            # Indicators
+            table = s3db.project_indicator
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+
+            fields = [table.id,
+                      table.goal_id,
+                      table.outcome_id,
+                      table.output_id,
+                      table.code,
+                      table.name,
+                      ]
+            if status_from_activities:
+                fields += [table.actual_progress_by_activities,
+                           table.planned_progress_by_activities,
+                           ]
+            else:
+                fields += [table.current_status_by_indicators,
+                           table.overall_status_by_indicators,
+                           ]
+
+            rows = db(query).select(*fields)
+
+            if status_from_activities:
+                for row in rows:
+                    indicator_id = row.id
+                    goal_id = row.goal_id
+                    outcome_id = row.outcome_id
+                    output_id = row.output_id
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             criteria = {},
+                             actual_progress = row.actual_progress_by_activities,
+                             planned_progress = row.planned_progress_by_activities,
+                             )
+            else:
+                for row in rows:
+                    indicator_id = row.id
+                    goal_id = row.goal_id
+                    outcome_id = row.outcome_id
+                    output_id = row.output_id
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
+                        dict(code = row.code,
+                             name = row.name,
+                             current_status = row.current_status_by_indicators,
+                             overall_status = row.overall_status_by_indicators,
+                             )
+
+            if status_from_activities:
+                # Criteria
+                table = s3db.project_indicator_criteria
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+
+                rows = db(query).select(table.id,
+                                        table.goal_id,
+                                        table.outcome_id,
+                                        table.output_id,
+                                        table.indicator_id,
+                                        table.name,
+                                        table.actual_progress_by_activities,
+                                        table.planned_progress_by_activities,
+                                        )
+
+                for row in rows:
+                    criteria_id = row.id
+                    goal_id = row.goal_id
+                    outcome_id = row.outcome_id
+                    output_id = row.output_id
+                    indicator_id = row.indicator_id
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"][criteria_id] = \
+                        dict(name = row.name,
+                             activities = {},
+                             actual_progress = row.actual_progress_by_activities,
+                             planned_progress = row.planned_progress_by_activities,
+                             )
+
+                # Activities
+                table = s3db.project_criteria_activity
+                atable = s3db.project_activity
+                ltable = s3db.project_criteria_activity_activity
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False) & \
+                        (ltable.criteria_activity_id == table.id) & \
+                        (ltable.activity_id == atable.id)
+
+                rows = db(query).select(ltable.activity_id,
+                                        atable.name,
+                                        table.goal_id,
+                                        table.outcome_id,
+                                        table.output_id,
+                                        table.indicator_id,
+                                        table.criteria_id,
+                                        table.actual_progress,
+                                        table.planned_progress,
+                                        )
+
+                for row in rows:
+                    activity_id = row[ltable.activity_id]
+                    name = row[atable.name]
+                    row = row["project_criteria_activity"]
+                    goal_id = row.goal_id
+                    outcome_id = row.outcome_id
+                    output_id = row.output_id
+                    indicator_id = row.indicator_id
+                    criteria_id = row.criteria_id
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"][criteria_id]["activities"][activity_id] = \
+                        dict(name = name,
+                             actual_progress = row.actual_progress,
+                             planned_progress = row.planned_progress,
+                             )
+
+            return project, goals
+
+
+        # Filtered, so we need to recalculate dynamically
+        if current.deployment_settings.get_project_status_from_activities():
+            # Progress from Activities
+            if start_date:
+                start_date = s3_decode_iso_datetime(start_date)
+                start_date = start_date.date()
+            if end_date:
+                end_date = s3_decode_iso_datetime(end_date)
+            else:
+                end_date = current.request.utcnow
+            end_date = end_date.date()
+
+            project = {"start_date": start_date,
+                       "end_date": end_date,
+                       "actual_progress": 0,
+                       "planned_progress": 0,
+                       }
+
+            goals = {}
+            outcomes = {}
+            outputs = {}
+            indicators = {}
+            criteria = {}
+
+            # Read all the relevant Activities
+            limitby = None
+            table = s3db.project_criteria_activity
+            atable = s3db.project_activity
+            ltable = s3db.project_criteria_activity_activity
+            if activity_ids:
+                activity_ids = activity_ids.split(",")
+                if len(activity_ids) == 1:
+                    query = (ltable.activity_id == activity_ids[0])
+                    limitby = (0, 1)
+                else:
+                    query = (ltable.activity_id.belongs(activity_ids))
+            elif indicator_ids:
+                if len(indicator_ids) == 1:
+                    query = (table.indicator_id == indicator_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.indicator_id.belongs(indicator_ids)) & \
+                            (table.deleted == False)
+            elif goal_ids:
+                if len(goal_ids) == 1:
+                    query = (table.goal_id == goal_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.goal_id.belongs(goal_ids)) & \
+                            (table.deleted == False)
+            else:
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+            query &= (ltable.criteria_activity_id == table.id)
+            query &= (atable.id == ltable.activity_id)
+            # @ToDo: Do we need cleverer date handling as per DateFilter?
+            if start_date:
+                query &= (atable.date >= start_date)
+            query &= (atable.end_date <= end_date)
+
+            rows = db(query).select(ltable.activity_id,
+                                    atable.name,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.output_id,
+                                    table.indicator_id,
+                                    table.criteria_id,
+                                    table.actual_progress,
+                                    table.planned_progress,
+                                    table.weighting,
+                                    )
+            
+            for row in rows:
+                activity_id = row[ltable.activity_id]
+                activity_name = row[atable.name]
+                row = row["project_criteria_activity"]
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                indicator_id = row.indicator_id
+                criteria_id = row.criteria_id
+                actual_progress = row.actual_progress
+                planned_progress = row.planned_progress
+                if goal_id in goals:
+                    if outcome_id in goals[goal_id]["outcomes"]:
+                        if output_id in goals[goal_id]["outcomes"][outcome_id]["outputs"]:
+                            if indicator_id in goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"]:
+                                if criteria_id in goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"]:
+                                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"][criteria_id]["activities"][activity_id] = \
+                                        dict(name = activity_name,
+                                             actual_progress = actual_progress,
+                                             planned_progress = planned_progress,
+                                             )
+                                else:
+                                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"][criteria_id] = {"activities": {activity_id: {"name": activity_name,
+                                                                                                                                                                                      "actual_progress": actual_progress,
+                                                                                                                                                                                      "planned_progress": planned_progress,
+                                                                                                                                                                                      }
+                                                                                                                                                                        }
+                                                                                                                                                         }
+                            else:
+                                goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = {"criteria": {criteria_id: {"activities": {activity_id: {"name": activity_name,
+                                                                                                                                                                                    "actual_progress": actual_progress,
+                                                                                                                                                                                    "planned_progress": planned_progress,
+                                                                                                                                                                                    }
+                                                                                                                                                                      }
+                                                                                                                                                       }
+                                                                                                                                         }
+                                                                                                                            }
+                        else:
+                            goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id] = {"indicators": {indicator_id: {"criteria": {criteria_id: {"activities": {activity_id: {"name": activity_name,
+                                                                                                                                                                                  "actual_progress": actual_progress,
+                                                                                                                                                                                  "planned_progress": planned_progress,
+                                                                                                                                                                                  }
+                                                                                                                                                                    }
+                                                                                                                                                     }
+                                                                                                                                       }
+                                                                                                                          }
+                                                                                                           }
+                                                                                            }
+                    else:
+                        goals[goal_id]["outcomes"][outcome_id] = {"outputs": {output_id: {"indicators": {indicator_id: {"criteria": {criteria_id: {"activities": {activity_id: {"name": activity_name,
+                                                                                                                                                                                "actual_progress": actual_progress,
+                                                                                                                                                                                "planned_progress": planned_progress,
+                                                                                                                                                                                }
+                                                                                                                                                                  }
+                                                                                                                                                   }
+                                                                                                                                     }
+                                                                                                                        }
+                                                                                                         }
+                                                                                          }
+                                                                              }
+                                                                  }
+                else:
+                    goals[goal_id] = {"actual_progress": 0,
+                                      "planned_progress": 0,
+                                      "outcomes": {outcome_id: {"outputs": {output_id: {"indicators": {indicator_id: {"criteria": {criteria_id: {"activities": {activity_id: {"name": activity_name,
+                                                                                                                                                                              "actual_progress": actual_progress,
+                                                                                                                                                                              "planned_progress": planned_progress,
+                                                                                                                                                                              }
+                                                                                                                                                                }
+                                                                                                                                                 }
+                                                                                                                                   }
+                                                                                                                      }
+                                                                                                       }
+                                                                                        }
+                                                                            }
+                                                                }
+                                                   }
+                                      }
+                weighting = row.weighting
+                if actual_progress is None:
+                    actual_progress = 0
+                if planned_progress is None:
+                    planned_progress = 0
+                actual_progress = actual_progress * weighting
+                planned_progress = planned_progress * weighting
+                if criteria_id not in criteria:
+                    criteria[criteria_id] = {"actual_progress": actual_progress,
+                                             "planned_progress": planned_progress,
+                                             }
+                else:
+                    # Add this data to Totals
+                    c = criteria[criteria_id]
+                    c["actual_progress"] += actual_progress
+                    c["planned_progress"] += planned_progress
+
+            # Read all the relevant Criteria
+            table = s3db.project_indicator_criteria
+            if indicator_ids:
+                if len(indicator_ids) == 1:
+                    query = (table.indicator_id == indicator_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.indicator_id.belongs(indicator_ids)) & \
+                            (table.deleted == False)
+            elif goal_ids:
+                if len(goal_ids) == 1:
+                    query = (table.goal_id == goal_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.goal_id.belongs(goal_ids)) & \
+                            (table.deleted == False)
+            else:
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.output_id,
+                                    table.indicator_id,
+                                    table.name,
+                                    table.weighting,
+                                    )
+            for row in rows:
+                criteria_id = row.id
+                criteria_name = row.name
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                indicator_id = row.indicator_id
+                if criteria_id in criteria:
+                    actual_progress = criteria[criteria_id]["actual_progress"]
+                    planned_progress = criteria[criteria_id]["planned_progress"]
+                else:
+                    actual_progress = 0
+                    planned_progress = 0
+                if criteria_id in goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"]:
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"][criteria_id].update(name = criteria_name,
+                                                                                                                                             actual_progress = actual_progress,
+                                                                                                                                             planned_progress = planned_progress,
+                                                                                                                                             )
+                else:
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id]["criteria"][criteria_id] = {"activities": {},
+                                                                                                                                         "name": criteria_name,
+                                                                                                                                         "actual_progress": actual_progress,
+                                                                                                                                         "planned_progress": planned_progress,
+                                                                                                                                         }
+                weighting = row.weighting
+                actual_progress = actual_progress * weighting
+                planned_progress = planned_progress * weighting
+                if indicator_id not in indicators:
+                    indicators[indicator_id] = {"actual_progress": actual_progress,
+                                                "planned_progress": planned_progress,
+                                                }
+                else:
+                    # Add this data to Totals
+                    i = indicators[indicator_id]
+                    i["actual_progress"] += actual_progress
+                    i["planned_progress"] += planned_progress
+
+            # Read all the relevant Indicators
+            table = s3db.project_indicator
+            limitby = None
+            if indicator_ids:
+                if len(indicator_ids) == 1:
+                    limitby = (0, 1)
+                    query = (table.id == indicator_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.id.belongs(indicator_ids)) & \
+                            (table.deleted == False)
+            elif goal_ids:
+                if len(goal_ids) == 1:
+                    query = (table.goal_id == goal_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.goal_id.belongs(goal_ids)) & \
+                            (table.deleted == False)
+            else:
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.output_id,
+                                    table.code,
+                                    table.name,
+                                    table.weighting,
+                                    limitby = limitby,
+                                    )
+            for row in rows:
+                indicator_id = row.id
+                indicator_name = row.name
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                if indicator_id in indicators:
+                    actual_progress = indicators[indicator_id]["actual_progress"]
+                    planned_progress = indicators[indicator_id]["planned_progress"]
+                else:
+                    actual_progress = 0
+                    planned_progress = 0
+                if indicator_id in goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"]:
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id].update(code = row.code,
+                                                                                                                    name = indicator_name,
+                                                                                                                    actual_progress = actual_progress,
+                                                                                                                    planned_progress = planned_progress,
+                                                                                                                    )
+                else:
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = {"criteria": {},
+                                                                                                                "code": row.code,
+                                                                                                                "name": indicator_name,
+                                                                                                                "actual_progress": actual_progress,
+                                                                                                                "planned_progress": planned_progress,
+                                                                                                                }
+                weighting = row.weighting
+                actual_progress = actual_progress * weighting
+                planned_progress = planned_progress * weighting
+                if output_id not in outputs:
+                    outputs[output_id] = {"actual_progress": actual_progress,
+                                          "planned_progress": planned_progress,
+                                          }
+                else:
+                    # Add this data to Totals
+                    o = outputs[output_id]
+                    o["actual_progress"] += actual_progress
+                    o["planned_progress"] += planned_progress
+
+            # Read all the relevant Outputs
+            table = s3db.project_output
+            if goal_ids:
+                if len(goal_ids) == 1:
+                    query = (table.goal_id == goal_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.goal_id.belongs(goal_ids)) & \
+                            (table.deleted == False)
+            else:
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.code,
+                                    table.name,
+                                    table.weighting,
+                                    )
+            for row in rows:
+                output_id = row.id
+                output_name = row.name
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                if output_id in outputs:
+                    actual_progress = outputs[output_id]["actual_progress"]
+                    planned_progress = outputs[output_id]["planned_progress"]
+                else:
+                    actual_progress = 0
+                    planned_progress = 0
+                if output_id in goals[goal_id]["outcomes"][outcome_id]["outputs"]:
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id].update(code = row.code,
+                                                                                        name = output_name,
+                                                                                        actual_progress = actual_progress,
+                                                                                        planned_progress = planned_progress,
+                                                                                        )
+                else:
+                    goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id] = {"indicators": {},
+                                                                                    "code": row.code,
+                                                                                    "name": output_name,
+                                                                                    "actual_progress": actual_progress,
+                                                                                    "planned_progress": planned_progress,
+                                                                                    }
+                weighting = row.weighting
+                actual_progress = actual_progress * weighting
+                planned_progress = planned_progress * weighting
+                if outcome_id not in outcomes:
+                    outcomes[outcome_id] = {"actual_progress": actual_progress,
+                                          "planned_progress": planned_progress,
+                                          }
+                else:
+                    # Add this data to Totals
+                    o = outcomes[outcome_id]
+                    o["actual_progress"] += actual_progress
+                    o["planned_progress"] += planned_progress
+
+            # Read all the relevant Outcomes
+            table = s3db.project_outcome
+            if goal_ids:
+                if len(goal_ids) == 1:
+                    query = (table.goal_id == goal_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.goal_id.belongs(goal_ids)) & \
+                            (table.deleted == False)
+            else:
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.code,
+                                    table.name,
+                                    table.weighting,
+                                    )
+            for row in rows:
+                outcome_id = row.id
+                outcome_name = row.name
+                goal_id = row.goal_id
+                if outcome_id in outcomes:
+                    actual_progress = outcomes[outcome_id]["actual_progress"]
+                    planned_progress = outcomes[outcome_id]["planned_progress"]
+                else:
+                    actual_progress = 0
+                    planned_progress = 0
+                if outcome_id in goals[goal_id]["outcomes"]:
+                    goals[goal_id]["outcomes"][outcome_id].update(code = row.code,
+                                                                  name = outcome_name,
+                                                                  actual_progress = actual_progress,
+                                                                  planned_progress = planned_progress,
+                                                                  )
+                else:
+                    goals[goal_id]["outcomes"][outcome_id] = {"outputs": {},
+                                                              "code": row.code,
+                                                              "name": outcome_name,
+                                                              "actual_progress": actual_progress,
+                                                              "planned_progress": planned_progress,
+                                                              }
+                weighting = row.weighting
+                actual_progress = actual_progress * weighting
+                planned_progress = planned_progress * weighting
+                if goal_id not in goals:
+                    goals[goal_id] = {"actual_progress": actual_progress,
+                                      "planned_progress": planned_progress,
+                                      }
+                else:
+                    # Add this data to Totals
+                    g = goals[goal_id]
+                    g["actual_progress"] += actual_progress
+                    g["planned_progress"] += planned_progress
+
+            # Read all the relevant Goals
+            table = s3db.project_goal
+            limitby = None
+            if goal_ids:
+                if len(goal_ids) == 1:
+                    limitby = (0, 1)
+                    query = (table.id == goal_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.id.belongs(goal_ids)) & \
+                            (table.deleted == False)
+            else:
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+
+            rows = db(query).select(table.id,
+                                    table.code,
+                                    table.name,
+                                    table.weighting,
+                                    limitby = None
+                                    )
+            for row in rows:
+                goal_id = row.id
+                goal_name = row.name
+                if goal_id in goals:
+                    actual_progress = outcomes[goal_id]["actual_progress"]
+                    planned_progress = outcomes[goal_id]["planned_progress"]
+                    goals[goal_id].update(code = row.code,
+                                          name = goal_name,
+                                          actual_progress = actual_progress,
+                                          planned_progress = planned_progress,
+                                          )
+                else:
+                    actual_progress = 0
+                    planned_progress = 0
+                    goals[goal_id] = {"outcomes": {},
+                                      "name": goal_name,
+                                      "code": row.code,
+                                      "actual_progress": actual_progress,
+                                      "planned_progress": planned_progress,
+                                      }
+                weighting = row.weighting
+                actual_progress = actual_progress * weighting
+                planned_progress = planned_progress * weighting
+                # Add this data to Totals
+                project["actual_progress"] += actual_progress
+                project["planned_progress"] += planned_progress
+
+            return project, goals
+        
+        
+        
+        # Filtered, so we need to recalculate dynamically
+        # status_by_indicators
+        # Goals
+        limitby = None
+        goals = {}
+        table = s3db.project_goal
+        if goal_ids:
+            goal_ids = goal_ids.split(",")
+            if len(goal_ids) == 1:
+                query = (table.id == goal_ids[0])
+                limitby = (0, 1)
+            else:
+                query = (table.id.belongs(goal_ids))
+        else:
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+
+        fields = [table.id,
+                  table.code,
+                  table.name,
+                  ]
+        if status_from_activities:
+            fields += [table.actual_progress_by_activities,
+                       table.planned_progress_by_activities,
+                       ]
+        else:
+            fields += [table.current_status_by_indicators,
+                       table.overall_status_by_indicators,
+                       ]
+
+        rows = db(query).select(*fields,
+                                limitby = limitby
+                                )
+
+        if status_from_activities:
+            for row in rows:
+                goals[row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         outcomes = {},
+                         actual_progress = row.actual_progress_by_activities,
+                         planned_progress = row.planned_progress_by_activities,
+                         )
+        else:
+            for row in rows:
+                goals[row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         outcomes = {},
+                         current_status = row.current_status_by_indicators,
+                         overall_status = row.overall_status_by_indicators,
+                         )
+
+        # Outcomes
+        table = s3db.project_outcome
+        if goal_ids:
+            if len(goal_ids) == 1:
+                query = (table.goal_id == goal_ids[0])
+            else:
+                query = (table.goal_id.belongs(goal_ids))
+        else:
+            query = (table.project_id == project_id)
+        query &= (table.deleted == False)
+
+        fields = [table.id,
+                  table.goal_id,
+                  table.code,
+                  table.name,
+                  ]
+        if status_from_activities:
+            fields += [table.actual_progress_by_activities,
+                       table.planned_progress_by_activities,
+                       ]
+        else:
+            fields += [table.current_status_by_indicators,
+                       table.overall_status_by_indicators,
+                       ]
+
+        rows = db(query).select(*fields)
+
+        if status_from_activities:
+            for row in rows:
+                goals[row.goal_id]["outcomes"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         outputs = {},
+                         actual_progress = row.actual_progress_by_activities,
+                         planned_progress = row.planned_progress_by_activities,
+                         )
+        else:
+            for row in rows:
+                goals[row.goal_id]["outcomes"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         outputs = {},
+                         current_status = row.current_status_by_indicators,
+                         overall_status = row.overall_status_by_indicators,
+                         )
+
+        # Outputs
+        table = s3db.project_output
+        if goal_ids:
+            if len(goal_ids) == 1:
+                query = (table.goal_id == goal_ids[0])
+            else:
+                query = (table.goal_id.belongs(goal_ids))
+        else:
+            query = (table.project_id == project_id)
+        query &= (table.deleted == False)
+
+        fields = [table.id,
+                  table.goal_id,
+                  table.outcome_id,
+                  table.code,
+                  table.name,
+                  ]
+        if status_from_activities:
+            fields += [table.actual_progress_by_activities,
+                       table.planned_progress_by_activities,
+                       ]
+        else:
+            fields += [table.current_status_by_indicators,
+                       table.overall_status_by_indicators,
+                       ]
+
+        rows = db(query).select(*fields)
+
+        if status_from_activities:
+            for row in rows:
+                goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         indicators = {},
+                         actual_progress = row.actual_progress_by_activities,
+                         planned_progress = row.planned_progress_by_activities,
+                         )
+        else:
+            for row in rows:
+                goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         indicators = {},
+                         current_status = row.current_status_by_indicators,
+                         overall_status = row.overall_status_by_indicators,
+                         )
+
+        # Indicators
+        limitby = None
+        indicators = {}
+        table = s3db.project_indicator
+        if indicator_ids:
+            indicator_ids = indicator_ids.split(",")
+            if len(indicator_ids) == 1:
+                query = (table.id == indicator_ids[0])
+                limitby = (0, 1)
+            else:
+                query = (table.id.belongs(indicator_ids))
+        elif goal_ids:
+            if len(goal_ids) == 1:
+                query = (table.goal_id == goal_ids[0]) & \
+                        (table.deleted == False)
+            else:
+                query = (table.goal_id.belongs(goal_ids)) & \
+                        (table.deleted == False)
+        else:
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+
+        fields = [table.id,
+                  table.goal_id,
+                  table.outcome_id,
+                  table.output_id,
+                  table.code,
+                  table.name,
+                  ]
+        if status_from_activities:
+            fields += [table.actual_progress_by_activities,
+                       table.planned_progress_by_activities,
+                       ]
+        else:
+            fields += [table.current_status_by_indicators,
+                       table.overall_status_by_indicators,
+                       ]
+
+        rows = db(query).select(*fields,
+                                limitby = limitby
+                                )
+        if not indicator_ids:
+            iappend = indicator_ids.append
+        else:
+            iappend = lambda i: i
+
+        if status_from_activities:
+            for row in rows:
+                indicator_id = row.id
+                iappend(indicator_id)
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                indicators[indicator_id] = dict(goal = goal_id,
+                                                outcome = outcome_id,
+                                                output = output_id,
+                                                )
+                goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         #comments = NONE,
+                         actual_progress = row.actual_progress_by_activities,
+                         planned_progress = row.planned_progress_by_activities,
+                         )
+        else:
+            for row in rows:
+                indicator_id = row.id
+                iappend(indicator_id)
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                indicators[indicator_id] = dict(goal = goal_id,
+                                                outcome = outcome_id,
+                                                output = output_id,
+                                                )
+                goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         current_status = row.current_status_by_indicators,
+                         overall_status = row.overall_status_by_indicators,
+                         )
+
+        if status_from_activities:
+            # Activities
+            limitby = None
+            #activities = {}
+            table = s3db.project_criteria_activity
+            atable = s3db.project_activity
+            ltable = s3db.project_criteria_activity_activity
+            if activity_ids:
+                activity_ids = activity_ids.split(",")
+                if len(activity_ids) == 1:
+                    query = (ltable.activity_id == activity_ids[0])
+                    limitby = (0, 1)
+                else:
+                    query = (ltable.activity_id.belongs(activity_ids))
+            elif indicator_ids:
+                if len(indicator_ids) == 1:
+                    query = (table.indicator_id == indicator_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.indicator_id.belongs(indicator_ids)) & \
+                            (table.deleted == False)
+            elif goal_ids:
+                if len(goal_ids) == 1:
+                    query = (table.goal_id == goal_ids[0]) & \
+                            (table.deleted == False)
+                else:
+                    query = (table.goal_id.belongs(goal_ids)) & \
+                            (table.deleted == False)
+            else:
+                query = (table.project_id == project_id) & \
+                        (table.deleted == False)
+            query &= (ltable.criteria_activity_id == table.id)
+
+            rows = db(query).select(ltable.activity_id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.output_id,
+                                    table.indicator_id,
+                                    atable.name,
+                                    table.actual_progress,
+                                    table.planned_progress,
+                                    limitby = limitby
+                                    )
+            #if not activity_ids:
+            #    aappend = activity_ids.append
+            #else:
+            #    aappend = lambda a: a
+
+            for row in rows:
+                activity_id = row[ltable.activity_id]
+                name = row[atable.name]
+                #aappend(activity_id)
+                row = row["project_criteria_activity"]
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                indicator_id = row.indicator_id
+                indicators[indicator_id] = dict(goal = goal_id,
+                                                outcome = outcome_id,
+                                                output = output_id,
+                                                )
+                goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
+                    dict(name = name,
+                         actual_progress = row.actual_progress_by_activities,
+                         planned_progress = row.planned_progress_by_activities,
+                         )
+
+        # Indicator Data
+        #date = None
+        #table = s3db.project_indicator_data
+        #if len(indicator_ids) == 1:
+        #    query = (table.indicator_id == indicator_ids[0]) & \
+        #            (table.deleted == False)
+        #else:
+        #    query = (table.indicator_id.belongs(indicator_ids)) & \
+        #            (table.deleted == False)
+        #if start_date:
+        #    query &= (table.end_date >= s3_decode_iso_datetime(start_date))
+        #    start_date = start_date.date()
+        #if end_date:
+        #    end_date = s3_decode_iso_datetime(end_date)
+        #else:
+        #    end_date = current.request.utcnow
+        #query &= (table.end_date <= end_date)
+        #end_date = end_date.date()
+        #rows = db(query).select(table.indicator_id,
+        #                        table.end_date,
+        #                        table.value,
+        #                        table.target_value,
+        #                        #table.comments,
+        #                        #orderby=table.end_date,
+        #                        )
+        #for row in rows:
+        #    date = row.end_date # Old: We just want to store the last
+        #    indicator_id = row.indicator_id
+        #    actual = row.value
+        #    target = row.target_value
+        #    i = indicators[indicator_id]
+        #    goal = goals[i["goal"]]
+        #    outcome = goal["outcomes"][i["outcome"]]
+        #    output = outcome["outputs"][i["output"]]
+        #    indicator = output["indicators"][indicator_id]
+        #    if actual:
+        #        #indicator["current_actual"] = actual # We just want to store the last per Indicator
+        #        #indicator["overall_actual"] += actual
+        #        #if start_date is None or \
+        #        #   date >= start_date:
+        #        if date <= end_date:
+        #            indicator["actual"] += actual
+        #    if target:
+        #        #indicator["current_target"] = target # We just want to store the last per Indicator
+        #        #indicator["overall_target"] += target
+        #        #if start_date is None or \
+        #        #   date >= start_date:
+        #        indicator["total_target"] += target
+        #        if date <= end_date:
+        #            indicator["target"] += target
+
+        #    #comments = row.comments
+        #    #if comments:
+        #    #    indicator["comments"] = comments # We just want to store the last per Indicator
+
+        # Sort & Convert to percentages and Sum upwards
+        #project_actual = 0
+        #project_target = 0
+
+        #goals = OrderedDict(sorted(goals.items(), key=lambda x: x[1]["code"]))
+        #for goal in goals:
+        #    goal = goals[goal]
+        #    outcomes = OrderedDict(sorted(goal["outcomes"].items(), key=lambda x: x[1]["code"]))
+        #    for outcome in outcomes:
+        #        outcome = outcomes[outcome]
+        #        outputs = OrderedDict(sorted(outcome["outputs"].items(), key=lambda x: x[1]["code"]))
+        #        for output in outputs:
+        #            output = outputs[output]
+        #            indicators = OrderedDict(sorted(output["indicators"].items(), key=lambda x: x[1]["code"]))
+        #            for indicator in indicators:
+        #                indicator = indicators[indicator]
+        #                total_target = indicator["total_target"]
+        #                if total_target:
+        #                    indicator["actual"] = actual = (indicator["actual"] / total_target) * 100
+        #                    indicator["target"] = target = (indicator["target"] / total_target) * 100
+        #                    output["actual"] += actual
+        #                    output["target"] += target
+        #                else:
+        #                    # Can't Divide by Zero
+        #                    indicator["actual"] = 0
+        #                    indicator["target"] = 0
+        #            output["indicators"] = indicators
+        #            count = len(indicators)
+        #            if count:
+        #                output["actual"] = actual = output["actual"] / count
+        #                output["target"] = target = output["target"] / count
+        #                outcome["actual"] += actual
+        #                outcome["target"] += target
+        #        outcome["outputs"] = outputs
+        #        count = len(outputs)
+        #        if count:
+        #            outcome["actual"] = actual = outcome["actual"] / count
+        #            outcome["target"] = target = outcome["target"] / count
+        #            goal["actual"] += actual
+        #            goal["target"] += target
+        #    goal["outcomes"] = outcomes
+        #    count = len(outcomes)
+        #    if count:
+        #        goal["actual"] = actual = goal["actual"] / count
+        #        goal["target"] = target = goal["target"] / count
+        #        project_actual += actual
+        #        project_target += target
+
+        #count = len(goals)
+        #if count > 1:
+        #    project_actual = project_actual / count
+        #    project_target = project_target / count
+
+        return project, goals
+
+    # -------------------------------------------------------------------------
+    def html(self, r, **attr):
+        """
+            HTML Representation
+            - page with Filters
+        """
+
+        T = current.T
+        db = current.db
+        s3db = current.s3db
+        settings = current.deployment_settings
 
         project_id = r.id
 
@@ -5550,56 +7696,9 @@ class project_SummaryReport(S3Method):
         rows = db(query).select(table.id,
                                 table.code,
                                 table.name,
-                                table.current_status,
-                                table.overall_status,
                                 )
         for row in rows:
-            goals[row.id] = dict(code = row.code,
-                                 name = row.name,
-                                 outcomes = {},
-                                 current_status = row.current_status,
-                                 overall_status = row.overall_status,
-                                 )
-
-        # Outcomes
-        table = s3db.project_outcome
-        query = (table.project_id == project_id) & \
-                (table.deleted == False)
-        rows = db(query).select(table.id,
-                                table.goal_id,
-                                table.code,
-                                table.name,
-                                table.current_status,
-                                table.overall_status,
-                                )
-        for row in rows:
-            goals[row.goal_id]["outcomes"][row.id] = dict(code = row.code,
-                                                          name = row.name,
-                                                          outputs = {},
-                                                          current_status = row.current_status,
-                                                          overall_status = row.overall_status,
-                                                          )
-
-        # Outputs
-        table = s3db.project_output
-        query = (table.project_id == project_id) & \
-                (table.deleted == False)
-        rows = db(query).select(table.id,
-                                table.goal_id,
-                                table.outcome_id,
-                                table.code,
-                                table.name,
-                                table.current_status,
-                                table.overall_status,
-                                )
-        for row in rows:
-            goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
-                dict(code = row.code,
-                     name = row.name,
-                     indicators = {},
-                     current_status = row.current_status,
-                     overall_status = row.overall_status,
-                     )
+            goals[row.id] = "%s: %s" % (row.code, row.name)
 
         # Indicators
         indicators = {}
@@ -5607,82 +7706,68 @@ class project_SummaryReport(S3Method):
         query = (table.project_id == project_id) & \
                 (table.deleted == False)
         rows = db(query).select(table.id,
-                                table.goal_id,
-                                table.outcome_id,
-                                table.output_id,
                                 table.code,
                                 table.name,
-                                table.current_status,
-                                table.overall_status,
                                 )
         for row in rows:
-            indicator_id = row.id
-            goal_id = row.goal_id
-            outcome_id = row.outcome_id
-            output_id = row.output_id
-            indicators[indicator_id] = dict(goal = goal_id,
-                                            outcome = outcome_id,
-                                            output = output_id,
-                                            )
-            goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
-                dict(code = row.code,
-                     name = row.name,
-                     comments = NONE,
-                     current_status = row.current_status,
-                     overall_status = row.overall_status,
-                     current_target = NONE,
-                     overall_target = 0,
-                     #current_actual = NONE,
-                     #overall_actual = 0,
-                     )
+            indicators[row.id] = "%s: %s" % (row.code, row.name)
 
-        # Indicator Data
-        table = s3db.project_indicator_data
-        query = (table.project_id == project_id) & \
-                (table.end_date <= current.request.utcnow) & \
-                (table.deleted == False)
-        rows = db(query).select(table.indicator_id,
-                                table.end_date,
-                                table.target_value,
-                                #table.value,
-                                table.comments,
-                                orderby=table.end_date,
-                                )
-        for row in rows:
-            date = row.end_date # We just want to store the last
-            indicator_id = row.indicator_id
-            target = row.target_value
-            #actual = row.value
-            i = indicators[indicator_id]
-            indicator = goals[i["goal"]]["outcomes"][i["outcome"]]["outputs"][i["output"]]["indicators"][indicator_id]
-            if target:
-                indicator["current_target"] = target # We just want to store the last per Indicator
-                indicator["overall_target"] += target
-            #if actual:
-            #    indicator["current_actual"] = actual # We just want to store the last per Indicator
-            #    indicator["overall_actual"] += actual
-            comments = row.comments
-            if comments:
-                indicator["comments"] = comments # We just want to store the last per Indicator
+        # Filters
+        filter_widgets = [S3DateFilter("date",
+                                       _name = "date",
+                                       label = T("Time Period"),
+                                       hide_time = True,
+                                       ),
+                          S3OptionsFilter("goal_id",
+                                          _name = "goal_id",
+                                          label = T("Goals"),
+                                          options = goals,
+                                          ),
+                          S3OptionsFilter("indicator_id",
+                                          _name = "indicator_id",
+                                          label = T("Indicators"),
+                                          options = indicators,
+                                          ),
+                          ]
 
-        # Sort
-        goals = OrderedDict(sorted(goals.items(), key=lambda x: x[1]["code"]))
-        for goal in goals:
-            outcomes = OrderedDict(sorted(goals[goal]["outcomes"].items(), key=lambda x: x[1]["code"]))
-            for outcome in outcomes:
-                outputs = OrderedDict(sorted(outcomes[outcome]["outputs"].items(), key=lambda x: x[1]["code"]))
-                for output in outputs:
-                    indicators = OrderedDict(sorted(outputs[output]["indicators"].items(), key=lambda x: x[1]["code"]))
-                    outputs[output]["indicators"] = indicators
-                outcomes[outcome]["outputs"] = outputs
-            goals[goal]["outcomes"] = outcomes
+        if settings.get_project_status_from_activities():
+            # Activities
+            activities = {}
+            table = s3db.project_activity
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.name,
+                                    )
+            for row in rows:
+                activities[row.id] = row.name
 
-        return date, goals
+            filter_widgets.append(S3OptionsFilter("activity_id",
+                                                  _name = "activity_id",
+                                                  label = T("Activities"),
+                                                  options = activities,
+                                                  ))
+
+        settings.ui.filter_auto_submit = False
+        form = S3FilterForm(filter_widgets,
+                            #auto_submit = False, # I think this should completely over-ride setting, whereas currently the submit button is hidden
+                            submit = T("Generate PDF"),
+                            url = r.url(representation="pdf"),
+                            )
+        form = form.html(None)
+
+        output = {"item": form,
+                  "title": T("Project Summary Report"),
+                  }
+
+        current.response.view = "simple.html"
+        return output
 
     # -------------------------------------------------------------------------
     def pdf(self, r, **attr):
         """
             PDF Representation
+            -the actual report
         """
 
         from ..s3.s3codecs.pdf import EdenDocTemplate, S3RL_PDF
@@ -5693,8 +7778,10 @@ class project_SummaryReport(S3Method):
 
         NONE = current.messages["NONE"]
 
+        status_from_activities = current.deployment_settings.get_project_status_from_activities()
+
         # Extract Data
-        date, goals = self._extract(r, **attr)
+        project, goals = self._extract(r, **attr)
 
         record = r.record
         organisation_id = record.organisation_id
@@ -5730,7 +7817,11 @@ class project_SummaryReport(S3Method):
                                                                                limitby=(0, 1)
                                                                                ).first()
         if budget:
-            budget = "%s %s" % (budget.currency, budget.total_budget)
+            if hasattr(btable.currency, "represent"):
+                currency = btable.currency.represent(budget.currency)
+            else:
+                currency = budget.currency
+            budget = "%s %s" % (currency, budget.total_budget)
         else:
             budget = NONE
 
@@ -5767,12 +7858,19 @@ class project_SummaryReport(S3Method):
         otable = s3db.project_organisation
         query = (otable.project_id == project_id) & \
                 (otable.organisation_id != organisation_id)
-        partners = db(query).select(otable.organisation_id)
+        partners = db(query).select(otable.organisation_id,
+                                    otable.role,
+                                    )
         if partners:
             org_represent = s3db.org_OrganisationRepresent() # show_link=False
-            partners = org_represent.bulk([row.organisation_id for row in partners])
+            donors = org_represent.bulk([row.organisation_id for row in partners if row.role == 3])
+            del donors[None]
+            donors = donors.values()
+            partners = org_represent.bulk([row.organisation_id for row in partners if row.role != 3])
             del partners[None]
             partners = partners.values()
+        else:
+            donors = []
 
         gtable = s3db.project_location
         query = (gtable.project_id == project_id)
@@ -5783,76 +7881,60 @@ class project_SummaryReport(S3Method):
             del locations[None]
             locations = locations.values()
 
+        # @ToDo: deployment_setting to separate per Location?
         btable = s3db.project_beneficiary
         query = (btable.project_id == project_id)
         beneficiaries = db(query).select(btable.parameter_id,
-                                         btable.value,
+                                         btable.value, # Beneficiaries Reached
                                          )
         if beneficiaries:
             ben_represent = S3Represent(lookup="stats_parameter",
                                         translate=True,
                                         )
-            benef_types = ben_represent.bulk([row.parameter_id for row in beneficiaries])
+            benef_types = ben_represent.bulk(list(set([row.parameter_id for row in beneficiaries])))
+            # Sum per Type
             del benef_types[None]
             benefs = []
-            bappend = benefs.append
-            for row in beneficiaries:
-                # @ToDo: Add Location?
-                bappend("%s %s" % (row.value, benef_types.get(row.parameter_id)))
+            sums = {}
+            for t in benef_types:
+                sums[t] = 0
+                for row in beneficiaries:
+                    if row.parameter_id == t:
+                        sums[t] += row.value
+                benefs.append("%s %s" % (sums[t], benef_types.get(t)))
             beneficiaries = benefs
 
-        report_title = s3_unicode(T("Project Summary Report")).encode("utf8")
-        filename = "%s_%s.pdf" % (report_title, s3_unicode(project_title).encode("utf8"))
+        report_title = s3_str(T("Project Summary Report"))
+        filename = "%s_%s.pdf" % (report_title, s3_str(project_title))
 
         header = DIV(s3db.org_organisation_logo(organisation_id),
                      date_represent(r.utcnow),
                      # @ToDo: This is overflowing
                      )
 
-        narrative = TABLE(TR(TD(T("Project Name")),
-                             TD(record.name),
-                             ),
-                          TR(TD(T("Program")),
-                             TD(program),
-                             ),
-                          TR(TD(T("Description")),
-                             TD(record.description),
-                             ),
-                          TR(TD(T("Status")),
-                             TD(status),
-                             ),
-                          TR(TD(T("Budget")),
-                             TD(budget),
-                             ),
-                          TR(TD(T("Start Date")),
-                             TD(date_represent(record.start_date)),
-                             ),
-                          TR(TD(T("End Date")),
-                             TD(date_represent(record.end_date)),
-                             ),
-                          TR(TD(T("Hazards")),
-                             TD(hazards),
-                             ),
-                          TR(TD(T("Sectors")),
-                             TD(sectors),
-                             ),
-                          TR(TD(T("Themes")),
-                             TD(themes),
-                             ),
-                          TR(TD(T("Contact Person")),
-                             TD(table.human_resource_id.represent(record.human_resource_id)),
-                             ),
-                          TR(TD(T("Partner Organizations"),
-                                _colspan=2,
-                                ),
-                             ),
-                          )
-        nappend = narrative.append
-
-        for p in partners:
-            nappend(TR(TD(),
-                       TD(p),
-                       ))
+        narrative_rows= [TR(TD(T("General Project Information")),
+                            _colspan=2,
+                            ),
+                         TR(TD(T("Project")),
+                            TD(record.name),
+                            ),
+                         #TR(TD(T("Program")),
+                         #   TD(program),
+                         #   ),
+                         #TR(TD(T("Status")),
+                         #   TD(status),
+                         #   ),
+                         TR(TD(T("Description")),
+                            TD(record.description),
+                            ),
+                         TR(TD(T("Start Date")),
+                            TD(date_represent(record.start_date)),
+                            ),
+                         TR(TD(T("End Date")),
+                            TD(date_represent(record.end_date)),
+                            ),
+                         ]
+        nappend = narrative_rows.append
 
         nappend(TR(TD(T("Locations"),
                       _colspan=2,
@@ -5863,7 +7945,33 @@ class project_SummaryReport(S3Method):
                        TD(l),
                        ))
 
-        nappend(TR(TD(T("Beneficiaries"),
+        nappend(TR(TD(T("Donors"),
+                      _colspan=2,
+                      ),
+                   ))
+        for d in donors:
+            nappend(TR(TD(),
+                       TD(d),
+                       ))
+
+        narrative_rows += (TR(TD(table.human_resource_id.label),
+                              TD(table.human_resource_id.represent(record.human_resource_id)), # @ToDo: person_represent?
+                              ),
+                           TR(TD(T("Budget")),
+                              TD(budget),
+                              ),
+                           TR(TD(T("Hazards")),
+                              TD(hazards),
+                              ),
+                           TR(TD(T("Sectors")),
+                              TD(sectors),
+                              ),
+                           TR(TD(T("Themes")),
+                              TD(themes),
+                              ),
+                           )
+
+        nappend(TR(TD(T("Beneficiaries Reached"),
                       _colspan=2,
                       ),
                    ))
@@ -5872,125 +7980,113 @@ class project_SummaryReport(S3Method):
                        TD(b),
                        ))
 
-        status_table = TABLE(#TR(TD(T("Current Planned Status"),
-                             #      ),
-                             #   TD(
-                             #      ),
-                             #   ),
-                             #TR(TD(T("Overall Planned Status"),
-                             #      ),
-                             #   TD(
-                             #      ),
-                             #   ),
-                             TR(TD(T("Current Status"),
-                                   ),
-                                # @ToDo: Colours?
-                                TD(project_status_represent(record.current_status_by_indicators),
-                                   ),
-                                ),
-                             TR(TD(T("Overall Status"),
-                                   ),
-                                TD(project_status_represent(record.overall_status_by_indicators),
-                                   ),
-                                ),
-                             )
+        nappend(TR(TD(T("Partner Organizations"),
+                      _colspan=2,
+                      ),
+                   ))
+        for p in partners:
+            nappend(TR(TD(),
+                       TD(p),
+                       ))
+
+        narrative = TABLE(*narrative_rows)
+
+        if status_from_activities:
+            status_table = TABLE(TR(TD(T("Current Status of Project"),
+                                       _rowspan=2,
+                                       ),
+                                    TD(T("Actual")),
+                                    TD(T("Planned")),
+                                    ),
+                                 TR(#TD(),
+                                    TD(project_status_represent(project["actual_progress"])),
+                                    TD(project_status_represent(project["planned_progress"])),
+                                    ),
+                                 )
+        else:
+            status_table = TABLE(TR(TD(T("Current Status of Project"),
+                                       _rowspan=2,
+                                       ),
+                                    TD(T("Current")),
+                                    TD(T("Overall")),
+                                    ),
+                                 TR(#TD(),
+                                    TD(project_status_represent(project["current_status"])),
+                                    TD(project_status_represent(project["overall_status"])),
+                                    ),
+                                 )
         sappend = status_table.append
 
         for goal_id in goals:
             goal = goals[goal_id]
-            row = TR(TD("%s: %s" % (T("Goal"), goal["code"]),
+            row = TR(TD("%s %s: %s" % (T("Goal"), goal["code"], goal["name"]),
                         ),
-                     TD(goal["name"]),
+                     TD(project_status_represent(goal["actual_progress"] if status_from_activities else goal["current_status"])),
+                     TD(project_status_represent(goal["planned_progress"] if status_from_activities else goal["overall_status"])),
                      _class="project_goal",
-                     )
-            sappend(row)
-            row = TR(TD(T("Current Status"),
-                        ),
-                     TD(project_status_represent(goal["current_status"]))
-                     )
-            sappend(row)
-            row = TR(TD(T("Overall Status"),
-                        ),
-                     TD(project_status_represent(goal["overall_status"]))
                      )
             sappend(row)
             outcomes = goal["outcomes"]
             for outcome_id in outcomes:
                 outcome = outcomes[outcome_id]
-                row = TR(TD("%s: %s" % (T("Outcome"), outcome["code"]),
+                row = TR(TD("%s %s: %s" % (T("Outcome"), outcome["code"], outcome["name"]),
                             ),
-                         TD(outcome["name"]),
+                         TD(project_status_represent(outcome["actual_progress"] if status_from_activities else outcome["current_status"])),
+                         TD(project_status_represent(outcome["planned_progress"] if status_from_activities else outcome["overall_status"])),
                          _class="project_outcome",
-                         )
-                sappend(row)
-                row = TR(TD(T("Current Status"),
-                            ),
-                         TD(project_status_represent(outcome["current_status"]))
-                         )
-                sappend(row)
-                row = TR(TD(T("Overall Status"),
-                            ),
-                         TD(project_status_represent(outcome["overall_status"]))
                          )
                 sappend(row)
                 outputs = outcome["outputs"]
                 for output_id in outputs:
                     output = outputs[output_id]
-                    row = TR(TD("%s: %s" % (T("Output"), output["code"]),
+                    row = TR(TD("%s %s: %s" % (T("Output"), output["code"], output["name"]),
                                 ),
-                             TD(output["name"]),
+                             TD(project_status_represent(output["actual_progress"] if status_from_activities else output["current_status"])),
+                             TD(project_status_represent(output["planned_progress"] if status_from_activities else output["overall_status"])),
                              _class="project_output",
                              )
                     sappend(row)
-                    row = TR(TD(T("Current Status"),
-                                ),
-                             TD(project_status_represent(output["current_status"]))
-                             )
-                    sappend(row)
-                    row = TR(TD(T("Overall Status"),
-                                ),
-                             TD(project_status_represent(output["overall_status"]))
-                             )
-                    sappend(row)
                     indicators = output["indicators"]
-                    for i in indicators:
-                        indicator = indicators[i]
-                        row = TR(TD("%s: %s" % (T("Indicator"), indicator["code"]),
+                    for indicator_id in indicators:
+                        indicator = indicators[indicator_id]
+                        row = TR(TD("%s %s: %s" % (T("Indicator"), indicator["code"], indicator["name"]),
                                     ),
-                                 TD(indicator["name"]),
+                                 TD(project_status_represent(indicator["actual_progress"] if status_from_activities else indicator["current_status"])),
+                                 TD(project_status_represent(indicator["planned_progress"] if status_from_activities else indicator["overall_status"])),
                                  _class="project_indicator",
                                  )
                         sappend(row)
-                        row = TR(TD(T("Current Target"),
-                                    ),
-                                 TD(indicator["current_target"])
-                                 )
-                        sappend(row)
-                        row = TR(TD(T("Overall Target"),
-                                    ),
-                                 TD(indicator["overall_target"])
-                                 )
-                        sappend(row)
-                        row = TR(TD(T("Current Status"),
-                                    ),
-                                 TD(project_status_represent(indicator["current_status"]))
-                                 )
-                        sappend(row)
-                        row = TR(TD(T("Overall Status"),
-                                    ),
-                                 TD(project_status_represent(indicator["overall_status"]))
-                                 )
-                        sappend(row)
-                        row = TR(TD(T("Justification"),
-                                    ),
-                                 TD(indicator["comments"])
-                                 )
-                        sappend(row)
+                        if status_from_activities:
+                            criteria = indicator["criteria"]
+                            for criteria_id in criteria:
+                                criterion = criteria[criteria_id]
+                                row = TR(TD("%s: %s" % (T("Criterion"), criterion["name"]),
+                                            ),
+                                         TD(project_status_represent(criterion["actual_progress"])),
+                                         TD(project_status_represent(criterion["planned_progress"])),
+                                         _class="project_criteria",
+                                         )
+                                sappend(row)
+                                activities = criterion["activities"]
+                                for activity_id in activities:
+                                    activity = activities[activity_id]
+                                    row = TR(TD("%s: %s" % (T("Activity"), activity["name"]),
+                                                ),
+                                             TD(project_status_represent(activity["actual_progress"])),
+                                             TD(project_status_represent(activity["planned_progress"])),
+                                             _class="project_activity",
+                                             )
+                                    sappend(row)
+
+        start_date = project["start_date"]
+        if start_date:
+            start_date = H3("%s: %s" % (T("From Date"), date_represent(start_date)))
 
         body = DIV(H1(T("Narrative Report")),
-                   H3("%s: %s" % (T("Up To Date"), date_represent(date))),
+                   start_date,
+                   H3("%s: %s" % (T("Up To Date"), date_represent(project["end_date"]))),
                    narrative,
-                   H1(T("Current Status of Project")),
+                   P(""),
                    status_table,
                    )
 
@@ -6007,6 +8103,10 @@ class project_SummaryReport(S3Method):
                                         },
                   "tr.project_indicator": {"background-color": "#d9d9d9",
                                            },
+                  #"tr.project_criteria": {"background-color": "#d9d9d9",
+                  #                         },
+                  #"tr.project_activity": {"background-color": "#d9d9d9",
+                  #                         },
                   }
         header_flowable = get_html_flowable(header, printable_width)
         body_flowable = get_html_flowable(body, printable_width, styles)
@@ -6030,7 +8130,7 @@ class project_SummaryReport(S3Method):
 # =============================================================================
 class project_IndicatorSummaryReport(S3Method):
     """
-        Display the a Summary of the Indicator Statuses for the Project
+        Display a Summary of the Indicator Statuses for the Project
 
        @ToDo: PDF representation (CRMADA want)
        @ToDo: Should we aggregate entries in the same Month?
@@ -6050,6 +8150,9 @@ class project_IndicatorSummaryReport(S3Method):
             if r.representation == "html":
                 output = self.html(r, **attr)
                 return output
+            #elif r.representation == "pdf":
+            #    output = self.pdf(r, **attr)
+            #    return output
             elif r.representation == "xls":
                 output = self.xls(r, **attr)
                 return output
@@ -6069,6 +8172,93 @@ class project_IndicatorSummaryReport(S3Method):
 
         project_id = r.id
 
+        #if current.deployment_settings.get_project_status_from_activities():
+        #    # Goals
+        #    goals = {}
+        #    table = s3db.project_goal
+        #    query = (table.project_id == project_id) & \
+        #            (table.deleted == False)
+        #    rows = db(query).select(table.id,
+        #                            table.code,
+        #                            table.name,
+        #                            table.actual_progress_by_activities,
+        #                            )
+        #    for row in rows:
+        #        goals[row.id] = dict(code = row.code,
+        #                             name = row.name,
+        #                             outcomes = {},
+        #                             status = row.actual_progress_by_activities,
+        #                             )
+
+        #    # Outcomes
+        #    table = s3db.project_outcome
+        #    query = (table.project_id == project_id) & \
+        #            (table.deleted == False)
+        #    rows = db(query).select(table.id,
+        #                            table.goal_id,
+        #                            table.code,
+        #                            table.name,
+        #                            table.actual_progress_by_activities,
+        #                            )
+        #    for row in rows:
+        #        goals[row.goal_id]["outcomes"][row.id] = dict(code = row.code,
+        #                                                      name = row.name,
+        #                                                      outputs = {},
+        #                                                      status = row.actual_progress_by_activities,
+        #                                                      )
+
+        #    # Outputs
+        #    table = s3db.project_output
+        #    query = (table.project_id == project_id) & \
+        #            (table.deleted == False)
+        #    rows = db(query).select(table.id,
+        #                            table.goal_id,
+        #                            table.outcome_id,
+        #                            table.code,
+        #                            table.name,
+        #                            table.actual_progress_by_activities,
+        #                            )
+        #    for row in rows:
+        #        goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
+        #            dict(code = row.code,
+        #                 name = row.name,
+        #                 indicators = {},
+        #                 status = row.actual_progress_by_activities,
+        #                 )
+
+        #    # Indicators
+        #    indicators = {}
+        #    table = s3db.project_indicator
+        #    query = (table.project_id == project_id) & \
+        #            (table.deleted == False)
+        #    rows = db(query).select(table.id,
+        #                            table.goal_id,
+        #                            table.outcome_id,
+        #                            table.output_id,
+        #                            table.code,
+        #                            table.name,
+        #                            table.actual_progress_by_activities,
+        #                            )
+        #    for row in rows:
+        #        indicator_id = row.id
+        #        goal_id = row.goal_id
+        #        outcome_id = row.outcome_id
+        #        output_id = row.output_id
+        #        indicators[indicator_id] = dict(goal = goal_id,
+        #                                        outcome = outcome_id,
+        #                                        output = output_id,
+        #                                        )
+        #        goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
+        #            dict(code = row.code,
+        #                 name = row.name,
+        #                 dates = {},
+        #                 years = {},
+        #                 status = row.actual_progress_by_activities,
+        #                 target = 0,
+        #                 actual = 0,
+        #                 )
+        #else:
+
         # Goals
         goals = {}
         table = s3db.project_goal
@@ -6077,13 +8267,13 @@ class project_IndicatorSummaryReport(S3Method):
         rows = db(query).select(table.id,
                                 table.code,
                                 table.name,
-                                table.overall_status,
+                                table.overall_status_by_indicators,
                                 )
         for row in rows:
             goals[row.id] = dict(code = row.code,
                                  name = row.name,
                                  outcomes = {},
-                                 status = row.overall_status,
+                                 status = row.overall_status_by_indicators,
                                  )
 
         # Outcomes
@@ -6094,13 +8284,13 @@ class project_IndicatorSummaryReport(S3Method):
                                 table.goal_id,
                                 table.code,
                                 table.name,
-                                table.overall_status,
+                                table.overall_status_by_indicators,
                                 )
         for row in rows:
             goals[row.goal_id]["outcomes"][row.id] = dict(code = row.code,
                                                           name = row.name,
                                                           outputs = {},
-                                                          status = row.overall_status,
+                                                          status = row.overall_status_by_indicators,
                                                           )
 
         # Outputs
@@ -6112,14 +8302,14 @@ class project_IndicatorSummaryReport(S3Method):
                                 table.outcome_id,
                                 table.code,
                                 table.name,
-                                table.overall_status,
+                                table.overall_status_by_indicators,
                                 )
         for row in rows:
             goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
                 dict(code = row.code,
                      name = row.name,
                      indicators = {},
-                     status = row.overall_status,
+                     status = row.overall_status_by_indicators,
                      )
 
         # Indicators
@@ -6133,7 +8323,7 @@ class project_IndicatorSummaryReport(S3Method):
                                 table.output_id,
                                 table.code,
                                 table.name,
-                                table.overall_status,
+                                table.overall_status_by_indicators,
                                 )
         for row in rows:
             indicator_id = row.id
@@ -6149,7 +8339,7 @@ class project_IndicatorSummaryReport(S3Method):
                      name = row.name,
                      dates = {},
                      years = {},
-                     status = row.overall_status,
+                     status = row.overall_status_by_indicators,
                      target = 0,
                      actual = 0,
                      )
@@ -6433,9 +8623,14 @@ class project_IndicatorSummaryReport(S3Method):
             current.log.error(error)
             raise HTTP(503, body=error)
 
+        T = current.T
+
         dates, years, goals = self._extract(r, **attr)
 
-        T = current.T
+        if not years:
+            current.session.warning = T("No Indicator Data available")
+            redirect("/%s/project/project/%s" % (current.request.application, r.id))
+
         s3db = current.s3db
         NONE = current.messages["NONE"]
 
@@ -6734,88 +8929,206 @@ def project_progress_report(r, **attr):
         # Extract Data
         #@ToDo: DRY with project_indicator_summary_report?
 
-        # Goals
-        goals = {}
-        table = s3db.project_goal
-        query = (table.project_id == project_id) & \
-                (table.deleted == False)
-        rows = db(query).select(table.id,
-                                table.code,
-                                table.name,
-                                table.overall_status,
-                                )
-        for row in rows:
-            goals[row.id] = dict(code = row.code,
-                                 name = row.name,
-                                 outcomes = {},
-                                 status = row.overall_status,
-                                 )
+        if current.deployment_settings.get_project_status_from_activities():
+            project_status = r.record.actual_progress_by_activities
+            # Goals
+            goals = {}
+            table = s3db.project_goal
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.code,
+                                    table.name,
+                                    table.actual_progress_by_activities,
+                                    )
+            for row in rows:
+                goals[row.id] = dict(code = row.code,
+                                     name = row.name,
+                                     outcomes = {},
+                                     status = row.actual_progress_by_activities,
+                                     )
 
-        # Outcomes
-        table = s3db.project_outcome
-        query = (table.project_id == project_id) & \
-                (table.deleted == False)
-        rows = db(query).select(table.id,
-                                table.goal_id,
-                                table.code,
-                                table.name,
-                                table.overall_status,
-                                )
-        for row in rows:
-            goals[row.goal_id]["outcomes"][row.id] = dict(code = row.code,
+            # Outcomes
+            table = s3db.project_outcome
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.code,
+                                    table.name,
+                                    table.actual_progress_by_activities,
+                                    )
+            number_of_outcomes = 0
+            goals_with_outcomes = []
+            append = goals_with_outcomes.append
+            for row in rows:
+                number_of_outcomes += 1
+                goal_id = row.goal_id
+                append(goal_id)
+                goals[goal_id]["outcomes"][row.id] = dict(code = row.code,
                                                           name = row.name,
                                                           outputs = {},
-                                                          status = row.overall_status,
+                                                          status = row.actual_progress_by_activities,
                                                           )
+            goals_without_outcomes = len(goals) - len(set(goals_with_outcomes))
 
-        # Outputs
-        table = s3db.project_output
-        query = (table.project_id == project_id) & \
-                (table.deleted == False)
-        rows = db(query).select(table.id,
-                                table.goal_id,
-                                table.outcome_id,
-                                table.code,
-                                table.name,
-                                table.overall_status,
-                                )
-        number_of_outputs = 0
-        for row in rows:
-            number_of_outputs += 1
-            goals[row.goal_id]["outcomes"][row.outcome_id]["outputs"][row.id] = \
-                dict(code = row.code,
-                     name = row.name,
-                     indicators = {},
-                     status = row.overall_status,
-                     )
+            # Outputs
+            table = s3db.project_output
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.code,
+                                    table.name,
+                                    table.actual_progress_by_activities,
+                                    )
+            number_of_outputs = 0
+            outcomes_with_outputs = []
+            append = outcomes_with_outputs.append
+            for row in rows:
+                number_of_outputs += 1
+                outcome_id = row.outcome_id
+                append(outcome_id)
+                goals[row.goal_id]["outcomes"][outcome_id]["outputs"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         indicators = {},
+                         status = row.actual_progress_by_activities,
+                         )
+            outcomes_without_outputs = number_of_outcomes - len(set(outcomes_with_outputs))
 
-        # Indicators
-        table = s3db.project_indicator
-        query = (table.project_id == project_id) & \
-                (table.deleted == False)
-        rows = db(query).select(table.id,
-                                table.goal_id,
-                                table.outcome_id,
-                                table.output_id,
-                                table.code,
-                                table.name,
-                                table.overall_status,
-                                )
-        number_of_indicators = 0
-        for row in rows:
-            number_of_indicators += 1
-            indicator_id = row.id
-            goal_id = row.goal_id
-            outcome_id = row.outcome_id
-            output_id = row.output_id
-            goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][indicator_id] = \
-                dict(code = row.code,
-                     name = row.name,
-                     dates = {},
-                     status = row.overall_status,
-                     target = 0,
-                     actual = 0,
-                     )
+            # Indicators
+            table = s3db.project_indicator
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.output_id,
+                                    table.code,
+                                    table.name,
+                                    table.actual_progress_by_activities,
+                                    )
+            number_of_indicators = 0
+            outputs_with_indicators = []
+            append = outputs_with_indicators.append
+            for row in rows:
+                number_of_indicators += 1
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                append(output_id)
+                goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         dates = {},
+                         status = row.actual_progress_by_activities,
+                         target = 0,
+                         actual = 0,
+                         )
+            outputs_without_indicators = number_of_outputs - len(set(outputs_with_indicators))
+
+        else:
+            # Status by Indicators
+            project_status = r.record.overall_status_by_indicators
+            # Goals
+            goals = {}
+            table = s3db.project_goal
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.code,
+                                    table.name,
+                                    table.overall_status_by_indicators,
+                                    )
+            for row in rows:
+                goals[row.id] = dict(code = row.code,
+                                     name = row.name,
+                                     outcomes = {},
+                                     status = row.overall_status_by_indicators,
+                                     )
+
+            # Outcomes
+            table = s3db.project_outcome
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.code,
+                                    table.name,
+                                    table.overall_status_by_indicators,
+                                    )
+            number_of_outcomes = 0
+            goals_with_outcomes = []
+            append = goals_with_outcomes.append
+            for row in rows:
+                number_of_outcomes += 1
+                goal_id = row.goal_id
+                append(goal_id)
+                goals[goal_id]["outcomes"][row.id] = dict(code = row.code,
+                                                          name = row.name,
+                                                          outputs = {},
+                                                          status = row.overall_status_by_indicators,
+                                                          )
+            goals_without_outcomes = len(goals) - len(set(goals_with_outcomes))
+
+            # Outputs
+            table = s3db.project_output
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.code,
+                                    table.name,
+                                    table.overall_status_by_indicators,
+                                    )
+            number_of_outputs = 0
+            outcomes_with_outputs = []
+            append = outcomes_with_outputs.append
+            for row in rows:
+                number_of_outputs += 1
+                outcome_id = row.outcome_id
+                append(outcome_id)
+                goals[row.goal_id]["outcomes"][outcome_id]["outputs"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         indicators = {},
+                         status = row.overall_status_by_indicators,
+                         )
+            outcomes_without_outputs = number_of_outcomes - len(set(outcomes_with_outputs))
+
+            # Indicators
+            table = s3db.project_indicator
+            query = (table.project_id == project_id) & \
+                    (table.deleted == False)
+            rows = db(query).select(table.id,
+                                    table.goal_id,
+                                    table.outcome_id,
+                                    table.output_id,
+                                    table.code,
+                                    table.name,
+                                    table.overall_status_by_indicators,
+                                    )
+            number_of_indicators = 0
+            outputs_with_indicators = []
+            append = outputs_with_indicators.append
+            for row in rows:
+                number_of_indicators += 1
+                goal_id = row.goal_id
+                outcome_id = row.outcome_id
+                output_id = row.output_id
+                append(output_id)
+                goals[goal_id]["outcomes"][outcome_id]["outputs"][output_id]["indicators"][row.id] = \
+                    dict(code = row.code,
+                         name = row.name,
+                         dates = {},
+                         status = row.overall_status_by_indicators,
+                         target = 0,
+                         actual = 0,
+                         )
+            outputs_without_indicators = number_of_outputs - len(set(outputs_with_indicators))
 
         # Sort
         goals = OrderedDict(sorted(goals.items(), key=lambda x: x[1]["code"]))
@@ -6830,13 +9143,13 @@ def project_progress_report(r, **attr):
             goals[goal]["outcomes"] = outcomes
 
         # Format Data
-        number_of_rows = number_of_indicators + (number_of_outputs - 1)
+        number_of_rows = number_of_indicators + outputs_without_indicators + outcomes_without_outputs + goals_without_outcomes + number_of_outputs - 1
         item = TABLE(_class="project_progress_report")
         rows = []
         row = TR(TD(T("Project"),
                     _rowspan=number_of_rows,
                     ),
-                 TD(project_status_represent(r.record.overall_status_by_indicators),
+                 TD(project_status_represent(project_status),
                     _rowspan=number_of_rows,
                     ),
                  )
@@ -6970,76 +9283,76 @@ def project_progress_report(r, **attr):
         raise HTTP(405, current.ERROR.BAD_METHOD)
 
 # =============================================================================
-def project_budget_progress_report(r, **attr):
-    """
-        @ToDo: Display the Progress of a Project's Budget
-    """
-
-    if r.representation == "html" and r.name == "project":
-
-        T = current.T
-        db = current.db
-        s3db = current.s3db
-
-        project_id = r.id
-
-        # Extract Data
-
-        # Format Data
-        item = TABLE(_class="budget_progress_report")
-
-        output = dict(item=item)
-        output["title"] = T("Total Budget Progress")
-        output["subtitle"] = "%s: %s" % (T("Project"), r.record.name)
-        # @ToDo: Add "On Date"
-
-        # Maintain RHeader for consistency
-        if "rheader" in attr:
-            rheader = attr["rheader"](r)
-            if rheader:
-                output["rheader"] = rheader
-
-        current.response.view = "simple.html"
-        return output
-
-    else:
-        raise HTTP(405, current.ERROR.BAD_METHOD)
+#def project_budget_progress_report(r, **attr):
+#    """
+#        @ToDo: Display the Progress of a Project's Budget
+#    """
+#
+#    if r.representation == "html" and r.name == "project":
+#
+#        T = current.T
+#        db = current.db
+#        s3db = current.s3db
+#
+#        project_id = r.id
+#
+#        # Extract Data
+#
+#        # Format Data
+#        item = TABLE(_class="budget_progress_report")
+#
+#        output = dict(item=item)
+#        output["title"] = T("Total Budget Progress")
+#        output["subtitle"] = "%s: %s" % (T("Project"), r.record.name)
+#        # @ToDo: Add "On Date"
+#
+#        # Maintain RHeader for consistency
+#        if "rheader" in attr:
+#            rheader = attr["rheader"](r)
+#            if rheader:
+#                output["rheader"] = rheader
+#
+#        current.response.view = "simple.html"
+#        return output
+#
+#    else:
+#        raise HTTP(405, current.ERROR.BAD_METHOD)
 
 # =============================================================================
-def project_indicator_progress_report(r, **attr):
-    """
-        @ToDo: Display the Progress of a Project
-    """
-
-    if r.representation == "html" and r.name == "project":
-
-        T = current.T
-        db = current.db
-        s3db = current.s3db
-
-        project_id = r.id
-
-        # Extract Data
-
-        # Format Data
-        item = TABLE(_class="project_indicator_progress_report")
-
-        output = dict(item=item)
-        output["title"] = T("Monthly Progress by Indicator")
-        output["subtitle"] = "%s: %s" % (T("Project"), r.record.name)
-        # @ToDo: Add "On Date"
-
-        # Maintain RHeader for consistency
-        if "rheader" in attr:
-            rheader = attr["rheader"](r)
-            if rheader:
-                output["rheader"] = rheader
-
-        current.response.view = "simple.html"
-        return output
-
-    else:
-        raise HTTP(405, current.ERROR.BAD_METHOD)
+#def project_indicator_progress_report(r, **attr):
+#    """
+#        @ToDo: Display the Progress of a Project
+#    """
+#
+#    if r.representation == "html" and r.name == "project":
+#
+#        T = current.T
+#        db = current.db
+#        s3db = current.s3db
+#
+#        project_id = r.id
+#
+#        # Extract Data
+#
+#        # Format Data
+#        item = TABLE(_class="project_indicator_progress_report")
+#
+#        output = dict(item=item)
+#        output["title"] = T("Monthly Progress by Indicator")
+#        output["subtitle"] = "%s: %s" % (T("Project"), r.record.name)
+#        # @ToDo: Add "On Date"
+#
+#        # Maintain RHeader for consistency
+#        if "rheader" in attr:
+#            rheader = attr["rheader"](r)
+#            if rheader:
+#                output["rheader"] = rheader
+#
+#        current.response.view = "simple.html"
+#        return output
+#
+#    else:
+#        raise HTTP(405, current.ERROR.BAD_METHOD)
 
 # =============================================================================
 class S3ProjectProgrammeModel(S3Model):
@@ -8007,7 +10320,7 @@ class S3ProjectTaskModel(S3Model):
                                  comment = S3PopupLink(c = "project",
                                                        f = "tag",
                                                        title = ADD_TAG,
-                                                       tooltip = T("A project tag helps to assosiate keywords with projects/tasks."),
+                                                       tooltip = T("A project tag helps to associate keywords with projects/tasks."),
                                                        ),
                                  )
 
@@ -8121,6 +10434,7 @@ class S3ProjectTaskModel(S3Model):
                            writable = staff,
                            ),
                      Field.Method("task_id", self.project_task_task_id),
+                     s3_comments(),
                      *s3_meta_fields(),
                      on_define = lambda table: \
                         [table.created_on.set_attributes(represent = lambda dt: \
@@ -8317,9 +10631,12 @@ class S3ProjectTaskModel(S3Model):
                                           orderby = "date"
                                           ),
                      "time_actual",
+                     "comments",
                      ))
         else:
-            cappend("status")
+            cextend(("status",
+                     "comments",
+                     ))
 
         # Custom Form
         crud_form = S3SQLCustomForm(*crud_fields)
@@ -8469,6 +10786,13 @@ class S3ProjectTaskModel(S3Model):
                        project_time = "task_id",
                        # Comments (for imports))
                        project_comment = "task_id",
+                       # Shelter Inspections
+                       cr_shelter_inspection_flag = {"link": "cr_shelter_inspection_task",
+                                                     "joinby": "task_id",
+                                                     "key": "inspection_flag_id",
+                                                     "actuate": "link",
+                                                     "autodelete": False,
+                                                     }
                        )
 
         # ---------------------------------------------------------------------
@@ -8934,7 +11258,7 @@ class S3ProjectTaskModel(S3Model):
         s3db = current.s3db
 
         form_vars = form.vars
-        id = form_vars.id
+        task_id = form_vars.id
         record = form.record
 
         table = db.project_task
@@ -8967,30 +11291,32 @@ class S3ProjectTaskModel(S3Model):
             text = s3_auth_user_represent(current.auth.user.id)
             for var in changed:
                 text = "%s\n%s" % (text, changed[var])
-            table.insert(task_id=id,
-                         body=text)
+            table.insert(task_id = task_id,
+                         body = text,
+                         )
 
         post_vars = current.request.post_vars
         if "project_id" in post_vars:
             ltable = db.project_task_project
-            filter = (ltable.task_id == id)
+            filter = (ltable.task_id == task_id)
             project = post_vars.project_id
             if project:
                 # Create the link to the Project
                 #ptable = db.project_project
-                #master = s3db.resource("project_task", id=id)
+                #master = s3db.resource("project_task", id=task_id)
                 #record = db(ptable.id == project).select(ptable.id,
                 #                                         limitby=(0, 1)).first()
                 #link = s3db.resource("project_task_project")
                 #link_id = link.update_link(master, record)
-                query = (ltable.task_id == id) & \
+                query = (ltable.task_id == task_id) & \
                         (ltable.project_id == project)
                 record = db(query).select(ltable.id, limitby=(0, 1)).first()
                 if record:
                     link_id = record.id
                 else:
-                    link_id = ltable.insert(task_id = id,
-                                            project_id = project)
+                    link_id = ltable.insert(task_id = task_id,
+                                            project_id = project,
+                                            )
                 filter = filter & (ltable.id != link_id)
             # Remove any other links
             links = s3db.resource("project_task_project", filter=filter)
@@ -8998,24 +11324,25 @@ class S3ProjectTaskModel(S3Model):
 
         if "activity_id" in post_vars:
             ltable = db.project_task_activity
-            filter = (ltable.task_id == id)
+            filter = (ltable.task_id == task_id)
             activity = post_vars.activity_id
             if post_vars.activity_id:
                 # Create the link to the Activity
                 #atable = db.project_activity
-                #master = s3db.resource("project_task", id=id)
+                #master = s3db.resource("project_task", id=task_id)
                 #record = db(atable.id == activity).select(atable.id,
                 #                                          limitby=(0, 1)).first()
                 #link = s3db.resource("project_task_activity")
                 #link_id = link.update_link(master, record)
-                query = (ltable.task_id == id) & \
+                query = (ltable.task_id == task_id) & \
                         (ltable.activity_id == activity)
                 record = db(query).select(ltable.id, limitby=(0, 1)).first()
                 if record:
                     link_id = record.id
                 else:
-                    link_id = ltable.insert(task_id = id,
-                                            activity_id = activity)
+                    link_id = ltable.insert(task_id = task_id,
+                                            activity_id = activity,
+                                            )
                 filter = filter & (ltable.id != link_id)
             # Remove any other links
             links = s3db.resource("project_task_activity", filter=filter)
@@ -9023,24 +11350,25 @@ class S3ProjectTaskModel(S3Model):
 
         if "milestone_id" in post_vars:
             ltable = db.project_task_milestone
-            filter = (ltable.task_id == id)
+            filter = (ltable.task_id == task_id)
             milestone = post_vars.milestone_id
             if milestone:
                 # Create the link to the Milestone
                 #mtable = db.project_milestone
-                #master = s3db.resource("project_task", id=id)
+                #master = s3db.resource("project_task", id=task_id)
                 #record = db(mtable.id == milestone).select(mtable.id,
                 #                                           limitby=(0, 1)).first()
                 #link = s3db.resource("project_task_milestone")
                 #link_id = link.update_link(master, record)
-                query = (ltable.task_id == id) & \
+                query = (ltable.task_id == task_id) & \
                         (ltable.milestone_id == milestone)
                 record = db(query).select(ltable.id, limitby=(0, 1)).first()
                 if record:
                     link_id = record.id
                 else:
-                    link_id = ltable.insert(task_id = id,
-                                            milestone_id = milestone)
+                    link_id = ltable.insert(task_id = task_id,
+                                            milestone_id = milestone,
+                                            )
                 filter = filter & (ltable.id != link_id)
             # Remove any other links
             links = s3db.resource("project_task_milestone", filter=filter)
@@ -9048,6 +11376,10 @@ class S3ProjectTaskModel(S3Model):
 
         # Notify Assignee
         task_notify(form)
+
+        # Resolve shelter inspection flags linked to this task
+        if current.deployment_settings.get_cr_shelter_inspection_tasks():
+            s3db.cr_resolve_shelter_flags(task_id)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -9480,18 +11812,34 @@ def task_notify(form):
         If the task is assigned to someone then notify them
     """
 
-    vars = form.vars
-    pe_id = vars.pe_id
+    formvars = form.vars
+    record = form.record
+
+    pe_id = formvars.pe_id
     if not pe_id:
+        # Not assigned to anyone
         return
+
     user = current.auth.user
     if user and user.pe_id == pe_id:
         # Don't notify the user when they assign themselves tasks
         return
-    if int(vars.status) not in current.response.s3.project_task_active_statuses:
+
+    status = formvars.status
+    if status is not None:
+        status = int(status)
+    else:
+        if record and "status" in record:
+            status = record.status
+        else:
+            table = current.s3db.project_task
+            status = table.status.default
+
+    if status not in current.response.s3.project_task_active_statuses:
         # No need to notify about closed tasks
         return
-    if form.record is None or (int(pe_id) != form.record.pe_id):
+
+    if record is None or (int(pe_id) != record.pe_id):
         # Assignee has changed
         settings = current.deployment_settings
 
@@ -9499,15 +11847,21 @@ def task_notify(form):
             # Notify assignee
             subject = "%s: Task assigned to you" % settings.get_system_name_short()
             url = "%s%s" % (settings.get_base_public_url(),
-                            URL(c="project", f="task", args=vars.id))
-            priority = current.s3db.project_task.priority.represent(int(vars.priority))
+                            URL(c="project", f="task", args=[formvars.id]))
+
+            priority = formvars.priority
+            if priority is not None:
+                priority = current.s3db.project_task.priority.represent(int(priority))
+            else:
+                priority = "unknown"
+
             message = "You have been assigned a Task:\n\n%s\n\n%s\n\n%s\n\n%s" % \
-                (url,
-                 "%s priority" % priority,
-                 vars.name,
-                 vars.description or "")
+                            (url,
+                             "%s priority" % priority,
+                             formvars.name,
+                             formvars.description or "")
+
             current.msg.send_by_pe_id(pe_id, subject, message)
-    return
 
 # =============================================================================
 class project_TaskRepresent(S3Represent):
@@ -9887,6 +12241,7 @@ def project_rheader(r):
         mode_task = settings.get_project_mode_task()
         details_tab = settings.get_project_details_tab()
         indicators = settings.get_project_indicators()
+        status_from_activities = settings.get_project_status_from_activities()
 
         # Tabs
         #ADMIN = current.session.s3.system_roles.ADMIN
@@ -9906,6 +12261,10 @@ def project_rheader(r):
         if indicators:
             append((T("Indicators"), "indicator"))
             append((T("Indicator Data"), "indicator_data"))
+        if settings.get_project_indicator_criteria():
+            append((T("Indicator Criteria"), "indicator_criteria"))
+        if status_from_activities:
+            append((T("Activities"), "criteria_activity"))
         if settings.get_project_multiple_organisations() and not details_tab:
             append((T("Organizations"), "organisation"))
         if settings.get_project_community() and not details_tab:
@@ -9950,7 +12309,9 @@ def project_rheader(r):
                           ["organisation_id"],
                           ["start_date", "end_date"]
                           ]
-        if indicators:
+        if status_from_activities:
+            rheader_fields.append(["actual_progress_by_activities", "planned_progress_by_activities"])
+        elif indicators:
             rheader_fields.append(["current_status_by_indicators", "overall_status_by_indicators"])
         # @ToDo: Fix
         #if settings.get_project_budget_monitoring():
@@ -9959,8 +12320,9 @@ def project_rheader(r):
 
         if indicators:
             rfooter = DIV(A(ICON("print"),
+                            " ",
                             T("Project Summary Report"),
-                            _href=URL(args=[r.id, "summary_report"], extension="pdf"),
+                            _href=URL(args=[r.id, "summary_report"]),#, extension="pdf"),
                             _class="action-btn",
                             ),
                           A(T("Summary of Progress by Indicator"),
@@ -9968,6 +12330,7 @@ def project_rheader(r):
                             _class="action-btn",
                             ),
                           A(ICON("table"),
+                            " ",
                             T("Summary of Progress by Indicator"),
                             _href=URL(args=[r.id, "indicator_summary_report"], extension="xls"),
                             _class="action-btn",
@@ -10189,25 +12552,62 @@ def project_task_controller():
                 #field.readable = field.writable = False
 
         elif "mine" in get_vars:
-            # Show the Open Tasks for this User
+            # Show open tasks assigned to the current user
+
+            # Show only open tasks
+            query = (FS("status").belongs(statuses))
+
             if auth.user:
-                pe_id = auth.user.pe_id
-                query = (table.pe_id == pe_id) & \
-                        (table.status.belongs(statuses))
-                r.resource.add_filter(query)
-            crud_strings.title_list = T("My Open Tasks")
-            crud_strings.msg_list_empty = T("No Tasks Assigned")
+                hide_fields = ("pe_id", "status")
+                if current.deployment_settings \
+                          .get_project_my_tasks_include_team_tasks():
+                    # Include tasks assigned to the current user's teams
+
+                    # Look up all teams the current user is member of
+                    mtable = s3db.pr_group_membership
+                    gtable = s3db.pr_group
+                    gquery = (mtable.person_id == auth.s3_logged_in_person()) & \
+                             (mtable.deleted == False) & \
+                             (gtable.id == mtable.group_id) & \
+                             (gtable.group_type == 3)
+                    groups = current.db(gquery).select(gtable.pe_id)
+
+                    # Filter query
+                    pe_ids = set(group.pe_id for group in groups)
+                    if pe_ids:
+                        # Show assignee if teams are included
+                        hide_fields = ("status",)
+                        pe_ids.add(auth.user.pe_id)
+                        query &= (FS("pe_id").belongs(pe_ids))
+                    else:
+                        query &= (FS("pe_id") == auth.user.pe_id)
+
+                else:
+                    # Filter by user pe_id
+                    query &= (FS("pe_id") == auth.user.pe_id)
+
+                # No need for assignee (always us) or status (always "assigned"
+                # or "reopened") in list fields:
+                list_fields = s3db.get_config(tablename, "list_fields")
+                if list_fields:
+                    list_fields[:] = (fn for fn in list_fields
+                                         if fn not in hide_fields)
+
+                # Adapt CRUD strings
+                crud_strings.title_list = T("My Open Tasks")
+                crud_strings.msg_list_empty = T("No Tasks Assigned")
+
+            else:
+                # Not logged-in, showing all open tasks
+                crud_strings.title_list = T("Open Tasks")
+
+            r.resource.add_filter(query)
+
+            # Can not add tasks in this list
             s3db.configure(tablename,
                            copyable = False,
                            listadd = False,
                            )
-
-            # No need for assignee (always us) or status (always "assigned"
-            # or "reopened") in list fields:
-            list_fields = s3db.get_config(tablename, "list_fields")
-            if list_fields:
-                list_fields[:] = (fn for fn in list_fields
-                                     if fn not in ("pe_id", "status"))
 
         elif "project" in get_vars:
             # Show Open Tasks for this Project
@@ -10436,7 +12836,7 @@ def project_project_filters(org_label):
 
     if settings.get_project_programmes():
         append_filter(
-            S3OptionsFilter("programme_project.programme_id",
+            S3OptionsFilter("project_programme_project.programme_id",
                             label = T("Program"),
                             hidden = True,
                             )

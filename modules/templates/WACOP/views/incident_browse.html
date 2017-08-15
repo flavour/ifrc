@@ -1,0 +1,43 @@
+{{extend "layout.html"}}
+{{=system_wide}}
+<main role='main' class='main'>
+ {{=XML(alerts)}}
+ {{=XML(events)}}
+ <div class='row well'>
+  <div id='ff' class='medium-4 columns'>
+   {{=filter_form}}
+  </div>
+  <div id='map-here' class='medium-8 columns'>
+  {{if _map:}}
+    {{=XML(_map)}}
+  {{pass}}
+  </div>
+ </div>
+ <div class='row well'>
+   <div class='small-12 column'>
+    <ul class='tabs tab-navigation' data-tab>
+      <li class='tab-title active'><a href='#panel1'>Incidents</a></li>
+      <li class='tab-title'><a href='#panel2'>Reports</a></li>
+    </ul>
+    <div class='tabs-content'>
+      <section class='content active' id='panel1'>
+        <div class='row'>
+          <div class='small-12 columns'>
+            {{=event_incident_datatable}}
+          </div>
+        </div>
+      </section>
+      <section class='staff content' id='panel2'>
+        <div class='row'>
+          <div class='small-12 columns'>
+            {{#event_incident_datatable}}
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+ </div>
+</main>
+{{include "dataTables.html"}}
+{{include "dataLists.html"}}
+{{s3.scripts.append("/%s/static/themes/WACOP/js/resize_map.js" % appname)}}

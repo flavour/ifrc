@@ -2,7 +2,7 @@
 
 """ S3 SQL Forms
 
-    @copyright: 2012-2016 (c) Sahana Software Foundation
+    @copyright: 2012-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -29,6 +29,7 @@
 
 __all__ = ("S3SQLCustomForm",
            "S3SQLDefaultForm",
+           "S3SQLDummyField",
            "S3SQLSubFormLayout",
            "S3SQLVerticalSubFormLayout",
            "S3SQLInlineComponent",
@@ -138,6 +139,14 @@ class S3SQLForm(object):
     # -------------------------------------------------------------------------
     # Utility functions
     # -------------------------------------------------------------------------
+    def __len__(self):
+        """
+            Support len(crud_form)
+        """
+
+        return len(self.elements)
+
+    # -------------------------------------------------------------------------
     def _config(self, key, default=None):
         """
             Get a configuration setting for the current table
@@ -224,54 +233,149 @@ class S3SQLForm(object):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def _insert_subheadings(form, tablename, subheadings):
+    def _insert_dummy_fields(form, formstyle, dummy_fields):
+        """
+            Insert dummy fields into forms
+            - these are simple DIVs placed into the correct place in the form
+              which are meant to be acted upon by custom JavaScript routines
+
+            @param form: the form
+            @param formstyle: the formstyle
+            @param dummy_fields:
+        """
+
+        if not dummy_fields:
+            return
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def _insert_subheadings(form, tablename, formstyle, subheadings):
         """
             Insert subheadings into forms
 
             @param form: the form
             @param tablename: the tablename
-            @param subheadings: a dict of {"Headline": Fieldnames}, where
-                Fieldname can be either a single field name or a list/tuple
-                of field names belonging under that headline
+            @param formstyle: the formstyle
+            @param subheadings:
+                OLD (maintained for backwards compatibility):
+                    a dict of {"Header": Fieldnames}, where
+                        Fieldname can be either a single field name or
+                        a list/tuple of field names belonging under that header
+                NEW (allows for multiple levels, used by DC):
+                    a dict of {"Header": {"fields": Fieldnames,
+                                          "subheadings": {"Header": {"fields": Fieldnames,
+                                                                     "subheadings": etc,
+                                                                     },
+                                                          },
+                                          },
+                               }
         """
 
-        if subheadings:
-            if tablename in subheadings:
-                subheadings = subheadings.get(tablename)
-            form_rows = iter(form[0])
-            tr = form_rows.next()
-            i = 0
+        if not subheadings:
+            return
+        if tablename in subheadings:
+            subheadings = subheadings.get(tablename)
+        if formstyle.__name__ in ("formstyle_table",
+                                  "formstyle_table_inline",
+                                  ):
+            def create_subheading(represent, tablename, f):
+                return TR(TD(represent, _colspan=3,
+                             _class="subheading",
+                             ),
+                          _class = "subheading",
+                          _id = "%s_%s__subheading" % (tablename, f),
+                          )
+        else:
+            def create_subheading(represent, tablename, f):
+                return DIV(represent,
+                           _class = "subheading",
+                           _id = "%s_%s__subheading" % (tablename, f),
+                           )
+        if "fields" in subheadings[subheadings.items()[0][0]]:
+            new_style = True
+            done = {1: [],
+                    2: [],
+                    3: [],
+                    }
+            fields = {}
+            for k, v in subheadings.items():
+                for f in v["fields"]:
+                    fields[f] = {1: k}
+                for _k, _v in v["subheadings"].items():
+                    for f in _v["fields"]:
+                        fields[f] = {1: k,
+                                     2: _k,
+                                     }
+                    for __k, __v in _v["subheadings"].items():
+                        for f in __v["fields"]:
+                            fields[f] = {1: k,
+                                         2: _k,
+                                         3: __k,
+                                         }
+        else:
+            new_style = False
             done = []
-            while tr:
-                # @ToDo: We need a better way of working than this!
-                f = tr.attributes.get("_id", None)
-                if not f:
-                    try:
-                        # DIV-based form-style
-                        f = tr[0][0].attributes.get("_id", None)
+        form_rows = iter(form[0])
+        tr = form_rows.next()
+        i = 0
+        while tr:
+            # @ToDo: We need a better way of working than this!
+            f = tr.attributes.get("_id", None)
+            if not f:
+                try:
+                    # DIV-based form-style
+                    f = tr[0][0].attributes.get("_id", None)
+                    if not f:
+                        # DRRPP formstyle
+                        f = tr[0][0][1][0].attributes.get("_id", None)
                         if not f:
-                            # DRRPP formstyle
-                            f = tr[0][0][1][0].attributes.get("_id", None)
-                            if not f:
-                                # Date fields are inside an extra TAG()
-                                f = tr[0][0][1][0][0].attributes.get("_id", None)
-                    except:
-                        # Something else
-                        f = None
-                if f:
-                    if f.endswith("__row"):
-                        f = f[:-5]
-                    if f.startswith(tablename):
-                        f = f[len(tablename) + 1:] # : -6
-                        if f.startswith("sub_"):
-                            # Component
-                            f = f[4:]
-                    elif f.startswith("sub-default"):
-                        # S3SQLInlineComponent[CheckBox]
-                        f = f[11:]
-                    elif f.startswith("sub_"):
-                        # S3GroupedOptionsWidget
+                            # Date fields are inside an extra TAG()
+                            f = tr[0][0][1][0][0].attributes.get("_id", None)
+                except:
+                    # Something else
+                    f = None
+            if f:
+                if f.endswith("__row"):
+                    f = f[:-5]
+                if f.startswith(tablename):
+                    f = f[len(tablename) + 1:] # : -6
+                    if f.startswith("sub_"):
+                        # Component
                         f = f[4:]
+                elif f.startswith("sub-default"):
+                    # S3SQLInlineComponent[CheckBox]
+                    f = f[11:]
+                elif f.startswith("sub_"):
+                    # S3GroupedOptionsWidget
+                    f = f[4:]
+                if new_style:
+                    headings = fields.get(f)
+                    if not headings:
+                        try:
+                            tr = form_rows.next()
+                        except StopIteration:
+                            break
+                        else:
+                            i += 1
+                        continue
+                    inserted = 0
+                    for j in (1, 2, 3):
+                        heading = headings.get(j)
+                        if heading and heading not in done[j]:
+                            done[j].append(heading)
+                            if j in (1, 2):
+                                # Clear lower level to avoid cross-section dupes
+                                done[j + 1] = []
+                            subheading = create_subheading(heading, tablename, f)
+                            form[0].insert(i, subheading)
+                            i += 1
+                            inserted += 1
+                    if inserted:
+                        tr.attributes.update(_class="%s after_subheading" % tr.attributes["_class"])
+                        for _i in range(0, inserted):
+                            # Iterate over the rows we just created
+                            tr = form_rows.next()
+                else:
                     for k in subheadings.keys():
                         if k in done:
                             continue
@@ -285,20 +389,17 @@ class S3SQLForm(object):
                                 represent = ""
                             else:
                                 represent = k
-                            form[0].insert(i, TR(TD(represent, _colspan=3,
-                                                    _class="subheading"),
-                                                 _class = "subheading",
-                                                 _id = "%s_%s__subheading" %
-                                                       (tablename, f)))
+                            subheading = create_subheading(represent, tablename, f)
+                            form[0].insert(i, subheading)
                             tr.attributes.update(_class="%s after_subheading" % tr.attributes["_class"])
                             tr = form_rows.next()
                             i += 1
-                try:
-                    tr = form_rows.next()
-                except StopIteration:
-                    break
-                else:
-                    i += 1
+            try:
+                tr = form_rows.next()
+            except StopIteration:
+                break
+            else:
+                i += 1
 
 # =============================================================================
 class S3SQLDefaultForm(S3SQLForm):
@@ -426,7 +527,7 @@ class S3SQLDefaultForm(S3SQLForm):
         # Subheadings
         subheadings = options.get("subheadings", None)
         if subheadings:
-            self._insert_subheadings(form, tablename, subheadings)
+            self._insert_subheadings(form, tablename, formstyle, subheadings)
 
         # Process the form
         logged = False
@@ -682,7 +783,7 @@ class S3SQLDefaultForm(S3SQLForm):
             try:
                 callback(onaccept, form, tablename=tablename)
             except:
-                error = "onaccept failed: %s" % onaccept
+                error = "onaccept failed: %s" % str(onaccept)
                 current.log.error(error)
                 # This is getting swallowed
                 raise
@@ -717,14 +818,6 @@ class S3SQLDefaultForm(S3SQLForm):
 # =============================================================================
 class S3SQLCustomForm(S3SQLForm):
     """ Custom SQL Form """
-
-    # -------------------------------------------------------------------------
-    def __len__(self):
-        """
-            Support len(crud_form)
-        """
-
-        return len(self.elements)
 
     # -------------------------------------------------------------------------
     def insert(self, index, element):
@@ -1060,7 +1153,12 @@ class S3SQLCustomForm(S3SQLForm):
         # Subheadings
         subheadings = options.get("subheadings", None)
         if subheadings:
-            self._insert_subheadings(form, tablename, subheadings)
+            self._insert_subheadings(form, tablename, formstyle, subheadings)
+
+        # Dummy Fields
+        dummy_fields = self.opts.get("dummy_fields", None)
+        if dummy_fields:
+            self._insert_dummy_fields(dummy_fields)
 
         # Process the form
         formname = "%s/%s" % (tablename, record_id)
@@ -1132,7 +1230,7 @@ class S3SQLCustomForm(S3SQLForm):
             try:
                 callback(onvalidation, form, tablename=self.tablename)
             except:
-                error = "onvalidation failed: %s" % onvalidation
+                error = "onvalidation failed: %s" % str(onvalidation)
                 current.log.error(error)
                 raise
 
@@ -1170,7 +1268,7 @@ class S3SQLCustomForm(S3SQLForm):
                     callback(subonvalidation, subform,
                              tablename = subtable._tablename)
                 except:
-                    error = "onvalidation failed: %s" % subonvalidation
+                    error = "onvalidation failed: %s" % str(subonvalidation)
                     current.log.error(error)
                     raise
                 for fn in subform.errors:
@@ -1453,7 +1551,7 @@ class S3SQLCustomForm(S3SQLForm):
             try:
                 callback(onaccept, form, tablename=tablename)
             except:
-                error = "onaccept failed: %s" % onaccept
+                error = "onaccept failed: %s" % str(onaccept)
                 current.log.error(error)
                 # This is getting swallowed
                 raise
@@ -1643,45 +1741,46 @@ class S3SQLField(S3SQLFormElement):
 
         rfield = S3ResourceField(resource, self.selector)
 
-        components = resource.components
-        subtables = {}
-        if components:
-            for alias, component in components.items():
-                if component.multiple:
-                    continue
-                if component._alias:
-                    tablename = component._alias
-                else:
-                    tablename = component.tablename
-                subtables[tablename] = alias
+        field = rfield.field
+        if field is None:
+            raise SyntaxError("Invalid selector: %s" % self.selector)
 
         tname = rfield.tname
-        if rfield.field is not None:
 
-            field = rfield.field
+        options = self.options
+        label = options.get("label", DEFAULT)
+        widget = options.get("widget", DEFAULT)
 
-            options = self.options
-            label = options.get("label", DEFAULT)
-            widget = options.get("widget", DEFAULT)
+        if resource._alias:
+            tablename = resource._alias
+        else:
+            tablename = resource.tablename
 
+        if tname == tablename:
             # Field in the main table
-            if resource._alias:
-                tablename = resource._alias
-            else:
-                tablename = resource.tablename
-            if tname == tablename:
-                field = rfield.field
 
-                if label is not DEFAULT:
-                    field.label = label
-                if widget is not DEFAULT:
-                    field.widget = widget
+            if label is not DEFAULT:
+                field.label = label
+            if widget is not DEFAULT:
+                field.widget = widget
 
-                return None, field.name, field
+            return None, field.name, field
 
-            # Field in a subtable (= single-record-component)
-            elif tname in subtables:
-                field = rfield.field
+        else:
+            components = resource.components
+            subtables = {}
+            if components:
+                for alias, component in components.items():
+                    if component.multiple:
+                        continue
+                    if component._alias:
+                        tablename = component._alias
+                    else:
+                        tablename = component.tablename
+                    subtables[tablename] = alias
+
+            if tname in subtables:
+                # Field in a subtable (= single-record-component)
 
                 alias = subtables[tname]
                 name = "sub_%s_%s" % (alias, rfield.fname)
@@ -1691,11 +1790,55 @@ class S3SQLField(S3SQLFormElement):
                                                    label = label,
                                                    widget = widget,
                                                    )
+
                 return alias, field.name, renamed_field
-            else:
-                raise SyntaxError("Invalid subtable: %s" % tname)
-        else:
-            raise SyntaxError("Invalid selector: %s" % self.selector)
+
+            raise SyntaxError("Invalid subtable: %s" % tname)
+
+# =============================================================================
+class S3SQLDummyField(S3SQLFormElement):
+    """
+        A Dummy Field
+
+        A simple DIV which can then be acted upon with JavaScript
+    """
+
+    # -------------------------------------------------------------------------
+    def resolve(self, resource):
+        """
+            Method to resolve this form element against the calling resource.
+
+            @param resource: the resource
+            @return: a tuple
+                        (
+                            subtable alias (or None for main table),
+                            original field name,
+                            Field instance for the form renderer
+                        )
+        """
+
+        field = Field(self.selector,
+                      label = "",
+                      widget = self,
+                      )
+
+        return self, None, field
+
+    # -------------------------------------------------------------------------
+    def __call__(self, field, value, **attributes):
+        """
+            Widget renderer for the input field. To be implemented in
+            subclass (if required) and to be set as widget=self for the
+            field returned by the resolve()-method of this form element.
+
+            @param field: the input field
+            @param value: the value to populate the widget
+            @param attributes: attributes for the widget
+            @return: the widget for this form element as HTML helper
+        """
+
+        return DIV(_class="s3-dummy-field",
+                   )
 
 # =============================================================================
 class S3SQLSubForm(S3SQLFormElement):
@@ -1835,6 +1978,9 @@ class SKIP_POST_VALIDATION(Validator):
 class S3SQLSubFormLayout(object):
     """ Layout for S3SQLInlineComponent (Base Class) """
 
+    # Layout-specific CSS class for the inline component
+    layout_class = "subform-default"
+
     def __init__(self):
         """ Constructor """
 
@@ -1879,7 +2025,7 @@ class S3SQLSubFormLayout(object):
             subform = TABLE(headers,
                             TBODY(item_rows),
                             TFOOT(action_rows),
-                            _class="embeddedComponent",
+                            _class= " ".join(("embeddedComponent", self.layout_class)),
                             )
         return subform
 
@@ -2018,25 +2164,41 @@ class S3SQLSubFormLayout(object):
             else:
                 return DIV(btn)
 
+
+        # CSS class for action-columns
+        _class = "subform-action"
+
         # Render the action icons for this row
         append = subform.append
         if readonly:
             if editable:
-                append(action(T("Edit this entry"), "edt"))
+                append(TD(action(T("Edit this entry"), "edt"),
+                          _class = _class,
+                          ))
             else:
-                append(TD())
+                append(TD(_class=_class))
 
             if deletable:
-                append(action(T("Remove this entry"), "rmv"))
+                append(TD(action(T("Remove this entry"), "rmv"),
+                          _class = _class,
+                          ))
             else:
-                append(TD())
+                append(TD(_class=_class))
         else:
             if index != "none" or item:
-                append(action(T("Update this entry"), "rdy", throbber=True))
-                append(action(T("Cancel editing"), "cnc"))
+                append(TD(action(T("Update this entry"), "rdy", throbber=True),
+                          _class = _class,
+                          ))
+                append(TD(action(T("Cancel editing"), "cnc"),
+                          _class = _class,
+                          ))
             else:
-                append(TD())
-                append(action(T("Add this entry"), "add", throbber=True))
+                append(TD(action(T("Discard this entry"), "dsc"),
+                          _class=_class,
+                          ))
+                append(TD(action(T("Add this entry"), "add", throbber=True),
+                          _class = _class,
+                          ))
 
     # -------------------------------------------------------------------------
     def rowstyle_read(self, form, fields, *args, **kwargs):
@@ -2103,6 +2265,9 @@ class S3SQLVerticalSubFormLayout(S3SQLSubFormLayout):
         - standard horizontal layout for read-rows
         - hiding header row if there are no visible read-rows
     """
+
+    # Layout-specific CSS class for the inline component
+    layout_class = "subform-vertical"
 
     # -------------------------------------------------------------------------
     def headers(self, data, readonly=False):
@@ -3398,6 +3563,61 @@ class S3SQLInlineComponent(S3SQLSubForm):
 class S3SQLInlineLink(S3SQLInlineComponent):
     """
         Subform to edit link table entries for the master record
+
+        Constructor options:
+
+            readonly..........True|False......render read-only always
+            multiple..........True|False......allow selection of multiple
+                                              options (default True)
+            render_list.......True|False......in read-only mode, render HTML
+                                              list rather than comma-separated
+                                              strings (default False)
+            widget............string..........which widget to use, one of:
+                                                  - multiselect (default)
+                                                  - groupedopts
+                                                  - hierarchy
+            requires..........Validator.......validator to determine the
+                                              selectable options (defaults to
+                                              field validator), not supported
+                                              for hierarchy widget
+            cols..............integer.........number of columns for grouped
+                                              options (default: None)
+            help_field........string..........additional field in the look-up
+                                              table to render as tooltip for
+                                              grouped options
+            orientation.......string..........orientation for grouped options
+                                              order, one of:
+                                                  - cols
+                                                  - rows
+            size..............integer.........maximum number of items per group
+                                              in grouped options, None to disable
+                                              grouping
+            sort..............True|False......sort grouped options (always True
+                                              when grouping, i.e. size!=None)
+            table.............True|False......render grouped options as HTML
+                                              TABLE rather than nested DIVs
+                                              (default True)
+            represent.........callback........representation method for hierarchy
+                                              nodes (defaults to field represent)
+            leafonly..........True|False......only leaf nodes can be selected
+            columns...........integer.........Foundation column-width for the
+                                              widget (for custom forms), hierarchy
+                                              and multi-select only
+            filter............resource query..filter query for hierarchy and
+                                              multi-select widget
+            header............True|False......multi-select to show a header with
+                                              search-option
+            selectedList......integer.........how many items to show on multi-select
+                                              button before collapsing into number
+            noneSelectedText..string..........placeholder text on multi-select button
+
+            filterby..........field selector..filter look-up options by this field
+                                              (can be a field in the look-up table
+                                              itself or in another table linked to it)
+            filteropts........value|list......filter for these values, or:
+            filterexpr........field selector..lookup the filter value from this
+                                              field (can be a field in the master
+                                              table, or in linked table)
     """
 
     prefix = "link"
@@ -3478,8 +3698,11 @@ class S3SQLInlineLink(S3SQLInlineComponent):
         options["multiple"] = multiple
 
         # Field dummy
+        kfield = link.table[component.rkey]
         dummy_field = Storage(name = field.name,
-                              type = link.table[component.rkey].type)
+                              type = kfield.type,
+                              represent = kfield.represent,
+                              )
 
         # Widget type
         widget = options.get("widget")
@@ -3697,9 +3920,20 @@ class S3SQLInlineLink(S3SQLInlineComponent):
         labels = result.values()
         labels.sort()
 
-        # Render as TAG to support HTML output
-        return TAG[""](list(chain.from_iterable([[l, ", "]
-                                                 for l in labels]))[:-1])
+        if self.options.get("render_list"):
+            if value is None or value == [None]:
+                # Don't render as list if empty
+                return current.messages.NONE
+            else:
+                # Render as HTML list
+                return UL([LI(l) for l in labels],
+                          _class = "s3-inline-link",
+                          )
+        else:
+            # Render as comma-separated list of strings
+            # (using TAG rather than join() to support HTML labels)
+            return TAG[""](list(chain.from_iterable([[l, ", "]
+                                                    for l in labels]))[:-1])
 
     # -------------------------------------------------------------------------
     def get_options(self):

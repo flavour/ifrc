@@ -7,7 +7,7 @@
     @requires: U{B{I{gluon}} <http://web2py.com>}
     @requires: U{B{I{lxml}} <http://codespeak.net/lxml>}
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -845,7 +845,9 @@ class S3XML(S3Codec):
                 # These have been looked-up in bulk
                 geojson = geojsons[tablename].get(record_id, None)
                 if geojson:
-                    # Always single
+                    # Always single...except with spatial DB
+                    if type(geojson) is list:
+                        geojson = geojson[-1]
                     geometry = etree.SubElement(map_data, "geometry")
                     geometry.set("value", geojson)
 
@@ -1271,7 +1273,7 @@ class S3XML(S3Codec):
                     attr = data.attrib
                     attr[FIELD] = f
                     attr[FILEURL] = fileurl
-                    attr[ATTRIBUTE.filename] = filename
+                    attr[ATTRIBUTE.filename] = s3_unicode(filename)
 
             elif fieldtype == "password":
                 data = SubElement(elem, DATA)
@@ -2212,12 +2214,21 @@ class S3XML(S3Codec):
 
     # -------------------------------------------------------------------------
     @classmethod
-    def tree2json(cls, tree, pretty_print=False, native=False):
+    def tree2json(cls, tree, pretty_print=False, native=False, as_dict=False):
         """
             Converts an element tree into JSON
 
             @param tree: the element tree
-            @param pretty_print: provide pretty formatted output
+            @param pretty_print: indent and insert line breaks into
+                                 the JSON string to make it human-readable
+                                 (useful for debug)
+            @param native: tree is S3XML
+            @param as_dict: return a JSON-serializable object instead of
+                            a string, useful for embedding the data in
+                            other structures
+
+            @return: a JSON string (with as_dict=False),
+                     or a JSON-serializable object (with as_dict=True)
         """
 
         if isinstance(tree, etree._ElementTree):
@@ -2238,8 +2249,10 @@ class S3XML(S3Codec):
             else:
                 root_dict["s3"] = json.loads(root_dict["s3"])
 
-        if pretty_print:
-            js = json.dumps(root_dict, indent=4)
+        if as_dict:
+            return root_dict
+        elif pretty_print:
+            js = json.dumps(root_dict, indent=2)
             return "\n".join([l.rstrip() for l in js.splitlines()])
         else:
             return json.dumps(root_dict, separators=SEPARATORS)

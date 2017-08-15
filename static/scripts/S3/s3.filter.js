@@ -114,6 +114,9 @@ S3.search = {};
         s.url = ajaxURL;
     };
 
+    // Pass to global scope to be called by s3.gis.js
+    S3.search.searchRewriteAjaxOptions = searchRewriteAjaxOptions;
+
     /**
      * Default options for $.searchS3
      */
@@ -166,7 +169,7 @@ S3.search = {};
     $.searchDownloadS3 = function(url, target) {
 
         var options = $.extend({}, searchS3Defaults, {url: url}),
-            form = document.createElement("form");
+            form = document.createElement('form');
 
         options.type = 'GET';
         searchRewriteAjaxOptions(options, 'form');
@@ -276,11 +279,29 @@ S3.search = {};
                 hierarchical_location_change(this);
             }
         });
+        form.find('.map-filter').each(function() {
+            var $this = $(this);
+            $this.val('');
+            // Ensure that the button is off (so polygon removed)
+            var widget_name = $this.attr('id'),
+                map_id = widget_name + '-map',
+                s3 = S3.gis.maps[map_id].s3,
+                polygonButton = s3.polygonButton;
+            if (polygonButton.getIconClass() == 'drawpolygonclear-off') {
+                polygonButton.items[0].btnEl.dom.click();
+            }
+        });
         form.find('.range-filter-input').each(function() {
             $(this).val('');
         });
         form.find('.date-filter-input').each(function() {
-            $(this).calendarWidget('clear');
+            var $this = $(this);
+            $this.calendarWidget('clear');
+            var widget_name = $this.attr('id');
+            var widget = $('#' + widget_name.slice(0, -3));
+            widget.find('.range-picker').each(function() {
+                $(this).trigger('clear');
+            });
         });
         // Hierarchy filter widget (experimental)
         form.find('.hierarchy-filter').each(function() {
@@ -422,6 +443,21 @@ S3.search = {};
             }
         });
 
+        // Map widgets
+        form.find('.map-filter').each(function() {
+
+            $this = $(this),
+            id = $this.attr('id');
+            urlVar = $('#' + id + '-data').val();
+            value = $this.val();
+
+            if (value) {
+                queries.push([urlVar, value]);
+            } else {
+                queries.push([urlVar, null]);
+            }
+        });
+
         // Numerical range widgets -- each widget has two inputs.
         form.find('.range-filter-input:visible').each(function() {
 
@@ -473,7 +509,15 @@ S3.search = {};
                 }
                 var jsDate = $this.calendarWidget('getJSDate', end),
                     urlValue = isoFormat(jsDate);
-                queries.push([urlVar, urlValue]);
+                if (end && $this.hasClass('end_date')) {
+                    // end_date
+                    urlVar = urlVar.split('__')[0];
+                    // @ToDo: filterURL should AND multiple $filter into 1 (will be required when we have multiple $filter in a single page)
+                    queries.push(['$filter', '(' + urlVar + ' ' + operator + ' "' + urlValue + '") or (' + urlVar + ' eq None)']);
+                } else {
+                    // Single field or start_date
+                    queries.push([urlVar, urlValue]);
+                }
             } else {
                 // Remove the filter (explicit null)
                 queries.push([urlVar, null]);
@@ -497,7 +541,7 @@ S3.search = {};
             urlVar = $('#' + id + '-data').val();
             value = '';
 
-            operator = $("input:radio[name='" + id + "_filter']:checked").val();
+            //operator = $("input:radio[name='" + id + "_filter']:checked").val();
 
             if (this.tagName.toLowerCase() == 'select') {
                 // Standard SELECT
@@ -679,6 +723,30 @@ S3.search = {};
             }
         });
 
+        // Map widgets
+        form.find('.map-filter').each(function() {
+            $this = $(this);
+            id = $this.attr('id');
+            expression = $('#' + id + '-data').val();
+            if (q.hasOwnProperty(expression)) {
+                if (!$this.is(':visible') && !$this.hasClass('active')) {
+                    toggleAdvanced(form);
+                }
+                values = q[expression];
+                if (values) {
+                    $this.val(values[0]);
+                    var map_id = id + '-map';
+                    // Display the Polygon
+                    S3.gis.maps[map_id].s3.polygonButtonLoaded();
+                } else {
+                    $this.val('');
+                    var map_id = id + '-map';
+                    // Hide the Polygon
+                    S3.gis.maps[map_id].s3.layerRefreshed();
+                }
+            }
+        });
+
         // Numerical range widgets
         form.find('.range-filter-input').each(function() {
             $this = $(this);
@@ -723,6 +791,8 @@ S3.search = {};
                 } else {
                     $this.calendarWidget('clear');
                 }
+                // Ensure any range-picker is updated with new value
+                $this.trigger('change');
             }
         });
 
@@ -924,6 +994,7 @@ S3.search = {};
      */
     var updateOptions = function(options) {
 
+        var filter_id;
         for (filter_id in options) {
             var widget = $('#' + filter_id);
 
@@ -931,76 +1002,115 @@ S3.search = {};
                 var newopts = options[filter_id];
 
                 // OptionsFilter
-                if ($(widget).hasClass('options-filter')) {
-                    if ($(widget)[0].tagName.toLowerCase() == 'select') {
+                if (widget.hasClass('options-filter')) {
+                    if (widget[0].tagName.toLowerCase() == 'select') {
                         // Standard SELECT
-                        var selected = $(widget).val(),
-                            s=[], opts='', group, item, value, label, tooltip;
 
                         // Update HTML
                         if (newopts.hasOwnProperty('empty')) {
 
-                            // @todo: implement
+                            // Ensure the widget is hidden
+                            if (widget.hasClass('multiselect-filter-widget') &&
+                                widget.multiselect('instance')) {
+                                widget.multiselect('refresh');
+                                widget.multiselect('instance').button.hide();
+                            } else if (widget.hasClass('groupedopts-filter-widget') &&
+                                widget.groupedopts('instance')) {
+                                widget.groupedopts('refresh');
+                            } else {
+                                widget.hide();
+                            }
 
-                        } else
-
-                        if (newopts.hasOwnProperty('groups')) {
-                            for (var i=0, len=newopts.groups.length; i < len; i++) {
-                                group = newopts.groups[i];
-                                if (group.label) {
-                                    opts += '<optgroup label="' + group.label + '">';
-                                }
-                                for (var j=0, lenj=group.items.length; j < lenj; j++) {
-                                    item = group.items[j];
-                                    value = item[0].toString();
-                                    if (selected && $.inArray(value, selected) >= 0) {
-                                        s.push(value);
-                                    }
-                                    opts += '<option value="' + value + '"';
-                                    tooltip = item[3];
-                                    if (tooltip) {
-                                        opts += ' title="' + tooltip + '"';
-                                    }
-                                    label = item[1];
-                                    opts += '>' + label + '</option>';
-                                }
-                                if (group.label) {
-                                    opts += '</optgroup>';
-                                }
+                            // Show the no-opts
+                            var noopt = widget.siblings('.no-options-available');
+                            if (noopt.length) {
+                                noopt.html(newopts.empty);
+                                noopt.removeClass('hide').show();
                             }
 
                         } else {
-                            for (var i=0, len=newopts.length; i < len; i++) {
-                                item = newopts[i];
-                                value = item[0].toString();
-                                label = item[1];
-                                if (selected && $.inArray(value, selected) >= 0) {
-                                    s.push(value);
+
+                            var selected = widget.val(),
+                                s=[], opts='', group, item, value, label, tooltip;
+
+                            if (newopts.hasOwnProperty('groups')) {
+                                for (var i=0, len=newopts.groups.length; i < len; i++) {
+                                    group = newopts.groups[i];
+                                    if (group.label) {
+                                        opts += '<optgroup label="' + group.label + '">';
+                                    }
+                                    for (var j=0, lenj=group.items.length; j < lenj; j++) {
+                                        item = group.items[j];
+                                        value = item[0].toString();
+                                        if (selected && $.inArray(value, selected) >= 0) {
+                                            s.push(value);
+                                        }
+                                        opts += '<option value="' + value + '"';
+                                        tooltip = item[3];
+                                        if (tooltip) {
+                                            opts += ' title="' + tooltip + '"';
+                                        }
+                                        label = item[1];
+                                        opts += '>' + label + '</option>';
+                                    }
+                                    if (group.label) {
+                                        opts += '</optgroup>';
+                                    }
                                 }
-                                opts += '<option value="' + value + '">' + label + '</option>';
+
+                            } else {
+                                for (var i=0, len=newopts.length; i < len; i++) {
+                                    item = newopts[i];
+                                    value = item[0].toString();
+                                    label = item[1];
+                                    if (selected && $.inArray(value, selected) >= 0) {
+                                        s.push(value);
+                                    }
+                                    opts += '<option value="' + value + '">' + label + '</option>';
+                                }
                             }
-                        }
-                        $(widget).html(opts);
+                            widget.html(opts);
 
-                        // Update SELECTed value
-                        if (s) {
-                            $(widget).val(s);
-                        }
+                            // Update SELECTed value
+                            if (s) {
+                                widget.val(s);
+                            }
 
-                        // Refresh UI widgets
-                        if (widget.hasClass('groupedopts-filter-widget') &&
-                            widget.groupedopts('instance')) {
-                            widget.groupedopts('refresh');
-                        } else
-                        if (widget.hasClass('multiselect-filter-widget') &&
-                            widget.multiselect('instance')) {
-                            widget.multiselect('refresh');
+                            // Hide the no-opts
+                            var noopt = widget.siblings('.no-options-available');
+                            if (noopt.length) {
+                                noopt.hide();
+                            }
+                            // Refresh UI widgets
+                            if (widget.hasClass('groupedopts-filter-widget') &&
+                                widget.groupedopts('instance')) {
+                                widget.groupedopts('refresh');
+                            } else if (widget.hasClass('multiselect-filter-widget') &&
+                                widget.multiselect('instance')) {
+                                widget.multiselect('refresh');
+                                widget.multiselect('instance').button.show();
+                            } else {
+                                widget.removeClass('hide').show();
+                            }
                         }
 
                     } else {
                         // other widget types of options filter
                     }
 
+                } else if (widget.hasClass('date-filter')) {
+                    var min = newopts.min;
+                    var max = newopts.max;
+                    $('#' + filter_id + '-ge').calendarWidget('instance').option('minDateTime', min)
+                                                                         .option('maxDateTime', max)
+                                                                         .refresh();
+                    $('#' + filter_id + '-le').calendarWidget('instance').option('minDateTime', min)
+                                                                         .option('maxDateTime', max)
+                                                                         .refresh();
+                    widget.find('.range-picker').each(function() {
+                        var ts = newopts.ts;
+                        $(this).trigger('resize', [min, max, ts]);
+                    });
                 } else {
                     // @todo: other filter types (e.g. S3LocationFilter)
                 }
@@ -1305,7 +1415,7 @@ S3.search = {};
 
     /**
      * Check that Map JS is Loaded
-     * - used if a tab containing a Map is unhidden
+     * - e.g. used if a tab containing a Map is unhidden
      */
     var jsLoaded = function() {
         var dfd = new jQuery.Deferred();
@@ -1359,10 +1469,12 @@ S3.search = {};
      * Initialise Map for an S3Map page
      * - in global scope as called from callback to Map Loader
      */
-    S3.search.s3map = function() {
-        var gis = S3.gis;
+    S3.search.s3map = function(map_id) {
         // Instantiate the map
-        var map_id = 'default_map';
+        var gis = S3.gis;
+        if (map_id === undefined) {
+            map_id = 'default_map';
+        }
         var options = gis.options[map_id];
         gis.show_map(map_id, options);
         // Get the current Filters
@@ -1376,17 +1488,30 @@ S3.search = {};
      * A Hierarchical Location Filter has changed
      */
     var hierarchical_location_change = function(widget) {
-        var name = widget.name;
-        var base = name.slice(0, -1);
-        var level = parseInt(name.slice(-1));
-        var $widget = $('#' + name);
-        var values = $widget.val();
-        if (values) {
-            // Show the next widget down
-            var fn = base.replace(/-/g, '_') + (level + 1);
-            S3[fn]();
-            $('#' + base + (level + 1)).next('.ui-multiselect').show();
-        } else {
+        var name = widget.name,
+            base = name.slice(0, -1),
+            level = parseInt(name.slice(-1)),
+            $widget = $('#' + name),
+            values = $widget.val();
+        if (!values) {
+            // Clear the values from all subsequent widgets
+            for (var l = level + 1; l <= 5; l++) {
+                var select = $('#' + base + l);
+                if (select.length) {
+                    select.html('');
+                    if (select.hasClass('groupedopts-filter-widget') &&
+                        select.groupedopts('instance')) {
+                        try {
+                            select.groupedopts('refresh');
+                        } catch(e) { }
+                    } else
+                    if (select.hasClass('multiselect-filter-widget') &&
+                        select.multiselect('instance')) {
+                        select.multiselect('refresh');
+                    }
+                }
+            }
+            // Hide all subsequent widgets
             // Hide the next widget down
             var next_widget = $widget.next('.ui-multiselect').next('.location-filter').next('.ui-multiselect');
             if (next_widget.length) {
@@ -1412,197 +1537,195 @@ S3.search = {};
                     }
                 }
             }
-        }
-        var hierarchy = S3.location_filter_hierarchy;
-        if (S3.location_name_l10n != undefined) {
-            var translate = true;
-            var location_name_l10n = S3.location_name_l10n;
         } else {
-            var translate = false;
-        }
-        // Initialise vars in a way in which we can access them via dynamic names
-        widget.options1 = [];
-        widget.options2 = [];
-        widget.options3 = [];
-        widget.options4 = [];
-        widget.options5 = [];
-        var new_level, opt, _opt, i, option;
-        if (hierarchy.hasOwnProperty('L' + level)) {
-            // Top-level
-            var _hierarchy = hierarchy['L' + level];
-            for (opt in _hierarchy) {
-                if (_hierarchy.hasOwnProperty(opt)) {
-                    if (values === null) {
-                        // Show all Options
-                        for (option in _hierarchy[opt]) {
-                            if (_hierarchy[opt].hasOwnProperty(option)) {
-                                new_level = level + 1;
-                                if (option && option != 'null') {
-                                    widget['options' + new_level].push(option);
-                                }
-                                if (typeof(_hierarchy[opt][option]) === 'object') {
-                                    var __hierarchy = _hierarchy[opt][option];
-                                    for (_opt in __hierarchy) {
-                                        if (__hierarchy.hasOwnProperty(_opt)) {
-                                            new_level = level + 2;
-                                            if (_opt && _opt != 'null') {
-                                                widget['options' + new_level].push(_opt);
-                                            }
-                                            // @ToDo: Greater recursion
-                                            //if (typeof(__hierarchy[_opt]) === 'object') {
-                                            //}
-                                        }
-                                    }
-                                }
-                            }
+            var new_level = level + 1,
+                next = base + new_level,
+                $next = $('#' + next);
+            if (!$next.length) {
+                // Missing level or the end of the widgets
+                new_level = level + 2;
+                next = base + new_level;
+                $next = $('#' + next);
+            }
+            if (!$next.length) {
+                // End of the widgets
+                return;
+            }
+            // Show the next widget down
+            var fn = next.replace(/-/g, '_');
+            S3[fn]();
+            $next.next('.ui-multiselect').show();
+
+            var hierarchy = S3.location_filter_hierarchy;
+            if (S3.location_name_l10n != undefined) {
+                var translate = true;
+                var location_name_l10n = S3.location_name_l10n;
+            } else {
+                var translate = false;
+            }
+            // Initialise vars in a way in which we can access them via dynamic names
+            widget.options1 = [];
+            widget.options2 = [];
+            widget.options3 = [];
+            widget.options4 = [];
+            widget.options5 = [];
+            // Find the level at which the hierarchy is defined
+            var hierarchy_level;
+            for (hierarchy_level = level; hierarchy_level >= 0; hierarchy_level--) {
+                if (hierarchy.hasOwnProperty('L' + hierarchy_level)) {
+                    break;
+                }
+            }
+            // Support Function to populate the lists which will populate the widget options
+            var showSubOptions = function(thisHierarchy) {
+                var thisOpt,
+                    thatOpt,
+                    thatHierarchy;
+                for (thisOpt in thisHierarchy) {
+                    if (thisHierarchy.hasOwnProperty(thisOpt)) {
+                        if (thisOpt && thisOpt != 'null') {
+                            widget['options' + new_level].push(thisOpt);
                         }
-                    } else {
-                        for (i in values) {
-                            if (values[i] === opt) {
-                                for (option in _hierarchy[opt]) {
-                                    if (_hierarchy[opt].hasOwnProperty(option)) {
-                                        new_level = level + 1;
-                                        if (option && option != 'null') {
-                                            widget['options' + new_level].push(option);
+                        thatHierarchy = thisHierarchy[thisOpt];
+                        if (typeof(thatHierarchy) === 'object') {
+                            next = new_level + 1;
+                            if (!$('#' + base + next).length) {
+                                // Missing level
+                                next = new_level + 2;
+                            }
+                            if ($('#' + base + next).length) {
+                                for (thatOpt in thatHierarchy) {
+                                    if (thatHierarchy.hasOwnProperty(thatOpt)) {
+                                        if (thatOpt && thatOpt != 'null') {
+                                            widget['options' + next].push(thatOpt);
                                         }
-                                        if (typeof(_hierarchy[opt][option]) === 'object') {
-                                            var __hierarchy = _hierarchy[opt][option];
-                                            for (_opt in __hierarchy) {
-                                                if (__hierarchy.hasOwnProperty(_opt)) {
-                                                    new_level = level + 2;
-                                                    if (_opt && _opt != 'null') {
-                                                        widget['options' + new_level].push(_opt);
-                                                    }
-                                                    // @ToDo: Greater recursion
-                                                    //if (typeof(__hierarchy[_opt]) === 'object') {
-                                                    //}
-                                                }
-                                            }
-                                        }
+                                        // @ToDo: Greater recursion?
+                                        //if (typeof(thatHierarchy[thatOpt]) === 'object') {
+                                        //}
                                     }
-                                }
+                            }
                             }
                         }
                     }
                 }
             }
-        } else if (hierarchy.hasOwnProperty('L' + (level - 1))) {
-            // Nested 1 in
-            var _hierarchy = hierarchy['L' + (level - 1)];
-            // Read higher level
-            var _values = $('#' + base + (level - 1)).val();
-            for (opt in _hierarchy) {
-                if (_hierarchy.hasOwnProperty(opt)) {
-                    if (_values === null) {
-                        // We can't be hiding
-                        // Read this level
-                        _values = $('#' + base + level).val();
-                        for (option in _hierarchy[opt]) {
-                            for (i in _values) {
-                                if (_values[i] === option) {
-                                    new_level = level + 1;
-                                    // Read the options for this level
-                                    var __hierarchy = _hierarchy[opt][option];
-                                    for (_opt in __hierarchy) {
-                                        if (__hierarchy.hasOwnProperty(_opt)) {
-                                            if (_opt && _opt != 'null') {
-                                                widget['options' + new_level].push(_opt);
-                                            }
-                                        }
-                                    }
-                                    // @ToDo: Read the options for subsequent levels
+            // Recursive Function to populate the lists which will populate the widget options
+            var showOptions = function(thisHierarchy, thisLevel) {
+                var i,
+                    nextLevel,
+                    thisOpt,
+                    thatHierarchy,
+                    theseValues = $('#' + base + thisLevel).val();
+                for (thisOpt in thisHierarchy) {
+                    if (thisHierarchy.hasOwnProperty(thisOpt)) {
+                        if (theseValues === null) {
+                            if (thisLevel === level) {
+                                // Show all Options
+                                showSubOptions(thisHierarchy[thisOpt]);
+                            } else {
+                                // Recurse
+                                nextLevel = thisLevel + 1;
+                                if (!$('#' + base + nextLevel).length) {
+                                    // Missing level
+                                    nextLevel++;
                                 }
+                                showOptions(thisHierarchy[thisOpt], nextLevel);
                             }
-                        }
-                    } else {
-                        for (i in _values) {
-                            if (_values[i] === opt) {
-                                for (option in _hierarchy[opt]) {
-                                    if (_hierarchy[opt].hasOwnProperty(option)) {
-                                        if (values === null) {
-                                            // Show all subsequent Options
-                                            for (option in _hierarchy[opt]) {
-                                                if (_hierarchy[opt].hasOwnProperty(option)) {
-                                                    new_level = level + 1;
-                                                    var __hierarchy = _hierarchy[opt][option];
-                                                    for (_opt in __hierarchy) {
-                                                        if (__hierarchy.hasOwnProperty(_opt)) {
-                                                            if (_opt && _opt != 'null') {
-                                                                widget['options' + new_level].push(_opt);
-                                                            }
-                                                            // @ToDo: Greater recursion
-                                                            //if (typeof(__hierarchy[_opt]) === 'object') {
-                                                            //}
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            for (i in values) {
-                                                if (values[i] === option) {
-                                                    new_level = level + 1;
-                                                    var __hierarchy = _hierarchy[opt][option];
-                                                    for (_opt in __hierarchy) {
-                                                        if (__hierarchy.hasOwnProperty(_opt)) {
-                                                            if (_opt && _opt != 'null') {
-                                                                widget['options' + new_level].push(_opt);
-                                                            }
-                                                            // @ToDo: Greater recursion
-                                                            //if (typeof(__hierarchy[_opt]) === 'object') {
-                                                            //}
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else if (hierarchy.hasOwnProperty('L' + (level - 2))) {
-            // @ToDo
-        }
-        var name, name_l10n, options, _options;
-        for (var l = level + 1; l <= 5; l++) {
-            var select = $('#' + base + l);
-            if (typeof(select) != 'undefined') {
-                options = widget['options' + l];
-                // @ToDo: Sort by name_l10n not by name
-                options.sort();
-                _options = '';
-                for (i in options) {
-                    if (options.hasOwnProperty(i)) {
-                        name = options[i];
-                        if (translate) {
-                            name_l10n = location_name_l10n[name] || name;
                         } else {
-                            name_l10n = name;
+                            // Show only selected options
+                            for (i in theseValues) {
+                                if (theseValues[i] === thisOpt) {
+                                    if (thisLevel === level) {
+                                        showSubOptions(thisHierarchy[thisOpt]);
+                                    } else {
+                                        // Recurse
+                                        nextLevel = thisLevel + 1;
+                                        if (!$('#' + base + nextLevel).length) {
+                                            // Missing level
+                                            nextLevel++;
+                                        }
+                                        showOptions(thisHierarchy[thisOpt], nextLevel);
+                                    }
+                                }
+                            }
                         }
-                        _options += '<option value="' + name + '">' + name_l10n + '</option>';
                     }
                 }
-                select.html(_options);
-                if (select.hasClass('groupedopts-filter-widget') &&
-                    select.groupedopts('instance')) {
-                    try {
-                        select.groupedopts('refresh');
-                    } catch(e) { }
-                } else
-                if (select.hasClass('multiselect-filter-widget') &&
-                    select.multiselect('instance')) {
-                    select.multiselect('refresh');
-                }
-                if (l === (level + 1)) {
-                    if (values) {
-                        // Show next level down (if hidden)
-                        select.next('button').removeClass('hidden').show();
-                        // @ToDo: Hide subsequent levels (if configured to do so)
-                    } else {
-                        // @ToDo: Hide next levels down (if configured to do so)
-                        //select.next('button').hide();
+            }
+            // Start with the base Hierarchy level
+            var _hierarchy = hierarchy['L' + hierarchy_level];
+            showOptions(_hierarchy, hierarchy_level);
+
+            // Populate the widget options from the lists
+            var name,
+                name_l10n,
+                options,
+                htmlOptions;
+            for (var l = new_level; l <= 5; l++) {
+                var select = $('#' + base + l);
+                if (select.length) {
+                    options = widget['options' + l];
+                    // @ToDo: Sort by name_l10n not by name
+                    options.sort();
+                    htmlOptions = '';
+                    for (i in options) {
+                        if (options.hasOwnProperty(i)) {
+                            name = options[i];
+                            if (translate) {
+                                name_l10n = location_name_l10n[name] || name;
+                            } else {
+                                name_l10n = name;
+                            }
+                            htmlOptions += '<option value="' + name + '">' + name_l10n + '</option>';
+                        }
+                    }
+                    select.html(htmlOptions);
+                    if (select.hasClass('groupedopts-filter-widget') &&
+                        select.groupedopts('instance')) {
+                        try {
+                            select.groupedopts('refresh');
+                        } catch(e) { }
+                    } else
+                    if (select.hasClass('multiselect-filter-widget') &&
+                        select.multiselect('instance')) {
+                        select.multiselect('refresh');
+                    }
+                    if (l === (new_level)) {
+                        //if (values) {
+                            // Show next level down (if hidden)
+                            select.next('button').removeClass('hidden').show();
+                            // Hide all subsequent widgets
+                            // Select the next widget down
+                            var next_widget = $widget.next('.ui-multiselect').next('.location-filter').next('.ui-multiselect');
+                            if (next_widget.length) {
+                                // Don't hide the immediate next one
+                                //next_widget.hide();
+                                // Hide the next widget down
+                                next_widget = next_widget.next('.location-filter').next('.ui-multiselect');
+                                if (next_widget.length) {
+                                    next_widget.hide();
+                                    // Hide the next widget down
+                                    next_widget = next_widget.next('.location-filter').next('.ui-multiselect');
+                                    if (next_widget.length) {
+                                        next_widget.hide();
+                                        // Hide the next widget down
+                                        next_widget = next_widget.next('.location-filter').next('.ui-multiselect');
+                                        if (next_widget.length) {
+                                            next_widget.hide();
+                                            // Hide the next widget down
+                                            next_widget = next_widget.next('.location-filter').next('.ui-multiselect');
+                                            if (next_widget.length) {
+                                                next_widget.hide();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        /*
+                        } else {
+                            // @ToDo: Hide next levels down (if configured to do so)
+                            //select.next('button').hide();
+                        }*/
                     }
                 }
             }
@@ -1794,6 +1917,26 @@ S3.search = {};
     };
 
     /**
+     * Event handler for the dataChanged event: data of a filter
+     * target have changed => update filter options accordingly
+     *
+     * @param {string} targetID - the filter target ID
+     */
+    var dataChanged = function(targetID) {
+
+        if (targetID) {
+
+            var target = $(this).find('input.filter-submit-target').val();
+            if (target) {
+                targets = target.split(' ');
+                if (targets.length && $.inArray(targetID + '', targets) != -1) {
+                    S3.search.ajaxUpdateOptions(this);
+                }
+            }
+        }
+    };
+
+    /**
      * document-ready script
      */
     $(document).ready(function() {
@@ -1837,6 +1980,14 @@ S3.search = {};
             filterSubmit($(this).closest('.filter-form'));
         });
 
+        // Handle external target data updates
+        // (e.g. add/update popups, or jeditable-Ajax)
+        $('.filter-form').on('dataChanged', function(e, targetID) {
+            dataChanged.call(this, targetID);
+            // No need (currently) to let this bubble up:
+            return false;
+        });
+
         // Advanced button
         $('.filter-advanced').on('click', function() {
             toggleAdvanced($(this).closest('form'));
@@ -1851,11 +2002,435 @@ S3.search = {};
         $('.text-filter, .range-filter-input').on('input.autosubmit', function () {
             $(this).closest('form').trigger('optionChanged');
         });
-        $('.options-filter, .location-filter, .date-filter-input').on('change.autosubmit', function () {
+        $('.options-filter, .location-filter, .date-filter-input, .map-filter').on('change.autosubmit', function () {
             $(this).closest('form').trigger('optionChanged');
         });
         $('.hierarchy-filter').on('select.s3hierarchy', function() {
             $(this).closest('form').trigger('optionChanged');
+        });
+        $('.map-filter').each(function() {
+            var $this = $(this);
+            $.when(jsLoaded()).then(
+                function(status) {
+                    // Success: Add Callbacks
+                    var widget_name = $this.attr('id'),
+                        widget = $('#' + widget_name),
+                        map_id = widget_name + '-map',
+                        wkt,
+                        gis = S3.gis,
+                        map = gis.maps[map_id],
+                        s3 = map.s3;
+                    s3.pointPlaced = function(feature) {
+                        var out_options = {
+                            'internalProjection': map.getProjectionObject(),
+                            'externalProjection': gis.proj4326
+                            };
+                        wkt = new OpenLayers.Format.WKT(out_options).write(feature);
+                        // Store the data & trigger the autosubmit
+                        widget.val('"' + wkt + '"').trigger('change');
+                    }
+                    s3.polygonButtonOff = function() {
+                        // Clear the data & trigger the autosubmit
+                        widget.val('').trigger('change');
+                    }
+                    s3.layerRefreshed = function(layer) {
+                        var polygonButton = s3.polygonButton;
+                        if (polygonButton.getIconClass() == 'drawpolygonclear-off') {
+                            // Hide the Polygon
+                            if (s3.lastDraftFeature) {
+                                s3.lastDraftFeature.destroy();
+                            } else if (s3.draftLayer.features.length > 1) {
+                                // Clear the one from the Current Location in S3LocationSelector
+                                s3.draftLayer.features[0].destroy();
+                            }
+                            // Deactivate Control
+                            polygonButton.control.deactivate();
+                            polygonButton.items[0].pressed = true;
+                        }
+                    }
+                    s3.polygonButtonLoaded = function() {
+                        wkt = widget.val();
+                        if (wkt) {
+                            // Press Toolbar button
+                            s3.polygonButton.items[0].btnEl.dom.click();
+                            // Draw Polygon
+                            var geometry = OpenLayers.Geometry.fromWKT(wkt);
+                            geometry.transform(gis.proj4326, map.getProjectionObject());
+                            var feature = new OpenLayers.Feature.Vector(
+                                geometry,
+                                {}, // attributes
+                                null // Style
+                            );
+                            var draftLayer = s3.draftLayer;
+                            draftLayer.addFeatures([feature]);
+                            s3.lastDraftFeature = feature;
+                            map.zoomToExtent(draftLayer.getDataExtent());
+                        }
+                    }
+                    s3.polygonButtonLoaded();
+                },
+                function(status) {
+                    // Failed
+                    s3_debug(status);
+                },
+                function(status) {
+                    // Progress
+                    s3_debug(status);
+                }
+            );
+        });
+
+        // Range-Picker
+        // https://github.com/zhangtasdq/range-picker
+        // @ToDo: Copy (ideally Move DRY) non-Date aspects to range-filter
+        $('.date-filter').find('.range-picker').each(function() {
+            var $this = $(this);
+            var fmt = $this.data('fmt');
+            var minValue = $this.data('min');
+            if (minValue) {
+                var minDate = moment(minValue);
+            } else {
+                var minDate = moment().subtract(5, 'minutes');
+                $this.data('min', minDate.format());
+            }
+            var maxValue = $this.data('max');
+            if (maxValue) {
+                var maxDate = moment(maxValue);
+            } else {
+                var maxDate = moment().subtract(5, 'minutes');
+                $this.data('max', maxDate.format());
+            }
+            var widget_name = $this.parent().attr('id');
+
+            // Coarse Filters
+            // @ToDo: widget & deployment settings
+            // Options: All months between minDate & maxDate
+            var cfmt = 'MMM YYYY',
+                year = minDate.format('YYYY'),
+                optDate = moment(minDate), // Clone
+                optgroups = '', // Concat faster than join in modern browsers
+                years = [{'year': year,
+                          'months': []
+                          }],
+                i = 0,
+                j,
+                months,
+                new_year;
+            while (maxDate > optDate || optDate.format('M') === maxDate.format('M')) {
+                new_year = optDate.format('YYYY');
+                if (new_year != year) {
+                    years.push({'year': new_year,
+                                'months': []
+                                });
+                    year = new_year;
+                    i++;
+                }
+                years[i]['months'].push(optDate.format(cfmt));
+                optDate.add(1, 'month');
+            }
+            for (i = 0; i < years.length; i++) {
+                year = years[i];
+                months = year['months'];
+                year = year['year'];
+                optgroups += '<optgroup label="' + year + '">';
+                for (j = 0; j < months.length; j++) {
+                    optgroups += '<option value="' + months[j] + '">' + months[j] + '</option>';
+                }
+                optgroups += '</optgroup>';
+            }
+            // @ToDo: i18n
+            $this.before('<div class="range-coarse"><div class="range-coarse-start"><label for="' + widget_name + '-cs">From:</label><select id="' + widget_name + '-cs">' + optgroups + '</select></div><div class="range-coarse-end"><label for="' + widget_name + '-ce">to:</label><select id="' + widget_name + '-ce">' + optgroups + '</select></div></div>');
+            var coarseStart = $('#' + widget_name + '-cs');
+            var coarseEnd = $('#' + widget_name + '-ce');
+            coarseStart.val(minDate.format(cfmt));
+            coarseEnd.val(maxDate.format(cfmt));
+
+            // Function used by both LineGraph & Play button
+            function slotsData() {
+                var v,
+                    label,
+                    values = [],
+                    ts = $this.data('ts');
+
+                // Data is represented as an array of {x,y} pairs.
+                for (var i = 0; i < ts.length; i++) {
+                    v = ts[i];
+                    // Axes cannot be Text strings
+                    // so we hook into tooltip to add fmt there
+                    //label = moment(v[0]).format(fmt) + ' - ' + moment(v[1]).format(fmt);
+                    label = moment(v[0]);
+                    //values.push({x: label, y: v[2]}); // If pulling back start & end of slot
+                    values.push({x: label, y: v[1]});
+                }
+
+                // Store the Values as used in multiple places
+                $this.data('slots', values);
+
+                // Line chart data should be sent as an array of series objects.
+                return [{values: values,   // values - represents the array of {x,y} data points
+                         key: '',          // key  - the name of the series.
+                         // @ToDo: deployment_setting: use same as the one that enables...or copy from another CSS element?
+                         color: '#3b6596', // color - optional: choose your own line color.
+                         area: true        // area - set to true if you want this line to turn into a filled area chart.
+                         },
+                        ];
+            }
+            // Store the initial values for Play button
+            slotsData();
+
+            // Play Button
+            // @ToDo: widget & deployment settings
+            // @ToDo: Make this sensitive to changing of Icon sets
+            // @ToDo: i18n
+            $this.before('<a class="button secondary tiny play"><i class="fa fa-play"></i> Play</a><a class="button secondary tiny hide pause"><i class="fa fa-pause"></i> Pause</a><a class="button secondary tiny hide stop"><i class="fa fa-stop"></i> Stop</a>');
+            var play = $('#' + widget_name + ' .play'),
+                pause = $('#' + widget_name + ' .pause'),
+                stop = $('#' + widget_name + ' .stop'),
+                slots = $this.data('slots');
+            if (slots.length < 3) {
+                // Hide the Play button as it doesn't work for such a small number of values
+                play.hide();
+            }
+
+            // Range-Picker
+            var offset,
+                timeOffset,
+                currentDate;
+            var rangePicker = $this.rangepicker({
+                type: 'double',
+                startValue: minDate.format(fmt),
+                endValue: maxDate.format(fmt),
+                translateSelectLabel: function(currentPosition, totalPosition) {
+                    minDate = new Date($this.data('min'));
+                    maxDate = new Date($this.data('max'));
+                    offset = maxDate - minDate;
+                    timeOffset = offset * (currentPosition / totalPosition);
+                    currentDate = new Date(+minDate + parseInt(timeOffset));
+                    return moment(currentDate).format(fmt);
+                }
+            });
+
+            // Line Graph
+            // @ToDo: widget & deployment settings
+            $this.before('<div id="' + widget_name + '-chart"><svg></svg></div>');
+            // On-hover data point tooltip
+            var tooltipContent = function(data) {
+                var point = data.point;
+
+                var tooltip = '<div class="pt-tooltip">' +
+                              '<div class="pt-tooltip-label" style="color:' + point.color + '">' + point.x.format(fmt) + '</div>' +
+                              '<div class="pt-tooltip-text">' + point.y + '</div>' +
+                              '</div>';
+                return tooltip;
+            }
+            rangePicker.graph = function() {
+                nv.addGraph(function() {
+                    var chart = nv.models.lineChart()
+                                  .margin({left: 0, right: 0})      // Adjust chart margins to give the x-axis some breathing room.
+                                  //.useInteractiveGuideline(true)  // We want nice looking tooltips and a guideline!
+                                  //.transitionDuration(350)        // how fast do you want the lines to transition?
+                                  .showLegend(false)       // Hide the legend (would allow users to turn on/off line series)
+                                  .showYAxis(false)        // Hide the y-axis
+                                  .showXAxis(false);       // Show the x-axis
+
+                     chart.tooltip.contentGenerator(tooltipContent);
+
+                    //chart.xAxis     // Chart x-axis settings
+                    //     .axisLabel('Time (ms)')
+                    //     .tickFormat(d3.format(',r'));
+
+                    //chart.yAxis     // Chart y-axis settings
+                    //     .axisLabel('Voltage (v)')
+                    //     .tickFormat(d3.format('.02f'));
+
+                    // Done setting the chart up? Time to render it!
+                    var myData = slotsData();   // You need data...
+
+                    d3.select('#' + widget_name + '-chart svg')  // Select the <svg> element you want to render the chart in.
+                      .datum(myData)         // Populate the <svg> element with chart data...
+                      .call(chart);          // Finally, render the chart!
+
+                    // Update the chart when window resizes.
+                    nv.utils.windowResize(function() { chart.update() });
+                    return chart;
+                });
+            };
+            rangePicker.graph();
+
+            // Events
+            // minuteStep handled server-side by extending widget ranges in _options
+            //var startStep = startField.calendarWidget('option', 'minuteStep');
+            var startField = $('#' + widget_name + '-ge'),
+                endField = $('#' + widget_name + '-le'),
+                values,
+                totalPosition,
+                startValue,
+                endValue,
+                startDate,
+                endDate;
+
+            // If the slider is updated then update the INPUTs & trigger a form refresh
+            $this.on('update', function(e) {
+                values = rangePicker.getSelectValue();
+                totalPosition = values['totalWidth'];
+                startValue = values['start'];
+                endValue = values['end'];
+                minDate = new Date($this.data('min'));
+                maxDate = new Date($this.data('max'));
+                offset = maxDate - minDate;
+                timeOffset = offset * (startValue / totalPosition);
+                startDate = new Date(+minDate + parseInt(timeOffset));
+                startField.val(moment(startDate).format(fmt));
+                timeOffset = offset * (endValue / totalPosition);
+                endDate = new Date(+minDate + parseInt(timeOffset));
+                endField.val(moment(endDate).format(fmt));
+                $this.closest('form').trigger('optionChanged');
+            });
+
+            // If the Coarse Filters are updated then update the slider min/max & the INPUTs & trigger a form refresh
+            coarseStart.on('change', function(e) {
+                minDate = moment($(this).val(), cfmt);
+                $this.data('min', minDate.format());
+                startDate = minDate.format(fmt);
+                rangePicker.refresh({'startValue': startDate
+                                     });
+                startField.val(startDate);
+                $this.closest('form').trigger('optionChanged');
+            });
+            coarseEnd.on('change', function(e) {
+                maxDate = moment($(this).val(), cfmt).endOf('month');
+                $this.data('max', maxDate.format());
+                endDate = maxDate.format(fmt);
+                rangePicker.refresh({'endValue': endDate
+                                     });
+                endField.val(endDate);
+                $this.closest('form').trigger('optionChanged');
+            });
+
+            // If the INPUTs are updated then update the slider
+            function updatePosition() {
+                startValue = startField.val();
+                endValue = endField.val();
+                minDate = new Date($this.data('min'));
+                maxDate = new Date($this.data('max'));
+                offset = maxDate - minDate;
+                if (startValue) {
+                    startDate = moment(startValue, fmt);
+                    timeOffset = startDate - minDate;
+                    startValue = ((timeOffset / offset) * 100) + '%';
+                } else {
+                    startValue = '0%';
+                }
+                if (endValue) {
+                    endDate = moment(endValue, fmt);
+                    timeOffset = endDate - minDate;
+                    endValue = ((timeOffset / offset) * 100) + '%';
+                } else {
+                    endValue = '100%';
+                }
+                rangePicker.updatePosition(endValue, startValue);
+            };
+            startField.on('change', function(e) {
+                updatePosition();
+            });
+            endField.on('change', function(e) {
+                updatePosition();
+            });
+
+            // Handle clear
+            $this.on('clear', function(e) {
+                rangePicker.updatePosition('100%', '0%');
+            });
+
+            // Allow resizing by updateOptions
+            $this.on('resize', function(e, min, max, ts) {
+                $this.data('min', min);
+                $this.data('max', max);
+                rangePicker.refresh({'startValue': moment(min).format(fmt),
+                                     'endValue': moment(max).format(fmt)//,
+                                     });
+                $this.data('ts', ts);
+                rangePicker.graph();
+                // Store the new values for Play button
+                //slotsData(); // If the .graph() is hidden by settings but Play is present then need to do this
+                slots = $this.data('slots');
+                if (slots.length > 2) {
+                    // Ensure Play button is visible in case it was previously hidden
+                    play.show();
+                 } else {
+                    // Hide the Play button as it doesn't work for such a small number of values
+                    play.hide();
+                }
+            });
+
+            // Play button
+            // @ToDo: Make slot_speed configurable (use same setting as on/off)
+            var slot_speed = 4000,
+                slot_wait = 0,    // 1st will happen immediately
+                timers = [];
+            function playSlot(slot) {
+                var start = slots[slot].x;
+                try {
+                    var end = slots[slot + 1].x;
+                } catch(e) {
+                    // Final slot
+                    var end =  moment($this.data('max'));
+                }
+                var timeout = slot_wait;
+                slot_wait = slot_wait + slot_speed;
+                var timer = setTimeout(function() {
+                    setSlot(slot, start, end);
+                }, timeout);
+                timers.push(timer);
+            }
+            function setSlot(slot, start, end) {
+                $this.data('slot', slot);
+                startField.val(start.format(fmt));
+                endField.val(end.format(fmt));
+                startField.trigger('change');
+            }
+            // First Play should start at the beginning
+            $this.data('slot', 0);
+            play.on('click', function() {
+                // Start Play from the correct slot
+                var slot = $this.data('slot');
+                // Hide Play
+                play.hide();
+                // Unhide Pause & Stop
+                pause.removeClass('hide').show();
+                stop.removeClass('hide').show();
+                // Move the slider through each of the slots at the defined interval
+                slots = $this.data('slots');
+                for (slot; slot < slots.length; slot++) {
+                    playSlot(slot);
+                }
+            });
+            pause.on('click', function() {
+                // Stop Playback
+                for (var i = 0; i < timers.length; i++) {
+                    clearTimeout(timers.pop());
+                }
+                // Reset Wait (so we don't have long pause for initial resume)
+                slot_wait = 0;
+                // Hide Pause
+                pause.hide();
+                // Show Play
+                play.show();
+            });
+            stop.on('click', function() {
+                // Stop Playback
+                for (var i = 0; i < timers.length; i++) {
+                    clearTimeout(timers.pop());
+                }
+                // Future Plays should start at the beginning
+                $this.data('slot', 0);
+                slot_wait = 0;
+                // Hide Pause & Stop
+                pause.hide();
+                stop.hide();
+                // Show Play
+                play.show();
+            });
         });
 
         // Don't submit if pressing Enter
@@ -2083,7 +2658,7 @@ S3.search = {};
                         }).keypress(function(e) {
                             if(e.which == 13) {
                                 e.preventDefault();
-                                $this = $(this);
+                                var $this = $(this);
                                 if ($this.val()) {
                                     $this.addClass('changed');
                                 }

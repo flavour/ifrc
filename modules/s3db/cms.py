@@ -2,7 +2,7 @@
 
 """ Sahana Eden Content Management System Model
 
-    @copyright: 2012-2016 (c) Sahana Software Foundation
+    @copyright: 2012-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -31,6 +31,7 @@ __all__ = ("S3ContentModel",
            "S3ContentMapModel",
            "S3ContentOrgModel",
            "S3ContentOrgGroupModel",
+           "S3ContentTeamModel",
            "S3ContentUserModel",
            "cms_index",
            "cms_documentation",
@@ -39,6 +40,7 @@ __all__ = ("S3ContentModel",
            "cms_post_list_layout",
            "S3CMS",
            #"cms_Calendar",
+           #"cms_TagList",
            )
 
 import datetime
@@ -445,7 +447,7 @@ class S3ContentModel(S3Model):
                                                       "multiple": False,
                                                       },
 
-                       # For InlineForm to tag Posts to Events/Incidents/Incident Types
+                       # For InlineForm to tag Posts to Events/Incidents/Incident Types/Teams
                        event_post = (# Events
                                      {"name": "event_post",
                                       "joinby": "post_id",
@@ -456,6 +458,13 @@ class S3ContentModel(S3Model):
                                       }
                                      ),
                        event_post_incident_type = "post_id",
+
+                       pr_group = {"link": "cms_post_team",
+                                   "joinby": "group_id",
+                                   "key": "incident_type_id",
+                                   "actuate": "hide",
+                                   },
+                       cms_post_team = "post_id",
 
                        # For Profile to filter appropriately
                        event_event = {"link": "event_post",
@@ -568,6 +577,11 @@ class S3ContentModel(S3Model):
                                  sortby = "name",
                                  )
 
+        # Custom Methods
+        set_method("cms", "tag",
+                   method = "tag_list",
+                   action = cms_TagList)
+
         # ---------------------------------------------------------------------
         # Tags <> Posts link table
         #
@@ -617,8 +631,7 @@ class S3ContentModel(S3Model):
 
         # Resource Configuration
         configure(tablename,
-                  list_fields = ["id",
-                                 "post_id",
+                  list_fields = ["post_id",
                                  "created_by",
                                  "modified_on"
                                  ],
@@ -699,7 +712,8 @@ class S3ContentModel(S3Model):
     @staticmethod
     def cms_post_onaccept(form):
         """
-           Handle the case where the page is for a Module home page,
+           - Set person_id from created_by if not already set
+           - Handle the case where the page is for a Module home page,
            Resource Summary page or Map Layer
         """
 
@@ -816,7 +830,7 @@ class S3ContentModel(S3Model):
                           tag_id = tag_id,
                           )
 
-        output = current.xml.json_message(True, 200, "Tag Added")
+        output = current.xml.json_message(True, 200, current.T("Tag Added"))
         current.response.headers["Content-Type"] = "application/json"
         return output
 
@@ -854,7 +868,7 @@ class S3ContentModel(S3Model):
                 resource = current.s3db.resource("cms_tag_post", id=exists.id)
                 resource.delete()
 
-        output = current.xml.json_message(True, 200, "Tag Removed")
+        output = current.xml.json_message(True, 200, current.T("Tag Removed"))
         current.response.headers["Content-Type"] = "application/json"
         return output
 
@@ -896,7 +910,7 @@ class S3ContentModel(S3Model):
                                     user_id = user_id,
                                     )
 
-        output = current.xml.json_message(True, 200, "Bookmark Added")
+        output = current.xml.json_message(True, 200, current.T("Bookmark Added"))
         current.response.headers["Content-Type"] = "application/json"
         return output
 
@@ -927,7 +941,7 @@ class S3ContentModel(S3Model):
             resource = current.s3db.resource("cms_post_user", id=exists.id)
             resource.delete()
 
-        output = current.xml.json_message(True, 200, "Bookmark Removed")
+        output = current.xml.json_message(True, 200, current.T("Bookmark Removed"))
         current.response.headers["Content-Type"] = "application/json"
         return output
 
@@ -1000,6 +1014,34 @@ class S3ContentOrgGroupModel(S3Model):
         self.define_table(tablename,
                           self.cms_post_id(empty=False),
                           self.org_group_id(empty=False),
+                          *s3_meta_fields())
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return {}
+
+# =============================================================================
+class S3ContentTeamModel(S3Model):
+    """
+        Link Posts to Teams
+    """
+
+    names = ("cms_post_team",)
+
+    def model(self):
+
+        # ---------------------------------------------------------------------
+        # Teams <> Posts link table
+        #
+        tablename = "cms_post_team"
+        self.define_table(tablename,
+                          self.cms_post_id(empty = False,
+                                           ondelete = "CASCADE",
+                                           ),
+                          self.pr_group_id(empty = False,
+                                           ondelete = "CASCADE",
+                                           ),
                           *s3_meta_fields())
 
         # ---------------------------------------------------------------------
@@ -2061,5 +2103,31 @@ class cms_Calendar(S3Method):
                    BR(),
                    location,
                    )
+
+# =============================================================================
+class cms_TagList(S3Method):
+    """
+        Return a list of available Tags
+        - suitable for use in Tag-It's AutoComplete
+    """
+
+    # -------------------------------------------------------------------------
+    def apply_method(self, r, **attr):
+        """
+            Entry point for REST API
+
+            @param r: the S3Request
+            @param attr: controller arguments
+        """
+
+        if r.representation == "json":
+            table = current.s3db.cms_tag
+            tags = current.db(table.deleted == False).select(table.name)
+            tag_list = [tag.name for tag in tags]
+            output = json.dumps(tag_list, separators=SEPARATORS)
+            current.response.headers["Content-Type"] = "application/json"
+            return output
+
+        raise HTTP(405, current.ERROR.BAD_METHOD)
 
 # END =========================================================================

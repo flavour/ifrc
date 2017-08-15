@@ -2,7 +2,7 @@
 
 """ Sahana Eden Messaging Model
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -418,7 +418,7 @@ class S3MessageModel(S3Model):
                             [table.instance_type.set_attributes(readable = True,
                                                                 writable = True,
                                                                 ),
-                                                                                       
+
                              ],
                           )
 
@@ -1448,7 +1448,7 @@ class S3RSSModel(S3ChannelModel):
                                  ondelete = "CASCADE",
                                  represent = rss_represent,
                                  requires = IS_EMPTY_OR(
-                                                IS_ONE_OF(db, "msg_rss.id",
+                                                IS_ONE_OF(current.db, "msg_rss.id",
                                                           rss_represent)),
                                  )
 

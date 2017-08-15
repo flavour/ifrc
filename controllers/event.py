@@ -44,10 +44,11 @@ def event():
             method = r.method
             if r.component:
                 cname = r.component_name
-                if cname == "collection":
-                    # @ToDo: Filter Locations available based on Event Locations
-                    #s3db.dc_collection.location_id.default = r.record.location_id
-                    s3.crud_strings["dc_collection"].label_create = T("Add Assessment")
+                if cname == "req":
+                    if method != "update" and method != "read":
+                        # Hide fields which don't make sense in a Create form
+                        # inc list_create (list_fields over-rides)
+                        s3db.req_create_form_mods()
 
                 #elif cname == "document":
                 #    # @ToDo: Filter Locations available based on Event Locations
@@ -61,11 +62,10 @@ def event():
                 #    # @ToDo: Filter Locations available based on Event Locations
                 #    #s3db.doc_document.location_id.default = r.record.location_id
 
-                elif cname == "req":
-                    if method != "update" and method != "read":
-                        # Hide fields which don't make sense in a Create form
-                        # inc list_create (list_fields over-rides)
-                        s3db.req_create_form_mods()
+                elif cname == "response":
+                    # @ToDo: Filter Locations available based on Event Locations
+                    #s3db.dc_collection.location_id.default = r.record.location_id
+                    s3.crud_strings["dc_response"].label_create = T("Add Assessment")
 
                 elif cname == "target":
                     # @ToDo: Filter Locations available based on Event Locations
@@ -127,19 +127,21 @@ def incident():
                         r.method = "assign"
                     if r.method == "assign":
                         r.custom_action = s3db.hrm_AssignMethod(component="assign")
-                if r.component_name == "config":
+                cname = r.component_name
+                if cname == "config":
                     s3db.configure("gis_config",
                                    deletable = False,
                                    )
                     s3.crud.submit_button = T("Update")
-                elif r.component_name in ("asset", "human_resource", "organisation", "site"):
+                elif cname in ("asset", "human_resource", "organisation", "site"):
                     s3.crud.submit_button = T("Assign")
                     s3.crud_labels["DELETE"] = T("Remove")
-                #else:
-                #    s3.crud.submit_button = T("Assign")
-                #    s3.crud_labels["DELETE"] = T("Remove")
+                    # Default Event to that of the Incident
+                    f = s3db["event_%s" % cname].event_id
+                    f.default = r.record.event_id
+                    f.readable = f.writable = False
 
-            elif r.method != "update" and r.method != "read":
+            elif r.method not in ("read", "update"):
                 # Create or ListCreate
                 r.table.closed.writable = r.table.closed.readable = False
 
@@ -305,6 +307,18 @@ def team():
 # -----------------------------------------------------------------------------
 def team_status():
     """ Team statuses """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def human_resource():
+    """ Events <> Human Resources """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def organisation():
+    """ Events <> Organisations """
 
     return s3_rest_controller()
 

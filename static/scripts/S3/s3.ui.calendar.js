@@ -1,11 +1,15 @@
 /**
  * jQuery UI Widget for S3CalendarWidget
  *
- * @copyright 2015-2016 (c) Sahana Software Foundation
+ * @copyright 2015-2017 (c) Sahana Software Foundation
  * @license MIT
  *
  * requires jQuery 1.9.1+
  * requires jQuery UI 1.10 widget factory
+ * requires jQuery UI DatePicker for Gregorian calendars: https://jqueryui.com/datepicker/
+ * requires jQuery UI Timepicker-addon if using times: http://trentrichardson.com/examples/timepicker
+ * requires Calendars for non-Gregorian calendars: http://keith-wood.name/calendars.html
+ * (ensure that calendars/ui-smoothness.calendars.picker.css is in css.cfg for that)
  */
 (function($, undefined) {
 
@@ -191,7 +195,7 @@
          * @prop {bool} timepicker - show a timepicker
          * @prop {number} minuteStep - the minute-step for the timepicker slider
          *
-         * @prop {bool} clearButton - show a "Clear"-button
+         * @prop {bool} clearButton - show a "Clear"-button, true|false|"icon"
          *
          * @prop {string} setMin - CSS selector for target widget to set minimum selectable
          *                         date/time to the selected date/time of this widget
@@ -318,9 +322,17 @@
             }
 
             // Add clear-button
-            if (opts.clearButton) {
+            if (opts.clearButton === "icon") {
+
+                var clearButton = $('<span class="postfix calendar-clear-btn" title="' + opts.clearText + '"><i class="fa-close fa"> </i></span>');
+
+                el.after(clearButton);
+                this.clearButton = clearButton;
+
+            } else if (opts.clearButton) {
+
                 var clearButton = $('<button class="btn date-clear-btn" type="button">' + opts.clearText + '</button>');
-                $(el).after(clearButton);
+                el.after(clearButton);
                 this.clearButton = clearButton;
             }
 
@@ -333,7 +345,7 @@
             // Add trigger button
             if (opts.triggerButton) {
                 var triggerButton = $('<button class="ui-datepicker-trigger" type="button">');
-                $(el).after(triggerButton);
+                el.after(triggerButton);
                 this.triggerButton = triggerButton;
             }
 

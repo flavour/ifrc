@@ -47,19 +47,11 @@ class S3MainMenu(default.S3MainMenu):
         else:
             dashboard = None
 
-        return [#homepage(),
-                #MM("Feed", c="cms", f="newsfeed", m="datalist",
-                #   icon = "news",
-                #   ),
-                dashboard,
+        return [dashboard,
                 MM("Map", c="gis", f="index"),
-                #MM("Dashboard", c="event", f="event", m="summary"),
-                MM("Incidents", c="event", f="incident", m="summary"),
-                #MM("Alerts", c="event", f="alert", m="summary"),
-                MM("Events", c="event", f="event", m="summary"),
-                #MM("Tasks", c="project", f="task", m="summary"),
-                MM("Resources", c="pr", f="group", m="summary"),
-                #MM("Contacts", c="hrm", f="staff", m="summary"),
+                MM("Incidents", c="event", f="incident", m="browse"),
+                MM("Events", c="event", f="event", m="browse"),
+                MM("Resources", c="pr", f="group", m="browse"),
                 MM("More", link=False)(
                    MM("Fire Stations", c="fire", f="station"),
                    MM("Police Stations", c="police", f="station"),
@@ -185,7 +177,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Log", f="log"),
                     ),
                     M("Taxonomies")(
-                        M("Event Types", c="event", f="event_type"),
+                        #M("Event Types", c="event", f="event_type"),
                         M("Incident Types", c="event", f="incident_type"),
                         M("Organization Types", c="org", f="organisation_type"),
                         M("Update Statuses", c="cms", f="status"),

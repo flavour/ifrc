@@ -148,8 +148,13 @@ class S3OptionsMenu(default.S3OptionsMenu):
                       vars = {"closed": "0"})(
                         M("Create", m="create"),
                         M("All Beneficiaries", vars = {}),
-                        M(follow_up_label, f="due_followups"),
+                        M("Beneficiary Report", m="report"),
                         ),
+                    M("Protection Response",
+                      c="dvr", f="case_activity", link=False)(
+                          M("Overview", m="summary", p="read"),
+                          M(follow_up_label, f="due_followups"),
+                      ),
                     M("Activities", link=False,
                       restrict = ("ORG_ADMIN", "GROUP_ACTIVITIES", "MENTAL_HEALTH"))(
                         M("Group Activities", f="activity",
@@ -171,16 +176,18 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         ),
                     M("Administration", c="dvr", link=False,
                       restrict = (ADMIN, "ORG_ADMIN"))(
+                        M("Education Levels", c="pr", f="education_level"),
+                        M("Occupation Types", c="pr", f="occupation_type"),
                         M("Beneficiary Types", f="beneficiary_type"),
                         #M("Evaluation Questions", f="evaluation_question"),
                         M("Housing Types", f="housing_type"),
                         M("Income Sources", f="income_source"),
                         SEP(),
+                        M("Intervention Types", f="response_type"),
                         M("Need Types", f="need", m="hierarchy"),
                         M("Protection Assessment", f="vulnerability_type", m="hierarchy"),
                         M("Provider Types", f="provider_type"),
                         M("Referral Types", f="referral_type"),
-                        M("Response Types", f="response_type"),
                         M("Termination Types", f="termination_type"),
                         SEP(),
                         M("Activity Age Groups", f="activity_age_group"),
@@ -191,8 +198,15 @@ class S3OptionsMenu(default.S3OptionsMenu):
 
     # -------------------------------------------------------------------------
     @classmethod
+    def pr(cls):
+        """ PR - use DVR menu """
+
+        return cls.dvr()
+
+    # -------------------------------------------------------------------------
+    @classmethod
     def project(cls):
-        """ PROJECT - use DVR menu """
+        """ PROJECT - use ORG menu """
 
         return cls.org()
 
@@ -220,7 +234,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     M("Administration", c=("org", "project"), link=False,
                       restrict = (ADMIN, "ORG_ADMIN"))(
                         M("Organization Types", f="organisation_type"),
-                        M("Service Types", f="service"),
+                        M("Service Types", f="service", m="hierarchy"),
                         M("Facility Types", f="facility_type"),
                         M("Projects", c="project", f="project"),
                     ),

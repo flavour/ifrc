@@ -112,7 +112,7 @@ def dojs(dogis = False, warnings = True):
         print "using local Closure Compiler"
     except Exception, E:
         print "No closure (%s)" % E
-        print "Download from http://closure-compiler.googlecode.com/files/compiler-latest.zip"
+        print "Download from http://dl.google.com/closure-compiler/compiler-latest.zip"
         try:
             import closure_ws
             use_compressor = "closure_ws"
@@ -352,7 +352,8 @@ def dojs(dogis = False, warnings = True):
     # Single scripts
     for filename in ("add_person",
                      "cap",
-                     "dc",
+                     "dc_answer",
+                     "dc_question",
                      "dvr",
                      "gis",
                      "gis.feature_crud",

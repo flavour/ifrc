@@ -2,7 +2,7 @@
 
 """ Resource Import Tools
 
-    @copyright: 2011-2016 (c) Sahana Software Foundation
+    @copyright: 2011-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -3840,6 +3840,8 @@ class S3BulkImporter(object):
                               "prefix": "pr",
                               "name": "person"},
             }
+        # Keep track of which resources have been customised so we don't do this twice
+        self.customised = []
         self.errorList = []
         self.resultList = []
 
@@ -4038,11 +4040,13 @@ class S3BulkImporter(object):
             else:
                 S.close()
 
-            # Customise the resource
-            customise = current.deployment_settings.customise_resource(tablename)
-            if customise:
-                request = S3Request(prefix, name, current.request)
-                customise(request, tablename)
+            if tablename not in self.customised:
+                # Customise the resource
+                customise = current.deployment_settings.customise_resource(tablename)
+                if customise:
+                    request = S3Request(prefix, name, current.request)
+                    customise(request, tablename)
+                    self.customised.append(tablename)
 
             extra_data = None
             if task[5]:
@@ -4426,14 +4430,13 @@ class S3BulkImporter(object):
         """
 
         if url == "unifont":
-            UNIFONT = True
+            #UNIFONT = True
             url = "http://unifoundry.com/pub/unifont-7.0.06/font-builds/unifont-7.0.06.ttf"
             # Rename to make version upgrades be transparent
             filename = "unifont.ttf"
             extension = "ttf"
         else:
-            UNIFONT = False
-
+            #UNIFONT = False
             filename = url.split("/")[-1]
             filename, extension = filename.rsplit(".", 1)
 
@@ -4624,11 +4627,13 @@ class S3BulkImporter(object):
         tablename = "%s_%s" % (prefix, resourcename)
         resource = current.s3db.resource(tablename)
 
-        # Customise the resource
-        customise = current.deployment_settings.customise_resource(tablename)
-        if customise:
-            request = S3Request(prefix, resourcename, current.request)
-            customise(request, tablename)
+        if tablename not in self.customised:
+            # Customise the resource
+            customise = current.deployment_settings.customise_resource(tablename)
+            if customise:
+                request = S3Request(prefix, resourcename, current.request)
+                customise(request, tablename)
+                self.customised.append(tablename)
 
         auth = current.auth
         auth.rollback = True

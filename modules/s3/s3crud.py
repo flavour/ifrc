@@ -7,7 +7,7 @@
     @requires: U{B{I{gluon}} <http://web2py.com>}
     @requires: U{B{I{lxml}} <http://codespeak.net/lxml>}
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1105,7 +1105,7 @@ class S3CRUD(S3Method):
     # -------------------------------------------------------------------------
     def select(self, r, **attr):
         """
-            Filtered datatable/datalist
+            Filterable datatable/datalist
 
             @param r: the S3Request
             @param attr: dictionary of parameters for the method handler
@@ -1207,7 +1207,7 @@ class S3CRUD(S3Method):
                                            _class = "filter-form",
                                            _id = "%s-filter-form" % target
                                            )
-                fresource = current.s3db.resource(resource.tablename)
+                fresource = current.s3db.resource(resource.tablename) # Use a clean resource
                 alias = resource.alias if r.component else None
                 output["list_filter_form"] = filter_form.html(fresource,
                                                               get_vars,
@@ -1575,7 +1575,7 @@ class S3CRUD(S3Method):
         layout = get_config("list_layout", None)
 
         # List ID
-        list_id = get_vars.get("list_id",
+        list_id = get_vars.get("list_id", # Could we check for refresh here? (Saves extra get_var)
                                attr.get("list_id", "datalist"))
 
         # List fields
@@ -2077,10 +2077,11 @@ class S3CRUD(S3Method):
         if "resource" in get_vars:
             tablename = get_vars["resource"]
 
-            # Customise the resource
-            customise = current.deployment_settings.customise_resource(tablename)
-            if customise:
-                customise(r, tablename)
+            if tablename != "%s_%s" % (r.controller, r.function):
+                # Customise the resource
+                customise = current.deployment_settings.customise_resource(tablename)
+                if customise:
+                    customise(r, tablename)
 
             components = [alias] if alias else None
             try:
@@ -2180,7 +2181,8 @@ class S3CRUD(S3Method):
                     value, error = widget.validate(value,
                                                    requires=field.requires,
                                                    )
-                    validated["value"] = widget.serialize(value)
+                    validated["value"] = widget.serialize(value) \
+                                         if not error else value
                     # Use widget-represent instead of standard represent
                     widget_represent = widget.represent
                 else:
@@ -2189,7 +2191,8 @@ class S3CRUD(S3Method):
                         value, error = s3_validate(table, fname, value, original)
                     except AttributeError:
                         error = "invalid field"
-                    validated["value"] = field.formatter(value)
+                    validated["value"] = field.formatter(value) \
+                                         if not error else value
                     widget_represent = None
 
                 # Handle errors, update the validated item

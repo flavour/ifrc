@@ -2,7 +2,7 @@
 
 """ Sahana Eden Document Library
 
-    @copyright: 2011-2016 (c) Sahana Software Foundation
+    @copyright: 2011-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -800,7 +800,7 @@ class S3DocSitRepModel(S3Model):
                                     ondelete = "RESTRICT",
                                     represent = represent,
                                     requires = IS_EMPTY_OR(
-                                                IS_ONE_OF(db, "doc_sitrep.id",
+                                                IS_ONE_OF(current.db, "doc_sitrep.id",
                                                           represent,
                                                           orderby="doc_sitrep.name",
                                                           sort=True)),

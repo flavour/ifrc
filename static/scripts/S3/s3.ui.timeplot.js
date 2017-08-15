@@ -1,12 +1,13 @@
 /**
  * jQuery UI timeplot Widget for S3TimePlot
  *
- * @copyright 2013-2016 (c) Sahana Software Foundation
+ * @copyright 2013-2017 (c) Sahana Software Foundation
  * @license MIT
  *
  * requires jQuery 1.9.1+
  * requires jQuery UI 1.10 widget factory
  * requires D3.js 3.4.9+
+ * requires NVD3.js
  *
  */
 
@@ -26,12 +27,19 @@
          * @prop {string} ajaxURL - the URL to Ajax-load data from
          * @prop {number|bool} autoSubmit - auto-submit timeout, false to
          *                                  deactivate auto-submit
-         * @prop {string} emptyMessage - message to show when no data are
-         *                               available for the time interval
          * @prop {bool} burnDown - render as burnDown from baseline
          *                         rather than as burnUp from zero
+         * @prop {string} emptyMessage - message to show when no data are
+         *                               available for the time interval
          *
-         * @todo: complete documentation
+         * @prop {string} thousandSeparator: the thousands-separator
+         * @prop {string} thousandGrouping: number of digits per thousands-group
+         * @prop {integer} precision: number of decimal places for numbers,
+         *                            null for any, 0 for none
+         *
+         * @prop {string} defaultChartType - the default chart type,
+         *                                   'linechart'|'barchart'
+         * @prop {string} defaultChartAxis - the default Y-axis aspect
          */
         options: {
             ajaxURL: null,
@@ -188,7 +196,9 @@
         /**
          * Render the chart
          *
-         * @todo: parameter description
+         * @param {object} [chartOptions] - the chart options
+         * @prop {string} chartOptions.type - the chart type ('linechart'|'barchart')
+         * @prop {string} chartOptions.axis - the chart axis
          */
         _renderChart: function(chartOptions) {
 
@@ -288,7 +298,11 @@
         /**
          * Simple Bar Chart
          *
-         * @todo: parameter description
+         * @param {jQuery} chart - the chart container
+         * @param {Array} facts - array of facts to render (tuples, see
+         *                        S3TimeSeries.as_dict() for details), multiple
+         *                        series not supported yet (=>@todo)
+         * @param {Array} data - the aggregated period data
          */
         _renderBarChart: function(chart, facts, data) {
 
@@ -330,17 +344,17 @@
                                       .append('svg')
                                       .attr('class', 'nv');
 
-                // @todo: show tooltips instead of values (needs tooltipContent renderer)
+                // @todo: show tooltips instead of values (needs contentGenerator)
                 barChart = nv.models.discreteBarChart()
                                     .x(function(d) { return d.start; })
                                     .y(function(d) { return d.value; })
                                     .color([defaultColor])
                                     .staggerLabels(true)
-                                    .tooltips(false)
-                                    //.tooltipContent(barChartTooltip)
                                     .showValues(true)
                                     .forceY([0, 1]);
 
+                barChart.tooltip.enabled(false);
+                //barChart.tooltip.contentGenerator(barChartTooltip);
                 var valueFormat = this.options.numberFormatter;
 
                 // Set value and tick formatters
@@ -382,7 +396,11 @@
         /**
          * Simple Line Chart
          *
-         * @todo: parameter description
+         * @param {jQuery} chart - the chart container
+         * @param {Array} facts - array of facts to render (tuples, see
+         *                        S3TimeSeries.as_dict() for details), will
+         *                        render multiple series
+         * @param {Array} data - the aggregated period data
          */
         _renderLineChart: function(chart, facts, data) {
 
@@ -442,12 +460,12 @@
                                        .attr('class', 'nv');
 
                 // @todo: make legend use label
-                // @todo: tooltipContent renderer to use fact label
+                // @todo: tooltip.contentGenerator to use fact label
                 lineChart = nv.models.lineChart()
                                      .x(function(d) { return d.start; })
                                      .y(function(d) { return d.value; })
                                      .margin({right: 50})
-                                     .transitionDuration(250)
+                                     .duration(250)
                                      .showLegend(true)
                                      .useInteractiveGuideline(true)
                                      .forceY([0, 1]);
@@ -518,22 +536,35 @@
             if (needs_reload || force) {
 
                 // Reload data and refresh
-                var ajaxURL = this.options.ajaxURL;
-                $.ajax({
+
+                // Ajax URL and method
+                var ajaxURL = this.options.ajaxURL,
+                    ajaxMethod = $.ajaxS3;
+
+                // Use $.searchS3 if available
+                if ($.searchS3 !== undefined) {
+                    ajaxMethod = $.searchS3;
+                }
+
+                ajaxMethod({
                     'url': ajaxURL,
-                    'dataType': 'json'
-                }).done(function(data) {
-                    self.input.val(JSON.stringify(data));
-                    self.data = data;
-                    self.refresh();
-                }).fail(function(jqXHR, textStatus, errorThrown) {
-                    if (errorThrown == 'UNAUTHORIZED') {
-                        msg = i18n.gis_requires_login;
-                    } else {
-                        msg = jqXHR.responseText;
+                    'type': 'GET',
+                    'dataType': 'json',
+                    'success': function(data) {
+                        self.input.val(JSON.stringify(data));
+                        self.data = data;
+                        self.refresh();
+                    },
+                    'error': function(jqXHR, textStatus, errorThrown) {
+                        if (errorThrown == 'UNAUTHORIZED') {
+                            msg = i18n.gis_requires_login;
+                        } else {
+                            msg = jqXHR.responseText;
+                        }
+                        console.log(msg);
                     }
-                    console.log(msg);
                 });
+
             } else {
                 // Refresh without reloading the data
                 self.refresh();

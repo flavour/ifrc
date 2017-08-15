@@ -60,16 +60,29 @@ form {
         font-weight: normal;
         font-size: 0.75rem;
     }
+
+    // Inline-components
     table.embeddedComponent {
         margin-top: 0.125rem;
         margin-bottom: 0.125rem;
         border: 1px solid #dddddd;
         border-collapse: separate;
+
         td {
             border: none;
             padding-bottom: 0.05rem;
             padding-top: 0.15rem;
             vertical-align: top;
+        }
+        &.subform-vertical {
+            .add-row, .edit-row {
+                td {
+                    border-top: 1px solid #dddddd;
+                    &.subform-action {
+                        vertical-align: bottom;
+                    }
+                }
+            }
         }
         .label-row {
             td {
@@ -83,7 +96,12 @@ form {
             }
         }
         tr.inline-form {
-            &.single td {
+            input,
+            .btn.date-clear-btn,
+            .postfix.calendar-clear-btn {
+                margin-top: 0;
+            }
+            &.single td:only-child {
                 padding: 0;
             }
             select {
@@ -95,8 +113,9 @@ form {
         display: inline-block;
         margin-bottom: 1.25rem;
         margin-left: 0;
-        margin-top: -1.25rem;
     }
+
+    // Login-form on homepage
     &.auth_login #submit_record__row {
         white-space: pre;
     }
@@ -144,6 +163,9 @@ select {
 textarea {
     resize: both;
     max-width: 100%;
+}
+input.datetimepicker {
+    max-width: 8rem;
 }
 
 select {
@@ -207,6 +229,10 @@ select {
         display: inline-block;
     }
     .inline-tooltip {
+        padding-top: 0.2rem;
+    }
+    label.inline {
+        line-height: normal;
         padding-top: 0.2rem;
     }
 }

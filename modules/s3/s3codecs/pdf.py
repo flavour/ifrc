@@ -3,7 +3,7 @@
 """
     S3 Adobe PDF codec
 
-    @copyright: 2011-2016 (c) Sahana Software Foundation
+    @copyright: 2011-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -45,7 +45,7 @@ from gluon.contenttype import contenttype
 from gluon.languages import lazyT
 
 from ..s3codec import S3Codec
-from ..s3utils import s3_unicode
+from ..s3utils import s3_strip_markup, s3_unicode
 
 # Import the specialist libraries
 try:
@@ -1324,6 +1324,8 @@ class S3html2pdf():
         elif isinstance(html, DIV):
             return self.parse_div(html)
         elif (isinstance(html, basestring) or isinstance(html, lazyT)):
+            if "<" in html:
+                html = s3_strip_markup(html)
             if title:
                 para = [Paragraph(biDiText(html), self.boldstyle)]
             else:
@@ -1546,6 +1548,8 @@ class S3html2pdf():
         if row_count is None:
             row_count = 0
 
+        rowspans = []
+
         exclude_tag = self.exclude_tag
         parse_tr = self.parse_tr
         parse = self.parse_table_components
@@ -1564,7 +1568,7 @@ class S3html2pdf():
                                            )
 
             elif isinstance(component, TR):
-                result = parse_tr(component, style, row_count)
+                result = parse_tr(component, style, row_count, rowspans)
                 row_count += 1
 
             if result != None:
@@ -1573,13 +1577,14 @@ class S3html2pdf():
         return content, row_count
 
     # -------------------------------------------------------------------------
-    def parse_tr (self, html, style, rowCnt):
+    def parse_tr(self, html, style, rowCnt, rowspans):
         """
             Parses a TR element and converts it into a format for ReportLab
 
             @param html: the TR element  to convert
             @param style: the default style
             @param rowCnt: the row counter
+            @param rowspans: the remaining rowspans (if any)
 
             @return: a list containing text that ReportLab can use
         """
@@ -1600,15 +1605,33 @@ class S3html2pdf():
         exclude_tag = self.exclude_tag
 
         colCnt = 0
+        rspan_index = -1
         for component in html.components:
 
             if not isinstance(component, (TH, TD)) or \
                exclude_tag(component):
                 continue
 
+            rspan_index += 1
+
+            if len(rowspans) < (rspan_index + 1):
+                rowspans.append(0)
+
+            if rowspans[rspan_index]:
+                rappend("")
+                rowspans[rspan_index] -= 1
+                cell = (colCnt, rowCnt)
+                sappend(("LINEABOVE", cell, cell, 0, colors.white))
+                colCnt += 1
+
             if component.components == []:
                 rappend("")
                 continue
+
+            rowspan = component.attributes.get("_rowspan")
+            if rowspan:
+                # @ToDo: Centre the text across the rows
+                rowspans[rspan_index] = rowspan - 1
 
             colspan = component.attributes.get("_colspan", 1)
             for detail in component.components:
@@ -1643,7 +1666,10 @@ class S3html2pdf():
                 else:
                     colCnt += 1
 
-        return None if row == [] else row
+        if row == []:
+            return None
+        else:
+            return row
 
     # -------------------------------------------------------------------------
     def _styles(self, element):

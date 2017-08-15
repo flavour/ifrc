@@ -2,7 +2,7 @@
 
 """ Sahana Eden Synchronization
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -675,7 +675,12 @@ class SyncDataModel(S3Model):
     def defaults(self):
         """ Safe defaults if module is disabled """
 
-        return {}
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False)
+
+        return dict(sync_repository_id = lambda **attr: dummy("repository_id"),
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod

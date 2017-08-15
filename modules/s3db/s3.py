@@ -2,7 +2,7 @@
 
 """ S3 Framework Tables
 
-    @copyright: 2009-2016 (c) Sahana Software Foundation
+    @copyright: 2009-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -220,6 +220,19 @@ class S3DynamicTablesModel(S3Model):
                            label = T("Expose mobile form"),
                            default = True,
                            ),
+                     Field("mobile_data", "boolean",
+                           label = T("Expose data for mobile clients"),
+                           default = False,
+                           ),
+                     Field("settings", "json",
+                           label = T("Settings"),
+                           requires = IS_EMPTY_OR(IS_JSONS3()),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Settings"),
+                                                           T("Configuration settings for this table (JSON object)"),
+                                                           ),
+                                         ),
+                           ),
                      #s3_comments(),
                      *s3_meta_fields())
 
@@ -260,7 +273,6 @@ class S3DynamicTablesModel(S3Model):
         tablename = "s3_field"
         define_table(tablename,
                      table_id(empty = False,
-                              notnull = True,
                               ondelete = "CASCADE",
                               ),
                      Field("label",

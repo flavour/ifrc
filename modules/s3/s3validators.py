@@ -1113,7 +1113,6 @@ class IS_ONE_OF_EMPTY_SELECT(IS_ONE_OF_EMPTY):
 
 # =============================================================================
 class IS_NOT_ONE_OF(IS_NOT_IN_DB):
-
     """
         Filtered version of IS_NOT_IN_DB()
             - understands the 'deleted' field.
@@ -1124,26 +1123,74 @@ class IS_NOT_ONE_OF(IS_NOT_IN_DB):
     """
 
     def __call__(self, value):
+
         value = str(value)
         if not value.strip():
+            # Empty => error
             return (value, translate(self.error_message))
+
         if value in self.allowed_override:
+            # Uniqueness-requirement overridden
             return (value, None)
+
+        # Establish table and field
         (tablename, fieldname) = str(self.field).split(".")
         dbset = self.dbset
         table = dbset.db[tablename]
         field = table[fieldname]
+
+        # Does the table allow archiving ("soft-delete")?
+        archived = "deleted" in table
+
+        # Does the table use multiple columns as key?
+        record_id = self.record_id
+        keys = record_id.keys() if isinstance(record_id, dict) else None
+
+        # Build duplicate query
+        # => if the field has a unique-constraint, we must include
+        #    archived ("soft-deleted") records, otherwise the
+        #    validator will pass, but the DB-write will crash
         query = (field == value)
-        if "deleted" in table:
+        if not field.unique and archived:
             query = (table["deleted"] == False) & query
-        rows = dbset(query).select(limitby=(0, 1))
-        if len(rows) > 0:
-            if isinstance(self.record_id, dict):
-                for f in self.record_id:
-                    if str(getattr(rows[0], f)) != str(self.record_id[f]):
+
+        # Limit the fields we extract to just keys+deleted
+        fields = []
+        if keys:
+            fields = [table[k] for k in keys]
+        else:
+            fields = [table._id]
+        if archived:
+            fields.append(table.deleted)
+
+        # Find conflict
+        row = dbset(query).select(limitby=(0, 1), *fields).first()
+        if row:
+            if keys:
+                # Keyed table
+                for f in keys:
+                    if str(getattr(row, f)) != str(record_id[f]):
                         return (value, translate(self.error_message))
-            elif str(rows[0][table._id.name]) != str(self.record_id):
+
+            elif str(row[table._id.name]) != str(record_id):
+
+                if archived and row.deleted and field.type in ("string", "text"):
+                    # Table supports archiving, and the conflicting
+                    # record is "deleted" => try updating the archived
+                    # record by appending a random tag to the field value
+                    import random
+                    tagged = "%s.[%s]" % (value,
+                                         "".join(random.choice("abcdefghijklmnopqrstuvwxyz")
+                                                 for _ in range(8))
+                                         )
+                    try:
+                        row.update_record(**{fieldname: tagged})
+                    except:
+                        # Failed => nothing else we can try
+                        return (value, translate(self.error_message))
+                else:
                     return (value, translate(self.error_message))
+
         return (value, None)
 
 # =============================================================================
@@ -2651,13 +2698,13 @@ class IS_UTC_DATETIME(Validator):
         T = current.T
         if error_message is None:
             if minimum is None and maximum is None:
-                error_message = T("Date is required!")
+                error_message = T("Date/Time is required!")
             elif minimum is None:
-                error_message = T("Date must be %(max)s or earlier!")
+                error_message = T("Date/Time must be %(max)s or earlier!")
             elif maximum is None:
-                error_message = T("Date must be %(min)s or later!")
+                error_message = T("Date/Time must be %(min)s or later!")
             else:
-                error_message = T("Date must be between %(min)s and %(max)s!")
+                error_message = T("Date/Time must be between %(min)s and %(max)s!")
         if offset_error is None:
             offset_error = T("Invalid UTC offset!")
 
@@ -2715,7 +2762,11 @@ class IS_UTC_DATETIME(Validator):
                                               local=True,
                                               )
             if dt is None:
-                return(value, self.error_message)
+                # Try parsing as date
+                dt_ = self.calendar.parse_date(dtstr)
+                if dt_ is None:
+                    return(value, self.error_message)
+                dt = datetime.datetime.combine(dt_, datetime.datetime.min.time())
         elif isinstance(value, datetime.datetime):
             dt = value
             utc_offset = None
@@ -3772,7 +3823,7 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
                 ("grb", "Grebo"),
                 #("grc", "Greek, Ancient (to 1453)"),
                 #("gre", "Greek, Modern (1453-)"),
-                ("el", "Greek, Modern (1453-)"),
+                ("el", "Greek"), # "Greek, Modern (1453-)"
                 #("grn", "Guarani"),
                 ("gn", "Guarani"),
                 ("gsw", "Swiss German; Alemannic; Alsatian"),
@@ -4069,7 +4120,7 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
                 ("sel", "Selkup"),
                 #("sem", "Semitic languages"),
                 #("sga", "Irish, Old (to 900)"),
-                #("sgn", "Sign Languages"),
+                ("sgn", "Sign Languages"),
                 ("shn", "Shan"),
                 ("sid", "Sidamo"),
                 #("sin", "Sinhala; Sinhalese"),

@@ -3,7 +3,7 @@
     Sahana Eden Volunteers Management
     (Extends modules/eden/hrm.py)
 
-    @copyright: 2012-2016 (c) Sahana Software Foundation
+    @copyright: 2012-2017 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1016,7 +1016,7 @@ def vol_service_record(r, **attr):
         if image:
             image = image.image
             size = (160, None)
-            image = s3db.pr_image_represent(image, size=size)
+            image = s3db.pr_image_library_represent(image, size=size)
             size = s3db.pr_image_size(image, size)
             url = URL(c="default",
                       f="download",

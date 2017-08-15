@@ -321,6 +321,15 @@ def config(settings):
 
     settings.fin.currency_default = currency_default
 
+    def currency_represent(currency):
+        """ NS-specific currency represent """
+
+        if currency == "HNL":
+            root_org = current.auth.root_org_name()
+            if root_org == HNRC:
+                return "L"
+        return currency
+
     # -------------------------------------------------------------------------
     # Map Settings
 
@@ -1945,14 +1954,17 @@ Thank you"""
                 s3db = current.s3db
                 # Default to Volunteers
                 s3db.hrm_human_resource.type.default = 2
-                # Doesn't work as email created after human_resource
-                #s3db.configure("hrm_human_resource",
-                #               create_onaccept = hrm_human_resource_create_onaccept,
-                #               )
-                # Create User Accounts for those Persons without them
-                s3db.configure("hrm_training",
-                               postimport = hrm_training_postimport,
-                               )
+                has_role = current.auth.s3_has_role
+                if not has_role("ADMIN") and \
+                   (has_role("training_coordinator") or has_role("training_assistant")):
+                    # Doesn't work as email created after human_resource
+                    #s3db.configure("hrm_human_resource",
+                    #               create_onaccept = hrm_human_resource_create_onaccept,
+                    #               )
+                    # Create User Accounts for those Persons without them
+                    s3db.configure("hrm_training",
+                                   postimport = hrm_training_postimport,
+                                   )
 
             return True
         s3.prep = custom_prep
@@ -2909,6 +2921,23 @@ Thank you"""
     settings.customise_supply_item_category_resource = customise_supply_item_category_resource
 
     # -------------------------------------------------------------------------
+    def customise_project_organisation_resource(r, tablename):
+
+        root_org = current.auth.root_org_name()
+        if root_org == HNRC:
+            from gluon import IS_IN_SET
+            currency_opts = {"EUR" : "EUR",
+                             "CHF" : "CHF",
+                             "HNL" : "L",
+                             "USD" : "USD",
+                             }
+            f = current.s3db.project_organisation.currency
+            f.represent = currency_represent
+            f.requires = IS_IN_SET(currency_opts)
+
+    settings.customise_project_organisation_resource = customise_project_organisation_resource
+
+    # -------------------------------------------------------------------------
     def project_project_postprocess(form):
         """
             When using Budget Monitoring (i.e. HNRC) then create the entries
@@ -3075,18 +3104,22 @@ Thank you"""
         if root_org == HNRC:
             # @ToDo: Use Inter-American Framework instead (when extending to Zone office)
             # @ToDo: Add 'Business Line' (when extending to Zone office)
-            settings.project.details_tab = True
-            #settings.project.community_volunteers = True
+            project_settings = settings.project
+            project_settings.details_tab = True
+            #project_settings.community_volunteers = True
             # Done in a more structured way instead
             objectives = None
             outputs = None
-            settings.project.goals = True
-            settings.project.indicators = True
-            settings.project.outcomes = True
-            settings.project.outputs = True
+            project_settings.goals = True
+            project_settings.outcomes = True
+            project_settings.outputs = True
+            project_settings.indicators = True
+            project_settings.indicator_criteria = True
+            project_settings.status_from_activities = True
+            table.human_resource_id.label = T("Coordinator")
             # Use Budget module instead of ProjectAnnualBudget
-            settings.project.multiple_budgets = False
-            settings.project.budget_monitoring = True
+            project_settings.multiple_budgets = False
+            project_settings.budget_monitoring = True
             # Require start/end dates
             table.start_date.requires = table.start_date.requires.other
             table.end_date.requires = table.end_date.requires.other
@@ -3104,6 +3137,15 @@ Thank you"""
             import random, string
             btable.name.default = "".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(16))
             btable.monitoring_frequency.default = 3 # Monthly
+            btable.currency.represent = currency_represent
+            currency_opts = {"EUR" : "EUR",
+                             "CHF" : "CHF",
+                             "HNL" : "L",
+                             "USD" : "USD",
+                             }
+            from gluon import IS_IN_SET
+            btable.currency.requires = IS_IN_SET(currency_opts)
+            s3db.budget_monitoring.currency.represent = currency_represent
             postprocess = project_project_postprocess
             list_fields = s3db.get_config("project_project", "list_fields")
             list_fields += [(T("Monthly Status"), "current_status_by_indicators"),
@@ -3260,7 +3302,54 @@ Thank you"""
             else:
                 result = True
 
-            if r.component:
+            if r.method == "grouped":
+
+                grouped = {"default":
+                        {"title": T("Global Report of Projects Status"),
+                         "fields": [(T("Project"), "name"),
+                                    (T("Program"), "programme.name"),
+                                    (T("Donor"), "donor.organisation_id"),
+                                    (T("Budget"), "budget.total_budget"),
+                                    (T("Location"), "location.location_id"),
+                                    "start_date",
+                                    "end_date",
+                                    ],
+                         "orderby": ["name",
+                                     ],
+                         "aggregate": [("sum", "budget.total_budget"),
+                                       ],
+                         },
+                       }
+
+                from s3 import S3DateFilter, S3OptionsFilter
+
+                filter_widgets = [S3DateFilter("date",
+                                               label = T("Time Period"),
+                                               hide_time = True,
+                                               ),
+                                  S3OptionsFilter("programme_project.programme_id",
+                                                  label = T("Programs"),
+                                                  ),
+                                  S3OptionsFilter("theme_project.theme_id",
+                                                  label = T("Themes"),
+                                                  ),
+                                  S3OptionsFilter("sector_project.sector_id",
+                                                  label = T("Sectors"),
+                                                  ),
+                                  S3OptionsFilter("beneficiary.parameter_id",
+                                                  label = T("Beneficiaries"),
+                                                  ),
+                                  S3OptionsFilter("hazard_project.hazard_id",
+                                                  label = T("Hazards"),
+                                                  ),
+                                  ]
+
+                s3db.configure(tablename,
+                               filter_widgets = filter_widgets,
+                               grouped = grouped,
+                               )
+
+            elif r.component:
                 if r.component_name == "organisation":
                     component_id = r.component_id
                     if component_id:
@@ -3408,16 +3497,22 @@ Thank you"""
     #settings.customise_project_beneficiary_resource = customise_project_beneficiary_resource
 
     # -------------------------------------------------------------------------
-    def customise_project_indicator_resource(r, tablename):
+    #def customise_project_indicator_resource(r, tablename):
 
-        table = current.s3db.project_indicator
-        table.definition.label = T("Indicator Definition")
-        table.measures.label = T("Indicator Criteria")
+    #    table = current.s3db.project_indicator
+    #    table.definition.label = T("Indicator Definition")
+    #    table.measures.label = T("Indicator Criteria")
 
-    settings.customise_project_indicator_resource = customise_project_indicator_resource
+    #settings.customise_project_indicator_resource = customise_project_indicator_resource
 
     # -------------------------------------------------------------------------
     def customise_project_indicator_data_resource(r, tablename):
+
+        table = current.s3db.project_indicator_data
+        f = table.start_date
+        f.readable = f.writable = True
+        f.label = T("Start Date")
+        table.end_date.label = T("End Date")
 
         if r.method == "update":
             has_role = current.auth.s3_has_role
@@ -3425,7 +3520,6 @@ Thank you"""
                 # Normal Access
                 return
             # Project Manager
-            table = current.s3db.project_indicator_data
             if r.tablename == "project_indicator_data":
                 record_id = r.id
             else:

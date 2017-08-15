@@ -38,6 +38,7 @@ def config(settings):
     settings.gis.countries = ("PH",)
     # Uncomment to display the Map Legend as a floating DIV
     settings.gis.legend = "float"
+    settings.gis.latlon_selector = True
     # Uncomment to Disable the Postcode selector in the LocationSelector
     settings.gis.postcode_selector = False
     # Uncomment to show the Print control:
@@ -131,6 +132,10 @@ def config(settings):
 
     settings.mobile.forms = [("Beneficiaries", "pr_person", {"c": "dvr",
                                                              }),
+                             # Done via the Answer resource, which is exposed through Dynamic Tables
+                             #("Rapid Assessments", "dc_response", {"c": "dc",
+                             #                                      "f": "respnse",
+                             #                                      }),
                              ]
 
     # =========================================================================
@@ -165,6 +170,9 @@ def config(settings):
     # =========================================================================
     # Data Collection
     #
+
+    # Download Assessments - as these have been created through Targetting
+    settings.dc.mobile_data = True
 
     def dc_target_onaccept(form):
         """
@@ -228,8 +236,9 @@ def config(settings):
 
         # Always at L3
         from s3 import S3LocationSelector
-        table.location_id.widget = S3LocationSelector(levels=("L1", "L2", "L3"),
-                                                      show_map=False)
+        table.location_id.widget = S3LocationSelector(levels = ("L1", "L2", "L3"),
+                                                      show_map = False,
+                                                      )
 
         has_role = current.auth.s3_has_role
         if has_role("ERT_LEADER") or has_role("HUM_MANAGER"):
@@ -259,6 +268,47 @@ def config(settings):
     settings.customise_dc_target_resource = customise_dc_target_resource
 
     # -------------------------------------------------------------------------
+    def customise_dc_target_controller(**attr):
+
+        s3 = current.response.s3
+        standard_prep = s3.prep
+        def custom_prep(r):
+            # Call standard prep
+            if callable(standard_prep):
+                if not standard_prep(r):
+                    return False
+
+            if not r.component:
+                # When creating Targets from Assessments module, include the Event field
+                from s3 import S3SQLCustomForm, S3SQLInlineLink
+                crud_form = S3SQLCustomForm(S3SQLInlineLink("event",
+                                                            label = T("Disaster"),
+                                                            field = "event_id",
+                                                            multiple = False,
+                                                            ),
+                                            "template_id",
+                                            "date",
+                                            "location_id",
+                                            "comments",
+                                            )
+
+                current.s3db.configure("dc_target",
+                                       crud_form = crud_form,
+                                       )
+            elif r.component_name == "response":
+                # Don't start anseering Assessment when creating them here
+                current.s3db.configure("dc_response",
+                                       create_next = None,
+                                       )
+
+            return True
+        s3.prep = custom_prep
+
+        return attr
+
+    settings.customise_dc_target_controller = customise_dc_target_controller
+
+    # -------------------------------------------------------------------------
     def customise_dc_response_resource(r, tablename):
 
         # @ToDo: Filters inc 'Assigned to me'
@@ -267,11 +317,33 @@ def config(settings):
         s3db = current.s3db
         table = s3db.dc_response
 
-        table.person_id.label = T("Name of team leader")
-
+        f = table.person_id
+        f.label = T("Name of team leader")
+        # Filter to just Staff
+        from gluon import IS_EMPTY_OR
+        from s3 import IS_ONE_OF
+        ptable = s3db.pr_person
+        htable = s3db.hrm_human_resource
+        set = db(ptable.id == htable.person_id)
+        f.requires = IS_EMPTY_OR(IS_ONE_OF(set, "pr_person.id",
+                                           f.represent,
+                                           orderby = "pr_person.first_name",
+                                           sort = True,
+                                           ))
+        f.widget = None
+        # @ToDo: have this create Staff, not just Person (Allow hrm/person/create with embedded Staff details?)
+        from s3layouts import S3PopupLink
+        f.comment = S3PopupLink(c = "pr",
+                                f = "person",
+                                label = T("Create Person"),
+                                vars = {"child": "person_id"},
+                                )
+                                      
         # Always at L4
         from s3 import S3LocationSelector
-        table.location_id.widget = S3LocationSelector(levels=("L1", "L2", "L3", "L4"))
+        table.location_id.widget = S3LocationSelector(levels = ("L1", "L2", "L3", "L4"),
+                                                      show_map = False,
+                                                      )
 
         # Always SC
         otable = s3db.org_organisation
@@ -289,9 +361,9 @@ def config(settings):
             f.readable = f.writable = False 
 
         has_role = current.auth.s3_has_role
+        ttable = s3db.dc_template
         if has_role("ERT_LEADER") or has_role("HUM_MANAGER"):
             # Default to the Rapid Assessment Form
-            ttable = s3db.dc_template
             RAPID = db(ttable.name == "Rapid Assessment").select(ttable.id,
                                                                  cache = s3db.cache,
                                                                  limitby = (0, 1)
@@ -302,28 +374,112 @@ def config(settings):
                 # Prepop not done
                 current.log.warning("Cannot default Targets to Rapid Assessment form")
 
+        def update_onaccept(form):
+            form_vars = form.vars
+            response_id = form_vars["id"]
+            person_id = form_vars.get("person_id")
+            if not person_id:
+                record = db(table.id == response_id).select(table.person_id,
+                                                            limitby = (0, 1)
+                                                            ).first()
+                person_id = record.person_id
+            if person_id:
+                # See if there is a user associated with it
+                user_id = current.auth.s3_get_user_id(person_id)
+                if user_id:
+                    # Set correct owned_by_user
+                    db(table.id == response_id).update(owned_by_user = user_id)
+                    # Also update the Answer
+                    dtable = s3db.s3_table
+                    ttable = s3db.dc_template
+                    query = (table.id == response_id) & \
+                            (table.template_id == ttable.id) & \
+                            (ttable.table_id == dtable.id)
+                    template = db(query).select(dtable.name,
+                                                limitby=(0, 1),
+                                                ).first()
+                    dtablename = template.name
+                    db(s3db[dtablename].response_id == response_id).update(owned_by_user = user_id)
+
+        def create_onaccept(form):
+            form_vars = form.vars
+            response_id = form_vars["id"]
+            person_id = form_vars.get("person_id")
+            if not person_id:
+                record = db(table.id == response_id).select(table.person_id,
+                                                            limitby = (0, 1)
+                                                            ).first()
+                person_id = record.person_id
+            if person_id:
+                # See if there is a user associated with it
+                user_id = current.auth.s3_get_user_id(person_id)
+                if user_id:
+                    # Set correct owned_by_user
+                    db(table.id == response_id).update(owned_by_user = user_id)
+            else:
+                user_id = None
+            # Create the Answer (ERT Members don't have CREATE permissions)
+            dtable = s3db.s3_table
+            ttable = s3db.dc_template
+            query = (table.id == response_id) & \
+                    (table.template_id == ttable.id) & \
+                    (ttable.table_id == dtable.id)
+            template = db(query).select(dtable.name,
+                                        limitby=(0, 1),
+                                        ).first()
+            dtablename = template.name
+            s3db[dtablename].insert(response_id = response_id,
+                                    owned_by_user = user_id,
+                                    )
+
+        s3db.configure("dc_response",
+                       create_onaccept = create_onaccept,
+                       update_onaccept = update_onaccept,
+                       )
+
     settings.customise_dc_response_resource = customise_dc_response_resource
 
     # -------------------------------------------------------------------------
     def customise_dc_response_controller(**attr):
 
-        # When creating Assessments from Assessments module, include the Event field
-        from s3 import S3SQLCustomForm, S3SQLInlineLink
-        crud_form = S3SQLCustomForm(S3SQLInlineLink("event",
-                                                    label = T("Disaster"),
-                                                    field = "event_id",
-                                                    multiple = False,
-                                                    ),
-                                    "template_id",
-                                    "date",
-                                    "location_id",
-                                    "person_id",
-                                    "comments",
-                                    )
+        s3 = current.response.s3
+        standard_prep = s3.prep
+        def custom_prep(r):
+            # Call standard prep
+            if callable(standard_prep):
+                if not standard_prep(r):
+                    return False
 
-        current.s3db.configure("dc_response",
+            # rheader represents should be clickable
+            from gluon import URL
+            s3db = current.s3db
+            s3db.dc_response.person_id.represent = s3db.pr_PersonRepresent(linkto=URL(c="hrm", f="person", args=["[id]"]),
+                                                                           show_link = True,
+                                                                           )
+            if not r.component:
+                # When creating Assessments from Assessments module, include the Event field
+                from s3 import S3SQLCustomForm, S3SQLInlineLink
+                crud_form = S3SQLCustomForm(S3SQLInlineLink("event",
+                                                            label = T("Disaster"),
+                                                            field = "event_id",
+                                                            multiple = False,
+                                                            ),
+                                            "template_id",
+                                            "date",
+                                            "location_id",
+                                            "person_id",
+                                            "comments",
+                                            )
+
+                s3db.configure("dc_response",
                                crud_form = crud_form,
                                )
+
+            elif r.component_name == "answer":
+                current.s3db.event_event.start_date.label = T("Date the Event Occurred")
+
+            return True
+        s3.prep = custom_prep
 
         return attr
 
@@ -597,7 +753,7 @@ def config(settings):
     # -------------------------------------------------------------------------
     def customise_pr_person_resource(r, tablename):
 
-        if r.function != "distribution":
+        if r.function not in ("activity", "distribution"):
             return
 
         # Beneficiaries
@@ -1150,8 +1306,8 @@ def config(settings):
             if callable(standard_postp):
                 output = standard_postp(r, output)
 
-            if r.interactive and r.component_name == "case":
-                if "showadd_btn" in output:
+            if r.interactive:
+                if r.component_name == "case" and "showadd_btn" in output:
                     # Replace add button with one for the Person perspective
                     from gluon import URL
                     from s3 import S3CRUD
@@ -1168,6 +1324,12 @@ def config(settings):
                                                  _href=url,
                                                  )
                     output["buttons"] = {"add_btn": add_btn}
+                elif r.component_name == "person" and \
+                     r.function != "distribution":
+                    # Only Logs should be editing Beneficiaries
+                    s3db.configure("pr_person",
+                                   insertable = False,
+                                   )
 
             return output
         s3.postp = custom_postp
@@ -1304,7 +1466,7 @@ def config(settings):
                              levels = ("L1", "L2", "L3"),
                              hidden = True,
                              ),
-            S3OptionsFilter("programme_project.programme_id",
+            S3OptionsFilter("project_programme_project.programme_id",
                             label = T("Program"),
                             hidden = True,
                             ),
