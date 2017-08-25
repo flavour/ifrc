@@ -1038,6 +1038,9 @@ class PRPersonModel(S3Model):
                                                 },
                             dvr_case_effort = "person_id",
                             dvr_case_event = "person_id",
+                            dvr_case_flag_case = {"name": "dvr_flag",
+                                                  "joinby": "person_id",
+                                                  },
                             dvr_case_flag = {"link": "dvr_case_flag_case",
                                              "joinby": "person_id",
                                              "key": "flag_id",
@@ -1059,6 +1062,7 @@ class PRPersonModel(S3Model):
                             dvr_note = {"name": "case_note",
                                         "joinby": "person_id",
                                         },
+                            dvr_residence_status = "person_id",
                             # Evacuee Registry
                             evr_case = {"joinby": "person_id",
                                         "multiple": False,
@@ -5880,12 +5884,11 @@ class pr_PersonEntityRepresent(S3Represent):
 
         item = object.__getattribute__(row, instance_type)
         if instance_type == "pr_person":
-            pe_str = "%s %s" % (s3_fullname(item),
-                                label)
+            pe_str = "%s %s" % (s3_fullname(item), label)
         elif instance_type == "hrm_training_event":
             pe_str = self.training_event_represent.represent_row(item)
         elif "name" in item:
-            pe_str = s3_unicode(item["name"])
+            pe_str = s3_str(item["name"])
         else:
             pe_str = "[%s]" % label
 
@@ -5893,7 +5896,8 @@ class pr_PersonEntityRepresent(S3Represent):
             etable = current.s3db.pr_pentity
             instance_type_nice = etable.instance_type.represent(instance_type)
             pe_str = "%s (%s)" % (pe_str,
-                                  s3_unicode(instance_type_nice))
+                                  s3_str(instance_type_nice),
+                                  )
 
         return pe_str
 
@@ -6972,8 +6976,9 @@ def pr_update_affiliations(table, record):
             return
         pr_group_update_affiliations(record)
 
-    elif rtype in ("org_organisation_branch",
-                   "org_group_membership",
+    elif rtype in ("org_group_membership",
+                   "org_organisation_branch",
+                   "org_organisation_team",
                    "org_site") or \
          rtype in current.auth.org_site_types:
         # Hierarchy methods in org.py:

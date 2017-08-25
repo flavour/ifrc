@@ -35,6 +35,7 @@ __all__ = ("DVRCaseModel",
            "DVRHouseholdModel",
            "DVRHouseholdMembersModel",
            "DVRCaseEconomyInformationModel",
+           "DVRLegalStatusModel",
            "DVRCaseEffortModel",
            "DVRCaseEventModel",
            "DVRCaseEvaluationModel",
@@ -1482,13 +1483,13 @@ class DVRResponseModel(S3Model):
                            default = False,
                            label = T("Default Initial Status"),
                            ),
-                     Field("is_default_closure", "boolean",
-                           default = False,
-                           label = T("Default Closure Status"),
-                           ),
                      Field("is_closed", "boolean",
                            default = False,
                            label = T("Closes Response Action"),
+                           ),
+                     Field("is_default_closure", "boolean",
+                           default = False,
+                           label = T("Default Closure Status"),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -2748,14 +2749,58 @@ class DVRCaseActivityModel(S3Model):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def case_activity_onaccept(form):
+    def case_activity_close_responses(case_activity_id):
         """
-            Onaccept-callback for case activites:
-                - automatically set end date when marked as completed
+            Close all open response actions in a case activity
+
+            @param case_activity_id: the case activity record ID
         """
 
         db = current.db
         s3db = current.s3db
+
+        rtable = s3db.dvr_response_action
+        stable = s3db.dvr_response_status
+
+        # Get all response actions for this case activity
+        # that have an open-status (or no status at all):
+        left = stable.on((stable.id == rtable.status_id) & \
+                         (stable.deleted == False))
+        query = (rtable.case_activity_id == case_activity_id) & \
+                (rtable.deleted == False) & \
+                ((stable.is_closed == False) | (stable.id == None))
+        rows = db(query).select(rtable.id)
+
+        if rows:
+
+            # Get the default closure status,
+            # (usually something like "obsolete")
+            query = (stable.is_default_closure == True) & \
+                    (stable.deleted == False)
+            closure_status = db(query).select(stable.id,
+                                              limitby = (0, 1),
+                                              ).first()
+
+            # Update all open response actions for this
+            # case activity to the default closure status:
+            if closure_status:
+                response_ids = set(row.id for row in rows)
+                query = rtable.id.belongs(response_ids)
+                db(query).update(status_id = closure_status.id)
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def case_activity_onaccept(cls, form):
+        """
+            Onaccept-callback for case activites:
+                - set end date when marked as completed
+                - close any open response actions when marked as completed
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        settings = current.deployment_settings
 
         # Read form data
         form_vars = form.vars
@@ -2773,7 +2818,7 @@ class DVRCaseActivityModel(S3Model):
         activity = None
         is_closed = False
 
-        if current.deployment_settings.get_dvr_case_activity_use_status():
+        if settings.get_dvr_case_activity_use_status():
             # Use status_id
             stable = s3db.dvr_case_activity_status
             left = stable.on(atable.status_id == stable.id)
@@ -2814,7 +2859,9 @@ class DVRCaseActivityModel(S3Model):
 
             activity.update_record(**data)
 
-            # @todo: also close all actions linked to this activity
+            # Close any open response actions in this activity:
+            if settings.get_dvr_manage_response_actions:
+                cls.case_activity_close_responses(activity.id)
 
         elif activity.end_date:
 
@@ -2971,6 +3018,7 @@ class DVRCaseAppointmentModel(S3Model):
 
         mandatory_appointments = settings.get_dvr_mandatory_appointments()
         update_case_status = settings.get_dvr_appointments_update_case_status()
+        update_last_seen_on = settings.get_dvr_appointments_update_last_seen_on()
 
         # ---------------------------------------------------------------------
         # Case Appointment Type
@@ -3029,6 +3077,8 @@ class DVRCaseAppointmentModel(S3Model):
                            default = True,
                            label = T("Presence required"),
                            represent = s3_yes_no_represent,
+                           readable = update_last_seen_on,
+                           writable = update_last_seen_on,
                            comment = DIV(_class = "tooltip",
                                          _title = "%s|%s" % (T("Presence required"),
                                                              T("This appointment requires the presence of the person concerned"),
@@ -3822,6 +3872,175 @@ class DVRCaseEconomyInformationModel(S3Model):
     @staticmethod
     def defaults():
         """ Safe defaults for names in case the module is disabled """
+
+        return {}
+
+# =============================================================================
+class DVRLegalStatusModel(S3Model):
+    """ Models to document the legal status of a beneficiary """
+
+    names = ("dvr_residence_status_type",
+             "dvr_residence_permit_type",
+             "dvr_residence_status",
+             )
+
+    def model(self):
+
+        T = current.T
+
+        db = current.db
+        s3 = current.response.s3
+
+        define_table = self.define_table
+        crud_strings = s3.crud_strings
+
+        # ---------------------------------------------------------------------
+        # Residence Status Types
+        #
+        tablename = "dvr_residence_status_type"
+        define_table(tablename,
+                     Field("name",
+                           requires = IS_NOT_EMPTY(),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # Table Configuration
+        self.configure(tablename,
+                       deduplicate = S3Duplicate(),
+                       )
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Residence Status Type"),
+            title_display = T("Residence Status Type Details"),
+            title_list = T("Residence Status Types"),
+            title_update = T("Edit Residence Status Type"),
+            label_list_button = T("List Residence Status Types"),
+            label_delete_button = T("Delete Residence Status Type"),
+            msg_record_created = T("Residence Status Type created"),
+            msg_record_modified = T("Residence Status Type updated"),
+            msg_record_deleted = T("Residence Status Type deleted"),
+            msg_list_empty = T("No Residence Status Types currently defined"),
+            )
+
+        # Reusable field
+        represent = S3Represent(lookup=tablename, translate=True)
+        status_type_id = S3ReusableField("status_type_id",
+                                         "reference %s" % tablename,
+                                         label = T("Residence Status"),
+                                         represent = represent,
+                                         requires = IS_EMPTY_OR(IS_ONE_OF(
+                                            db, "%s.id" % tablename,
+                                            represent,
+                                            )),
+                                         sortby = "name",
+                                         comment = S3PopupLink(
+                                                c="dvr",
+                                                f="residence_status_type",
+                                                tooltip=T("Create a new status type"),
+                                                ),
+                                         )
+
+        # ---------------------------------------------------------------------
+        # Residence Permit Types
+        #
+        tablename = "dvr_residence_permit_type"
+        define_table(tablename,
+                     Field("name",
+                           requires = IS_NOT_EMPTY(),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # Table Configuration
+        self.configure(tablename,
+                       deduplicate = S3Duplicate(),
+                       )
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Residence Permit Type"),
+            title_display = T("Residence Permit Type Details"),
+            title_list = T("Residence Permit Types"),
+            title_update = T("Edit Residence Permit Type"),
+            label_list_button = T("List Residence Permit Types"),
+            label_delete_button = T("Delete Residence Permit Type"),
+            msg_record_created = T("Residence Permit Type created"),
+            msg_record_modified = T("Residence Permit Type updated"),
+            msg_record_deleted = T("Residence Permit Type deleted"),
+            msg_list_empty = T("No Residence Permit Types currently defined"),
+            )
+
+        # Reusable field
+        represent = S3Represent(lookup=tablename, translate=True)
+        permit_type_id = S3ReusableField("permit_type_id",
+                                         "reference %s" % tablename,
+                                         label = T("Residence Permit Type"),
+                                         represent = represent,
+                                         requires = IS_EMPTY_OR(IS_ONE_OF(
+                                                        db, "%s.id" % tablename,
+                                                        represent,
+                                                        )),
+                                         sortby = "name",
+                                         comment = S3PopupLink(
+                                                        c="dvr",
+                                                        f="residence_permit_type",
+                                                        tooltip=T("Create a new permit type"),
+                                                        ),
+                                                   )
+
+        # ---------------------------------------------------------------------
+        # Residence Status
+        #
+        tablename = "dvr_residence_status"
+        define_table(tablename,
+                     self.pr_person_id(),
+                     status_type_id(),
+                     permit_type_id(),
+                     Field("reference",
+                           label = T("ID/Ref.No."),
+                           ),
+                     s3_date("valid_from",
+                             label = T("Valid From"),
+                             ),
+                     s3_date("valid_until",
+                             label = T("Valid Until"),
+                             ),
+                     #Field("obsolete", "boolean",
+                     #      default = False,
+                     #      ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+            label_create = T("Create Residence Status"),
+            title_display = T("Residence Status Details"),
+            title_list = T("Residence Statuses"),
+            title_update = T("Edit Residence Status"),
+            label_list_button = T("List Residence Statuses"),
+            label_delete_button = T("Delete Residence Status"),
+            msg_record_created = T("Residence Status created"),
+            msg_record_modified = T("Residence Status updated"),
+            msg_record_deleted = T("Residence Status deleted"),
+            msg_list_empty = T("No Residence Statuses currently defined"),
+            )
+
+        # ---------------------------------------------------------------------
+        # Pass names back to global scope (s3.*)
+        #
+        return {}
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """ Safe defaults for names in case the module is disabled """
+
+        #dummy = S3ReusableField("dummy_id", "integer",
+        #                        readable = False,
+        #                        writable = False,
+        #                        )
 
         return {}
 

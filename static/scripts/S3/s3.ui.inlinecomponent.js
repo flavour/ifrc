@@ -130,12 +130,15 @@
                 // Check add-row for defaults
                 var $row = $(this),
                     defaults = false;
+
                 $row.find('input[type!="hidden"], select, textarea').each(function() {
-                    var $this = $(this);
-                    if ($this.is(':visible') && $this.val() && $this.attr('type') != 'checkbox') {
+                    var $this = $(this),
+                        visible = $this.css('display') != 'none';
+                    if (visible && $this.val() && $this.attr('type') != 'checkbox') {
                         defaults = true;
                     }
                 });
+
                 if (defaults) {
                     // Enforce validation
                     self._markChanged($row);
@@ -470,6 +473,17 @@
                     value = input.val();
 
                     if (input.attr('type') == 'file') {
+
+                        // When editing an existing row, upload-fields are empty
+                        // unless a new file is uploaded, so if it is not marked
+                        // to be deleted, then retain the original file name to
+                        // indicate no change (may not pass validation otherwise):
+                        if (!value && original) {
+                            var dflag = $('#' + formname + '_i_' + fieldname + '_edit_' + rowindex + '__delete');
+                            if (!dflag.prop("checked")) {
+                                value = original[fieldname].value;
+                            }
+                        }
 
                         // Clone the file input ready to accept new files
                         var cloned = input.clone().insertAfter(input);
@@ -844,6 +858,10 @@
                         // Update the upload-widget (i.e. link and image preview)
                         this._updateUploadWidget(input, value);
 
+                        // Also reset the delete-flag in the edit row
+                        var dflag = $('#' + formname + '_i_' + fieldname + '_edit_0__delete');
+                        dflag.prop("checked", false);
+
                     } else if (input.attr('type') == 'checkbox') {
 
                         // Set checked-property from boolean value
@@ -1141,7 +1159,7 @@
                         if (upload.length) {
                             uploadID = 'upload_' + formName + '_' + fieldName + '_' + newIndex;
                             $('#' + uploadID).remove();
-                            upload.attr({'id': upload_id, 'name': upload_id});
+                            upload.attr({'id': uploadID, 'name': uploadID});
                         }
 
                         // Store text representation for the read-row
@@ -1360,30 +1378,40 @@
          */
         _submitAll: function(event) {
 
-            var self = event.data.widget;
-
             event.preventDefault();
 
-            var el = $(self.element),
+            var self = event.data.widget,
+                el = $(self.element),
                 empty,
                 success,
                 errors = false,
                 row;
 
             // Find and validate all pending rows
-            var rows = el.find('.inline-form.changed, .inline-form.required');
-            for (var i=0, len=rows.length; i < len; i++) {
+            el.find('.inline-form.changed, .inline-form.required').each(function() {
 
-                row = $(rows[i]);
+                var row = $(this);
+
                 empty = true;
-                if (!row.hasClass('required')) {
+
+                if (row.hasClass('required')) {
+
+                    // Treat required rows as non-empty
+                    empty = false;
+
+                } else {
+
                     // Check that the row contains data
                     var inputs = row.find('input, select, textarea'),
-                        input;
-                    for (var j=0, numfields=inputs.length; j < numfields; j++) {
-                        input = $(inputs[j]);
+                        input,
+                        tokens,
+                        defaultInput;
+
+                    for (var i = inputs.length; i--;) {
+
+                        input = $(inputs[i]);
+
                         // Ignore hidden inputs unless they have an 'input' flag
-                        var inputFlag = input.data('input');
                         if (input.is('[type="hidden"]')) {
                             if (!input.data('input')) {
                                 continue;
@@ -1391,25 +1419,26 @@
                         } else if (!input.is(':visible')) {
                             continue;
                         }
+
                         // Treat SELECTs as empty if only the default value is selected
-                        if (input.prop('tagName') == 'SELECT') {
-                            var tokens = input.attr('id').split('_');
+                        // ...except in single-rows => always create what is visible
+                        if (input.prop('tagName') == 'SELECT' && !row.hasClass('single')) {
+                            tokens = input.attr('id').split('_');
                             tokens.pop();
                             tokens.push('default');
-                            var defaultInput = $('#' + tokens.join('_'));
+                            defaultInput = $('#' + tokens.join('_'));
                             if (defaultInput.length && defaultInput.val() == input.val()) {
                                 continue;
                             }
                         }
+
                         if ((input.attr('type') != 'checkbox' && input.val()) || input.prop('checked')) {
                             empty = false;
                             break;
                         }
                     }
-                } else {
-                    // Treat required rows as non-empty
-                    empty = false;
                 }
+
                 // Validate all non-empty rows
                 if (!empty) {
                     if (row.hasClass('add-row')) {
@@ -1421,7 +1450,8 @@
                         errors = true;
                     }
                 }
-            }
+            });
+
             if (!errors) {
                 // Remove the submit-event handler for this widget and
                 // continue submitting the main form (=this)
