@@ -70,7 +70,7 @@ def config(settings):
     # http://www.loc.gov/standards/iso639-2/php/code_list.php
     settings.L10n.languages = OrderedDict([
        ("en", "English"),
-       ("de", "Deutsch"),
+       ("de", "German"),
     ])
     # Default language for Language Toolbar (& GIS Locations in future)
     settings.L10n.default_language = "de"
@@ -1889,27 +1889,10 @@ def config(settings):
 
         s3db = current.s3db
 
-        config = {}
-        get_config = s3db.get_config
-
-        for method in ("create", "update", None):
-
-            setting = "%s_onaccept" % method if method else "onaccept"
-            default = get_config(tablename, setting)
-            if not default:
-                if method is None and len(config) < 2:
-                    onaccept = dvr_case_onaccept
-                else:
-                    continue
-            elif not isinstance(default, list):
-                onaccept = [default, dvr_case_onaccept]
-            else:
-                onaccept = default
-                if all(cb != dvr_case_onaccept for cb in onaccept):
-                    onaccept.append(dvr_case_onaccept)
-            config[setting] = onaccept
-
-        s3db.configure(tablename, **config)
+        s3db.add_custom_callback(tablename,
+                                 "onaccept",
+                                 dvr_case_onaccept,
+                                 )
 
         ctable = s3db.dvr_case
 
@@ -3847,6 +3830,15 @@ class DRKSiteActivityReport(object):
                                                              utc=True,
                                                              )
 
+        # Filtered component for preliminary residence permit
+        s3db.add_components("pr_person",
+                            pr_identity = {"name": "residence_permit",
+                                           "joinby": "person_id",
+                                           "filterby": {"type": 5},
+                                           "multiple": False,
+                                           },
+                            )
+
         # Filtered component for family
         s3db.add_components("pr_person",
                             pr_group = {"name": "family",
@@ -3923,7 +3915,7 @@ class DRKSiteActivityReport(object):
                        (T("X-Ray Place"), "xray_place"),
                        date_completed("BAMF"),
                        (T("BÜMA valid until"), "dvr_case.valid_until"),
-                       "dvr_case.stay_permit_until",
+                       (T("Preliminary Residence Permit until"), "residence_permit.valid_until"),
                        (T("Allowance Payments"), "payment.paid_on"),
                        (T("Admitted on"), "dvr_case.date"),
                        "dvr_case.origin_site_id",

@@ -98,22 +98,17 @@ def config(settings):
     # -------------------------------------------------------------------------
     # L10n (Localization) settings
     languages = OrderedDict([
-        #("ar", "العربية"),
-        ("dv", "ދިވެހި"), # Divehi (Maldives)
+        #("ar", "Arabic"),
+        ("dv", "Divehi"), # Maldives
         ("en-US", "English"),
-        #("es", "Español"),
-        #("fr", "Français"),
-        #("km", "ភាសាខ្មែរ"),        # Khmer
-        #("mn", "Монгол хэл"),  # Mongolian
-        ("my", "မြန်မာစာ"),        # Burmese
-        #("ne", "नेपाली"),          # Nepali
-        #("prs", "دری"),        # Dari
-        #("ps", "پښتو"),        # Pashto
-        #("tet", "Tetum"),
-        ("th", "ภาษาไทย"),        # Thai
-        ("tl", "Tagalog"), # Filipino
-        #("vi", "Tiếng Việt"),   # Vietnamese
-        #("zh-cn", "中文 (简体)"),
+        #("es", "Spanish"),
+        #("fr", "French"),
+        #("km", "Khmer"), # Cambodia
+        #("mn", "Mongolian"),
+        ("my", "Burmese"), # Myanmar
+        ("ne", "Nepali"),
+        ("th", "Thai"),
+        ("tl", "Tagalog"), # Philippines
     ])
     settings.cap.languages = languages
     settings.L10n.languages = languages
@@ -455,24 +450,34 @@ def config(settings):
                     except ImportError:
                         current.log.debug("tweepy module needed for sending tweets")
                     else:
+                        url = "%s/%s" % (arow["cap_info.web"], "profile")
+                        try:
+                            from pyshorteners import Shortener
+                        except ImportError:
+                            pass
+                        else:
+                            try:
+                                url = Shortener('Tinyurl', timeout=3).short(url)
+                            except:
+                                pass
                         twitter_text = \
 ("""%(status)s Alert: %(headline)s
 %(sender)s: %(sender_name)s
-%(website)s: %(Website)s%(profile)s""") % {"status": s3_str(T(arow["cap_alert.status"])),
+%(website)s: %(Website)s""") % {"status": s3_str(T(arow["cap_alert.status"])),
                                            "headline": s3_str(get_formatted_value(arow["cap_info.headline"],
                                                                                   system=False)),
                                            "sender": s3_str(T("Sender")),
                                            "sender_name": s3_str(get_formatted_value(arow["cap_info.sender_name"],
                                                                                      system=False)),
                                            "website": s3_str(T("Website")),
-                                           "Website": s3_str(arow["cap_info.web"]),
-                                           "profile": "/profile",
+                                           "Website": s3_str(url),
                                            }
                         try:
-                            # @ToDo: shorten url
                             # @ToDo: Handle the multi-message nicely?
                             # @ToDo: Send resource url with tweet
-                            current.msg.send_tweet(text=s3_str(twitter_text))
+                            current.msg.send_tweet(text=s3_str(twitter_text),
+                                                   alert_id=alert_id,
+                                                   )
                         except tweepy.error.TweepError, e:
                             current.log.debug("Sending tweets failed: %s" % e)
 
@@ -517,9 +522,16 @@ def config(settings):
                         send_by_pe_id(row.pe_id,
                                       subject,
                                       email_content,
-                                      document_ids=cap_document_id)
+                                      document_ids=cap_document_id,
+                                      alert_id=alert_id,
+                                      )
                         try:
-                            send_by_pe_id(row.pe_id, subject, sms_content, contact_method="SMS")
+                            send_by_pe_id(row.pe_id,
+                                          subject,
+                                          sms_content,
+                                          contact_method="SMS",
+                                          alert_id=alert_id,
+                                          )
                         except ValueError:
                             current.log.error("No SMS Handler defined!")
                 else:
@@ -532,9 +544,16 @@ def config(settings):
                         send_by_pe_id(row.pe_id,
                                       subject,
                                       email_content,
-                                      document_ids=cap_document_id)
+                                      document_ids=cap_document_id,
+                                      alert_id=alert_id,
+                                      )
                         try:
-                            send_by_pe_id(row.pe_id, subject, sms_content, contact_method="SMS")
+                            send_by_pe_id(row.pe_id,
+                                          subject,
+                                          sms_content,
+                                          contact_method="SMS",
+                                          alert_id=alert_id,
+                                          )
                         except ValueError:
                             current.log.error("No SMS Handler defined!")
 
@@ -842,6 +861,44 @@ def config(settings):
 
     settings.msg.notify_attachment = custom_msg_notify_attachment
 
+    # -----------------------------------------------------------------------------
+    def custom_msg_notify_send_data(resource, data, meta_data):
+        """
+            Custom Method to send data containing alert_id to the s3msg.send_by_pe_id
+            @param resource: the S3Resource
+            @param data: the data returned from S3Resource.select
+            @param meta_data: the meta data for the notification
+        """
+
+        rows = data.rows
+        data = {}
+        if len(rows) == 1:
+            row = rows[0]
+            if "cap_alert.id" in row:
+                try:
+                    alert_id = int(row["cap_alert.id"])
+                    data["alert_id"] = alert_id
+                except ValueError:
+                    pass
+
+        return data
+
+    settings.msg.notify_send_data = custom_msg_notify_send_data
+
+    # -----------------------------------------------------------------------------
+    def msg_send_postprocess(message_id, **data):
+        """
+            Custom function that link alert_id in cap module to message_id in
+            message module
+        """
+
+        alert_id = data.get("alert_id", None)
+        if alert_id and message_id:
+            current.s3db.cap_alert_message.insert(alert_id = alert_id,
+                                                  message_id = message_id)
+
+    settings.msg.send_postprocess = msg_send_postprocess
+
     # -------------------------------------------------------------------------
     # Comment/uncomment modules here to disable/enable them
     # @ToDo: Have the system automatically enable migrate if a module is enabled
@@ -1047,6 +1104,16 @@ def config(settings):
         description = row["_row"]["cap_info.description"] if system else row["cap_info.description"]
         status = row["cap_alert.status"]
         msg_type = row["cap_alert.msg_type"]
+        url = "%s/%s" % (row["cap_info.web"], "profile")
+        try:
+            from pyshorteners import Shortener
+        except ImportError:
+            pass
+        else:
+            try:
+                url = Shortener('Tinyurl', timeout=3).short(url)
+            except:
+                pass
 
         if event_type_id and event_type_id != current.messages["NONE"]:
             if not isinstance(event_type_id, lazyT) and \
@@ -1073,8 +1140,7 @@ def config(settings):
                          if status != "Actual" else "",
                          BR() if status != "Actual" else "",
                          BR() if status != "Actual" else "",
-                         A(T("VIEW ALERT ON THE WEB"),
-                           _href = "%s/%s" % (s3_str(row["cap_info.web"]), "profile")),
+                         A(T("VIEW ALERT ON THE WEB"), _href = s3_str(url)),
                          BR(), BR(),
                          B(s3_str("%s %s %s %s" % (T(row["cap_alert.scope"]),
                                                    T(status),
@@ -1156,7 +1222,7 @@ def config(settings):
                           },
                          BR(), BR(),
                          T("For more details visit %(url)s or contact %(contact)s") % \
-                         {"url": "%s/%s" % ((s3_str(row["cap_info.web"])), "profile"),
+                         {"url": s3_str(url),
                           "contact": s3_str(get_formatted_value(row["cap_info.contact"],
                                                                 system=system)),
                           },
@@ -1214,6 +1280,16 @@ def config(settings):
         itable = current.s3db.cap_info
         event_type_id = row["cap_info.event_type_id"]
         priority_id = row["cap_info.priority"]
+        url = "%s/%s" % (row["cap_info.web"], "profile")
+        try:
+            from pyshorteners import Shortener
+        except ImportError:
+            pass
+        else:
+            try:
+                url = Shortener('Tinyurl', timeout=3).short(url)
+            except:
+                pass
 
         if not isinstance(event_type_id, lazyT) and \
            not isinstance(event_type_id, DIV):
@@ -1259,7 +1335,7 @@ T("""%(status)s %(message_type)s for %(area_description)s with %(priority)s prio
                                                            system=system)),
                  "date": s3_str(row["cap_alert.sent"]),
                  "identifier": s3_str(row["cap_alert.identifier"]),
-                 "profile": "%s/%s" % (s3_str(row["cap_info.web"]), "profile"),
+                 "profile": s3_str(url),
                  }
 
         return s3_str(sms_body)
@@ -1276,6 +1352,15 @@ T("""%(status)s %(message_type)s for %(area_description)s with %(priority)s prio
         response_type = row["cap_info.response_type"]
         instruction = row["cap_info.instruction"]
         description = row["cap_info.description"]
+        url = "%s/%s" % (row["cap_info.web"], "profile")
+        try:
+            from pyshorteners import Shortener
+            try:
+                url = Shortener('Tinyurl', timeout=3).short(url)
+            except:
+                pass
+        except ImportError:
+            pass
 
         if event_type_id and event_type_id != current.messages["NONE"]:
             if not isinstance(event_type_id, lazyT):
@@ -1347,12 +1432,12 @@ T("""%(status)s %(message_type)s for %(area_description)s with %(priority)s prio
                                                        system=system)),
                  },
                 T("For more details visit %(url)s or contact %(contact)s") % \
-                {"url": "%s/%s" % ((s3_str(row["cap_info.web"])), "profile"),
+                {"url": s3_str(url),
                  "contact": s3_str(get_formatted_value(row["cap_info.contact"], system=system)),
                  }
                 if row["cap_info.contact"] else
                 T("For more details visit %(url)s") % \
-                {"url": "%s/%s" % ((s3_str(row["cap_info.web"])), "profile")}
+                {"url": s3_str(url)}
                 ]
 
         return "\n\n".join(s3_str(item) for item in facebook_content if item!="")

@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: (c) 2010-2015 Sahana Software Foundation
+    @copyright: (c) 2010-2017 Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -40,6 +40,7 @@ __all__ = ("AuthS3",
 import datetime
 import json
 #import re
+import time
 
 from collections import OrderedDict
 from uuid import uuid4
@@ -57,6 +58,7 @@ from s3fields import S3Represent, s3_uid, s3_timestamp, s3_deletion_status, s3_c
 from s3rest import S3Method, S3Request
 from s3track import S3Tracker
 from s3utils import s3_addrow, s3_get_extension, s3_mark_required, s3_str
+from s3validators import IS_ISO639_2_LANGUAGE_CODE
 
 # DRY helper to get the original name of a Table (_tablename can be an alias)
 original_tablename = lambda table: table._ot if table._ot else table._tablename
@@ -568,14 +570,15 @@ Thank you"""
                 buttons.append(register_link)
 
             # Lost-password action link
-            if lost_pw_link is None:
-                lost_pw_link = deployment_settings.get_auth_password_changes()
-            if lost_pw_link:
-                lost_pw_link = A(T("Lost Password"),
-                                 _href=URL(f="user", args="retrieve_password"),
-                                 _class="action-lnk",
-                                 )
-                buttons.append(lost_pw_link)
+            if deployment_settings.get_auth_password_retrieval():
+                if lost_pw_link is None:
+                    lost_pw_link = deployment_settings.get_auth_password_changes()
+                if lost_pw_link:
+                    lost_pw_link = A(T("Lost Password"),
+                                     _href=URL(f="user", args="retrieve_password"),
+                                     _class="action-lnk",
+                                     )
+                    buttons.append(lost_pw_link)
 
             # Add submit button
             #if buttons:
@@ -848,6 +851,92 @@ Thank you"""
         return form
 
     # -------------------------------------------------------------------------
+    def reset_password(self,
+                       next=DEFAULT,
+                       onvalidation=DEFAULT,
+                       onaccept=DEFAULT,
+                       log=DEFAULT,
+                       ):
+        """
+            Returns a form to reset the user password, overrides web2py's
+            version of the method to not swallow the _next var.
+        """
+
+        table_user = self.table_user()
+        request = current.request
+        session = current.session
+
+        messages = self.messages
+        settings = self.settings
+
+        if next is DEFAULT:
+            next = self.get_vars_next() or settings.reset_password_next
+
+        if settings.prevent_password_reset_attacks:
+            key = request.vars.key
+            if key:
+                session._reset_password_key = key
+                session._reset_password_next = next
+                redirect(self.url(args = "reset_password"))
+            else:
+                key = session._reset_password_key
+                next = session._reset_password_next
+        else:
+            key = request.vars.key
+
+        try:
+            t0 = int(key.split('-')[0])
+            if time.time() - t0 > 60 * 60 * 24:
+                raise Exception
+            user = table_user(reset_password_key=key)
+            if not user:
+                raise Exception
+        except Exception:
+            session.flash = messages.invalid_reset_password
+            redirect(next, client_side=settings.client_side)
+
+        key = user.registration_key
+        if key in ("pending", "disabled", "blocked") or (key or "").startswith("pending"):
+            session.flash = messages.registration_pending
+            redirect(next, client_side=settings.client_side)
+
+        if onvalidation is DEFAULT:
+            onvalidation = settings.reset_password_onvalidation
+        if onaccept is DEFAULT:
+            onaccept = settings.reset_password_onaccept
+
+        passfield = settings.password_field
+        form = SQLFORM.factory(
+            Field("new_password", "password",
+                  label = messages.new_password,
+                  requires = table_user[passfield].requires,
+                  ),
+            Field("new_password2", "password",
+                  label = messages.verify_password,
+                  requires = [IS_EXPR("value==%s" % repr(request.vars.new_password),
+                              messages.mismatched_password)
+                              ],
+                  ),
+            submit_button = messages.password_reset_button,
+            hidden = dict(_next=next),
+            formstyle = settings.formstyle,
+            separator = settings.label_separator
+            )
+        if form.accepts(request, session, onvalidation=onvalidation,
+                        hideerror=settings.hideerror):
+            user.update_record(
+                **{passfield: str(form.vars.new_password),
+                   "registration_key": "",
+                   "reset_password_key": "",
+                   })
+            session.flash = messages.password_changed
+            if settings.login_after_password_change:
+                self.login_user(user)
+            callback(onaccept, form)
+            redirect(next, client_side=settings.client_side)
+        return form
+
+    # -------------------------------------------------------------------------
     def request_reset_password(self,
                                next=DEFAULT,
                                onvalidation=DEFAULT,
@@ -866,18 +955,18 @@ Thank you"""
 
         messages = self.messages
         settings = self.settings
+        if not settings.mailer:
+            current.response.error = messages.function_disabled
+            return ""
+
         utable = settings.table_user
         request = current.request
-        response = current.response
         session = current.session
         captcha = settings.retrieve_password_captcha or \
                   (settings.retrieve_password_captcha != False and settings.captcha)
 
         if next is DEFAULT:
             next = self.get_vars_next() or settings.request_reset_password_next
-        if not settings.mailer:
-            response.error = messages.function_disabled
-            return ""
         if onvalidation is DEFAULT:
             onvalidation = settings.reset_password_onvalidation
         if onaccept is DEFAULT:
@@ -895,13 +984,13 @@ Thank you"""
                 IS_IN_DB(self.db, utable[userfield],
                          error_message=messages.invalid_username)]
         form = SQLFORM(utable,
-                       fields=[userfield],
-                       hidden=dict(_next=next),
-                       showid=settings.showid,
-                       submit_button=messages.password_reset_button,
-                       delete_label=messages.delete_label,
-                       formstyle=current.deployment_settings.get_ui_formstyle(),
-                       separator=settings.label_separator
+                       fields = [userfield],
+                       hidden = dict(_next=next),
+                       showid = settings.showid,
+                       submit_button = messages.password_reset_button,
+                       delete_label = messages.delete_label,
+                       formstyle = current.deployment_settings.get_ui_formstyle(),
+                       separator = settings.label_separator
                        )
         form.add_class("auth_reset_password")
         if captcha:
@@ -1332,7 +1421,7 @@ Thank you"""
         """
 
         mailer = self.settings.mailer
-        if not mailer:
+        if not mailer or not mailer.settings.server:
             return False
 
         import time
@@ -1456,7 +1545,11 @@ Thank you"""
             utable.utc_offset.writable = True
 
         # Users should not be able to change their Org affiliation
+        # - also hide popup-link to create a new Org (makes
+        #   no sense here if the field is read-only anyway)
         utable.organisation_id.writable = False
+        utable.organisation_id.comment = None
+
         ## Only allowed to select Orgs that the user has update access to
         #utable.organisation_id.requires = \
         #    current.s3db.org_organisation_requires(updateable = True)
@@ -1645,17 +1738,25 @@ Thank you"""
                           ]
 
         language = utable.language
-        language.label = T("Language")
-        language.comment = DIV(_class="tooltip",
-                               _title="%s|%s" % (T("Language"),
-                                                 T("The language you wish the site to be displayed in.")))
-        languages = current.deployment_settings.get_L10n_languages()
-        language.represent = lambda opt: \
-            languages.get(opt, cmessages.UNKNOWN_OPT)
-        # Default the profile language to the one currently active
-        language.default = T.accepted_language
-        if multiselect_widget:
-            language.widget = S3MultiSelectWidget(multiple=False)
+        languages = deployment_settings.get_L10n_languages()
+        if len(languages) > 1:
+            language.label = T("Language")
+            language.comment = DIV(_class="tooltip",
+                                   _title="%s|%s" % (T("Language"),
+                                                     T("The language you wish the site to be displayed in.")))
+            requires = IS_ISO639_2_LANGUAGE_CODE(sort = True,
+                                                 translate = True,
+                                                 zero = None,
+                                                 )
+            language.represent = requires.represent
+            language.requires = requires
+            # Default the profile language to the one currently active
+            language.default = T.accepted_language
+            if multiselect_widget:
+                language.widget = S3MultiSelectWidget(multiple=False)
+        else:
+            language.default = languages.keys()[0]
+            language.readable = language.writable = False
 
         utc_offset = utable.utc_offset
         utc_offset.label = messages.label_utc_offset
@@ -1795,11 +1896,13 @@ $.filterOptionsS3({
                 else:
                     field.requires = IS_EMPTY_OR(requires)
 
-        if "profile" in request.args:
-            return
+        # Link User to Organisation (as staff, volunteer, or member)
+        if any(m in request.args for m in ("profile", "user_profile")):
+            # Irrelevant in personal profile
+            link_user_to_opts = False
+        else:
+            link_user_to_opts = deployment_settings.get_auth_registration_link_user_to()
 
-        # Link User to
-        link_user_to_opts = deployment_settings.get_auth_registration_link_user_to()
         if link_user_to_opts:
             link_user_to = utable.link_user_to
             link_user_to_default = deployment_settings.get_auth_registration_link_user_to_default()
@@ -1961,7 +2064,7 @@ $.filterOptionsS3({
                     # Don't check again
                     continue
 
-                if pe_tablename == "org_organisation":
+                if pe_tablename == "org_organisation" and pe_field == "name":
                     # This is a non-integer, so must be 1st or only phase
                     (record_id, pe_id) = org_lookup(pe_value)
                 else:
@@ -2321,25 +2424,25 @@ $.filterOptionsS3({
             T.force(language)
             if message == "approve_user":
                 subjects[language] = \
-                    T("%(system_name)s - New User Registration Approval Pending") % \
-                            {"system_name": system_name}
-                messages[language] = auth_messages.approve_user % \
+                    s3_str(T("%(system_name)s - New User Registration Approval Pending") % \
+                            {"system_name": system_name})
+                messages[language] = s3_str(auth_messages.approve_user % \
                             dict(system_name = system_name,
                                  first_name = first_name,
                                  last_name = last_name,
                                  email = email,
                                  url = "%(base_url)s/admin/user/%(id)s" % \
                                     dict(base_url=base_url,
-                                         id=user_id))
+                                         id=user_id)))
             elif message == "new_user":
                 subjects[language] = \
-                    T("%(system_name)s - New User Registered") % \
-                            {"system_name": system_name}
+                    s3_str(T("%(system_name)s - New User Registered") % \
+                            {"system_name": system_name})
                 messages[language] = \
-                    auth_messages.new_user % dict(system_name = system_name,
+                    s3_str(auth_messages.new_user % dict(system_name = system_name,
                                                   first_name = first_name,
                                                   last_name = last_name,
-                                                  email = email)
+                                                  email = email))
 
         # Restore language for UI
         T.force(session.s3.language)
@@ -6162,6 +6265,13 @@ class S3Permission(object):
             @param record: the record or record ID (None for any record)
         """
 
+        # Auth override, system roles and login
+        auth = self.auth
+        if auth.override:
+            #_debug("==> auth.override")
+            #_debug("*** GRANTED ***")
+            return True
+
         # Multiple methods?
         if isinstance(method, (list, tuple)):
             for m in method:
@@ -6182,12 +6292,6 @@ class S3Permission(object):
         #       record,
         #       )
 
-        # Auth override, system roles and login
-        auth = self.auth
-        if auth.override:
-            #_debug("==> auth.override")
-            #_debug("*** GRANTED ***")
-            return True
         sr = auth.get_system_roles()
         logged_in = auth.s3_logged_in()
         self.check_settings()
@@ -6209,6 +6313,10 @@ class S3Permission(object):
             #_debug("==> user is ADMIN")
             #_debug("*** GRANTED ***")
             return True
+
+        # Fall back to current request
+        c = c or self.controller
+        f = f or self.function
 
         if not self.use_cacls:
             #_debug("==> simple authorization")
@@ -6237,10 +6345,6 @@ class S3Permission(object):
             owners = []
             is_owner = True
             entity = None
-
-        # Fall back to current request
-        c = c or self.controller
-        f = f or self.function
 
         permission_cache = self.permission_cache
         if permission_cache is None:
@@ -6866,13 +6970,19 @@ class S3Permission(object):
         if "t" in acl:
             default_table_acl = acl["t"]
         elif table_restricted:
-            default_table_acl = default_page_acl
+            default_table_acl = default_page_acl if page_restricted else NONE
         else:
-            default_table_acl = ALL
+            default_table_acl = default_page_acl if page_restricted else ALL
 
-        # Fall back to default page acl
-        if not acls and not (t and self.use_tacls):
-            acls[ANY] = {"c": default_page_acl}
+        # No ACLs inevitably causes a "no applicable ACLs" permission failure,
+        # so for unrestricted pages or tables, we must create a default ACL
+        # here in order to have the default apply:
+        if not acls:
+            if t and self.use_tacls:
+                if not table_restricted:
+                    acls[ANY] = {"t": default_table_acl}
+            elif not page_restricted:
+                acls[ANY] = {"c": default_page_acl}
 
         # Order by precedence
         s3db = current.s3db
@@ -6942,15 +7052,17 @@ class S3Permission(object):
             @param f: function name
         """
 
-        modules = current.deployment_settings.modules
 
         page = "%s/%s" % (c, f)
         if page in self.unrestricted_pages:
-            return False
-        elif c not in modules or \
-             c in modules and not modules[c].restricted:
-            return False
-        return True
+            restricted = False
+        elif c != "default" or f not in ("tables", "table"):
+            modules = current.deployment_settings.modules
+            restricted = c in modules and modules[c].restricted
+        else:
+            restricted = True
+
+        return restricted
 
     # -------------------------------------------------------------------------
     def table_restricted(self, t=None):

@@ -742,7 +742,7 @@ def alert():
                                               ),)
 
             elif r.component_name == "info":
-                # Filter the langauge options
+                # Filter the language options
                 itable.language.requires = IS_ISO639_2_LANGUAGE_CODE(\
                                             zero=None,
                                             translate=True,
@@ -758,17 +758,23 @@ def alert():
 
                 # Check for prepopulate
                 if alert_id:
-                    row = db(table.id == alert_id).select(table.scope,
-                                                          table.event_type_id,
-                                                          limitby=(0, 1)).first()
-                    if row and row.scope == "Public":
-                        fn = "public"
+                    irows = db(itable.alert_id == alert_id).select(itable.language)
+                    # An alert can contain two info segments, in English and local language
+                    if len(irows) < 2:
+                        row = db(table.id == alert_id).select(table.scope,
+                                                              table.event_type_id,
+                                                              limitby=(0, 1)).first()
+                        if row.scope == "Public":
+                            fn = "public"
+                        else:
+                            fn = "alert"
+                        itable.web.default = settings.get_base_public_url()+\
+                                             URL(c="cap", f=fn, args=alert_id)
+                        itable.event_type_id.default = row.event_type_id
                     else:
-                        fn = "alert"
-                    itable.web.default = settings.get_base_public_url()+\
-                                         URL(c="cap", f=fn, args=alert_id)
-                    itable.event_type_id.default = row.event_type_id
-
+                        s3db.configure("cap_info",                              
+                                       insertable = False,
+                                       )
                 if record.approved_by is not None:
                     # Once approved, don't allow info segment to edit
                     # Don't allow to delete
@@ -867,21 +873,7 @@ def alert():
                                                   limitby=(0, 1)).first()
             iquery = (itable.alert_id == alert.template_id) & \
                      (itable.deleted != True)
-            irows = db(iquery).select(itable.id, itable.language)
-            # An alert can contain two info segments, one in English and one in
-            # local language
-            if len(irows) > 2:
-                session.error = T("An alert can contain maximum of two info segments! Check your template!")
-                redirect(URL(c="cap", f="alert", args=[lastid, "info"]))
-            else:
-                if len(irows) == 2:
-                    # Check if both info segments are for same language
-                    if irows[0]["language"] == irows[1]["language"]:
-                        session.error = T("Please edit already created info segment with same language!")
-                        redirect(URL(c="cap", f="alert", args=[lastid, "info"]))
-                if not all(language in [key for key in settings.get_L10n_languages()] for language in [irow.language for irow in irows]):
-                    session.error = T("An alert cannot contain other than English and Local Language! Check your template!")
-                    redirect(URL(c="cap", f="alert", args=[lastid, "info"]))
+            irows = db(iquery).select(itable.id)
             iquery_ = (itable.alert_id == lastid) & \
                       (itable.deleted != True)
             irows_ = db(iquery_).select(itable.template_info_id)
@@ -1192,17 +1184,23 @@ def template():
             alert_id = request.args(0)
             # Check for prepopulate
             if alert_id:
-                row = db(atable.id == alert_id).select(atable.scope,
-                                                       atable.event_type_id,
-                                                       limitby=(0, 1)).first()
-                if row and row.scope == "Public":
-                    fn = "public"
+                irows = db(itable.alert_id == alert_id).select(itable.language)
+                # An alert can contain two info segments, in English and local language
+                if len(irows) < 2:
+                    row = db(atable.id == alert_id).select(atable.scope,
+                                                           atable.event_type_id,
+                                                           limitby=(0, 1)).first()
+                    if row.scope == "Public":
+                        fn = "public"
+                    else:
+                        fn = "alert"
+                    itable.web.default = settings.get_base_public_url()+\
+                                         URL(c="cap", f=fn, args=alert_id)
+                    itable.event_type_id.default = row.event_type_id
                 else:
-                    fn = "alert"
-                itable.web.default = settings.get_base_public_url()+\
-                                     URL(c="cap", f=fn, args=alert_id)
-                itable.event_type_id.default = row.event_type_id
-
+                    s3db.configure("cap_info",                              
+                                   insertable = False,
+                                   )
         elif r.component_name == "resource":
             rtable = r.component.table
 
@@ -1409,6 +1407,16 @@ def notify_approver():
                 subject = "%s: Alert Approval Required" % settings.get_system_name_short()
                 url = "%s%s" % (settings.get_base_public_url(),
                                 URL(c="cap", f="alert", args=[alert_id, "review"]))
+                try:
+                    from pyshorteners import Shortener
+                except ImportError:
+                    pass
+                else:
+                    try:
+                        url = s3_str(Shortener('Tinyurl', timeout=3).short(url))
+                    except:
+                        pass
+                        
                 message = """
 Hello Approver,
 %(full_name)s has created the alert message.
@@ -1416,9 +1424,18 @@ Your action is required to approve or reject the message.
 Please go to %(url)s to complete the actions.\n
 Remember to verify the content before approving by using Edit button.""" % \
                         {"full_name": full_name, "url": url}
-                msg.send_by_pe_id(pe_ids, subject, message)
+                msg.send_by_pe_id(pe_ids,
+                                  subject,
+                                  message,
+                                  alert_id=alert_id,
+                                  )
                 try:
-                    msg.send_by_pe_id(pe_ids, subject, message, contact_method = "SMS")
+                    msg.send_by_pe_id(pe_ids,
+                                      subject,
+                                      message,
+                                      contact_method="SMS",
+                                      alert_id=alert_id,
+                                      )
                 except ValueError:
                     current.log.error("No SMS Handler defined!")
                 session.confirmation = T("Alert Approval Notified")

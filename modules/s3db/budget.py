@@ -81,7 +81,9 @@ class S3BudgetModel(S3Model):
                                )
 
         tablename = "budget_entity"
-        self.super_entity(tablename, "budget_entity_id", entity_types)
+        self.super_entity(tablename, "budget_entity_id", entity_types,
+                          Field("name"), # shared field
+                          )
 
         self.add_components(tablename,
                             # Budget Details
@@ -1340,22 +1342,31 @@ class S3BudgetAllocationModel(S3Model):
         self.define_table(tablename,
                           # This is a component, so needs to be a super_link
                           # - can't override field name, ondelete or requires
-                          super_link("budget_entity_id", "budget_entity"),
+                          super_link("budget_entity_id", "budget_entity",
+                                     # @todo: proper representation method incl.
+                                     #        entity type (currently only one
+                                     #        type defined, so using that as
+                                     #        label for now)
+                                     label = T("Project"),
+                                     represent = S3Represent(lookup="budget_entity"),
+                                     ),
                           # Component not instance
                           super_link("cost_item_id", "budget_cost_item",
                                      readable = True,
                                      writable = True,
                                      represent = self.budget_CostItemRepresent(),
                                      ),
-                          # @ToDo: s3_datetime
-                          s3_date("start_date",
-                                  label = T("Start Date")
-                                  ),
-                          s3_date("end_date",
-                                  label = T("End Date"),
-                                  start_field = "budget_allocation_start_date",
-                                  default_interval = 12,
-                                  ),
+                          s3_datetime("start_date",
+                                      label = T("Start Date"),
+                                      widget = "date",
+                                      ),
+                          s3_datetime("end_date",
+                                      label = T("End Date"),
+                                      # Not supported by s3_datetime
+                                      #start_field = "budget_allocation_start_date",
+                                      #default_interval = 12,
+                                      widget = "date",
+                                      ),
                           Field("unit_cost", "double",
                                 default = 0.00,
                                 label = T("One-Time Cost"),
@@ -1689,7 +1700,7 @@ class budget_CostItemRepresent(S3Represent):
         instance_fields = {
             "event_asset": ["incident_id", "asset_id"],
             "event_site": ["incident_id", "site_id"],
-            "event_human_resource": ["incident_id", "human_resource_id"],
+            "event_human_resource": ["incident_id", "job_title_id"],
         }
 
         # Get all super-entity rows
@@ -1791,7 +1802,7 @@ class budget_CostItemRepresent(S3Represent):
             table = s3db.event_human_resource
             repr_str = "%s - %s" % \
                         (table.incident_id.represent(item.incident_id),
-                         self.represent["human_resource_id"](item.human_resource_id),
+                         self.represent["job_title_id"](item.job_title_id),
                          )
         else:
             # Unknown instance type

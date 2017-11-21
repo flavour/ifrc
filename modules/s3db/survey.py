@@ -1480,12 +1480,7 @@ class S3SurveySeriesModel(S3Model):
                                 default = "",
                                 label = T("Logo"),
                                 ),
-                          Field("language", length=8,
-                                default = "en",
-                                label = T("Language"),
-                                # @ToDo: Dropdown of supported languages
-                                #requires =
-                                ),
+                          s3_language(),
                           s3_date("start_date",
                                   label = T("Start Date"),
                                   set_min = "#survey_series_end_date",
@@ -1620,12 +1615,14 @@ class S3SurveySeriesModel(S3Model):
                 questions = current.db(query).select(q_ltable.posn,
                                                      q_ltable.question_id,
                                                      orderby = q_ltable.posn)
-                for question in questions:
-                    qstn_posn = question.posn + posn_offset
-                    if mode == "Inclusive":
+                if mode == "Inclusive":
+                    for question in questions:
+                        qstn_posn = question.posn + posn_offset
                         if str(qstn_posn) in selected:
                             question_ids.append(str(question.question_id))
-                    elif mode == "Exclusive":
+                elif mode == "Exclusive":
+                    for question in questions:
+                        qstn_posn = question.posn + posn_offset
                         if str(qstn_posn) not in selected:
                             question_ids.append(str(question.question_id))
                 items = buildCompletedList(series_id, question_ids)
@@ -1638,6 +1635,7 @@ class S3SurveySeriesModel(S3Model):
                                            )
                 if r.representation == "html":
                     table = buildTableFromCompletedList(items)
+                    s3.actions = []
                     #exporter = S3Exporter()
                     #table = exporter.html(items)
                 output["items"] = table
@@ -3105,13 +3103,15 @@ class S3SurveyTranslateModel(S3Model):
                           Field("language",
                                 comment = DIV(_class="tooltip",
                                               _title="%s|%s" % (T("Language"),
-                                                                LANG_HELP))
+                                                                LANG_HELP)),
                                 ),
-                          Field("code",
-                                comment = DIV(_class="tooltip",
-                                                _title="%s|%s" % (T("Language Code"),
-                                                                CODE_HELP))
-                                ),
+                          s3_language("code",
+                                      empty = False,
+                                      label = T("Language Code"),
+                                      comment = DIV(_class="tooltip",
+                                                    _title="%s|%s" % (T("Language Code"),
+                                                                      CODE_HELP)),
+                                      ),
                           Field("file", "upload",
                                 autodelete = True,
                                 length = current.MAX_FILENAME_LENGTH,

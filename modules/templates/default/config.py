@@ -114,7 +114,9 @@ def config(settings):
     # Uncomment this to allow users to Login using OpenID
     #settings.auth.openid = True
     # Uncomment this to block password changes since managed externally (OpenID / SMTP / LDAP)
-    #settings.auth.password_changes = True
+    #settings.auth.password_changes = False
+    # Uncomment this to disable password retrieval (e.g. if impractical or unsafe)
+    #settings.auth.password_retrieval = False
     # Uncomment this to enable presence records on login based on HTML5 geolocations
     #settings.auth.set_presence_on_login = True
     # Uncomment this and specify a list of location levels to be ignored by presence records
@@ -123,38 +125,43 @@ def config(settings):
     #settings.auth.create_unknown_locations = True
 
     # L10n settings
-    # Languages used in the deployment (used for Language Toolbar & GIS Locations)
+    # Languages used in the deployment (used for Language Toolbar, GIS Locations, etc)
     # http://www.loc.gov/standards/iso639-2/php/code_list.php
     settings.L10n.languages = OrderedDict([
-        ("ar", "العربية"),
-        ("bs", "Bosanski"),
+        ("ar", "Arabic"),
+        ("bs", "Bosnian"),
+        #("dv", "Divehi"), # Maldives
         ("en", "English"),
-        ("fr", "Français"),
-        ("de", "Deutsch"),
-        ("el", "ελληνικά"),
-        ("es", "Español"),
-        ("it", "Italiano"),
-        ("ja", "日本語"),
-        ("km", "ភាសាខ្មែរ"),
-        ("ko", "한국어"),
-        ("mn", "Монгол хэл"),  # Mongolian
-        ("my", "မြန်မာစာ"),       # Burmese
-        ("ne", "नेपाली"),         # Nepali
-        ("prs", "دری"),        # Dari
-        ("ps", "پښتو"),         # Pashto
-        ("pt", "Português"),
-        ("pt-br", "Português (Brasil)"),
-        ("ru", "русский"),
+        ("fr", "French"),
+        ("de", "German"),
+        ("el", "Greek"),
+        ("es", "Spanish"),
+        #("id", "Bahasa Indonesia"),
+        ("it", "Italian"),
+        ("ja", "Japanese"),
+        ("km", "Khmer"), # Cambodia
+        ("ko", "Korean"),
+        #("lo", "Lao"),
+        #("mg", "Malagasy"),
+        ("mn", "Mongolian"),
+        #("ms", "Malaysian"),
+        ("my", "Burmese"), # Myanmar
+        ("ne", "Nepali"),
+        ("prs", "Dari"), # Afghan Persian
+        ("ps", "Pashto"), # Afghanistan, Pakistan
+        ("pt", "Portuguese"),
+        ("pt-br", "Portuguese (Brazil)"),
+        ("ru", "Russian"),
         ("tet", "Tetum"),
-        #("si", "සිංහල"),                 # Sinhala
-        #("ta", "தமிழ்"),                 # Tamil
-        #("th", "ภาษาไทย"),              # Thai
-        ("tl", "Tagalog"),
-        ("tr", "Türkçe"),
-        ("ur", "اردو"),
-        ("vi", "Tiếng Việt"),
-        ("zh-cn", "中文 (简体)"),
-        ("zh-tw", "中文 (繁體)"),
+        #("si", "Sinhala"), # Sri Lanka
+        #("ta", "Tamil"), # India, Sri Lanka
+        ("th", "Thai"),
+        ("tl", "Tagalog"), # Philippines
+        ("tr", "Turkish"),
+        ("ur", "Urdu"), # Pakistan
+        ("vi", "Vietnamese"),
+        ("zh-cn", "Chinese (Simplified)"), # Mainland China
+        ("zh-tw", "Chinese (Taiwan)"),
     ])
     # Default language for Language Toolbar (& GIS Locations in future)
     #settings.L10n.default_language = "en"
@@ -299,7 +306,7 @@ def config(settings):
     #settings.gis.permalink = False
     # Resources which can be directly added to the main map
     #settings.gis.poi_create_resources = None
-    #settings.gis.poi_create_resources = [{"c":"event", "f":"incident_report", "table": "gis_poi", label": T("Add Incident Report") ,"tooltip": T("Add Incident Report"), "layer":"Incident Reports", "location": "popup"}]
+    #settings.gis.poi_create_resources = [{"c":"event", "f":"incident_report", "table": "gis_poi", "label": T("Add Incident Report") ,"tooltip": T("Add Incident Report"), "layer":"Incident Reports", "location": "popup"}]
     # PoIs to export in KML/OSM feeds from Admin locations
     #settings.gis.poi_export_resources = ["cr_shelter", "hms_hospital", "org_office"]
     # Uncomment to show the Print control:
@@ -328,6 +335,8 @@ def config(settings):
     #settings.gis.zoomcontrol = False
     # Uncomment to open Location represent links in a Popup Window
     #settings.gis.popup_location_link = True
+    # Uncomment to include WKT in XML exports
+    #settings.gis.xml_wkt = True
     # GeoNames username
     settings.gis.geonames_username = "eden_test"
 

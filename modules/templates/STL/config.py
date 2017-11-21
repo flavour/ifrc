@@ -45,6 +45,9 @@ def config(settings):
     settings.auth.registration_link_user_to = ["staff"]
     settings.auth.registration_link_user_to_default = "staff"
 
+    # Password retrieval disabled
+    settings.auth.password_retrieval = False
+
     # Approval emails get sent to all admins
     #settings.mail.approver = "ADMIN"
 
@@ -140,9 +143,9 @@ def config(settings):
     # Languages used in the deployment (used for Language Toolbar & GIS Locations)
     # http://www.loc.gov/standards/iso639-2/php/code_list.php
     settings.L10n.languages = OrderedDict([
-        ("ar", "العربية"),
+        ("ar", "Arabic"),
         ("en", "English"),
-        ("tr", "Türkçe"),
+        ("tr", "Turkish"),
     ])
     # Default language for Language Toolbar (& GIS Locations in future)
     settings.L10n.default_language = "en"
@@ -182,6 +185,11 @@ def config(settings):
                                 )
 
     settings.ui.hierarchy_cascade_option_in_tree = False
+
+    # Increase timeout on AJAX reports (ms)
+    settings.ui.report_timeout = 600000 # 10 mins, same as the webserver
+    # Increase the timeout on Report auto-submission
+    settings.ui.report_auto_submit = 1200 # 1.2s
 
     # =========================================================================
     # DVR Case Management

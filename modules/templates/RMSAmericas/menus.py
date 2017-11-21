@@ -9,7 +9,7 @@ except ImportError:
     pass
 import s3menus as default
 
-red_cross_filter = {"organisation_type.name" : "Red Cross / Red Crescent"}
+RC = {"organisation_type.name" : "Red Cross / Red Crescent"}
 
 # =============================================================================
 class S3MainMenu(default.S3MainMenu):
@@ -43,6 +43,7 @@ class S3MainMenu(default.S3MainMenu):
 
         auth = current.auth
         has_role = auth.s3_has_role
+        has_roles = auth.s3_has_roles
         s3 = current.session.s3
 
         len_roles = len(s3.roles)
@@ -70,51 +71,66 @@ class S3MainMenu(default.S3MainMenu):
         #    return root_org == "Honduran Red Cross"
 
         def hrm(item):
-            return has_role(ORG_ADMIN) or \
-                   has_role("national_hr_manager") or \
-                   has_role("hr_manager") or \
-                   has_role("training_coordinator") or \
-                   has_role("training_assistant") or \
-                   has_role("surge_capacity_manager") or \
-                   has_role("disaster_manager")
+            return has_roles((ORG_ADMIN,
+                              "hr_manager",
+                              "hr_assistant",
+                              "training_coordinator",
+                              "training_assistant",
+                              "surge_capacity_manager",
+                              "disaster_manager",
+                              ))
+
+        def training(item):
+            return has_roles((ORG_ADMIN,
+                              "training_coordinator",
+                              "training_assistant",
+                              "ns_training_manager",
+                              "ns_training_assistant",
+                              "surge_capacity_manager",
+                              "disaster_manager",
+                              ))
 
         def inv(item):
-            return has_role("wh_manager") or \
-                   has_role("national_wh_manager") or \
-                   has_role(ORG_ADMIN)
+            return has_roles(("wh_manager",
+                              "national_wh_manager",
+                              ))
 
         def basic_warehouse(i):
-            if not (has_role("national_wh_manager") or \
-                    has_role(ORG_ADMIN)):
+            if not has_role("national_wh_manager"):
                 # Hide menu entries which user shouldn't need access to
                 return False
             else:
                 return True
 
         def multi_warehouse(i):
-            if not (has_role("national_wh_manager") or \
-                    has_role(ORG_ADMIN)):
+            if has_role("national_wh_manager"):
                 # Only responsible for 1 warehouse so hide menu entries which should be accessed via Tabs on their warehouse
                 return False
             else:
                 return True
+
+        def projects(item):
+            return has_roles(("project_reader",
+                              "project_manager",
+                              "monitoring_evaluation",
+                              ))
 
         menu= [homepage("gis")(),
                homepage("hrm", "org", name="Human Talent", check=hrm)(
                    MM("Human Talent", c="hrm", f="human_resource", m="summary"),
                    #MM("Teams", c="hrm", f="group"),
                    MM("National Societies", c="org", f="organisation",
-                      vars = red_cross_filter),
+                      vars = RC),
                    #MM("Offices", c="org", f="office"),
                    MM("Positions", c="hrm", f="job_title"),
                    #MM("Training Events", c="hrm", f="training_event"),
                    #MM("Training Courses", c="hrm", f="course"),
                ),
-               homepage("hrm", f="training_event", name="Training", check=hrm)(
+               homepage("hrm", f="training_event", name="Training", check=training)(
                    MM("Training Centers", c="hrm", f="training_center"),
                    MM("Training Course Catalog", c="hrm", f="course"),
                    MM("Training Events", c="hrm", f="training_event"),
-                   MM("External Trainees", c="pr", f="person"),
+                   MM("External Trainees", c="hrm", f="trainee"),
                ),
                homepage("inv", "supply", "req", check=inv)(
                    MM("Warehouses", c="inv", f="warehouse", m="summary", check=multi_warehouse),
@@ -132,7 +148,7 @@ class S3MainMenu(default.S3MainMenu):
                #    MM("Assets", c="asset", f="asset", m="summary"),
                #    MM("Items", c="asset", f="item", m="summary"),
                #),
-               homepage("project", f="project", m="summary")(
+               homepage("project", f="project", m="summary", check=projects)(
                    MM("Projects", c="project", f="project", m="summary"),
                    #MM("Locations", c="project", f="location"),
                    #MM("Outreach", c="po", f="index", check=outreach),
@@ -141,7 +157,9 @@ class S3MainMenu(default.S3MainMenu):
 
         # For some reason the deploy menu is displaying even if users have NONE access to deploy!
         # @ToDo: We will need to allow RIT members some basic access to the module
-        if has_role("surge_capacity_manager") or has_role("disaster_manager"):
+        if has_roles(("surge_capacity_manager",
+                      "disaster_manager",
+                      )):
             menu.append(
                 homepage("deploy", name="RIT", f="mission", m="summary",
                          vars={"~.status__belongs": "2"})(
@@ -163,14 +181,16 @@ class S3MainMenu(default.S3MainMenu):
     @classmethod
     def menu_lang(cls):
 
-        s3 = current.response.s3
+        languages = current.deployment_settings.get_L10n_languages()
+        represent_local = IS_ISO639_2_LANGUAGE_CODE.represent_local
 
         # Language selector
         menu_lang = ML("Language", right=True)
-        for language in s3.l10n_languages.items():
-            code, name = language
+        for code in languages:
+            # Show Language in it's own Language
+            lang_name = represent_local(code)
             menu_lang(
-                ML(name, translate=False, lang_code=code, lang_name=name)
+                ML(lang_name, translate=False, lang_code=code, lang_name=lang_name)
             )
         return menu_lang
 
@@ -202,22 +222,28 @@ class S3MainMenu(default.S3MainMenu):
             )
         else:
             has_role = auth.s3_has_role
-            is_org_admin = lambda i: has_role("ORG_ADMIN") and \
-                                     not has_role("ADMIN")
-            menu_personal = MP()(
-                        MP("Administration", c="admin", f="index",
-                           check=has_role("ADMIN")),
-                        MP("Administration", c="admin", f="user",
-                           check=is_org_admin),
-                        MP("Profile", c="hrm", f="person",
-                           args=[str(auth.s3_logged_in_person())],
-                           vars={"profile":1},
-                           ),
-                        MP("Change Password", c="default", f="user",
-                           m="change_password"),
-                        MP("Logout", c="default", f="user",
-                           m="logout"),
-            )
+            if has_role("ADMIN"):
+                admin = MP("Administration", c="admin", f="index")
+            elif has_role("ORG_ADMIN"):
+                admin = MP("Administration", c="admin", f="user")
+            elif auth.s3_has_roles(("hr_manager",
+                                    "ns_training_manager",
+                                    "training_coordinator",
+                                    )):
+                admin = MP("Administration", c="pr", f="forum")
+            else:
+                admin = None
+
+            menu_personal = MP()(admin,
+                                 MP("Profile", c="hrm", f="person",
+                                    args=[str(auth.s3_logged_in_person())],
+                                    vars={"profile":1},
+                                    ),
+                                 MP("Change Password", c="default", f="user",
+                                    m="change_password"),
+                                 MP("Logout", c="default", f="user",
+                                    m="logout"),
+                                 )
         return menu_personal
 
     # -------------------------------------------------------------------------
@@ -240,15 +266,22 @@ class S3OptionsMenu(default.S3OptionsMenu):
     def admin(self):
         """ ADMIN menu """
 
-        # Standard Admin Menu
-        menu = super(S3OptionsMenu, self).admin()
+        if current.auth.s3_has_role("ADMIN"):
+            # Standard Admin Menu
+            menu = super(S3OptionsMenu, self).admin()
 
-        # Additional Items
-        menu(M("Map Settings", c="gis", f="config"),
-             M("Content Management", c="cms", f="index"),
-             )
+            # Additional Items
+            menu(M("Forums", c="pr", f="forum"),
+                 M("Map Settings", c="gis", f="config"),
+                 M("Content Management", c="cms", f="index"),
+                 )
 
-        return menu
+            return menu
+
+        else:
+            # OrgAdmin
+            return self.pr()
+
 
     # -------------------------------------------------------------------------
     def gis(self):
@@ -265,11 +298,37 @@ class S3OptionsMenu(default.S3OptionsMenu):
     def pr(self):
         """ Person Registry """
 
-        if current.request.function == "person":
-            # Training Center access to external Trainees (not Staff/Volunteers)
-            return self.hrm()
+        auth = current.auth
+        has_role = auth.s3_has_role
+        if has_role("ADMIN"):
+            if current.request.function == "forum":
+                return self.admin()
+            return M(c="pr")(
+                        M("Persons", f="person")(
+                            M("Create", m="create"),
+                        ),
+                        #M("Groups", f="group")(
+                        #    M("Create", m="create"),
+                        #),
+                        #M("Forums", f="forum")(
+                        #    M("Create", m="create"),
+                        #),
+                        )
+
+        elif has_role("ORG_ADMIN"):
+            return M()(M("Users", c="admin", f="user")(
+                        ),
+                        M("Forums", c="pr", f="forum")(
+                            M("Create", m="create"),
+                        ),
+                       )
+
         else:
-            return super(S3OptionsMenu, self).pr()
+            # Managers (HR or Training Center Coordinators)
+            return M()(M("Forums", c="pr", f="forum")(
+                        M("Create", m="create"),
+                        ),
+                       )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -296,24 +355,31 @@ class S3OptionsMenu(default.S3OptionsMenu):
 
         if request.function in ("certificate", "course", "course_certificate",
                                 "facility", "training", "training_center",
-                                "training_event") or \
-           request.controller == "pr":
+                                "training_event", "trainee", "trainee_person"):
             return M()( M("Training Centers", c="hrm", f="training_center")(
                         ),
                         M("Training Course Catalog", c="hrm", f="course")(
                             M("Create", m="create"),
                             M("Import", m="import", p="create",
-                              restrict=[ORG_ADMIN]),
-                            M("Certificates", f="certificate"),
+                              restrict=(ORG_ADMIN,
+                                        "ns_training_manager",
+                                        "training_coordinator",
+                                        )),
+                            #M("Certificates", f="certificate"),
                             # Just access this via Tabs of Courses & Certificates
                             #M("Course Certificates", f="course_certificate"),
                         ),
                         M("Training Events", c="hrm", f="training_event")(
                             M("Create", m="create"),
                             M("Search Training Participants", f="training"),
-                            M("Import Participant List", f="training", m="import"),
+                            M("Import Participant List", f="training", m="import",
+                              restrict=(ORG_ADMIN,
+                                        "ns_training_manager",
+                                        "training_coordinator",
+                                        "training_assistant",
+                                        )),
                         ),
-                        M("External Trainees", c="pr", f="person")(
+                        M("External Trainees", c="hrm", f="trainee")(
                             M("Create", m="create"),
                         ),
                         M("Report", c="hrm", f="training", m="report")(
@@ -324,7 +390,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Human Talent", c="hrm", f="human_resource", m="summary")(
                             M("Create", m="create"),
                             M("Import", f="person", m="import",
-                              restrict=[ORG_ADMIN]),
+                              restrict=(ORG_ADMIN,
+                                        "hr_manager",
+                                        )),
                         ),
                         M("Report", c="hrm", f="human_resource", m="report")(
                             #M("Staff Report", m="report"),
@@ -337,9 +405,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         #    M("Import", f="group_membership", m="import"),
                         #),
                         M("National Societies", c="org", f="organisation",
-                          vars=red_cross_filter)(
+                          vars=RC)(
                             M("Create", m="create",
-                              vars=red_cross_filter
+                              vars=RC
                               ),
                             M("Import", m="import", p="create",
                               restrict=[ORG_ADMIN])
@@ -354,7 +422,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                         M("Position Catalog", c="hrm", f="job_title")(
                             M("Create", m="create"),
                             M("Import", m="import", p="create",
-                              restrict=[ORG_ADMIN]),
+                              restrict=(ORG_ADMIN,
+                                        "hr_manager",
+                                        )),
                         ),
                         #M("Organization Types", c="org", f="organisation_type",
                         #  restrict=[ADMIN])(
@@ -581,7 +651,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
                   m="import", p="create"),
              ),
              M("National Societies",  c="org", f="organisation",
-                                      vars=red_cross_filter)(
+                                      vars=RC)(
                 #M("Create", m="create", restrict=[ADMIN]),
                 #M("Import", m="import", p="create", restrict=[ADMIN]),
              ),

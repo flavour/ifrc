@@ -134,12 +134,21 @@ def incident():
                                    )
                     s3.crud.submit_button = T("Update")
                 elif cname in ("asset", "human_resource", "organisation", "site"):
+
+                    atable = s3db.table("budget_allocation")
+                    if atable:
+                        field = atable.budget_entity_id
+                        field.readable = field.writable = True
+
                     s3.crud.submit_button = T("Assign")
                     s3.crud_labels["DELETE"] = T("Remove")
-                    # Default Event to that of the Incident
-                    f = s3db["event_%s" % cname].event_id
-                    f.default = r.record.event_id
-                    f.readable = f.writable = False
+
+                    # Default Event in the link to that of the Incident
+                    ltable = s3db.table("event_%s" % cname)
+                    if ltable and "event_id" in ltable.fields:
+                        f = s3db["event_%s" % cname].event_id
+                        f.default = r.record.event_id
+                        f.readable = f.writable = False
 
             elif r.method not in ("read", "update"):
                 # Create or ListCreate
@@ -213,6 +222,80 @@ def incident_report():
     s3.prep = prep
 
     return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def sitrep():
+    """ RESTful CRUD controller """
+
+    if settings.get_event_sitrep_dynamic():
+        # All templates use the same component name for answers so need to add the right component manually
+        try:
+            sitrep_id = int(request.args(0))
+        except:
+            # Multiple record method
+            pass
+        else:
+            dtable = s3db.s3_table
+            stable = s3db.event_sitrep
+            ttable = s3db.dc_template
+            query = (stable.id == sitrep_id) & \
+                    (stable.template_id == ttable.id) & \
+                    (ttable.table_id == dtable.id)
+            template = db(query).select(dtable.name,
+                                        limitby=(0, 1),
+                                        ).first()
+            try:
+                dtablename = template.name
+            except:
+                # Old URL?
+                pass
+            else:
+                components = {dtablename: {"name": "answer",
+                                           "joinby": "sitrep_id",
+                                           "multiple": False,
+                                           }
+                              }
+                s3db.add_components("event_sitrep", **components)
+
+    # Pre-process
+    def prep(r):
+        if r.interactive:
+            if r.component_name == "answer":
+                # CRUD Strings
+                tablename = r.component.tablename
+                #s3.crud_strings[tablename] = Storage(
+                #    label_create = T("Create Responses"),
+                #    title_display = T("Response Details"),
+                #    title_list = T("Responses"),
+                #    title_update = T("Edit Response"),
+                #    label_list_button = T("List Responses"),
+                #    label_delete_button = T("Clear Response"),
+                #    msg_record_created = T("Response created"),
+                #    msg_record_modified = T("Response updated"),
+                #    msg_record_deleted = T("Response deleted"),
+                #    msg_list_empty = T("No Responses currently defined"),
+                #)
+
+                # Custom Form with Questions & Subheadings sorted correctly
+                s3db.dc_answer_form(r, tablename)
+
+        return True
+    s3.prep = prep
+
+    return s3_rest_controller(rheader = s3db.event_rheader)
+
+# -----------------------------------------------------------------------------
+def template():
+    """ RESTful CRUD controller """
+
+    from s3 import FS
+    s3.filter = FS("master") == "event_sitrep"
+
+    s3db.dc_template.master.default = "event_sitrep"
+
+    return s3_rest_controller("dc", "template",
+                              rheader = s3db.dc_rheader,
+                              )
 
 # -----------------------------------------------------------------------------
 def resource():

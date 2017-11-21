@@ -580,13 +580,7 @@ class DVRCaseModel(S3Model):
                      person_id(empty = False,
                                ondelete = "CASCADE",
                                ),
-                     Field("language",
-                           label = T("Language"),
-                           represent = IS_ISO639_2_LANGUAGE_CODE.represent_local,
-                           requires = IS_ISO639_2_LANGUAGE_CODE(select = None,
-                                                                translate = True,
-                                                                ),
-                           ),
+                     s3_language(list_from_settings = False),
                      Field("quality",
                            default = "N",
                            label = T("Quality/Mode"),
@@ -622,6 +616,12 @@ class DVRCaseModel(S3Model):
                            ),
                      s3_date("arrival_date",
                              label = T("Arrival Date"),
+                             ),
+                     s3_date("on_site_from",
+                             label = T("On-site from"),
+                             ),
+                     s3_date("on_site_until",
+                             label = T("On-site until"),
                              ),
                      self.dvr_referral_type_id(),
                      self.dvr_referral_type_id(
@@ -2542,7 +2542,7 @@ class DVRCaseActivityModel(S3Model):
             )
 
         # Reusable field
-        represent = dvr_CaseActivityRepresent(show_link=True),
+        represent = dvr_CaseActivityRepresent(show_link=True)
         case_activity_id = S3ReusableField("case_activity_id",
                                            "reference %s" % tablename,
                                            ondelete = "CASCADE",

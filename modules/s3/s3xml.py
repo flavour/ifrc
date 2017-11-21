@@ -83,7 +83,7 @@ class S3XML(S3Codec):
     # GIS field names
     Lat = "lat"
     Lon = "lon"
-    WKT = "wkt"
+    #WKT = "wkt"
 
     IGNORE_FIELDS = [
         "id",
@@ -157,6 +157,7 @@ class S3XML(S3Codec):
         latmin="latmin",
         latmax="latmax",
         limit="limit",
+        llrepr="llrepr",
         lon="lon",
         lonmin="lonmin",
         lonmax="lonmax",
@@ -230,7 +231,8 @@ class S3XML(S3Codec):
                 self.error = "XML Source error: %s" % sys.exc_info()[1]
                 return None
         try:
-            parser = etree.XMLParser(no_network = False,
+            parser = etree.XMLParser(huge_tree = True, # Support large WKT fields
+                                     no_network = False,
                                      remove_blank_text = True,
                                      )
             result = etree.parse(source, parser)
@@ -1121,6 +1123,7 @@ class S3XML(S3Codec):
                  fields=[],
                  url=None,
                  lazy=None,
+                 llrepr=None,
                  postprocess=None):
         """
             Creates a <resource> element from a record
@@ -1132,6 +1135,7 @@ class S3XML(S3Codec):
             @param fields: list of field names to include
             @param url: URL of the record
             @param lazy: lazy representation map
+            @param llrepr: lookup list representation method
             @param postprocess: post-process hook (xml_post_render)
         """
 
@@ -1185,6 +1189,16 @@ class S3XML(S3Codec):
             attrib[DELETED] = "True"
             # export only MTIME with deleted records
             fields = [self.MTIME]
+
+        # Lookup List Representation
+        if llrepr:
+            record_id = record.get(table._id.name)
+            if record_id:
+                if lazy is not None and hasattr(llrepr, "bulk"):
+                    text = S3RepresentLazy(record_id, llrepr)
+                    lazy.append((text, None, attrib, ATTRIBUTE.llrepr))
+                else:
+                    attrib[ATTRIBUTE.llrepr] = s3_unicode(llrepr(record_id))
 
         # Fields
         FIELDS_TO_ATTRIBUTES = self.FIELDS_TO_ATTRIBUTES

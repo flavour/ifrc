@@ -26,14 +26,18 @@ matplotlib>=1.1.1
 # Warning: Survey unresolved dependency: PyRTF required if you want to export assessment/survey templates as a Word document
 PyRTF>=0.45
 # Warning: Message Parsing unresolved dependency: TwitterSearch required for fetching results from twitter keyword queries
-TwitterSearch>=0.78.4
+TwitterSearch>=1.0
 # Warning: Messaging unresolved dependency: requests required for posting to Facebook
 requests>=2.3.0
 # Warning: Setup unresolved dependency: ansible required for Setup Module
 ansible>=1.6.2
 # Warning: Setup unresolved dependency: PyYAML required for Setup Module
 PyYAML>=3.11
+# Warning: Setup unresolved dependency: arrow used for some HRM functionality (currently just by IFRC)
+#arrow>=0.10.0
 # Warning: Setup unresolved dependency: boto required for Setup Module
 boto>=2.32.1
 # Warning: S3 unresolved dependency: pyparsing required for Calendar Support and Advanced URL Queries
 pyparsing>=2.0.1
+# Warning: URL shortener unresolved dependency: pyshorteners required to shorten the url (currently used by SAMBRO)
+#pyshorteners>=0.6.1

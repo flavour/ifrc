@@ -373,7 +373,8 @@ class S3Msg(object):
                       contact_method = "EMAIL",
                       document_ids = None,
                       from_address = None,
-                      system_generated = False):
+                      system_generated = False,
+                      **data):
         """
             Send a single message to a Person Entity (or list thereof)
 
@@ -461,6 +462,11 @@ class S3Msg(object):
         # Process OutBox async
         current.s3task.async("msg_process_outbox",
                              args = [contact_method])
+
+        # Perform post process after message sending
+        postp = current.deployment_settings.get_msg_send_postprocess()
+        if postp:
+            postp(message_id, **data)
 
         return message_id
 
@@ -651,12 +657,20 @@ class S3Msg(object):
         ptable = s3db.pr_person
         gtable = s3db.pr_group
         mtable = db.pr_group_membership
+        ftable = s3db.pr_forum
+        fmtable = db.pr_forum_membership
 
         # Left joins for multi-recipient lookups
         gleft = [mtable.on((mtable.group_id == gtable.id) & \
                            (mtable.person_id != None) & \
                            (mtable.deleted != True)),
                  ptable.on((ptable.id == mtable.person_id) & \
+                           (ptable.deleted != True))
+                 ]
+        fleft = [fmtable.on((fmtable.forum_id == ftable.id) & \
+                           (fmtable.person_id != None) & \
+                           (fmtable.deleted != True)),
+                 ptable.on((ptable.id == fmtable.person_id) & \
                            (ptable.deleted != True))
                  ]
 
@@ -765,6 +779,21 @@ class S3Msg(object):
                 # Re-queue the message for each member in the group
                 gquery = (gtable.pe_id == pe_id)
                 recipients = db(gquery).select(ptable.pe_id, left=gleft)
+                pe_ids = set(r.pe_id for r in recipients)
+                pe_ids.discard(None)
+                if pe_ids:
+                    for pe_id in pe_ids:
+                        outbox.insert(message_id=message_id,
+                                      pe_id=pe_id,
+                                      contact_method=contact_method,
+                                      system_generated=True)
+                    chainrun = True
+                status = True
+
+            elif entity_type == "pr_forum":
+                # Re-queue the message for each member in the group
+                fquery = (ftable.pe_id == pe_id)
+                recipients = db(fquery).select(ptable.pe_id, left=fleft)
                 pe_ids = set(r.pe_id for r in recipients)
                 pe_ids.discard(None)
                 if pe_ids:
@@ -2398,12 +2427,12 @@ class S3Msg(object):
                                                          limitby=(0, 1)).first()
 
         tso = TwitterSearch.TwitterSearchOrder()
-        tso.setKeywords(search_query.keywords.split(" "))
-        tso.setLanguage(search_query.lang)
+        tso.set_keywords(search_query.keywords.split(" "))
+        tso.set_language(search_query.lang)
         # @ToDo Handle more than 100 results per page
         # This may have to be changed upstream
-        tso.setCount(int(search_query.count))
-        tso.setIncludeEntities(search_query.include_entities)
+        tso.set_count(int(search_query.count))
+        tso.set_include_entities(search_query.include_entities)
 
         try:
             ts = TwitterSearch.TwitterSearch(
@@ -2423,7 +2452,7 @@ class S3Msg(object):
         rtable.location_id.requires = None
         update_super = s3db.update_super
 
-        for tweet in ts.searchTweetsIterable(tso):
+        for tweet in ts.search_tweets_iterable(tso):
             user = tweet["user"]["screen_name"]
             body = tweet["text"]
             tweet_id = tweet["id_str"]

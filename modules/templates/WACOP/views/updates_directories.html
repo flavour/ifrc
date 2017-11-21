@@ -15,9 +15,7 @@
       {{=filter_form}}
      </div>
      <div class='large-9 columns'>
-      <ul class='dl' id='updates_datalist'>
        {{=updates_datalist}}
-      </ul>
      </div>
     </div>
    </section>
@@ -33,10 +31,10 @@
          </div>
        </div>
        <div class='large-9 columns'>
-       <div id='dt-event_human_resource'>
-         {{=event_human_resource_datatable}}
+         <div id='dt-event_human_resource'>
+           {{=event_human_resource_datatable}}
+         </div>
        </div>
-     </div>
      </div>
    </section>
 
@@ -63,9 +61,11 @@
        <div class='large-3 columns'>
          {{=create_project_task_popup}}
          <div class='panel'>
+           <!--
            <div class='search-wrapper' id='dt-search-project_task'>
              <span class='search-icon'><i class='fa fa-search'></i></span>
-           </div>
+           </div>-->
+           {{=project_task_filter_form}}
          </div>
        </div>
        <div class='large-9 columns'>

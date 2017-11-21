@@ -15,7 +15,7 @@ def index():
 # -----------------------------------------------------------------------------
 def index_alt():
     """
-        Module homepage for non-Admin users when no CMS content found
+        Default module homepage
     """
 
     # Just redirect to the person list
@@ -338,7 +338,7 @@ def person():
                     name = "number%s" % row.number
                     if row.section != section:
                         label = section = row.section
-                        #subheadings[T(section)] = "sub_%sdata" % name
+                        #subheadings["sub_%sdata" % name] = T(section)
                     else:
                         label = ""
                     cappend(S3SQLInlineComponent("data",

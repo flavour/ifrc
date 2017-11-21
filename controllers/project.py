@@ -12,15 +12,27 @@ if not settings.has_module(module):
 
 mode_task = settings.get_project_mode_task()
 
-# =============================================================================
+# -----------------------------------------------------------------------------
 def index():
-    """ Module's Home Page """
+    """ Module's Custom Home Page """
+
+    return settings.customise_home(module, alt_function="index_alt")
+
+# -----------------------------------------------------------------------------
+def index_alt():
+    """
+        Default module homepage
+    """
 
     if mode_task:
-        # Bypass home page & go direct to browsing Tasks for a Project
-        s3_redirect_default(URL(f="project", vars={"tasks":1}))
+        if settings.get_project_projects():
+            # Bypass home page & go directly to task list for a project
+            s3_redirect_default(URL(f="project", vars={"tasks":1}))
+        else:
+            # Bypass home page & go directly to task list
+            s3_redirect_default(URL(f="task"))
     else:
-        # Bypass home page & go direct to filterable list of Projects
+        # Bypass home page & go directly to projects list
         s3_redirect_default(URL(f="project"))
 
 # =============================================================================
@@ -1141,6 +1153,12 @@ def programme_project():
     """ RESTful controller for Programmes <> Projects """
 
     s3.prep = lambda r: r.method == "options" and r.representation == "s3json"
+
+    return s3_rest_controller()
+
+# =============================================================================
+def strategy():
+    """ RESTful controller for Strategies """
 
     return s3_rest_controller()
 

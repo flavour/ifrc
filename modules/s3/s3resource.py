@@ -63,7 +63,7 @@ from s3data import S3DataTable, S3DataList
 from s3datetime import s3_format_datetime
 from s3fields import S3Represent, s3_all_meta_field_names
 from s3query import FS, S3ResourceField, S3ResourceQuery, S3Joins, S3URLQuery
-from s3utils import s3_has_foreign_key, s3_get_foreign_key, s3_unicode, s3_get_last_record_id, s3_remove_last_record_id
+from s3utils import s3_get_foreign_key, s3_get_last_record_id, s3_has_foreign_key, s3_remove_last_record_id, s3_str, s3_unicode
 from s3validators import IS_ONE_OF
 from s3xml import S3XMLFormat
 
@@ -998,6 +998,7 @@ class S3Resource(object):
                         db.commit()
         else:
             # Hard delete
+            deletable = len(rows) # assume all rows deletable
             for row in rows:
 
                 if joined:
@@ -1014,14 +1015,18 @@ class S3Resource(object):
                 # Delete super-entity
                 success = delete_super(table, row)
                 if not success:
+                    # Super-entity is not deletable
                     self.error = INTEGRITY_ERROR
+                    deletable -= 1
                     continue
+
                 # Delete the row
                 try:
                     del table[record_id]
                 except:
                     # Row is not deletable
                     self.error = INTEGRITY_ERROR
+                    deletable -= 1
                     continue
                 else:
                     # Successfully deleted
@@ -1541,13 +1546,25 @@ class S3Resource(object):
         append = qfields.append
         for f in table.fields:
 
-            if tablename == "gis_location" and \
-               ((f == "the_geom") or (f == "wkt" and current.auth.permission.format != "cap")):
-                # Filter out bulky Polygons
-                continue
-            elif f in ("wkt", "the_geom")  and tablename.startswith("gis_layer_shapefile_"):
-                # Filter out bulky Polygons
-                continue
+            if f in ("wkt", "the_geom"):
+                if tablename == "gis_location":
+                    if f == "the_geom":
+                        # Filter out bulky Polygons
+                        continue
+                    else:
+                        format = current.auth.permission.format
+                        if format == "cap":
+                            # Include WKT
+                            pass
+                        elif format == "xml" and current.deployment_settings.get_gis_xml_wkt():
+                            # Include WKT
+                            pass
+                        else:
+                            # Filter out bulky Polygons
+                            continue
+                elif tablename.startswith("gis_layer_shapefile_"):
+                    # Filter out bulky Polygons
+                    continue
 
             if fields or skip:
 
@@ -3200,7 +3217,7 @@ class S3Resource(object):
                     elif field.represent:
                         represent = field.represent(value)
                     else:
-                        represent = s3_unicode(value)
+                        represent = s3_str(value)
                     if isinstance(represent, A):
                         represent = represent.components[0]
 
@@ -3583,11 +3600,19 @@ class S3Resource(object):
 
         if rfields is None or dfields is None:
             if self.tablename == "gis_location":
-                if "wkt" not in skip and current.auth.permission.format != "cap":
-                    # Skip bulky WKT fields
-                    skip.append("wkt")
-                if current.deployment_settings.get_gis_spatialdb() and \
-                   "the_geom" not in skip:
+                settings = current.deployment_settings
+                if "wkt" not in skip:
+                    format = current.auth.permission.format
+                    if format == "cap":
+                        # Include WKT
+                        pass
+                    elif format == "xml" and settings.get_gis_xml_wkt():
+                        # Include WKT
+                        pass
+                    else:
+                        # Skip bulky WKT fields
+                        skip.append("wkt")
+                if "the_geom" not in skip and settings.get_gis_spatialdb():
                     skip.append("the_geom")
 
             xml = current.xml
@@ -6284,7 +6309,7 @@ class S3ResourceData(object):
         renderer = rfield.represent
         if not callable(renderer):
             # @ToDo: Don't convert unformatted numbers to strings
-            renderer = lambda v: s3_unicode(v) if v is not None else none
+            renderer = lambda v: s3_str(v) if v is not None else none
 
         # Deactivate linkto if so requested
         if not show_links and hasattr(renderer, "show_link"):
@@ -6305,7 +6330,7 @@ class S3ResourceData(object):
                 try:
                     text = renderer(value)
                 except:
-                    text = s3_unicode(value)
+                    text = s3_str(value)
                 fvalues[value] = text
 
         # Write representations into result
@@ -6327,7 +6352,7 @@ class S3ResourceData(object):
                 try:
                     text = renderer(value)
                 except:
-                    text = s3_unicode(value)
+                    text = s3_str(value)
                 result[colname] = text
                 if raw_data:
                     result["_row"][colname] = value
@@ -6361,7 +6386,7 @@ class S3ResourceData(object):
                                 )[:-1]
                             )
                 else:
-                    data = ", ".join([s3_unicode(v) for v in vlist])
+                    data = ", ".join([s3_str(v) for v in vlist])
 
                 result[colname] = data
                 if raw_data:

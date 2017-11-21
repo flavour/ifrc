@@ -30,6 +30,7 @@
 __all__ = ("S3SQLCustomForm",
            "S3SQLDefaultForm",
            "S3SQLDummyField",
+           "S3SQLVirtualField",
            "S3SQLSubFormLayout",
            "S3SQLVerticalSubFormLayout",
            "S3SQLInlineComponent",
@@ -233,22 +234,6 @@ class S3SQLForm(object):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def _insert_dummy_fields(form, formstyle, dummy_fields):
-        """
-            Insert dummy fields into forms
-            - these are simple DIVs placed into the correct place in the form
-              which are meant to be acted upon by custom JavaScript routines
-
-            @param form: the form
-            @param formstyle: the formstyle
-            @param dummy_fields:
-        """
-
-        if not dummy_fields:
-            return
-
-    # -------------------------------------------------------------------------
-    @staticmethod
     def _insert_subheadings(form, tablename, formstyle, subheadings):
         """
             Insert subheadings into forms
@@ -257,18 +242,7 @@ class S3SQLForm(object):
             @param tablename: the tablename
             @param formstyle: the formstyle
             @param subheadings:
-                OLD (maintained for backwards compatibility):
-                    a dict of {"Header": Fieldnames}, where
-                        Fieldname can be either a single field name or
-                        a list/tuple of field names belonging under that header
-                NEW (allows for multiple levels, used by DC):
-                    a dict of {"Header": {"fields": Fieldnames,
-                                          "subheadings": {"Header": {"fields": Fieldnames,
-                                                                     "subheadings": etc,
-                                                                     },
-                                                          },
-                                          },
-                               }
+                {"fieldname": "Heading"} or {"fieldname": ["Heading1", "Heading2"]}
         """
 
         if not subheadings:
@@ -278,43 +252,20 @@ class S3SQLForm(object):
         if formstyle.__name__ in ("formstyle_table",
                                   "formstyle_table_inline",
                                   ):
-            def create_subheading(represent, tablename, f):
+            def create_subheading(represent, tablename, f, level=""):
                 return TR(TD(represent, _colspan=3,
                              _class="subheading",
                              ),
                           _class = "subheading",
-                          _id = "%s_%s__subheading" % (tablename, f),
+                          _id = "%s_%s%s__subheading" % (tablename, f, level),
                           )
         else:
-            def create_subheading(represent, tablename, f):
+            def create_subheading(represent, tablename, f, level=""):
                 return DIV(represent,
                            _class = "subheading",
-                           _id = "%s_%s__subheading" % (tablename, f),
+                           _id = "%s_%s%s__subheading" % (tablename, f, level),
                            )
-        if "fields" in subheadings[subheadings.items()[0][0]]:
-            new_style = True
-            done = {1: [],
-                    2: [],
-                    3: [],
-                    }
-            fields = {}
-            for k, v in subheadings.items():
-                for f in v["fields"]:
-                    fields[f] = {1: k}
-                for _k, _v in v["subheadings"].items():
-                    for f in _v["fields"]:
-                        fields[f] = {1: k,
-                                     2: _k,
-                                     }
-                    for __k, __v in _v["subheadings"].items():
-                        for f in __v["fields"]:
-                            fields[f] = {1: k,
-                                         2: _k,
-                                         3: __k,
-                                         }
-        else:
-            new_style = False
-            done = []
+
         form_rows = iter(form[0])
         tr = form_rows.next()
         i = 0
@@ -348,52 +299,28 @@ class S3SQLForm(object):
                 elif f.startswith("sub_"):
                     # S3GroupedOptionsWidget
                     f = f[4:]
-                if new_style:
-                    headings = fields.get(f)
-                    if not headings:
-                        try:
-                            tr = form_rows.next()
-                        except StopIteration:
-                            break
-                        else:
-                            i += 1
-                        continue
-                    inserted = 0
-                    for j in (1, 2, 3):
-                        heading = headings.get(j)
-                        if heading and heading not in done[j]:
-                            done[j].append(heading)
-                            if j in (1, 2):
-                                # Clear lower level to avoid cross-section dupes
-                                done[j + 1] = []
-                            subheading = create_subheading(heading, tablename, f)
-                            form[0].insert(i, subheading)
-                            i += 1
-                            inserted += 1
-                    if inserted:
-                        tr.attributes.update(_class="%s after_subheading" % tr.attributes["_class"])
-                        for _i in range(0, inserted):
-                            # Iterate over the rows we just created
-                            tr = form_rows.next()
-                else:
-                    for k in subheadings.keys():
-                        if k in done:
-                            continue
-                        fields = subheadings[k]
-                        if not isinstance(fields, (list, tuple)):
-                            fields = [fields]
-                        if f in fields:
-                            done.append(k)
-                            if isinstance(k, int):
-                                # Don't display a section title
-                                represent = ""
-                            else:
-                                represent = k
-                            subheading = create_subheading(represent, tablename, f)
-                            form[0].insert(i, subheading)
-                            tr.attributes.update(_class="%s after_subheading" % tr.attributes["_class"])
-                            tr = form_rows.next()
-                            i += 1
+                headings = subheadings.get(f)
+                if not headings:
+                    try:
+                        tr = form_rows.next()
+                    except StopIteration:
+                        break
+                    else:
+                        i += 1
+                    continue
+                if not isinstance(headings, list):
+                    headings = [headings]
+                inserted = 0
+                for heading in headings:
+                    subheading = create_subheading(heading, tablename, f, inserted if inserted else "")
+                    form[0].insert(i, subheading)
+                    i += 1
+                    inserted += 1
+                if inserted:
+                    tr.attributes.update(_class="%s after_subheading" % tr.attributes["_class"])
+                    for _i in range(0, inserted):
+                        # Iterate over the rows we just created
+                        tr = form_rows.next()
             try:
                 tr = form_rows.next()
             except StopIteration:
@@ -1057,14 +984,23 @@ class S3SQLCustomForm(S3SQLForm):
             for alias, name, field in fields:
 
                 if alias is None:
+                    # Field in the master table
                     if name in record:
-                        data[field.name] = record[name]
+                        value = record[name]
+                        # Field Method?
+                        if callable(value):
+                            value = value()
+                        data[field.name] = value
+
                 elif alias in subtables:
+                    # Field in a subtable
                     if alias in subrows and \
                        subrows[alias] is not None and \
                        name in subrows[alias]:
                         data[field.name] = subrows[alias][name]
+
                 elif hasattr(alias, "extract"):
+                    # Form element with custom extraction method
                     data[field.name] = alias.extract(resource, record_id)
 
         else:
@@ -1154,11 +1090,6 @@ class S3SQLCustomForm(S3SQLForm):
         subheadings = options.get("subheadings", None)
         if subheadings:
             self._insert_subheadings(form, tablename, formstyle, subheadings)
-
-        # Dummy Fields
-        dummy_fields = self.opts.get("dummy_fields", None)
-        if dummy_fields:
-            self._insert_dummy_fields(dummy_fields)
 
         # Process the form
         formname = "%s/%s" % (tablename, record_id)
@@ -1796,6 +1727,56 @@ class S3SQLField(S3SQLFormElement):
             raise SyntaxError("Invalid subtable: %s" % tname)
 
 # =============================================================================
+class S3SQLVirtualField(S3SQLFormElement):
+    """
+        A form element to embed values of field methods (virtual fields),
+        always read-only
+    """
+
+    # -------------------------------------------------------------------------
+    def resolve(self, resource):
+        """
+            Method to resolve this form element against the calling resource.
+
+            @param resource: the resource
+            @return: a tuple
+                        (
+                            subtable alias (or None for main table),
+                            original field name,
+                            Field instance for the form renderer
+                        )
+        """
+
+        table = resource.table
+        selector = self.selector
+
+        if not hasattr(table, selector):
+            raise SyntaxError("Undefined virtual field: %s" % selector)
+
+        label = self.options.label
+        if not label:
+            label = " ".join(s.capitalize() for s in selector.split("_"))
+
+        field = Field(selector,
+                      label = label,
+                      widget = self,
+                      )
+
+        return None, selector, field
+
+    # -------------------------------------------------------------------------
+    def __call__(self, field, value, **attributes):
+        """
+            Widget renderer for field method values, renders a simple
+            read-only DIV with the value
+        """
+
+        widget = DIV(value, **attributes)
+        widget.add_class("s3-virtual-field")
+
+        return widget
+
+# =============================================================================
 class S3SQLDummyField(S3SQLFormElement):
     """
         A Dummy Field
@@ -1817,12 +1798,15 @@ class S3SQLDummyField(S3SQLFormElement):
                         )
         """
 
-        field = Field(self.selector,
+        selector = self.selector
+
+        field = Field(selector,
+                      default = "",
                       label = "",
                       widget = self,
                       )
 
-        return self, None, field
+        return None, selector, field
 
     # -------------------------------------------------------------------------
     def __call__(self, field, value, **attributes):
@@ -3413,9 +3397,8 @@ class S3SQLInlineComponent(S3SQLSubForm):
             for the real-input JSON
         """
 
-        if "filterby" in self.options:
-            filterby = self.options["filterby"]
-        else:
+        filterby = self.options.get("filterby")
+        if filterby is None:
             return None
 
         if not isinstance(filterby, (list, tuple)):
@@ -3467,6 +3450,8 @@ class S3SQLInlineComponent(S3SQLSubForm):
         field = table[fieldname]
 
         filterby = self.options["filterby"]
+        if filterby is None:
+            return None
         if not isinstance(filterby, (list, tuple)):
             filterby = [filterby]
 

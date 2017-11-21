@@ -23,6 +23,8 @@
          L5......................gis_location.L5
          Lat.....................gis_location.lat
          Lon.....................gis_location.lon
+         Capacity................edu_school
+         Contact.................edu_school
          Phone...................edu_school
          Email...................edu_school
          Website.................edu_school
@@ -238,6 +240,8 @@
             <!-- School data -->
             <data field="code"><xsl:value-of select="col[@field='Code']"/></data>
             <data field="name"><xsl:value-of select="$SchoolName"/></data>
+            <data field="capacity"><xsl:value-of select="col[@field='Capacity']"/></data>
+            <data field="contact"><xsl:value-of select="col[@field='Contact']"/></data>
             <data field="phone"><xsl:value-of select="col[@field='Phone']"/></data>
             <data field="email"><xsl:value-of select="col[@field='Email']"/></data>
             <data field="website"><xsl:value-of select="col[@field='Website']"/></data>

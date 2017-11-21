@@ -125,14 +125,16 @@ class S3MainMenu(default.S3MainMenu):
     @classmethod
     def menu_lang(cls):
 
-        s3 = current.response.s3
+        languages = current.deployment_settings.get_L10n_languages()
+        represent_local = IS_ISO639_2_LANGUAGE_CODE.represent_local
 
         # Language selector
         menu_lang = ML("Language", right=True)
-        for language in s3.l10n_languages.items():
-            code, name = language
+        for code in languages:
+            # Show Language in it's own Language
+            lang_name = represent_local(code)
             menu_lang(
-                ML(name, translate=False, lang_code=code, lang_name=name)
+                ML(lang_name, translate=False, lang_code=code, lang_name=lang_name)
             )
         return menu_lang
 
@@ -165,10 +167,12 @@ class S3MainMenu(default.S3MainMenu):
                            m = "login",
                            vars = {"_next": login_next},
                            ),
-                        MP("Lost Password", c="default", f="user",
-                           m = "retrieve_password",
-                           ),
                         )
+            if settings.get_auth_password_retrieval():
+                menu_personal(MP("Lost Password", c="default", f="user",
+                                 m = "retrieve_password",
+                                 ),
+                              )
         else:
             s3_has_role = auth.s3_has_role
             is_org_admin = lambda i: not s3_has_role(ADMIN) and \

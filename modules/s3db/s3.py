@@ -79,45 +79,42 @@ class S3DashboardModel(S3Model):
 
     def model(self):
 
-        define_table = self.define_table
-        configure = self.configure
-
         # ---------------------------------------------------------------------
         # Stored Dashboard Configuration
         #
         tablename = "s3_dashboard"
-        define_table(tablename,
-                     Field("controller", length = 64,
-                           requires = IS_NOT_EMPTY(),
-                           ),
-                     Field("function", length = 512,
-                           requires = IS_NOT_EMPTY(),
-                           ),
-                     Field("version", length = 40,
-                           readable = False,
-                           writable = False,
-                           ),
-                     Field("next_id", "integer",
-                           readable = False,
-                           writable = False,
-                           ),
-                     Field("layout",
-                           default = S3DashboardConfig.DEFAULT_LAYOUT,
-                           requires = IS_NOT_EMPTY(),
-                           ),
-                     Field("title",
-                           ),
-                     Field("widgets", "json",
-                           requires = IS_JSONS3(),
-                           ),
-                     Field("active", "boolean",
-                           default = True,
-                           ),
-                     *s3_meta_fields())
+        self.define_table(tablename,
+                          Field("controller", length = 64,
+                                requires = IS_NOT_EMPTY(),
+                                ),
+                          Field("function", length = 512,
+                                requires = IS_NOT_EMPTY(),
+                                ),
+                          Field("version", length = 40,
+                                readable = False,
+                                writable = False,
+                                ),
+                          Field("next_id", "integer",
+                                readable = False,
+                                writable = False,
+                                ),
+                          Field("layout",
+                                default = S3DashboardConfig.DEFAULT_LAYOUT,
+                                requires = IS_NOT_EMPTY(),
+                                ),
+                          Field("title",
+                                ),
+                          Field("widgets", "json",
+                                requires = IS_JSONS3(),
+                                ),
+                          Field("active", "boolean",
+                                default = True,
+                                ),
+                          *s3_meta_fields())
 
-        configure(tablename,
-                  onaccept = self.dashboard_onaccept,
-                  )
+        self.configure(tablename,
+                       onaccept = self.dashboard_onaccept,
+                       )
 
         # ---------------------------------------------------------------------
         # Link Dashboard Config <=> Person Entity
@@ -624,11 +621,9 @@ def s3_table_rheader(r, tabs=None):
         # Resource headers only used in interactive views
         return None
 
-    record = r.record
-    resource = r.resource
-
     rheader = None
 
+    record = r.record
     if record:
 
         T = current.T
@@ -649,7 +644,7 @@ def s3_table_rheader(r, tabs=None):
                               ]
 
         rheader = S3ResourceHeader(rheader_fields, tabs)(r,
-                                                         table = resource.table,
+                                                         table = r.resource.table,
                                                          record = record,
                                                          )
 

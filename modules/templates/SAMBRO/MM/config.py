@@ -23,8 +23,9 @@ def config(settings):
     # L10n (Localization) settings
     languages = OrderedDict([
         ("en-US", "English"),
-        ("my", "မြန်မာစာ"),        # Burmese
+        ("my", "Burmese"),
     ])
+    settings.cap.languages = languages
     settings.L10n.languages = languages
 
     # Alert Hub Title

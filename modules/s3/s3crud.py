@@ -1294,7 +1294,7 @@ class S3CRUD(S3Method):
                     items = []
 
             current.response.view = "plain.html"
-            return {"items": items}
+            return {"item": items}
 
         elif representation == "csv":
 
@@ -1986,7 +1986,13 @@ class S3CRUD(S3Method):
                     except:
                         success = False
                     if success:
-                        response.confirmation = T("Record approved")
+                        confirmation = response.confirmation
+                        if confirmation:
+                            response.confirmation = "%s, %s" % (T("Record approved"),
+                                                                confirmation,
+                                                                )
+                        else:
+                            response.confirmation = T("Record approved")
                         output["approve_form"] = ""
                     else:
                         response.warning = T("Record could not be approved.")
@@ -3126,10 +3132,10 @@ class S3CRUD(S3Method):
         else:
             return
         settings = current.response.s3.crud
+        custom_submit = [item]
         if settings.custom_submit:
-            settings.custom_submit.insert(0, item)
-        else:
-            settings.custom_submit = [item]
+            custom_submit.extend(settings.custom_submit)
+        settings.custom_submit = custom_submit
         return
 
     # -------------------------------------------------------------------------
