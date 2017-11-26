@@ -99,7 +99,7 @@ def config(settings):
                          "hrm_job_title",
                          "hrm_course",
                          "hrm_programme",
-                         #"member_membership_type",
+                         "member_membership_type",
                          "vol_award",
                          ):
             return None
@@ -744,12 +744,12 @@ def config(settings):
                 restricted = True,
                 #module_type = 10
             )),
-        #("member", Storage(
-        #       name_nice = T("Members"),
-        #       #description = "Membership Management System",
-        #       restricted = True,
-        #       #module_type = 10,
-        #   )),
+        ("member", Storage(
+               name_nice = T("Members"),
+               #description = "Membership Management System",
+               restricted = True,
+               #module_type = 10,
+           )),
         ("deploy", Storage(
                name_nice = T("Regional Intervention Teams"),
                #description = "Alerting and Deployment of Disaster Response Teams",
@@ -2314,7 +2314,7 @@ Thank you"""
                                                  limitby=(0, 1),
                                                  ).first()
             #if settings.get_L10n_translate_org_organisation():
-            org_name = org_represent(org_id)
+            #org_name = org_represent(org_id)
             #else:
             #    org_name = org.name
 

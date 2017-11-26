@@ -233,6 +233,8 @@ class DataCollectionTemplateModel(S3Model):
                      7: T("Date"),
                      #8: T("Date/Time"),
                      9: T("Grid"), # Pseudo-question
+                     10: T("Large Text"),
+                     11: T("Rich Text"),
                      #: T("Organization"),
                      #: T("Location"),
                      #: T("Person"),
@@ -257,7 +259,7 @@ class DataCollectionTemplateModel(S3Model):
                                         ),
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Code"),
-                                                           T("Unique code for the field - required if using Auto-Totals or Grids"),
+                                                           T("Unique code for the field - required if using Auto-Totals, Grids or Show Hidden"),
                                                            ),
                                          ),
                            ),
@@ -304,6 +306,15 @@ class DataCollectionTemplateModel(S3Model):
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Totals"),
                                                            T("List of fields (codes) which this one is the Total of"),
+                                                           ),
+                                         ),
+                           ),
+                     Field("show_hidden", "json",
+                           label = T("Show Hidden"),
+                           requires = IS_EMPTY_OR(IS_JSONS3()),
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Show Hidden"),
+                                                           T("List of fields (codes) which this one unhides when selected"),
                                                            ),
                                          ),
                            ),
@@ -466,9 +477,8 @@ class DataCollectionTemplateModel(S3Model):
             mobile_data = settings.get_dc_mobile_data()
             if not settings.get_dc_mobile_inserts():
                 table_settings["insertable"] = False
-            # @ToDo: Something other than default
-            # For SCPHIMS this should be response_id$location_id
-            table_settings["card"] = {"title": "Record #{{record.id}}",
+            # Configure table.response_id.represent
+            table_settings["card"] = {"title": "{{record.response_id}}",
                                       }
         elif master == "event_sitrep":
             mobile_form = False # For SCPHIMS at least
@@ -529,6 +539,7 @@ class DataCollectionTemplateModel(S3Model):
                                                        ).first()
 
         field_type = question.field_type
+        field_settings = {}
         options = None
         if field_type == 1:
             field_type = "string"
@@ -536,6 +547,8 @@ class DataCollectionTemplateModel(S3Model):
             field_type = "integer"
         elif field_type == 4:
             field_type = "boolean"
+            field_settings["mobile"] = {}
+            field_settings["mobile"]["widget"] = "checkbox"
         elif field_type == 5:
             T = current.T
             options = [T("Yes"),
@@ -553,6 +566,12 @@ class DataCollectionTemplateModel(S3Model):
         elif field_type == 9:
             # Grid: Pseudo-question, no dynamic field
             return
+        elif field_type == 10:
+            field_type = "text"
+            field_settings["widget"] = "comments"
+        elif field_type == 11:
+            field_type = "text"
+            field_settings["widget"] = "richtext"
         else:
             current.log.debug(field_type)
             raise NotImplementedError
@@ -563,7 +582,7 @@ class DataCollectionTemplateModel(S3Model):
             db(current.s3db.s3_field.id == field_id).update(label = question.name,
                                                             field_type = field_type,
                                                             options = options,
-                                                            #settings = field_settings,
+                                                            settings = field_settings,
                                                             require_not_empty = question.require_not_empty,
                                                             comments = question.comments,
                                                             )
@@ -582,7 +601,7 @@ class DataCollectionTemplateModel(S3Model):
                                                     name = name,
                                                     field_type = field_type,
                                                     options = options,
-                                                    #settings = field_settings,
+                                                    settings = field_settings,
                                                     require_not_empty = question.require_not_empty,
                                                     comments = question.comments,
                                                     )
@@ -883,7 +902,9 @@ class DataCollectionModel(S3Model):
         T = current.T
         db = current.db
 
-        mform = r.method == "mform"
+        # Mobile form configuration required for both schema and data export
+        #mform = r.method == "mform"
+        mform = r.tablename == tablename
         if mform:
             # Going direct to Dynamic Table
             dtable = db.s3_table
@@ -986,6 +1007,7 @@ class DataCollectionModel(S3Model):
                   qtable.posn,
                   qtable.totals,
                   qtable.grid,
+                  qtable.show_hidden,
                   ]
         if translate:
             left.append(ttable.on((ttable.question_id == qtable.id) & \
@@ -998,6 +1020,7 @@ class DataCollectionModel(S3Model):
         codes = {}
         grids = {}
         grid_children = {}
+        show_hidden = {}
         root_questions = []
         for question in questions:
             field_name = question.get("s3_field.name")
@@ -1019,7 +1042,7 @@ class DataCollectionModel(S3Model):
                         raise
                     rows = [s3_str(T(v)) for v in grid[0]]
                     cols = [s3_str(T(v)) for v in grid[1]]
-                    fields = [[0 for x in range(len(rows))] for y in range(len(cols))] 
+                    fields = [[0 for x in range(len(rows))] for y in range(len(cols))]
                     grids[code] = {"r": rows,
                                    "c": cols,
                                    "f": fields,
@@ -1029,6 +1052,11 @@ class DataCollectionModel(S3Model):
                     grid_children[field_name] = grid
                 else:
                     current.log.warning("Invalid grid data for %s - ignoring" % (code or field_name))
+            hides = question["dc_question.show_hidden"]
+            if hides:
+                show_hidden[field_name] = {"codes": hides,
+                                           "fields": [],
+                                           }
 
             section_id = question["dc_section.id"]
             label = None
@@ -1159,7 +1187,14 @@ class DataCollectionModel(S3Model):
                                 subheadings[fname] = subsubsection_name
                             fffirst = False
 
-        crud_form = S3SQLCustomForm(*crud_fields)
+        # Auto-Totals
+        autototals = {}
+        for field in auto_totals:
+            f = auto_totals[field]
+            append = f["fields"].append
+            for code in f["codes"]:
+                append(codes.get(code))
+            autototals[field] = f["fields"]
 
         # Grids
         # Place the child fields in the correct places in their grids
@@ -1171,24 +1206,35 @@ class DataCollectionModel(S3Model):
                 except:
                     current.log.warning("Invalid grid data for %s - ignoring" % code)
 
+        # Hides
+        hides = {}
+        for field in show_hidden:
+            f = show_hidden[field]
+            append = f["fields"].append
+            for code in f["codes"]:
+                fname = codes.get(code) or code
+                append(fname)
+            hides[field] = f["fields"]
+
         if mform:
-            # Auto-Totals
-            autototals = {}
-            for field in auto_totals:
-                f = auto_totals[field]
-                append = f["fields"].append
-                for code in f["codes"]:
-                    append(codes.get(code))
-                autototals[field] = f["fields"]
+            # Add response_id to form (but keep invisible) so that it can be used for the dataList represent
+            f = r.table.response_id
+            f.readable = f.writable = False
+            crud_fields.insert(0, "response_id")
+
+            crud_form = S3SQLCustomForm(*crud_fields)
 
             current.s3db.configure(tablename,
                                    crud_form = crud_form,
                                    autototals = autototals,
                                    grids = grids,
+                                   show_hidden = hides,
                                    subheadings = subheadings,
                                    )
 
         else:
+            crud_form = S3SQLCustomForm(*crud_fields)
+
             current.s3db.configure(tablename,
                                    crud_form = crud_form,
                                    subheadings = subheadings,
@@ -1201,20 +1247,23 @@ class DataCollectionModel(S3Model):
             jappend = s3.jquery_ready.append
 
             # Auto-Totals
-            for field in auto_totals:
-                f = auto_totals[field]
-                append = f["fields"].append
-                for code in f["codes"]:
-                    append(codes.get(code))
+            for field in autototals:
                 jappend('''S3.autoTotals('%s',%s,'%s')''' % \
                     (field,
-                     json.dumps(f["fields"], separators=SEPARATORS),
+                     json.dumps(autototals[field], separators=SEPARATORS),
                      tablename))
 
             # Grids
             if len(grids):
                 jappend('''S3.dc_grids(%s,'%s')''' % \
                     (json.dumps(grids, separators=SEPARATORS),
+                     tablename))
+
+            # Show Hidden
+            for field in hides:
+                jappend('''S3.showHidden('%s',%s,'%s')''' % \
+                    (field,
+                     json.dumps(hides[field], separators=SEPARATORS),
                      tablename))
 
             # Add JS
@@ -1351,7 +1400,7 @@ def dc_rheader(r, tabs=None):
                                          date_field,
                                          limitby=(0, 1)
                                          ).first()
-                
+
                 def event_name(record):
                     if event:
                         return event_id.represent(event.id)
@@ -1385,7 +1434,7 @@ def dc_rheader(r, tabs=None):
                 RESPONSES = T("Surveys")
             else:
                 RESPONSES = T("Responses")
-        
+
             tabs = ((T("Basic Details"), None),
                     (RESPONSES, "response"),
                     )
