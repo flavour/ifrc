@@ -6926,16 +6926,23 @@ class pr_AssignMethod(S3Method):
                             form = Storage(vars=link)
                             onaccept(form)
                         added += 1
-            current.session.confirmation = T("%(number)s assigned") % \
-                                           dict(number=added)
-            if added > 0:
-                redirect(URL(args=[r.id, self.next_tab], vars={}))
+            
+            if r.representation == "popup":
+                # Don't redirect, so we retain popup extension & so close popup
+                response.confirmation = T("%(number)s assigned") % \
+                                            dict(number=added)
+                return {}
             else:
-                redirect(URL(args=r.args, vars={}))
+                current.session.confirmation = T("%(number)s assigned") % \
+                                                    dict(number=added)
+                if added > 0:
+                    redirect(URL(args=[r.id, self.next_tab], vars={}))
+                else:
+                    redirect(URL(args=r.args, vars={}))
 
         elif r.http == "GET":
 
-            # Filter widgets
+            # @ToDo: be able to configure Filter widgets
             #if controller == "vol":
             #    resource_type = "volunteer"
             #elif len(types) == 1:
@@ -6956,20 +6963,22 @@ class pr_AssignMethod(S3Method):
                            "first_name",
                            "middle_name",
                            "last_name",
-                           #"organisation_id",
                            ]
-            #if len(types) == 2:
-            #    list_fields.append((T("Type"), "type"))
-            #list_fields.append("job_title_id")
-            #if settings.get_hrm_use_certificates():
-            #    list_fields.append((T("Certificates"), "person_id$certification.certificate_id"))
-            #if settings.get_hrm_use_skills():
-            #    list_fields.append((T("Skills"), "person_id$competency.skill_id"))
-            #if settings.get_hrm_use_trainings():
-            #    list_fields.append((T("Trainings"), "person_id$training.course_id"))
             if USERS:
                 db.auth_user.organisation_id.represent = s3db.org_OrganisationRepresent()
                 list_fields.append((current.messages.ORGANISATION, "user.organisation_id"))
+            elif tablename == "event_human_resource":
+                list_fields.append((current.messages.ORGANISATION, "human_resource.organisation_id"))
+            # @ToDo: be able to configure additional fields here, like:
+            #if len(types) == 2:
+            #    list_fields.append((T("Type"), "human_resource.type"))
+            #list_fields.append("human_resource.job_title_id")
+            #if settings.get_hrm_use_certificates():
+            #    list_fields.append((T("Certificates"), "certification.certificate_id"))
+            #if settings.get_hrm_use_skills():
+            #    list_fields.append((T("Skills"), "competency.skill_id"))
+            #if settings.get_hrm_use_trainings():
+            #    list_fields.append((T("Trainings"), "training.course_id"))
 
             # Data table
             resource = s3db.resource("pr_person",
@@ -7016,7 +7025,7 @@ class pr_AssignMethod(S3Method):
             # Bulk actions
             dt_bulk_actions = [(T("Assign"), "assign")]
 
-            if r.representation == "html":
+            if r.representation in ("html", "popup"):
                 # Page load
                 resource.configure(deletable = False)
 
@@ -7089,8 +7098,6 @@ class pr_AssignMethod(S3Method):
                                 dt_searching="false",
                                 )
 
-                STAFF = settings.get_hrm_staff_label()
-
                 response.view = "list_filter.html"
 
                 return {"items": items,
@@ -7127,8 +7134,6 @@ class pr_AssignMethod(S3Method):
                 r.error(415, current.ERROR.BAD_FORMAT)
         else:
             r.error(405, current.ERROR.BAD_METHOD)
-
-
 
 # =============================================================================
 def pr_compose():

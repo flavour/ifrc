@@ -428,12 +428,16 @@ def config(settings):
             if method == "datalist":
                 if get_vars.get("dashboard"):
                     from templates.WACOP.controllers import dashboard_filter
-                    s3.filter = dashboard_filter()
+                    # Too late for s3.filter to take effect
+                    #s3.filter = dashboard_filter()
+                    r.resource.add_filter(dashboard_filter())
                 else:
                     forum_id = get_vars.get("forum")
                     if forum_id:
                         from templates.WACOP.controllers import group_filter
-                        s3.filter = group_filter(forum_id)
+                        # Too late for s3.filter to take effect
+                        #s3.filter = group_filter(forum_id)
+                        r.resource.add_filter(group_filter(forum_id))
 
             elif method in ("custom", "dashboard", "filter"):
                 # Filter Widgets
@@ -448,13 +452,19 @@ def config(settings):
                         # We only expect a maximum of 1 of these, no need to append
                         if k == "dashboard":
                             from templates.WACOP.controllers import dashboard_filter
-                            s3.filter = dashboard_filter()
+                            # Too late for s3.filter to take effect
+                            #s3.filter = dashboard_filter()
+                            r.resource.add_filter(dashboard_filter())
                         elif k == "forum":
                             from templates.WACOP.controllers import group_filter
-                            s3.filter = group_filter(v)
+                            # Too late for s3.filter to take effect
+                            #s3.filter = group_filter(v)
+                            r.resource.add_filter(group_filter(v))
                         else:
                             from s3 import FS
-                            s3.filter = (FS(k) == v)
+                            # Too late for s3.filter to take effect
+                            #s3.filter = (FS(k) == v)
+                            r.resource.add_filter((FS(k) == v))
 
                 date_filter = S3DateFilter("date",
                                            # If we introduce an end_date on Posts:
@@ -510,6 +520,57 @@ def config(settings):
                                                              noneSelectedText = "Incident", # T() added in widget
                                                              no_opts = "",
                                                              ))
+
+                elif r.tablename == "pr_forum" or \
+                   (method == "filter" and get_vars.get("forum")):
+                    # Group Profile
+                    if r.tablename == "pr_forum":
+                        forum_id = r.id
+                    else:
+                        forum_id = get_vars.get("forum")
+                    appname = r.application
+                    eftable = s3db.event_forum
+                    base_query = (eftable.forum_id == forum_id)
+                    etable = s3db.event_event
+                    query = base_query & (eftable.event_id == etable.id)
+                    events_shared = db(query).select(etable.id,
+                                                     etable.name,
+                                                     )
+                    shared_events = {}
+                    for e in events_shared:
+                        shared_events[e.id] = e.name
+                    event_comment = "<a class='drop' data-options='ignore_repositioning:true;align:right' data-dropdown='event_drop{v}' aria-controls='event_drop{v}' aria-expanded='false'>…</a><ul id='event_drop{v}' class='f-dropdown' data-dropdown-content='' aria-hidden='true' tabindex='-1'><li><a href='/%(app)s/event/event/{v}/custom'>Go to Event</a></li><li><a href='/%(app)s/event/event/{v}/unshare/%(forum_id)s' class='ajax_link'>Stop sharing</a></li><li><a href='#'>Stop notifications</a></li></ul>" % \
+                        dict(app = appname,
+                             forum_id = forum_id,
+                             )
+                    filter_widgets.append(S3OptionsFilter("event_post.event_id",
+                                                          label = T("Shared Events"),
+                                                          cols = 1,
+                                                          options = shared_events,
+                                                          no_opts = "",
+                                                          table = False,
+                                                          option_comment = event_comment,
+                                                          ))
+                    itable = s3db.event_incident
+                    query = base_query & (eftable.incident_id == itable.id)
+                    incidents_shared = db(query).select(itable.id,
+                                                        itable.name,
+                                                        )
+                    shared_incidents = {}
+                    for i in incidents_shared:
+                        shared_incidents[i.id] = i.name
+                    incident_comment = "<a class='drop' data-options='ignore_repositioning:true;align:right' data-dropdown='incident_drop{v}' aria-controls='incident_drop{v}' aria-expanded='false'>…</a><ul id='incident_drop{v}' class='f-dropdown' data-dropdown-content='' aria-hidden='true' tabindex='-1'><li><a href='/%(app)s/event/incident/{v}/custom'>Go to Incident</a></li><li><a href='/%(app)s/event/incident/{v}/unshare/%(forum_id)s' class='ajax_link'>Stop sharing</a></li><li><a href='#'>Stop notifications</a></li></ul>" % \
+                        dict(app = appname,
+                             forum_id = forum_id,
+                             )
+                    filter_widgets.append(S3OptionsFilter("incident_post.incident_id",
+                                                          label = T("Shared Incidents"),
+                                                          cols = 1,
+                                                          options = shared_incidents,
+                                                          no_opts = "",
+                                                          table = False,
+                                                          option_comment = incident_comment,
+                                                          ))
 
                 if method != "dashboard":
                     user = current.auth.user
@@ -689,6 +750,16 @@ def config(settings):
                                    "group_id",
                                    "status_id",
                                    ]
+
+                    if r.component_id:
+                        f = s3db.event_team.group_id
+                        f.writable = False
+                        f.comment = None
+
+                    s3db.configure("event_team",
+                                   update_next = r.url(),
+                                   )
+
                 elif cname == "post":
                     list_fields = ["date",
                                    "series_id",
@@ -706,9 +777,78 @@ def config(settings):
             return True
         s3.prep = custom_prep
 
+        # Custom postp
+        standard_postp = s3.postp
+        def custom_postp(r, output):
+            # Call standard postp
+            if callable(standard_postp):
+                output = standard_postp(r, output)
+
+            if r.interactive and isinstance(output, dict):
+                if r.method == "assign":
+                    # No Top Menu
+                    current.menu.main = ""
+                    # Ensure we don't hide the Bulk Actions column in CSS
+                    s3.jquery_ready.append('''$('body').addClass('assign')''')
+                    # Custom View to waste less space inside popup
+                    import os
+                    response.view = os.path.join(r.folder,
+                                                 "modules", "templates",
+                                                 "WACOP", "views",
+                                                 "assign.html")
+
+                elif r.component_name == "group":
+                    output["title"] = T("Resource Details")
+
+                #elif r.component_name == "post":
+                #    # Add Tags - no, do client-side
+                #    output["form"].append()
+
+                #else:
+                #    # Summary or Profile pages
+                #    # Additional styles
+                #    s3.external_stylesheets += ["https://cdn.knightlab.com/libs/timeline3/latest/css/timeline.css",
+                #                                "https://fonts.googleapis.com/css?family=Merriweather:400,700|Source+Sans+Pro:400,700",
+                #                                ]
+
+                    #if r.method == "summary":
+                    #    # Open the Custom profile page instead of the normal one
+                    #    from gluon import URL
+                    #    from s3 import S3CRUD
+                    #    custom_url = URL(args = ["[id]", "custom"])
+                    #    S3CRUD.action_buttons(r,
+                    #                          read_url=custom_url,
+                    #                          update_url=custom_url)
+
+            return output
+        s3.postp = custom_postp
+
         # Custom rheader tabs
         attr = dict(attr)
         attr["rheader"] = wacop_rheader
+
+        # No sidebar menu
+        current.menu.options = None
+
+        refresh = current.request.get_vars.get("refresh")
+        if refresh:
+            # Popup from Resource Browse
+            current.menu.main = ""
+
+            #from gluon import A, URL
+            #attr["custom_crud_buttons"] = {"list_btn": A(T("Browse Resources"),
+            #                                             _class="action-btn",
+            #                                             _href=URL(c="pr", f="group", args="browse"),
+            #                                             _id="list-btn",
+            #                                             )
+            #                               }
+            attr["custom_crud_buttons"] = {"list_btn": "",
+                                           }
+
+            response = current.response
+            if response.confirmation:
+                script = '''self.parent.$('#%s').dataTable().fnReloadAjax()''' % refresh
+                response.s3.jquery_ready.append(script)
 
         return attr
 
@@ -860,10 +1000,7 @@ def config(settings):
             if callable(standard_prep):
                 result = standard_prep(r)
 
-            if r.method == "assign":
-                current.menu.main = ""
-
-            elif r.component_name == "group":
+            if r.component_name == "group":
                 if r.component_id:
                     f = s3db.event_team.group_id
                     f.writable = False
@@ -907,6 +1044,8 @@ def config(settings):
                 if r.method == "assign":
                     # No Top Menu
                     current.menu.main = ""
+                    # Ensure we don't hide the Bulk Actions column in CSS
+                    s3.jquery_ready.append('''$('body').addClass('assign')''')
                     # Custom View to waste less space inside popup
                     import os
                     response.view = os.path.join(r.folder,
@@ -952,8 +1091,6 @@ def config(settings):
             # Popup from Resource Browse
             current.menu.main = ""
 
-            attr["rheader"] = wacop_rheader
-
             #from gluon import A, URL
             #attr["custom_crud_buttons"] = {"list_btn": A(T("Browse Resources"),
             #                                             _class="action-btn",
@@ -977,7 +1114,7 @@ def config(settings):
     def customise_event_human_resource_resource(r, tablename):
 
         from gluon import A, URL
-        from s3 import s3_fieldmethod
+        from s3 import s3_fieldmethod, s3_fullname
 
         s3db = current.s3db
 
@@ -986,35 +1123,34 @@ def config(settings):
         f = r.function
         record_id = r.id
         ehrtable = s3db.event_human_resource
-        hr_represent = ehrtable.human_resource_id.represent
-        def hr_name(row):
-            hr_id = row["event_human_resource.human_resource_id"]
-            return A(hr_represent(hr_id),
+        def person_name(row):
+            person_id = row["event_human_resource.person_id"]
+            return A(s3_fullname(person_id),
                      _href = URL(c="event", f=f,
-                                 args=[record_id, "human_resource", hr_id, "profile"],
+                                 args=[record_id, "person", person_id, "profile"],
                                  ),
                      )
         ehrtable.name_click = s3_fieldmethod("name_click",
-                                             hr_name,
+                                             person_name,
                                              # over-ride the default represent of s3_unicode to prevent HTML being rendered too early
                                              # @ToDo: Bulk lookups
                                              represent = lambda v: v,
-                                             search_field = "human_resource_id",
+                                             search_field = "person_id",
                                              )
 
         s3db.configure(tablename,
                        #crud_form = crud_form,
-                       extra_fields = ("human_resource_id",
+                       extra_fields = ("person_id",
                                        ),
                        list_fields = [(T("Name"), "name_click"),
-                                      (T("Title"), "human_resource_id$job_title_id"),
-                                      "human_resource_id$organisation_id",
-                                      (T("Email"), "human_resource_id$person_id$email.value"),
-                                      (T("Phone"), "human_resource_id$person_id$phone.value"),
-                                      "status",
+                                      (T("Title"), "person_id$human_resource_id.job_title_id"),
+                                      "person_id$human_resource.organisation_id",
+                                      (T("Email"), "person_id$email.value"),
+                                      (T("Phone"), "person_id$phone.value"),
+                                      #"status",
                                       (T("Notes"), "comments"),
                                       ],
-                       orderby = "event_human_resource.human_resource_id",
+                       orderby = "event_human_resource.person_id",
                        )
 
     settings.customise_event_human_resource_resource = customise_event_human_resource_resource
@@ -1601,30 +1737,31 @@ def config(settings):
         filterby = None
         if r.tablename != "pr_forum":
             auth = current.auth
-            ADMIN = auth.s3_has_role("ADMIN")
-            if not ADMIN:
-                # Can only Share to Groups that the User is a Member of
-                ptable = s3db.pr_person
-                mtable = s3db.pr_forum_membership
-                ftable = s3db.pr_forum
-                query = (ptable.pe_id == auth.user.pe_id) & \
-                        (ptable.id == mtable.person_id) & \
-                        (mtable.forum_id == ftable.id)
-                forums = db(query).select(ftable.id,
-                                          ftable.name)
-                forum_ids = [f.id for f in forums]
-                filterby = dict(field = "forum_id",
-                                options = forum_ids,
-                                )
-                
-            crud_fields.insert(-1,
-                               S3SQLInlineComponent("task_forum",
-                                                    name = "forum",
-                                                    label = T("Share to Group"),
-                                                    fields = [("", "forum_id"),
-                                                              ],
-                                                    filterby = filterby,
-                                                    ))
+            if auth.user:
+                ADMIN = auth.s3_has_role("ADMIN")
+                if not ADMIN:
+                    # Can only Share to Groups that the User is a Member of
+                    ptable = s3db.pr_person
+                    mtable = s3db.pr_forum_membership
+                    ftable = s3db.pr_forum
+                    query = (ptable.pe_id == auth.user.pe_id) & \
+                            (ptable.id == mtable.person_id) & \
+                            (mtable.forum_id == ftable.id)
+                    forums = db(query).select(ftable.id,
+                                              ftable.name)
+                    forum_ids = [f.id for f in forums]
+                    filterby = dict(field = "forum_id",
+                                    options = forum_ids,
+                                    )
+                    
+                crud_fields.insert(-1,
+                                   S3SQLInlineComponent("task_forum",
+                                                        name = "forum",
+                                                        label = T("Share to Group"),
+                                                        fields = [("", "forum_id"),
+                                                                  ],
+                                                        filterby = filterby,
+                                                        ))
 
             if r.tablename == "event_event":
                 # Can only link to Incidents within this Event
@@ -1827,7 +1964,11 @@ def config(settings):
     settings.customise_project_task_controller = customise_project_task_controller
 
 # =============================================================================
-def event_team_rheader(incident_id, group_id, updates=False):
+def event_team_rheader(group_id,
+                       event_id = None,
+                       incident_id = None,
+                       updates = False,
+                       ):
     """
         RHeader for event_team
     """
@@ -1837,46 +1978,88 @@ def event_team_rheader(incident_id, group_id, updates=False):
     T = current.T
 
     table = current.s3db.event_team
-    query = (table.incident_id == incident_id) & \
-            (table.group_id == group_id)
-    record = current.db(query).select(table.status_id,
-                                      limitby=(0, 1),
-                                      ).first()
+    if event_id:
+        query = (table.event_id == event_id) & \
+                (table.group_id == group_id)
+        record = current.db(query).select(table.status_id,
+                                          limitby=(0, 1),
+                                          ).first()
 
-    rheader_tabs = DIV(SPAN(A(T("Resource Details"),
-                              _href=URL(c="event", f="incident",
-                                        args = [incident_id, "group", group_id],
-                                        vars = {"refresh": "custom-list-event_team",
-                                                },
-                                        ),
-                              _id="rheader_tab_group",
-                              ),
-                            _class="tab_here" if not updates else "tab_other",
+        rheader_tabs = DIV(SPAN(A(T("Resource Details"),
+                                  _href=URL(c="event", f="event",
+                                            args = [event_id, "group", group_id],
+                                            vars = {"refresh": "custom-list-event_team",
+                                                    },
+                                            ),
+                                  _id="rheader_tab_group",
+                                  ),
+                                _class="tab_here" if not updates else "tab_other",
+                                ),
+                           SPAN(A(T("Updates"),
+                                  _href=URL(c="pr", f="group",
+                                            args = [group_id, "post", "datalist"],
+                                            vars = {"event_id": event_id,
+                                                    "refresh": "custom-list-event_team",
+                                                    }
+                                            ),
+                                  _id="rheader_tab_post",
+                                  ),
+                                _class="tab_here" if updates else "tab_last",
+                                ),
+                           _class="tabs",
+                           )
+        rheader = DIV(TABLE(TR(TH("%s: " % table.group_id.label),
+                               table.group_id.represent(group_id),
+                               ),
+                            TR(TH("%s: " % table.event_id.label),
+                               table.event_id.represent(event_id),
+                               ),
+                            TR(TH("%s: " % table.status_id.label),
+                               table.status_id.represent(record.status_id),
+                               ),
                             ),
-                       SPAN(A(T("Updates"),
-                              _href=URL(c="pr", f="group",
-                                        args = [group_id, "post", "datalist"],
-                                        vars = {"incident_id": incident_id,
-                                                "refresh": "custom-list-event_team",
-                                                }
-                                        ),
-                              _id="rheader_tab_post",
-                              ),
-                            _class="tab_here" if updates else "tab_last",
+                      rheader_tabs)
+    elif incident_id:
+        query = (table.incident_id == incident_id) & \
+                (table.group_id == group_id)
+        record = current.db(query).select(table.status_id,
+                                          limitby=(0, 1),
+                                          ).first()
+
+        rheader_tabs = DIV(SPAN(A(T("Resource Details"),
+                                  _href=URL(c="event", f="incident",
+                                            args = [incident_id, "group", group_id],
+                                            vars = {"refresh": "custom-list-event_team",
+                                                    },
+                                            ),
+                                  _id="rheader_tab_group",
+                                  ),
+                                _class="tab_here" if not updates else "tab_other",
+                                ),
+                           SPAN(A(T("Updates"),
+                                  _href=URL(c="pr", f="group",
+                                            args = [group_id, "post", "datalist"],
+                                            vars = {"incident_id": incident_id,
+                                                    "refresh": "custom-list-event_team",
+                                                    }
+                                            ),
+                                  _id="rheader_tab_post",
+                                  ),
+                                _class="tab_here" if updates else "tab_last",
+                                ),
+                           _class="tabs",
+                           )
+        rheader = DIV(TABLE(TR(TH("%s: " % table.group_id.label),
+                               table.group_id.represent(group_id),
+                               ),
+                            TR(TH("%s: " % table.incident_id.label),
+                               table.incident_id.represent(incident_id),
+                               ),
+                            TR(TH("%s: " % table.status_id.label),
+                               table.status_id.represent(record.status_id),
+                               ),
                             ),
-                       _class="tabs",
-                       )
-    rheader = DIV(TABLE(TR(TH("%s: " % table.group_id.label),
-                           table.group_id.represent(group_id),
-                           ),
-                        TR(TH("%s: " % table.incident_id.label),
-                           table.incident_id.represent(incident_id),
-                           ),
-                        TR(TH("%s: " % table.status_id.label),
-                           table.status_id.represent(record.status_id),
-                           ),
-                        ),
-                  rheader_tabs)
+                      rheader_tabs)
     return rheader
     
 # =============================================================================
@@ -1968,22 +2151,29 @@ def wacop_rheader(r, tabs=[]):
 
         if tablename == "pr_group":
 
-            incident_id = r.get_vars.get("incident_id")
-            if incident_id and r.component_name == "post":
-                # Look like event_team details
-                group_id = r.id
-                rheader = event_team_rheader(incident_id, group_id, updates=True)
-                return rheader
-            else:
-                # Normal
-                rheader = pr_group_rheader(r)
-                return rheader
+            if r.component_name == "post":
+                incident_id = r.get_vars.get("incident_id")
+                if incident_id:
+                    # Look like event_team details
+                    group_id = r.id
+                    rheader = event_team_rheader(group_id, None, incident_id, updates=True)
+                    return rheader
+                else:
+                    event_id = r.get_vars.get("event_id")
+                    if event_id:
+                        # Look like event_team details
+                        group_id = r.id
+                        rheader = event_team_rheader(group_id, event_id, None, updates=True)
+                        return rheader
+            # Normal
+            rheader = pr_group_rheader(r)
+            return rheader
 
         elif tablename == "event_incident":
             if r.component_name == "group":
                 incident_id = r.id
                 group_id = r.component_id
-                rheader = event_team_rheader(incident_id, group_id, updates=False)
+                rheader = event_team_rheader(group_id, None, incident_id, updates=False)
                 return rheader
             else:
                 # Unused
@@ -2002,20 +2192,27 @@ def wacop_rheader(r, tabs=[]):
                                   ]
 
         elif tablename == "event_event":
-            # No normal workflows use this
+            if r.component_name == "group":
+                event_id = r.id
+                group_id = r.component_id
+                rheader = event_team_rheader(group_id, event_id, None, updates=False)
+                return rheader
+            else:
+                # Unused
+                return None
 
-            if not tabs:
-                tabs = [(T("Event Details"), None),
-                        (T("Incidents"), "incident"),
-                        (T("Units"), "group"),
-                        (T("Tasks"), "task"),
-                        (T("Updates"), "post"),
-                        ]
+                if not tabs:
+                    tabs = [(T("Event Details"), None),
+                            (T("Incidents"), "incident"),
+                            (T("Units"), "group"),
+                            (T("Tasks"), "task"),
+                            (T("Updates"), "post"),
+                            ]
 
-            rheader_fields = [["name"],
-                              ["start_date"],
-                              ["comments"],
-                              ]
+                rheader_fields = [["name"],
+                                  ["start_date"],
+                                  ["comments"],
+                                  ]
 
         rheader = S3ResourceHeader(rheader_fields, tabs)(r,
                                                          table=resource.table,
