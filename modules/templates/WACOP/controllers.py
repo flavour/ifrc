@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import dateutil.parser
+import json
 from gluon import current#, Field, SQLFORM
 from gluon.html import *
 from gluon.storage import Storage
@@ -484,12 +486,10 @@ class custom_WACOP(S3CRUD):
                     L3 = row["gis_location.L3"]
                     lat = row["gis_location.lat"]
                     lon = row["gis_location.lon"]
+                    location_full = "%s, %s; %s, %s" % (L3, L1_abrv, lat, lon)
                 else:
                     # No location or national
-                    L1_abrv = ""
-                    L3 = ""
-                    lat = ""
-                    lon = ""
+                    location_full = T("No Address Given")
                 alerts.append(DIV(TAG["aside"](TAG["header"](UL(LI(_class="item icon",
                                                                    ),
                                                                 LI(status,
@@ -510,7 +510,7 @@ class custom_WACOP(S3CRUD):
                                                           _class="meta",
                                                           ),
                                                      BR(),
-                                                     SPAN("%s, %s; %s, %s" % (L3, L1_abrv, lat, lon),
+                                                     SPAN(location_full,
                                                           _class="meta-location",
                                                           ),
                                                      ),
@@ -681,7 +681,7 @@ class custom_WACOP(S3CRUD):
                     # No location
                     L1_abrv = ""
                     L3 = ""
-                    addr_street = ""
+                    addr_street = T("No Address Given")
                     addr_postcode = ""
                 events.append(DIV(TAG["aside"](TAG["header"](UL(LI(status,
                                                                    _class="item primary status",
@@ -721,7 +721,13 @@ class custom_WACOP(S3CRUD):
                                                        end_date,
                                                        _class="event-date-location",
                                                        ),
-                                                   P(meta,
+                                                   P(meta + " ",
+                                                     A(T("Read More"),
+                                                       _href=URL(c="event", f="event",
+                                                                 args=[record_id, "custom"],
+                                                                 ),
+                                                       _class="more",
+                                                       ),
                                                      _class="meta",
                                                      ),
                                                    DIV(row["event_event.comments"],
@@ -729,15 +735,6 @@ class custom_WACOP(S3CRUD):
                                                        ),
                                                    _class="body",
                                                    ),
-                                               TAG["footer"](P(A(T("Read More"),
-                                                                 _href=URL(c="event", f="event",
-                                                                           args=[record_id, "custom"],
-                                                                           ),
-                                                                 _class="more",
-                                                                 ),
-                                                               ),
-                                                             _class="footer",
-                                                             ),
                                                _class="card-event",
                                                ),
                                   _class="medium-4 columns",
@@ -1080,9 +1077,10 @@ S3.search.ajaxUpdateOptions('#updates_datalist-filter-form')
         else:
             readonly = '''readOnly:true'''
         script = \
-'''S3.tagit=function(){$('.s3-tags').tagit({autocomplete:{source:'%s'},%s})}
+'''S3.tagit=function(){$('.s3-tags').tagit({placeholderText:'%s',autocomplete:{source:'%s'},%s})}
 S3.tagit()
-S3.redraw_fns.push('tagit')''' % (URL(c="cms", f="tag",
+S3.redraw_fns.push('tagit')''' % (T("Add tags here…"),
+                                  URL(c="cms", f="tag",
                                       args="tag_list.json"),
                                   readonly)
         s3.jquery_ready.append(script)
@@ -1377,18 +1375,18 @@ class incident_Browse(custom_WACOP):
         T = current.T
 
         # Alerts Cards
-        alerts = self._alerts_html()
+        #alerts = self._alerts_html()
 
         # Events Cards
-        events = self._events_html()
+        #events = self._events_html()
 
         # Map of Incidents
         map_id = "incident-gis_location_the_geom-map-filter-map"
         _map, button = self._map("Incidents", map_id=map_id, filter=True)
 
         # Output
-        output = {"alerts": alerts,
-                  "events": events,
+        output = {#"alerts": alerts,
+                  #"events": events,
                   "_map": _map,
                   }
 
@@ -1515,18 +1513,18 @@ class resource_Browse(custom_WACOP):
         T = current.T
 
         # Alerts Cards
-        alerts = self._alerts_html()
+        #alerts = self._alerts_html()
 
         # Events Cards
-        events = self._events_html()
+        #events = self._events_html()
 
         # Map of Resources
         map_id = "group-gis_location_the_geom-map-filter-map"
         _map, button = self._map("Resources", map_id=map_id, filter=True)
 
         # Output
-        output = {"alerts": alerts,
-                  "events": events,
+        output = {#"alerts": alerts,
+                  #"events": events,
                   "_map": _map,
                   }
 
@@ -1942,21 +1940,28 @@ class group_Profile(custom_WACOP):
 
         from s3 import s3_fullname
 
+        db = current.db
+        s3db = current.s3db
+        auth = current.auth
+
         table = r.table
         record = r.record
         forum_id = r.id
 
-        updateable = current.auth.s3_has_permission("update", table, record_id=forum_id, c="pr", f="forum")
+        updateable = auth.s3_has_permission("update", table,
+                                            record_id=forum_id,
+                                            c="pr",
+                                            f="forum")
 
         output = {"forum_id": forum_id,
                   "updateable": updateable,
                   }
 
-        mtable = current.s3db.pr_forum_membership
+        mtable = s3db.pr_forum_membership
         query = (mtable.forum_id == forum_id) & \
                 (mtable.deleted == False)
-        members = current.db(query).select(mtable.person_id,
-                                           mtable.admin)
+        members = db(query).select(mtable.person_id,
+                                   mtable.admin)
         admins = [s3_fullname(m.person_id) for m in members if m.admin]
 
         # Updates DataList
@@ -2001,6 +2006,29 @@ class group_Profile(custom_WACOP):
                          forum_id = forum_id,
                          )
 
+        # Notifications
+        ftable = s3db.pr_filter
+        stable = s3db.pr_subscription
+
+        pe_id = auth.user.pe_id
+        filter_string = '[["~.id", %s]]' % forum_id
+
+        query = (ftable.pe_id == pe_id) & \
+                (ftable.resource == "pr_forum") & \
+                (ftable.query == filter_string) & \
+                (ftable.id == stable.filter_id)
+        exists = db(query).select(stable.frequency,
+                                  limitby=(0, 1)
+                                  ).first()
+        if exists:
+            output["notify"] = True
+            output["frequency"] = exists.frequency
+        else:
+            output["notify"] = False
+            output["frequency"] = "immediately"
+
+        current.response.s3.scripts.append("/%s/static/themes/WACOP/js/group_profile.js" % r.application)
+
         self._view(output, "group_profile.html")
 
         return output
@@ -2026,6 +2054,7 @@ class incident_Profile(custom_WACOP):
         auth = current.auth
         db = current.db
         s3db = current.s3db
+        s3 = current.response.s3
         settings = current.deployment_settings
 
         ptable = s3db.cms_post
@@ -2043,7 +2072,12 @@ class incident_Profile(custom_WACOP):
                                                               #calendar = calendar,
                                                               )
 
+        # Map of Incident
+        # @ToDo: Add Resources
+        _map, button = self._map("Incidents", filter="~.id=%s" % incident_id)
+
         output = {"incident_id": incident_id,
+                  "_map": _map,
                   }
 
         # Incident Details
@@ -2086,10 +2120,7 @@ class incident_Profile(custom_WACOP):
             output["lon"] = location.lon or ""
             # @ToDo: BBOX should include the resources too
             bbox = current.gis.get_bounds(features=[location])
-            output["lat_max"] = bbox["lat_max"]
-            output["lat_min"] = bbox["lat_min"]
-            output["lon_max"] = bbox["lon_max"]
-            output["lon_min"] = bbox["lon_min"]
+            s3.js_global.append('''incident_bounds=%s''' % json.dumps(bbox))
         else:
             output["L1"] = ""
             output["L3"] = ""
@@ -2097,11 +2128,13 @@ class incident_Profile(custom_WACOP):
             output["postcode"] = ""
             output["lat"] = ""
             output["lon"] = ""
-            # @ToDo: Defaults for Seattle
-            output["lat_max"] = ""
-            output["lat_min"] = ""
-            output["lon_max"] = ""
-            output["lon_min"] = ""
+            # Defaults for Washington
+            bbox = {"lat_max": "45.5437202453613",
+                    "lat_min": "49.00244140625",
+                    "lon_max": "-116.917427062988",
+                    "lon_min": "-124.836097717285",
+                    }
+            s3.js_global.append('''incident_bounds=%s''' % json.dumps(bbox))
 
         updateable = auth.s3_has_permission("update", itable, record_id=incident_id, c="event", f="incident")
         output["updateable"] = updateable
@@ -2125,7 +2158,7 @@ class incident_Profile(custom_WACOP):
             script = '''incident_tags(%s)''' % incident_id
         else:
             script = '''incident_tags(false)'''
-        current.response.s3.jquery_ready.append(script)
+        s3.jquery_ready.append(script)
 
         user = auth.user
         if user:
@@ -2387,6 +2420,82 @@ class incident_Profile(custom_WACOP):
         return output
 
 # =============================================================================
+def group_Notify(r, **attr):
+    """
+        Manage Notifications for a Group
+
+        S3Method for interactive requests
+        - designed to be called via AJAX
+    """
+
+    forum_id = r.id
+    if not forum_id or r.http != "POST":
+        raise HTTP(405, current.ERROR.BAD_METHOD)
+
+    tablename = "pr_forum"
+    controller, function = tablename.split("_", 1)
+    filter_string = '[["~.id", %s]]' % forum_id
+
+    pe_id = current.auth.user.pe_id
+
+    post_vars_get = r.post_vars.get
+    email = post_vars_get("email")
+    frequency = post_vars_get("frequency")
+
+    db = current.db
+    s3db = current.s3db
+
+    ftable = s3db.pr_filter
+    stable = s3db.pr_subscription
+
+    query = (ftable.pe_id == pe_id) & \
+            (ftable.query == filter_string) & \
+            (ftable.id == stable.filter_id)
+    exists = db(query).select(ftable.id,
+                              stable.id,
+                              limitby=(0, 1)
+                              ).first()
+    if exists:
+        if email == "1":
+            db(stable.id == exists["pr_subscription.id"]).update(frequency = frequency)
+        else:
+            # Delete the Subscription
+            # (cascades to the subscription_resource)
+            resource = s3db.resource("pr_subscription", id=exists["pr_subscription.id"])
+            resource.delete()
+            # Delete the Filter
+            resource = s3db.resource("pr_filter", id=exists["pr_filter.id"])
+            resource.delete()
+    else:
+        if email == "1":
+            # Create the Filter
+            filter_id = ftable.insert(pe_id = pe_id,
+                                      # Just used by Saved Filters, not Subscription
+                                      #controller = controller,
+                                      #function = function,
+                                      #resource = tablename,
+                                      query = filter_string,
+                                      )
+            # Create the Subscription
+            subscription_id = stable.insert(pe_id = pe_id,
+                                            filter_id = filter_id,
+                                            notify_on = ["upd"],
+                                            frequency = frequency,
+                                            # Default:
+                                            #method = ["EMAIL"],
+                                            )
+            # Create the Subscription Resource
+            db.pr_subscription_resource.insert(subscription_id = subscription_id,
+                                               resource = tablename,
+                                               url = "%s/%s" % (controller, function),
+                                               )
+
+
+    output = current.xml.json_message(True, 200, current.T("Notification Settings Updated"))
+    current.response.headers["Content-Type"] = "application/json"
+    return output
+
+# =============================================================================
 class person_Dashboard(custom_WACOP):
     """
         Custom dashboard page for a person
@@ -2427,7 +2536,7 @@ class person_Dashboard(custom_WACOP):
             if hr:
                 job_title = hrtable.organisation_id.represent(hr.job_title_id)
                 staff_role = XML("%s, %s" % (job_title, organisation))
-                
+
             else:
                 staff_role = organisation
         else:
@@ -2673,7 +2782,7 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
     auth = current.auth
     user = auth.user
     if user: #and settings.get_cms_bookmarks():
-        # @ToDo: Bulk lookup
+        # @ToDo: Bulk lookup (via list_fields?)
         ltable = s3db.cms_post_user
         query = (ltable.post_id == record_id) & \
                 (ltable.user_id == user.id)
@@ -2704,6 +2813,7 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
 
     # Shares
     if user:
+        # @ToDo: Bulk lookup (via list_fields?)
         ptable = s3db.pr_person
         mtable = s3db.pr_forum_membership
         ftable = s3db.pr_forum
@@ -2879,28 +2989,18 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
 
     #if settings.get_cms_comments():
     # Add existing comments (oldest 1st)
-    comment_ids = raw["cms_comment.id"]
+    # - should sort by default by ID which is equivalent to oldest first,
+    #   however they seem to come in in a random order (even if orderby set on the component) so need to be sorted manually here
+    comments = raw["cms_comment.json_dump"]
     ncomments = 0
-    if comment_ids:
-        # Read extra data (can't have this as separate list_fields since come in unsorted & unable to match whole records
-        ctable = s3db.cms_comment
-        if isinstance(comment_ids, list):
-            comments = db(ctable.id.belongs(comment_ids)).select(ctable.body,
-                                                                 ctable.created_on,
-                                                                 ctable.created_by,
-                                                                 # Will sort by default by ID which is equivalent to oldest first
-                                                                 # orderby
-                                                                 )
-        else:
-            comment = db(ctable.id == comment_ids).select(ctable.body,
-                                                          ctable.created_on,
-                                                          ctable.created_by,
-                                                          limitby=(0, 1)
-                                                          ).first()
-            comments = [comment]
+    if comments:
+        if not isinstance(comments, list):
+            comments = [comments]
+        comments = [json.loads(comment) for comment in comments]
+        comments.sort(key=lambda c: c["created_on"])
         for comment in comments:
-            author = s3_auth_user_represent(comment.created_by)
-            cdate = comment.created_on
+            author = s3_auth_user_represent(comment["created_by"])
+            cdate = dateutil.parser.parse(comment["created_on"])
             ctime = cdate.time().strftime("%H:%M")
             cdate = cdate.date().strftime("%b %d, %Y")
             comment = LI(TAG["ASIDE"](P(T("Updated %(date)s @ %(time)s by %(author)s") % \
@@ -2910,7 +3010,7 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
                                                      ),
                                         _class="meta",
                                         ),
-                                      DIV(comment.body,
+                                      DIV(comment["body"],
                                           _class="desc",
                                           ),
                                       # @ToDo: Show this if more than x chars?

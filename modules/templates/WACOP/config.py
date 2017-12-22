@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from collections import OrderedDict
+import json
 
 from gluon import current
 from gluon.storage import Storage
@@ -161,19 +162,19 @@ def config(settings):
             restricted = True,
             module_type = None  # No Menu
         )),
-    #    ("errors", Storage(
-    #        name_nice = "Ticket Viewer",
-    #        #description = "Needed for Breadcrumbs",
-    #        restricted = False,
-    #        module_type = None  # No Menu
-    #    )),
-       ("sync", Storage(
+        #("errors", Storage(
+        #    name_nice = "Ticket Viewer",
+        #    #description = "Needed for Breadcrumbs",
+        #    restricted = False,
+        #    module_type = None  # No Menu
+        #)),
+        ("sync", Storage(
            name_nice = "Synchronization",
            #description = "Synchronization",
            restricted = True,
            access = "|1|",     # Only Administrators can see this module in the default menu & access the controller
            module_type = None  # This item is handled separately for the menu
-       )),
+        )),
         #("translate", Storage(
         #    name_nice = "Translation Functionality",
         #    #description = "Selective translation of strings based on module.",
@@ -199,6 +200,13 @@ def config(settings):
             module_type = 10
         )),
         # All modules below here should be possible to disable safely
+        ("msg", Storage(
+            name_nice = "Messaging",
+            #description = "Sends & Receives Alerts via Email & SMS",
+            restricted = True,
+            # The user-visible functionality of this module isn't normally required. Rather it's main purpose is to be accessed from other modules.
+            module_type = None,
+        )),
         ("hrm", Storage(
             name_nice = "Contacts",
             #description = "Human Resources Management",
@@ -381,25 +389,97 @@ def config(settings):
                 tags = ",".join(tags)
                 s3.jquery_ready.append('''wacop_update_tags("%s")''' % tags)
 
-            # Processing Tags/auto-Bookmarks
+            def create_onaccept(form):
+                """
+                    Update the modified_on of any forums to which the Incident/Event this Post links to is Shared
+                """
+                post_id = form.vars.id
+                pltable = s3db.event_post
+                events = db(pltable.post_id == post_id).select(pltable.event_id,
+                                                               pltable.incident_id,
+                                                               )
+                if len(events):
+                    event_ids = []
+                    eappend = event_ids.append
+                    incident_ids = []
+                    iappend = incident_ids.append
+                    for e in events:
+                        incident_id = e.incident_id
+                        if incident_id:
+                            iappend(incident_id)
+                        else:
+                            eappend(e.event_id)
+
+                    fltable = s3db.event_forum
+                    if len(event_ids):
+                        query = (fltable.event_id.belongs(event_ids))
+                        if len(incident_ids):
+                            query |= (fltable.incident_id.belongs(incident_ids))
+                    else:
+                        query = (fltable.incident_id.belongs(incident_ids))
+                    forums = db(query).select(fltable.forum_id)
+                    len_forums = len(forums)
+                    if len_forums:
+                        ftable = s3db.pr_forum
+                        if len_forums == 1:
+                            query = (ftable.id == forums.first().forum_id)
+                        else:
+                            query = (ftable.id.belongs([f.forum_id for f in forums]))
+                        db(query).update(modified_on = r.utcnow)
+
             default = s3db.get_config(tablename, "onaccept")
             if isinstance(default, list):
                 onaccept = default
+                # Processing Tags/auto-Bookmarks
                 onaccept.append(cms_post_onaccept)
+                create_onaccept = list(onaccept) + [create_onaccept]
             else:
+                # Processing Tags/auto-Bookmarks
                 onaccept = [default, cms_post_onaccept]
+                create_onaccept = [create_onaccept, default, cms_post_onaccept]
 
             s3db.configure(tablename,
                            crud_form = crud_form,
                            onaccept = onaccept,
+                           create_onaccept = create_onaccept,
                            )
 
         elif method in ("custom", "dashboard", "datalist", "filter"):
             # dataList configuration
+            from s3 import s3_fieldmethod
             from templates.WACOP.controllers import cms_post_list_layout
 
             s3 = current.response.s3
             s3.dl_no_header = True
+
+            # Virtual Field for Comments
+            # - otherwise need to do per-record DB calls inside cms_post_list_layout
+            #   as direct list_fields come in unsorted, so can't match up to records
+            ctable = s3db.cms_comment
+
+            def comment_as_json(row):
+                body = row["cms_comment.body"]
+                if not body:
+                    return None
+                return json.dumps({"body": body,
+                                   "created_by": row["cms_comment.created_by"],
+                                   "created_on": row["cms_comment.created_on"].isoformat(),
+                                   })
+
+            ctable.json_dump = s3_fieldmethod("json_dump",
+                                              comment_as_json,
+                                              # over-ride the default represent of s3_unicode to prevent HTML being rendered too early
+                                              #represent = lambda v: v,
+                                              )
+
+            s3db.configure("cms_comment",
+                           extra_fields = ["body",
+                                           "created_by",
+                                           "created_on",
+                                           ],
+                           # Doesn't seem to have any impact
+                           #orderby = "cms_comment.created_on asc",
+                           )
 
             s3db.configure(tablename,
                            # No create form in the datalist popups on Resource Browse page
@@ -413,15 +493,14 @@ def config(settings):
                                           "created_by",
                                           "tag.name",
                                           "document.file",
-                                          "comment.id",
-                                          # Extra fields come in unsorted, so can't match up to records
-                                          #"comment.body",
-                                          #"comment.created_by",
-                                          #"comment.created_on",
+                                          #"comment.id",
+                                          "comment.json_dump",
                                           ],
                            list_layout = cms_post_list_layout,
-                           # Default
-                           #orderby = "cms_post.date desc",
+                           # First is Default, 2nd has no impact
+                           #orderby = ("cms_post.date desc",
+                           #           "cms_comment.created_on asc",
+                           #           )
                            )
 
             get_vars = r.get_vars
@@ -1287,6 +1366,62 @@ def config(settings):
 
     settings.customise_event_team_resource = customise_event_team_resource
 
+    # -----------------------------------------------------------------------------
+    def pr_forum_notify_subject(resource, data, meta_data):
+        """
+            Custom Method to subject for the email
+            @param resource: the S3Resource
+            @param data: the data returned from S3Resource.select
+            @param meta_data: the meta data for the notification
+        """
+
+        subject = "[%s] %s %s" % (settings.get_system_name_short(),
+                                  data["rows"][0]["pr_forum.name"],
+                                  T("Notification"),
+                                  )
+        # RFC 2822
+        #return s3_str(s3_truncate(subject, length=78))
+        # Truncate happens in s3notify.py
+        return subject
+
+    # -----------------------------------------------------------------------------
+    def pr_forum_notify_renderer(resource, data, meta_data, format=None):
+        """
+            Custom Method to pre-render the contents for the message template
+
+            @param resource: the S3Resource
+            @param data: the data returned from S3Resource.select
+            @param meta_data: the meta data for the notification
+            @param format: the contents format ("text" or "html")
+        """
+
+        from gluon import DIV, H1, P
+
+        # We should always have just a single row
+        row = data["rows"][0]
+        notification = DIV(H1(T(row["pr_forum.name"])))
+        append = notification.append
+        # Updates
+        updates = row["cms_post.json_dump"]
+        if updates:
+            if not isinstance(updates, list):
+                updates = [updates]
+            #updates = [json.loads(update) for update in updates]
+            #updates.sort(key=lambda c: c["created_on"])
+            for update in updates:
+                update = json.loads(update)
+                #"update.date"
+                #"update.series_id"
+                #"update.priority"
+                #"update.status_id"
+                append(P("update.body"))
+        # Events
+        # Incidents
+        # Tasks
+
+        return {"notification": notification,
+                }
+
     # -------------------------------------------------------------------------
     def customise_pr_forum_resource(r, tablename):
 
@@ -1311,13 +1446,12 @@ def config(settings):
     # -------------------------------------------------------------------------
     def customise_pr_forum_controller(**attr):
 
-        T = current.T
         db = current.db
         s3db = current.s3db
         s3 = current.response.s3
 
         # Custom Browse
-        from templates.WACOP.controllers import group_Browse, group_Profile, text_filter_formstyle
+        from templates.WACOP.controllers import group_Browse, group_Notify, group_Profile, text_filter_formstyle
         set_method = s3db.set_method
         set_method("pr", "forum",
                    method = "browse",
@@ -1327,6 +1461,11 @@ def config(settings):
         set_method("pr", "forum",
                    method = "custom",
                    action = group_Profile)
+
+        # Custom Notifications
+        set_method("pr", "forum",
+                   method = "notify_settings",
+                   action = group_Notify)
 
         from s3 import S3OptionsFilter, S3SQLCustomForm, S3SQLInlineComponent, S3TextFilter
 
@@ -1433,7 +1572,51 @@ def config(settings):
             if callable(standard_prep):
                 result = standard_prep(r)
 
-            if r.method is None:
+            if r.representation == "msg":
+                # Notifications
+
+                # Add a Virtual Field for Posts
+                # - to keep their data together
+                table = s3db.cms_post
+                    
+                def cms_post_as_json(row):
+                    body = row["cms_post.body"]
+                    if not body:
+                        return None
+                    return json.dumps({"body": body,
+                                       "date": row["cms_post.date"].isoformat(),
+                                       "series_id": row["cms_post.series_id"],
+                                       "priority": row["cms_post.priority"],
+                                       "status_id": row["cms_post.status_id"],
+                                       })
+
+                table.json_dump = s3_fieldmethod("json_dump",
+                                                  cms_post_as_json,
+                                                  )
+                s3db.configure("cms_post",
+                               extra_fields = ("date",
+                                               "series_id",
+                                               "priority",
+                                               "status_id",
+                                               "body",
+                                               ),
+                               )
+
+                notify_fields = ["name",
+                                 "post.json_dump",
+                                 #"event.json_dump",
+                                 #"incident.json_dump",
+                                 #"task.json_dump",
+                                 ]
+                s3db.configure("pr_forum",
+                               notify_fields = notify_fields,
+                               notify_renderer = pr_forum_notify_renderer,
+                               notify_subject = pr_forum_notify_subject,
+                               # Keep default name, but it will use the one in the Template folder
+                               #notify_template = notify_template,
+                               )
+
+            elif r.method is None:
                 # Override defalt redirects from custom methods
                 if r.component:
                     from gluon.tools import redirect
@@ -1837,6 +2020,28 @@ def config(settings):
                                        ),
                           ]
 
+        def onaccept(form):
+            """
+                Update the modified_on of any forums to which the Task is Shared
+            """
+            task_id = form.vars.id
+            ltable = s3db.project_task_forum
+            forums = db(ltable.task_id == task_id).select(ltable.forum_id)
+            len_forums = len(forums)
+            if len_forums:
+                ftable = s3db.pr_forum
+                if len_forums == 1:
+                    query = (ftable.id == forums.first().forum_id)
+                else:
+                    query = (ftable.id.belongs([f.forum_id for f in forums]))
+                db(query).update(modified_on = r.utcnow)
+
+        update_onaccept = s3db.get_config(tablename, "update_onaccept")
+        if update_onaccept:
+            update_onaccept = [update_onaccept, onaccept]
+        else:
+            update_onaccept = onaccept
+
         s3db.configure(tablename,
                        crud_form = crud_form,
                        extra_fields = ("name",
@@ -1849,6 +2054,7 @@ def config(settings):
                                       (T("Due"), "date_due"),
                                       ],
                        orderby = "project_task.date_due",
+                       update_onaccept = update_onaccept,
                        )
 
     settings.customise_project_task_resource = customise_project_task_resource

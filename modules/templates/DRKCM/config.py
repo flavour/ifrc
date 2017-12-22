@@ -322,6 +322,52 @@ def config(settings):
     #settings.dvr.event_registration_checkin_warning = True
 
     # -------------------------------------------------------------------------
+    def customise_doc_document_resource(r, tablename):
+
+        if r.controller == "dvr":
+
+            s3db = current.s3db
+            table = s3db.doc_document
+
+            # Hide URL field
+            field = table.url
+            field.readable = field.writable = False
+
+            # Custom label for date-field
+            field = table.date
+            field.label = T("Uploaded on")
+            field.default = r.utcnow.date()
+            field.writable = False
+
+            # Custom label for name-field
+            field = table.name
+            field.label = T("Title")
+
+            # List fields
+            list_fields = ["name",
+                           "file",
+                           "date",
+                           "comments",
+                           ]
+            s3db.configure("doc_document",
+                           list_fields = list_fields,
+                           )
+
+    settings.customise_doc_document_resource = customise_doc_document_resource
+
+    # -------------------------------------------------------------------------
+    def customise_doc_document_controller(**attr):
+
+        current.deployment_settings.ui.export_formats = None
+
+        if current.request.controller == "dvr":
+            attr["rheader"] = drk_dvr_rheader
+
+        return attr
+
+    settings.customise_doc_document_controller = customise_doc_document_controller
+
+    # -------------------------------------------------------------------------
     def customise_dvr_home():
         """ Do not redirect to person-controller """
 
@@ -1792,6 +1838,24 @@ def config(settings):
     settings.customise_dvr_response_action_resource = customise_dvr_response_action_resource
 
     # -------------------------------------------------------------------------
+    def customise_dvr_service_contact_resource(r, tablename):
+
+        s3db = current.s3db
+
+        table = s3db.dvr_service_contact
+
+        field = table.type_id
+        field.label = T("Type")
+
+        field = table.organisation_id
+        field.readable = field.writable = False
+
+        field = table.organisation
+        field.readable = field.writable = True
+
+    settings.customise_dvr_service_contact_resource = customise_dvr_service_contact_resource
+
+    # -------------------------------------------------------------------------
     # Shelter Registry Settings
     #
     settings.cr.people_registration = False
@@ -2518,7 +2582,9 @@ def drk_dvr_rheader(r, tabs=[]):
                             (T("Family Members"), "group_membership/"),
                             (T("Activities"), "case_activity"),
                             (T("Appointments"), "case_appointment"),
+                            (T("Service Contacts"), "service_contact"),
                             (T("Photos"), "image"),
+                            (T("Documents"), "document/"),
                             (T("Notes"), "case_note"),
                             ]
 

@@ -4770,6 +4770,18 @@ class S3HRProgrammeModel(S3Model):
                            readable = False,
                            writable = False,
                            ),
+                     Field("event",
+                           label = T("Event Name"),
+                           # Enable in templates as-required
+                           readable = False,
+                           writable = False,
+                           ),
+                     Field("place",
+                           label = T("Place"),
+                           # Enable in templates as-required
+                           readable = False,
+                           writable = False,
+                           ),
                      s3_date(future = 0),
                      s3_date("end_date",
                              label = T("End Date"),
@@ -4850,8 +4862,7 @@ class S3HRProgrammeModel(S3Model):
                              },
                   extra_fields = ["date"],
                   filter_widgets = filter_widgets,
-                  list_fields = ["id",
-                                 "training",
+                  list_fields = ["training",
                                  "programme_id",
                                  "job_title_id",
                                  "training_id",
@@ -5068,7 +5079,7 @@ class hrm_AssignMethod(S3Method):
                             form = Storage(vars=link)
                             onaccept(form)
                         added += 1
-            
+
             if r.representation == "popup":
                 # Don't redirect, so we retain popup extension & so close popup
                 response.confirmation = T("%(number)s assigned") % \
@@ -5659,6 +5670,7 @@ def hrm_human_resource_onaccept(form):
                                   force_update = True)
 
     # Set person record to follow HR record
+    # (Person base location remains untouched)
     tracker = S3Tracker()
     pr_tracker = tracker(ptable, person_id)
     pr_tracker.check_in(htable, id, timestmp = request.utcnow)
@@ -5674,102 +5686,126 @@ def hrm_human_resource_onaccept(form):
 
     # Determine how the HR is positioned
     address = None
-    site_contact = record.site_contact
     update_location_from_site = False
+
+    site_contact = record.site_contact
+
     hstable = s3db.hrm_human_resource_site
     query = (hstable.human_resource_id == id)
     if site_id:
         # Add/update the record in the link table
         this = db(query).select(hstable.id,
-                                limitby=(0, 1)).first()
+                                limitby = (0, 1),
+                                ).first()
         if this:
-            db(query).update(site_id=site_id,
-                             human_resource_id=id,
-                             site_contact=site_contact)
+            db(query).update(site_id = site_id,
+                             human_resource_id = id,
+                             site_contact = site_contact,
+                             )
         else:
-            hstable.insert(site_id=site_id,
-                           human_resource_id=id,
-                           site_contact=site_contact)
+            hstable.insert(site_id = site_id,
+                           human_resource_id = id,
+                           site_contact = site_contact,
+                           )
+
         if location_lookup == "site_id" or location_lookup[0] == "site_id":
+            # Use site location as HR base location
             update_location_from_site = True
+
         elif location_lookup[0] == "person_id":
-            # Update Location from Site only if the Person has no Home Address
+            # Only use site location as HR base location if the Person
+            # has no Home Address
             atable = s3db.pr_address
             query = (atable.pe_id == ptable.pe_id) & \
                     (ptable.id == person_id) & \
                     (atable.type == 1) & \
                     (atable.deleted == False)
-            address = db(query).select(atable.location_id,
-                                       limitby=(0, 1)).first()
+            address = db(query).select(atable.id,
+                                       atable.location_id,
+                                       limitby=(0, 1),
+                                       ).first()
             if not address:
                 update_location_from_site = True
         else:
             # location_lookup == "person_id"
-            # Set to the Home Address
+            # Use home address to determine HR base location
             # Current Address preferred, otherwise Permanent if present
             atable = s3db.pr_address
             query = (atable.pe_id == ptable.pe_id) & \
                     (ptable.id == person_id) & \
                     (atable.type.belongs(1, 2)) & \
                     (atable.deleted == False)
-            address = db(query).select(atable.location_id,
+            address = db(query).select(atable.id,
+                                       atable.location_id,
                                        limitby = (0, 1),
                                        orderby = atable.type,
                                        ).first()
     else:
         # Delete any links in the link table
         db(query).delete()
+
         if "person_id" in location_lookup:
-            # Set to the Home Address
+            # Use home address to determine HR base location
             # Current Address preferred, otherwise Permanent if present
             atable = s3db.pr_address
             query = (atable.pe_id == ptable.pe_id) & \
                     (ptable.id == person_id) & \
                     (atable.type.belongs(1, 2)) & \
                     (atable.deleted == False)
-            address = db(query).select(atable.location_id,
+            address = db(query).select(atable.id,
+                                       atable.location_id,
                                        limitby = (0, 1),
                                        orderby = atable.type,
                                        ).first()
 
     if update_location_from_site:
+
+        # Use the site location as base location of the HR
         stable = db.org_site
         site = db(stable.site_id == site_id).select(stable.location_id,
-                                                    limitby=(0, 1)).first()
+                                                    limitby = (0, 1),
+                                                    ).first()
         try:
             data.location_id = location_id = site.location_id
         except:
-            current.log.error("Can't find site with site_id", site_id)
+            current.log.error("Can't find site with site_id ", site_id)
             data.location_id = location_id = None
 
     elif address:
+
+        # Use the address as base location of the HR
         data.location_id = location_id = address.location_id
 
     elif vol:
+
+        # No known address and not updating location from site
+        # => fall back to the HR's location_id if known
         if record.location_id:
+
+            # Add a new Address for the person from the HR location
             location_id = record.location_id
-            # Add Address from newly-created HRM
             pe = db(ptable.id == person_id).select(ptable.pe_id,
-                                                   limitby=(0, 1)).first()
+                                                   limitby = (0, 1),
+                                                   ).first()
             try:
                 atable.insert(type = 1,
                               pe_id = pe.pe_id,
-                              location_id = location_id)
+                              location_id = location_id,
+                              )
             except:
-                current.log.error("Can't find person with id", person_id)
+                current.log.error("Can't find person with id ", person_id)
         else:
             data.location_id = location_id = None
-
     else:
         data.location_id = location_id = None
 
+    # Update HR base location
+    hrm_tracker = tracker(htable, id)
     if location_id:
         # Set Base Location
-        hrm_tracker = tracker(htable, id)
         hrm_tracker.set_base_location(location_id)
     else:
         # Unset Base Location
-        hrm_tracker = tracker(htable, id)
         hrm_tracker.set_base_location(None)
 
     if settings.get_hrm_site_contact_unique():
@@ -6556,7 +6592,7 @@ def hrm_rheader(r, tabs=[], profile=False):
             duplicates = None
             if record_method:
                 hr_tab = (T(hr_record), record_method)
-                    
+
             tabs = [(T("Person Details"), None, {"native": True}),
                     hr_tab,
                     duplicates_tab,
@@ -8524,8 +8560,9 @@ class hrm_CV(S3Method):
             if r.representation == "html":
                 response = current.response
                 # Maintain normal rheader for consistency
+                rheader = attr["rheader"]
                 profile_header = TAG[""](H2(response.s3.crud_strings["pr_person"].title_display),
-                                         DIV(hrm_rheader(r), _id="rheader"),
+                                         DIV(rheader(r), _id="rheader"),
                                          )
             else:
                 profile_header = None

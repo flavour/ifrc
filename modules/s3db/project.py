@@ -9738,6 +9738,18 @@ class S3ProjectStrategyModel(S3Model):
         return dict(project_strategy_id = strategy_id,
                     )
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def defaults():
+        """ Safe defaults for model-global names if module is disabled """
+
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False)
+
+        return dict(project_strategy_id = lambda **attr: dummy("strategy_id"),
+                    )
+
 # =============================================================================
 class S3ProjectThemeModel(S3Model):
     """
@@ -10784,8 +10796,7 @@ class S3ProjectTaskModel(S3Model):
 
         # Resource Configuration
         configure(tablename,
-                  context = {#"event": "event.event_id",
-                             "incident": "incident.incident_id",
+                  context = {"incident": "incident.incident_id",
                              "location": "location_id",
                              # Assignee instead?
                              "organisation": "created_by$organisation_id",
@@ -10867,11 +10878,9 @@ class S3ProjectTaskModel(S3Model):
                        #event_incident = {"link": "event_task",
                        #                  "joinby": "task_id",
                        #                  "key": "incident_id",
-                       #                  "actuate": "embed",
-                       #                  "autocomplete": "name",
-                       #                  "autodelete": False,
+                       #                  "actuate": "replace",
                        #                  },
-                       # Format for InlineComponent
+                       # Format for InlineComponent & Context
                        event_task = {"name": "incident",
                                      "joinby": "task_id",
                                      },
@@ -11334,15 +11343,15 @@ class S3ProjectTaskModel(S3Model):
 
         db = current.db
         s3db = current.s3db
-        session = current.session
+        #session = current.session
 
         task_id = form.vars.id
 
-        if session.s3.incident:
-            # Create a link between this Task & the active Incident
-            etable = s3db.event_task
-            etable.insert(incident_id = session.s3.incident,
-                          task_id = task_id)
+        #if session.s3.incident:
+        #    # Create a link between this Task & the active Incident
+        #    etable = s3db.event_task
+        #    etable.insert(incident_id = session.s3.incident,
+        #                  task_id = task_id)
 
         ltp = db.project_task_project
 
@@ -11565,6 +11574,8 @@ class S3ProjectTaskModel(S3Model):
             ltable.insert(task_id = task_id,
                           forum_id = forum_id,
                           )
+            # Update modified_on of the forum to allow subscribers to be notified
+            db(s3db.pr_forum.id == forum_id).update(modified_on = r.utcnow)
 
         output = current.xml.json_message(True, 200, current.T("Task Shared"))
         current.response.headers["Content-Type"] = "application/json"

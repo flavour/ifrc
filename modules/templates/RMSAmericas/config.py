@@ -453,6 +453,7 @@ def config(settings):
     settings.hrm.root_organisation_label = "National Society"
     # Uncomment to consolidate tabs into a single CV
     settings.hrm.cv_tab = True
+    settings.hrm.vol_experience = "programme"
     # Uncomment to consolidate tabs into Staff Record (set to False to hide the tab)
     settings.hrm.record_tab = "record"
     # Use Locations for Training Events, not Facilities
@@ -1539,6 +1540,8 @@ Thank you"""
         #                          tablename = "hrm_human_resource")
 
         s3 = current.response.s3
+        # Enable scalability-optimized strategies
+        settings.base.bigtable = True
 
         if current.request.function == "trainee":
             EXTERNAL = True
@@ -3176,6 +3179,8 @@ Thank you"""
 
         s3db = current.s3db
         s3 = current.response.s3
+        # Enable scalability-optimized strategies
+        settings.base.bigtable = True
 
         # Custom prep
         standard_prep = s3.prep
@@ -3382,8 +3387,40 @@ Thank you"""
                 dtable.medical_conditions.comment = DIV(_class="tooltip",
                                                         _title="%s|%s" % (T("Medical Conditions"),
                                                                           T("Chronic Illness, Disabilities, Mental/Psychological Condition etc.")))
+                dtable.allergic.writable = dtable.allergic.readable = True
+                dtable.allergies.writable = dtable.allergies.readable = True
                 dtable.ethnicity.writable = dtable.ethnicity.readable = False
                 dtable.other_details.writable = dtable.other_details.readable = False
+                import json
+                SEPARATORS = (",", ":")
+                s3.jquery_ready.append('''S3.showHidden('%s',%s,'%s')''' % \
+                    ("allergic", json.dumps(["allergies"], separators=SEPARATORS), "pr_physical_description"))
+
+            elif component_name == "hours":
+
+                from s3 import S3SQLCustomForm
+
+                phtable = r.component.table
+                phtable.event.readable = phtable.event.writable = True
+                phtable.place.readable = phtable.place.writable = True
+
+                crud_form = S3SQLCustomForm("date",
+                                            "place",
+                                            "event",
+                                            "hours",
+                                            )
+
+                list_fields = ["date",
+                               "place",
+                               "event",
+                               "hours",
+                               ]
+
+                s3db.configure("hrm_programme_hours",
+                               crud_form = crud_form,
+                               list_fields = list_fields,
+                               )
+                
 
             return True
         s3.prep = custom_prep
