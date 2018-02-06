@@ -2,7 +2,7 @@
 
 """ Sahana Eden Content Management System Model
 
-    @copyright: 2012-2017 (c) Sahana Software Foundation
+    @copyright: 2012-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -724,7 +724,7 @@ class S3ContentModel(S3Model):
         """
            - Set person_id from created_by if not already set
            - Handle the case where the page is for a Module home page,
-           Resource Summary page or Map Layer
+             Resource Summary page or Map Layer
         """
 
         db = current.db

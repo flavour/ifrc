@@ -2,7 +2,7 @@
 
 """ S3 RESTful API
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -702,7 +702,7 @@ class S3Request(object):
 
         # Redirection
         if self.next is not None and \
-           (self.http != "GET" or self.method == "clear"):
+           (http != "GET" or self.method == "clear"):
             if isinstance(output, dict):
                 form = output.get("form")
                 if form:

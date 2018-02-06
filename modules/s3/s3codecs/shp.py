@@ -3,7 +3,7 @@
 """
     S3 Shapefile codec
 
-    @copyright: 2013-2017 (c) Sahana Software Foundation
+    @copyright: 2013-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -261,15 +261,13 @@ class S3SHP(S3Codec):
         try:
             from lxml import etree
         except ImportError:
-            import sys
-            print >> sys.stderr, "ERROR: lxml module needed for XML handling"
+            current.log.error("ERROR: lxml module needed for XML handling")
             raise
 
         try:
             from osgeo import ogr
         except ImportError:
-            import sys
-            print >> sys.stderr, "ERROR: GDAL module needed for Shapefile handling"
+            current.log.error("ERROR: GDAL module needed for Shapefile handling")
             raise
 
         # @ToDo: Check how this would happen

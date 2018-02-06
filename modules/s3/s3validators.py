@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: (c) 2010-2017 Sahana Software Foundation
+    @copyright: (c) 2010-2018 Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -3360,6 +3360,9 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
             @param code: the language code
         """
 
+        if not code:
+            return current.messages["NONE"]
+
         l10n_languages = current.deployment_settings.get_L10n_languages()
         name = l10n_languages.get(code)
         if not name:
@@ -3381,6 +3384,9 @@ class IS_ISO639_2_LANGUAGE_CODE(IS_IN_SET):
 
             @param code: the language code
         """
+
+        if not code:
+            return current.messages["NONE"]
 
         l10n_languages = current.deployment_settings.get_L10n_languages()
         name = l10n_languages.get(code)

@@ -2,7 +2,7 @@
 
 """ Sahana Eden Disaster Victim Registration Model
 
-    @copyright: 2012-2017 (c) Sahana Software Foundation
+    @copyright: 2012-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -338,6 +338,7 @@ class DVRCaseModel(S3Model):
                              ),
                      # @todo: rename into "code"?
                      # @ToDo: Option to autogenerate these, like Waybills, et al
+                     # @ToDo: Deprecate: We use pe_label as primary ID and Tags for any additional IDs to cross-reference to 3rd-party systems
                      Field("reference",
                            label = T("Case Number"),
                            ),
@@ -1411,6 +1412,8 @@ class DVRResponseModel(S3Model):
 
         hierarchical_response_types = settings.get_dvr_response_types_hierarchical()
 
+        NONE = current.messages["NONE"]
+
         # ---------------------------------------------------------------------
         # Response Types
         #
@@ -1570,6 +1573,14 @@ class DVRResponseModel(S3Model):
                              ),
                      self.hrm_human_resource_id(),
                      response_status_id(),
+                     Field("hours", "double",
+                           label = T("Effort (Hours)"),
+                           requires = IS_EMPTY_OR(
+                                       IS_FLOAT_IN_RANGE(0.0, None)),
+                           represent = lambda hours: "%.2f" % hours if hours else NONE,
+                           widget = S3HoursWidget(precision = 2,
+                                                  ),
+                           ),
                      s3_comments(label = T("Details"),
                                  comment = None,
                                  ),
@@ -1582,6 +1593,7 @@ class DVRResponseModel(S3Model):
                        "human_resource_id",
                        "date_due",
                        "date",
+                       "hours",
                        "status_id",
                        ]
 

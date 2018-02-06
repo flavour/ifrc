@@ -2,7 +2,7 @@
 
 """ Sahana Eden Person Registry Model
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -2099,11 +2099,13 @@ class PRPersonModel(S3Model):
         # If no results then search other fields
         # @ToDo: Do these searches anyway & merge results together
         if not len(rows):
+            rfilter = resource.rfilter
             if dob:
                 # Try DoB
                 # Remove the name filter (last one in)
-                resource.rfilter.filters.pop()
-                resource.rfilter.query = None
+                rfilter.filters.pop()
+                rfilter.query = None
+                rfilter.transformed = None
                 query = (FS("date_of_birth") == dob)
                 resource.add_filter(query)
                 rows = resource.select(fields=fields,
@@ -2111,9 +2113,10 @@ class PRPersonModel(S3Model):
                                        limit=MAX_SEARCH_RESULTS)["rows"]
             if not len(rows) and email:
                 # Try Email
-                # Remove the name filter (last one in)
-                resource.rfilter.filters.pop()
-                resource.rfilter.query = None
+                # Remove the name or DoB filter (last one in)
+                rfilter.filters.pop()
+                rfilter.query = None
+                rfilter.transformed = None
                 query = (FS("contact.value") == email) & (FS("contact.contact_method") == "EMAIL")
                 resource.add_filter(query)
                 rows = resource.select(fields=fields,
@@ -2121,9 +2124,10 @@ class PRPersonModel(S3Model):
                                        limit=MAX_SEARCH_RESULTS)["rows"]
             if not len(rows) and mobile_phone:
                 # Try Mobile Phone
-                # Remove the name filter (last one in)
-                resource.rfilter.filters.pop()
-                resource.rfilter.query = None
+                # Remove the name or DoB or email filter (last one in)
+                rfilter.filters.pop()
+                rfilter.query = None
+                rfilter.transformed = None
                 query = (FS("contact.value") == mobile_phone) & (FS("contact.contact_method") == "SMS")
                 resource.add_filter(query)
                 rows = resource.select(fields=fields,
@@ -2131,9 +2135,10 @@ class PRPersonModel(S3Model):
                                        limit=MAX_SEARCH_RESULTS)["rows"]
             if not len(rows) and home_phone:
                 # Try Home Phone
-                # Remove the name filter (last one in)
-                resource.rfilter.filters.pop()
-                resource.rfilter.query = None
+                # Remove the name or DoB or email or mobile filter (last one in)
+                rfilter.filters.pop()
+                rfilter.query = None
+                rfilter.transformed = None
                 query = (FS("contact.value") == home_phone) & (FS("contact.contact_method") == "HOME_PHONE")
                 resource.add_filter(query)
                 rows = resource.select(fields=fields,
@@ -3249,11 +3254,13 @@ class PRForumModel(S3Model):
                 redirect(URL(args=None))
 
         message = current.T("Forum Left")
-        #output = current.xml.json_message(True, 200, message)
-        #current.response.headers["Content-Type"] = "application/json"
-        #return output
-        current.session.confirmation = message
-        redirect(URL(args=None))
+        if r.representation == "json":
+            output = current.xml.json_message(True, 200, message)
+            current.response.headers["Content-Type"] = "application/json"
+            return output
+        else:
+            current.session.confirmation = message
+            redirect(URL(args=None))
 
     # -----------------------------------------------------------------------------
     @staticmethod
@@ -3313,7 +3320,7 @@ class PRForumModel(S3Model):
                       )
             body = "To approve this request, click here: %(url)s"
             translations = {}
-            languages = list(set([a["auth_user.language"] for a in persons]))
+            languages = list(set([a["auth_user.language"] for a in admins]))
             for l in languages:
                 translations[l] = {"s": s3_str(T(subject, language = l)) % dict(forum_name = forum_name),
                                    "b": s3_str(T(body, language = l)) % dict(url = url),
@@ -8990,7 +8997,7 @@ def pr_image_modify(image_file,
             #apt-get install libjpeg-dev
             #pip install pillow
             msg = sys.exc_info()[1]
-            s3_debug(msg)
+            current.log.error(msg)
             current.session.error = msg
             return
 

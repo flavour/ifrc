@@ -2,7 +2,7 @@
 
 """ S3 Data Model Extensions
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -110,15 +110,21 @@ class S3Model(object):
             self.__lock()
             if module in mandatory_models or \
                current.deployment_settings.has_module(module):
-                env = self.model()
+                try:
+                    env = self.model()
+                except Exception:
+                    self.__unlock()
+                    raise
             else:
-                env = self.defaults()
+                try:
+                    env = self.defaults()
+                except Exception:
+                    self.__unlock()
+                    raise
             if isinstance(env, (Storage, dict)):
                 response.s3.update(env)
             self.__loaded(True)
             self.__unlock()
-
-        return
 
     # -------------------------------------------------------------------------
     def __loaded(self, loaded=None):
@@ -656,6 +662,10 @@ class S3Model(object):
                     defaults = None
                     multiple = True
                     filterby = None
+                    # @ToDo: use these as fallback for RHeader Tabs on Web App
+                    #        (see S3ComponentTab.__init__)
+                    label = None
+                    plural = None
 
                 elif isinstance(link, dict):
                     alias = link.get("name", name)
@@ -710,6 +720,8 @@ class S3Model(object):
                     defaults = link.get("defaults")
                     multiple = link.get("multiple", True)
                     filterby = link.get("filterby")
+                    label = link.get("label")
+                    plural = link.get("plural")
 
                 else:
                     continue
@@ -726,6 +738,8 @@ class S3Model(object):
                                     defaults=defaults,
                                     multiple=multiple,
                                     filterby=filterby,
+                                    label=label,
+                                    plural=plural,
                                     )
                 hooks[alias] = component
 
@@ -937,6 +951,8 @@ class S3Model(object):
                                 prefix=prefix,
                                 name=name,
                                 alias=alias,
+                                label=hook.label,
+                                plural=hook.plural,
                                 )
 
             if hook.supertable is not None:

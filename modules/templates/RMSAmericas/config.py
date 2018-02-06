@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import datetime
 from collections import OrderedDict
 
 from gluon import current
@@ -501,6 +502,79 @@ def config(settings):
         return default
 
     settings.hrm.course_grades = hrm_course_grades
+
+    # =========================================================================
+    def vol_programme_active(person_id):
+        """
+            Whether a Volunteer counts as 'Active' based on the number of hours
+            they've done (both Trainings & Programmes) per month, averaged over
+            the last year.
+            If nothing recorded for the last 3 months, don't penalise as assume
+            that data entry hasn't yet been done.
+
+            @ToDo: This should be based on the HRM record, not Person record
+                   - could be active with Org1 but not with Org2
+        """
+
+        now = current.request.utcnow
+
+        # Time spent on Programme work
+        htable = current.s3db.hrm_programme_hours
+        query = (htable.deleted == False) & \
+                (htable.person_id == person_id) & \
+                (htable.date != None)
+        programmes = current.db(query).select(htable.hours,
+                                              htable.date,
+                                              orderby=htable.date)
+        if programmes:
+            # Ignore up to 3 months of records
+            three_months_prior = (now - datetime.timedelta(days=92))
+            end = max(programmes.last().date, three_months_prior.date())
+            last_year = end - datetime.timedelta(days=365)
+            # Is this the Volunteer's first year?
+            if programmes.first().date > last_year:
+                # Only start counting from their first month
+                start = programmes.first().date
+            else:
+                # Start from a year before the latest record
+                start = last_year
+
+            # Total hours between start and end
+            programme_hours = 0
+            for programme in programmes:
+                if programme.date >= start and programme.date <= end and programme.hours:
+                    programme_hours += programme.hours
+
+            # Average hours per month
+            months = max(1, (end - start).days / 30.5)
+            average = programme_hours / months
+
+            # Active?
+            if average >= 8:
+                return True
+
+        return False
+
+    def hrm_vol_active(default):
+        """ Whether & How to track Volunteers as Active """
+
+        #root_org = current.auth.root_org_name()
+        #if root_org in (ARCS, IRCS):
+        #    # Simple checkbox
+        #    return True
+        #elif root_org in (CVTL, PMI, PRC):
+        #    # Use formula based on hrm_programme
+        #    return vol_programme_active
+        #elif root_org in (CRMADA, ):
+        #    # Use formula based on vol_activity
+        #    return vol_activity_active
+        #return False
+
+        # Use formula based on hrm_programme
+        return vol_programme_active
+
+    settings.hrm.vol_active = hrm_vol_active
+    settings.hrm.vol_active_tooltip = "A volunteer is defined as active if they've participated in an average of 8 or more hours of Program work or Trainings per month in the last year"
 
     # -------------------------------------------------------------------------
     # RIT
@@ -1782,30 +1856,84 @@ Thank you"""
     settings.customise_hrm_job_title_controller = customise_hrm_job_title_controller
 
     # -------------------------------------------------------------------------
-    #def customise_hrm_programme_controller(**attr):
+    def customise_hrm_programme_controller(**attr):
 
-    #    # Organisation needs to be an NS/Branch
-    #    ns_only("hrm_programme",
-    #            required = False,
-    #            branches = False,
-    #            )
+        # Organisation needs to be an NS/Branch
+        ns_only("hrm_programme",
+                required = False,
+                branches = False,
+                )
 
-    #    return attr
+        f = current.s3db.hrm_programme.name_long
+        f.readable = f.writable = False
 
-    #settings.customise_hrm_programme_controller = customise_hrm_programme_controller
+        return attr
+
+    settings.customise_hrm_programme_controller = customise_hrm_programme_controller
 
     # -------------------------------------------------------------------------
-    #def customise_hrm_programme_hours_controller(**attr):
+    def customise_hrm_programme_hours_controller(**attr):
 
-    #    # Default Filter
-    #    from s3 import s3_set_default_filter
-    #    s3_set_default_filter("~.person_id$human_resource.organisation_id",
-    #                          user_org_default_filter,
-    #                          tablename = "hrm_programme_hours")
+        # Default Filter
+        from s3 import s3_set_default_filter
+        s3_set_default_filter("~.person_id$human_resource.organisation_id",
+                              user_org_default_filter,
+                              tablename = "hrm_programme_hours")
 
-    #    return attr
+        return attr
 
-    #settings.customise_hrm_programme_hours_controller = customise_hrm_programme_hours_controller
+    settings.customise_hrm_programme_hours_controller = customise_hrm_programme_hours_controller
+
+    # -------------------------------------------------------------------------
+    def customise_hrm_programme_hours_resource(r, tablename):
+
+        from s3 import S3SQLCustomForm
+
+        s3db = current.s3db
+        phtable = s3db.hrm_programme_hours
+
+        current.response.s3.crud_strings[tablename] = Storage(
+            label_create = T("Add Hours of Service"),
+            title_display = T("Hours Details"),
+            title_list = T("Hours of Service"),
+            title_update = T("Edit Hours"),
+            label_list_button = T("List Hours"),
+            label_delete_button = T("Delete Hours"),
+            msg_record_created = T("Hours added"),
+            msg_record_modified = T("Hours updated"),
+            msg_record_deleted = T("Hours deleted"),
+            msg_list_empty = T("Currently no hours recorded"))
+
+        # Show new custom fields
+        phtable.event.readable = phtable.event.writable = True
+        phtable.place.readable = phtable.place.writable = True
+        # Hide old fields so they don't appear in list_fields in hrm_Record
+        #phtable.programme_id.readable = phtable.programme_id.writable = False
+        phtable.job_title_id.readable = phtable.job_title_id.writable = False
+
+        crud_form = S3SQLCustomForm("date",
+                                    "programme_id",
+                                    "place",
+                                    "event",
+                                    "hours",
+                                    )
+
+        # Only visible in hrm_Record which controls list_fields itself
+        #list_fields = ["date",
+        #               "programme_id",
+        #               "place",
+        #               "event",
+        #               "training_id$training_event_id$location_id",
+        #               "training_id$training_event_id$course_id",
+        #               "hours",
+        #               ]
+
+        s3db.configure("hrm_programme_hours",
+                       crud_form = crud_form,
+                       #list_fields = list_fields,
+                       )
+
+    settings.customise_hrm_programme_hours_resource = customise_hrm_programme_hours_resource
 
     # -------------------------------------------------------------------------
     def customise_hrm_skill_resource(r, tablename):
@@ -2623,7 +2751,6 @@ Thank you"""
         get_vars = r.get_vars
         report = get_vars.get("report")
         if report == "movements":
-            import datetime
             from s3 import S3TypeConverter, S3DateTime
             # Get earliest/latest date from filter
             convert = S3TypeConverter.convert
@@ -3395,32 +3522,6 @@ Thank you"""
                 SEPARATORS = (",", ":")
                 s3.jquery_ready.append('''S3.showHidden('%s',%s,'%s')''' % \
                     ("allergic", json.dumps(["allergies"], separators=SEPARATORS), "pr_physical_description"))
-
-            elif component_name == "hours":
-
-                from s3 import S3SQLCustomForm
-
-                phtable = r.component.table
-                phtable.event.readable = phtable.event.writable = True
-                phtable.place.readable = phtable.place.writable = True
-
-                crud_form = S3SQLCustomForm("date",
-                                            "place",
-                                            "event",
-                                            "hours",
-                                            )
-
-                list_fields = ["date",
-                               "place",
-                               "event",
-                               "hours",
-                               ]
-
-                s3db.configure("hrm_programme_hours",
-                               crud_form = crud_form,
-                               list_fields = list_fields,
-                               )
-                
 
             return True
         s3.prep = custom_prep

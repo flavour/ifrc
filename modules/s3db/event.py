@@ -2,7 +2,7 @@
 
 """ Sahana Eden Event Model
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -507,7 +507,9 @@ class S3EventModel(S3Model):
                                             },
                             event_event_location = "event_id",
                             # Should be able to do everything via the link table
-                            #event_organisation = "event_id",
+                            event_organisation = {"name": "event_organisation",
+                                                  "joinby": "event_id",
+                                                  },
                             org_organisation = {"link": "event_organisation",
                                                 "joinby": "event_id",
                                                 "key": "organisation_id",
@@ -1439,8 +1441,8 @@ class S3IncidentModel(S3Model):
     def incident_update_onaccept(form):
         """
             When an Incident is updated
-                - set correct event_id for all relevant components
-                - check for closure
+             - set correct event_id for all relevant components
+             - check for closure
         """
 
         db = current.db
@@ -2611,7 +2613,7 @@ class S3EventAssetModel(S3Model):
                                       widget = "date",
                                       ),
                           s3_comments(),
-                          
+
                           *s3_meta_fields())
 
         current.response.s3.crud_strings[tablename] = Storage(
@@ -3349,7 +3351,7 @@ class S3EventScenarioModel(S3Model):
 
         # ---------------------------------------------------------------------
         # Scenarios
-        # 
+        #
         tablename = "event_scenario"
         self.define_table(tablename,
                           self.event_incident_type_id(),
@@ -3438,7 +3440,7 @@ class S3EventScenarioModel(S3Model):
 
         self.set_method("event", "scenario",
                         method = "plan",
-                        action = event_ScenarioActionPlan)                       
+                        action = event_ScenarioActionPlan)
 
         # Pass names back to global scope (s3.*)
         return dict(event_scenario_id = scenario_id,
@@ -3505,7 +3507,7 @@ class S3EventScenarioAssetModel(S3Model):
                           #            widget = "date",
                           #            ),
                           s3_comments(),
-                          
+
                           *s3_meta_fields())
 
         current.response.s3.crud_strings[tablename] = Storage(
@@ -3546,6 +3548,13 @@ class S3EventScenarioHRModel(S3Model):
 
         T = current.T
 
+        if current.deployment_settings.has_module("hrm"):
+            # Proper field
+            job_title_represent = S3Represent(lookup="hrm_job_title")
+        else:
+            # Dummy field - probably this model not being used but others from Event are
+            job_title_represent = None
+
         # ---------------------------------------------------------------------
         # Positions required &, potentially, then who would nromally fill them
         #
@@ -3558,7 +3567,7 @@ class S3EventScenarioHRModel(S3Model):
                                                 ondelete = "SET NULL",
                                                 requires = IS_EMPTY_OR(
                                                             IS_ONE_OF(current.db, "hrm_job_title.id",
-                                                                      self.hrm_human_resource.job_title_id.represent,
+                                                                      job_title_represent,
                                                                       filterby="type",
                                                                       filter_opts=(4,), # Type: Deploy
                                                                       )),
@@ -4428,7 +4437,7 @@ class event_ActionPlan(S3Method):
                                          "task_id$status",
                                          "task_id$date_due",
                                          ],
-                            
+
                           )
             profile_widgets.append(widget)
 
@@ -4599,7 +4608,7 @@ class event_ScenarioActionPlan(S3Method):
                                          #"task_id$date_due",
                                          "task_id$comments",
                                          ],
-                            
+
                           )
             profile_widgets.append(widget)
 

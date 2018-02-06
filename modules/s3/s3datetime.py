@@ -2,7 +2,7 @@
 
 """ S3 Date/Time Toolkit
 
-    @copyright: 2015-2017 (c) Sahana Software Foundation
+    @copyright: 2015-2018 (c) Sahana Software Foundation
     @license: MIT
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
@@ -49,7 +49,7 @@ try:
     import dateutil.tz
 except ImportError:
     import sys
-    print >> sys.stderr, "ERROR: python-dateutil module needed for date handling"
+    sys.stderr.write("ERROR: python-dateutil module needed for date handling\n")
     raise
 import math
 import re

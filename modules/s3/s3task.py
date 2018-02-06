@@ -3,10 +3,9 @@
 """ Asynchronous Task Execution
     - falls back to Synchronous if no workers are alive
 
-    Worker nodes won't run on Win32 yet.
-
     To run a worker node: python web2py.py -K eden
     or use UWSGI's 'Mule'
+    or use nssm on Win32: http://web2py.com/books/default/chapter/29/13/deployment-recipes#Using-nssm-to-run-as-a-Windows-service
 
     NB
         Need WEB2PY_PATH environment variable to be defined (e.g. /etc/profile)
@@ -17,7 +16,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2011-2017 (c) Sahana Software Foundation
+    @copyright: 2011-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person

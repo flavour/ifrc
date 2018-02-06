@@ -2,7 +2,7 @@
 
 """ S3 Navigation Module
 
-    @copyright: 2011-2017 (c) Sahana Software Foundation
+    @copyright: 2011-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1585,6 +1585,8 @@ class S3ComponentTab(object):
                         get_vars dict is optional.
         """
 
+        # @todo: use component hook label/plural as fallback for title
+        #        (see S3Model.add_components)
         title, component = tab[:2]
         if component and component.find("/") > 0:
             function, component = component.split("/", 1)

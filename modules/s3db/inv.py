@@ -2,7 +2,7 @@
 
 """ Sahana Eden Inventory Model
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -442,7 +442,7 @@ class S3InventoryModel(S3Model):
                                           #              _title="%s|%s" % (WAREHOUSE,
                                           #                                messages.AUTOCOMPLETE_HELP)),
                                           ),
-                          self.supply_item_entity_id,
+                          self.supply_item_entity_id(),
                           self.supply_item_id(ondelete = "RESTRICT",
                                               required = True,
                                               ),

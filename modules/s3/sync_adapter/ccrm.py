@@ -2,7 +2,7 @@
 
 """ S3 Synchronization: Peer Repository Adapter
 
-    @copyright: 2012-2017 (c) Sahana Software Foundation
+    @copyright: 2012-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -340,7 +340,6 @@ class S3SyncAdapter(S3SyncBaseAdapter):
             # Parse the response
             tree = current.xml.parse(f)
             root = tree.getroot()
-            #print current.xml.tostring(tree, pretty_print=True)
             is_error = root.xpath("//ResultSet[1]/Result[1]/is_error")
             if len(is_error) and int(is_error[0].text):
                 error = root.xpath("//ResultSet[1]/Result[1]/error_message")

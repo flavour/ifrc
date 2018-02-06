@@ -2,7 +2,7 @@
 
 """ Sahana Eden Procurement Model
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -158,7 +158,7 @@ class S3ProcurementModel(S3Model):
         tablename = "proc_plan_item"
         define_table(tablename,
                      plan_id(),
-                     self.supply_item_entity_id,
+                     self.supply_item_entity_id(),
                      self.supply_item_id(),
                      self.supply_item_pack_id(),
                      Field("quantity", "double", notnull = True,

@@ -4,6 +4,7 @@ import dateutil.parser
 import json
 from gluon import current#, Field, SQLFORM
 from gluon.html import *
+from gluon.http import HTTP
 from gluon.storage import Storage
 from s3 import FS, ICON, s3_auth_user_represent, \
                S3CRUD, S3CustomController, \
@@ -756,14 +757,20 @@ class custom_WACOP(S3CRUD):
         ADMIN = current.auth.s3_has_role("ADMIN")
 
         table = current.s3db.cms_post
-        record = current.db(table.name == "SYSTEM_WIDE").select(table.body,
-                                                                limitby=(0, 1)
-                                                                ).first()
+        query = (table.name == "SYSTEM_WIDE") & \
+                (table.deleted == False)
+        record = current.db(query).select(table.body,
+                                          limitby=(0, 1)
+                                          ).first()
         if record or ADMIN:
             if ADMIN:
-                edit_btn = P(A(current.T("Edit System-wide Alert"),
+                if record:
+                    label = current.T("Edit System-wide Alert")
+                else:
+                    label = current.T("Create System-wide Alert")
+                edit_btn = P(A(label,
                                _href = URL(c="cms", f="post",
-                                           args = "update",
+                                           args = "create",
                                            vars = {"page": "SYSTEM_WIDE"},
                                            ),
                                _class = "button button-info",
@@ -1149,6 +1156,23 @@ class event_Browse(custom_WACOP):
                   "_map": _map,
                   }
 
+        tablename = "event_event"
+        form_id = "%s-filter-form" % tablename
+
+        # Report
+        method = "report"
+        report_widget_id = "event_event_report"
+        handler = r.get_widget_handler(method)
+        content = handler(r,
+                          method = method,
+                          widget_id = report_widget_id,
+                          visible = False,
+                          **attr)
+        output["event_event_report"] = content
+        jqr_append = current.response.s3.jquery_ready.append
+        jqr_append('''S3.search.setup_hidden_widget('%s','%s')''' % (form_id, report_widget_id))
+        jqr_append('''$(document).foundation({tab:{callback:function(tab){S3.search.unhide_section('%s',tab)}}})''' % form_id)
+
         # Filter Form
         date_filter = S3DateFilter(["start_date", "end_date"],
                                    label = "",
@@ -1209,14 +1233,15 @@ class event_Browse(custom_WACOP):
                                              vars={}),
                                    ajaxurl = URL(c="event", f="event",
                                                  args=["filter.options"], vars={}),
+                                   _id = form_id,
                                    )
         output["filter_form"] = filter_form.html(r.resource, r.get_vars,
                                                  # Map & dataTable
-                                                 target="%s custom-list-event_event" % map_id,
-                                                 alias=None)
+                                                 target = "%s custom-list-event_event" % map_id,
+                                                 alias = None
+                                                 )
 
         # Events dataTable
-        tablename = "event_event"
 
         #ajax_vars = {"browse": 1}
         # Run already by the controller:
@@ -1232,6 +1257,7 @@ class event_Browse(custom_WACOP):
                         #ajax_vars = ajax_vars,
                         )
 
+        output["title"] = T("Events")
         self._view(output, "event_browse.html")
 
         return output
@@ -1353,6 +1379,7 @@ class group_Browse(custom_WACOP):
                                                  alias = None,
                                                  )
 
+        output["title"] = T("Groups")
         self._view(output, "group_browse.html")
 
         return output
@@ -1390,6 +1417,23 @@ class incident_Browse(custom_WACOP):
                   "_map": _map,
                   }
 
+        tablename = "event_incident"
+        form_id = "%s-filter-form" % tablename
+
+        # Report
+        method = "report"
+        report_widget_id = "event_incident_report"
+        handler = r.get_widget_handler(method)
+        content = handler(r,
+                          method = method,
+                          widget_id = report_widget_id,
+                          visible = False,
+                          **attr)
+        output["event_incident_report"] = content
+        jqr_append = current.response.s3.jquery_ready.append
+        jqr_append('''S3.search.setup_hidden_widget('%s','%s')''' % (form_id, report_widget_id))
+        jqr_append('''$(document).foundation({tab:{callback:function(tab){S3.search.unhide_section('%s',tab)}}})''' % form_id)
+
         # Filter Form
         date_filter = S3DateFilter(["date", "end_date"],
                                    label = "",
@@ -1412,6 +1456,7 @@ class incident_Browse(custom_WACOP):
                                            widget = "multiselect",
                                            #levels = ("L1", "L2", "L3"),
                                            levels = ("L3",),
+                                           no_opts = "",
                                            ),
                           S3MapFilter("location_id$the_geom",
                                       label = "",
@@ -1437,9 +1482,14 @@ class incident_Browse(custom_WACOP):
                                           noneSelectedText = "Incident Type",
                                           no_opts = "",
                                           ),
-                          S3OptionsFilter("organisation_id",
+                          #S3OptionsFilter("organisation_id",
+                          #                label = "",
+                          #                noneSelectedText = "Agency",
+                          #                no_opts = "",
+                          #                ),
+                          S3OptionsFilter("group.organisation_team.organisation_id",
                                           label = "",
-                                          noneSelectedText = "Agency",
+                                          noneSelectedText = "Organization",
                                           no_opts = "",
                                           ),
                           date_filter,
@@ -1465,14 +1515,15 @@ class incident_Browse(custom_WACOP):
                                              vars={}),
                                    ajaxurl = URL(c="event", f="incident",
                                                  args=["filter.options"], vars={}),
+                                   _id = form_id,
                                    )
         output["filter_form"] = filter_form.html(r.resource, r.get_vars,
-                                                 # Map & dataTable
-                                                 target="%s custom-list-event_incident" % map_id,
-                                                 alias=None)
+                                                 # Map, dataTable & Report
+                                                 target = "%s custom-list-event_incident %s" % (map_id, report_widget_id),
+                                                 alias = None
+                                                 )
 
         # Incidents dataTable
-        tablename = "event_incident"
 
         ajax_vars = {"browse": 1}
         # Run already by the controller:
@@ -1490,6 +1541,7 @@ class incident_Browse(custom_WACOP):
                         ajax_vars = ajax_vars,
                         )
 
+        output["title"] = T("Incidents")
         self._view(output, "incident_browse.html")
 
         return output
@@ -1528,6 +1580,23 @@ class resource_Browse(custom_WACOP):
                   "_map": _map,
                   }
 
+        tablename = "pr_group"
+        form_id = "%s-filter-form" % tablename
+
+        # Report
+        method = "report"
+        report_widget_id = "pr_group_report"
+        handler = r.get_widget_handler(method)
+        content = handler(r,
+                          method = method,
+                          widget_id = report_widget_id,
+                          visible = False,
+                          **attr)
+        output["pr_group_report"] = content
+        jqr_append = current.response.s3.jquery_ready.append
+        jqr_append('''S3.search.setup_hidden_widget('%s','%s')''' % (form_id, report_widget_id))
+        jqr_append('''$(document).foundation({tab:{callback:function(tab){S3.search.unhide_section('%s',tab)}}})''' % form_id)
+
         # Filter Form
         filter_widgets = [S3TextFilter(["name",
                                         "comments",
@@ -1542,6 +1611,7 @@ class resource_Browse(custom_WACOP):
                                            widget = "multiselect",
                                            #levels = ("L1", "L2", "L3"),
                                            levels = ("L3",),
+                                           no_opts = "",
                                            ),
                           S3MapFilter("location_id$the_geom",
                                       label = "",
@@ -1550,6 +1620,11 @@ class resource_Browse(custom_WACOP):
                           S3OptionsFilter("organisation_team.organisation_id",
                                           label = "",
                                           noneSelectedText = "Organization",
+                                          no_opts = "",
+                                          ),
+                          S3OptionsFilter("source",
+                                          label = "",
+                                          noneSelectedText = "Source",
                                           no_opts = "",
                                           ),
                           S3OptionsFilter("status_id",
@@ -1567,20 +1642,21 @@ class resource_Browse(custom_WACOP):
                                    #          vars={}),
                                    ajaxurl = URL(c="pr", f="group",
                                                  args=["filter.options"], vars={}),
+                                   _id = form_id,
                                    )
         output["filter_form"] = filter_form.html(r.resource, r.get_vars,
-                                                 # Map & dataTable
+                                                 # Map, dataTable & Report
                                                  # We also want to filter the Active Resources datatable, however the selectors don't match for that
                                                  #custom-list-event_team
-                                                 target="%s custom-list-pr_group" % map_id,
-                                                 alias=None)
+                                                 target = "%s custom-list-pr_group %s" % (map_id, report_widget_id),
+                                                 alias = None
+                                                 )
 
         # DataTables
         datatable = self._datatable
         #current.deployment_settings.ui.datatables_pagingType = "bootstrap"
 
         # Resources dataTable
-        tablename = "pr_group"
 
         #ajax_vars = {"browse": 1}
         # Run already by the controller:
@@ -1614,6 +1690,7 @@ class resource_Browse(custom_WACOP):
                   dt_init = dt_init,
                   )
 
+        output["title"] = T("Resources")
         self._view(output, "resource_browse.html")
 
         return output
@@ -1896,6 +1973,13 @@ class event_Profile(custom_WACOP):
                   updateable = updateable,
                   event_id = event_id,
                   dt_init = dt_init,
+                  # @ToDo: AJAX Delete
+                  actions = [{"label": T("Unassign"),
+                              "url": URL(c="event", f="event",
+                                         args=[event_id, "human_resource", "[id]", "delete"]),
+                              "icon": "fa fa-trash",
+                              },
+                             ],
                   )
 
         # Organisations dataTable
@@ -1910,6 +1994,13 @@ class event_Profile(custom_WACOP):
                   updateable = updateable,
                   event_id = event_id,
                   dt_init = dt_init,
+                  # @ToDo: AJAX Delete
+                  actions = [{"label": T("Remove"),
+                              "url": URL(c="event", f="event",
+                                         args=[event_id, "event_organisation", "[id]", "delete"]),
+                              "icon": "fa fa-trash",
+                              },
+                             ],
                   )
 
         # Updates DataList
@@ -1998,6 +2089,13 @@ class group_Profile(custom_WACOP):
                         tablename = tablename,
                         dt_init = dt_init,
                         forum_id = forum_id,
+                        # @ToDo: AJAX Delete
+                        actions = [{"label": current.T("Remove"),
+                                    "url": URL(c="pr", f="forum",
+                                               args=[forum_id, "forum_membership", "[id]", "delete"]),
+                                    "icon": "fa fa-trash",
+                                    },
+                                   ],
                         )
 
         # Tasks dataTable
@@ -2393,6 +2491,13 @@ class incident_Profile(custom_WACOP):
                   updateable = updateable,
                   incident_id = incident_id,
                   dt_init = dt_init,
+                  # @ToDo: AJAX Delete
+                  actions = [{"label": T("Unassign"),
+                              "url": URL(c="event", f="incident",
+                                         args=[incident_id, "human_resource", "[id]", "delete"]),
+                              "icon": "fa fa-trash",
+                              },
+                             ],
                   )
 
         # Organisations dataTable
@@ -2407,6 +2512,13 @@ class incident_Profile(custom_WACOP):
                   updateable = updateable,
                   incident_id = incident_id,
                   dt_init = dt_init,
+                  # @ToDo: AJAX Delete
+                  actions = [{"label": T("Remove"),
+                              "url": URL(c="event", f="incident",
+                                         args=[incident_id, "event_organisation", "[id]", "delete"]),
+                              "icon": "fa fa-trash",
+                              },
+                             ],
                   )
 
         # Updates DataList
@@ -2450,6 +2562,7 @@ def group_Notify(r, **attr):
 
     query = (ftable.pe_id == pe_id) & \
             (ftable.query == filter_string) & \
+            (ftable.resource == tablename) & \
             (ftable.id == stable.filter_id)
     exists = db(query).select(ftable.id,
                               stable.id,
@@ -2473,7 +2586,7 @@ def group_Notify(r, **attr):
                                       # Just used by Saved Filters, not Subscription
                                       #controller = controller,
                                       #function = function,
-                                      #resource = tablename,
+                                      resource = tablename, # But still useful to distinguish, in case saved filters also used
                                       query = filter_string,
                                       )
             # Create the Subscription
@@ -2853,6 +2966,7 @@ def cms_post_list_layout(list_id, item_id, resource, rfields, record):
             dropdown["_data-i"] = record_id
 
             dappend = dropdown.append
+            user_id = user.id
             for f in forums:
                 forum_id = f.id
                 checkbox_id = "post_%s_forum_%s" % (record_id, forum_id)

@@ -35,25 +35,14 @@ __all__ = ("S3MobileFormList",
            "S3MobileCRUD",
            )
 
-import datetime
 import json
-import sys
-
-try:
-    from lxml import etree
-except ImportError:
-    print >> sys.stderr, "ERROR: lxml module needed for XML handling"
-    raise
 
 from gluon import *
-from gluon.dal import Query
-from s3datetime import s3_encode_iso_datetime, s3_parse_datetime
-from s3error import S3PermissionError
-from s3forms import S3SQLForm, S3SQLCustomForm, S3SQLDefaultForm, S3SQLDummyField, S3SQLField
-from s3query import S3ResourceField
+from s3datetime import s3_parse_datetime
+from s3forms import S3SQLForm, S3SQLCustomForm, S3SQLDummyField, S3SQLField
 from s3rest import S3Method
-from s3utils import s3_get_foreign_key, s3_str, s3_unicode
-from s3validators import JSONERRORS, SEPARATORS
+from s3utils import s3_get_foreign_key, s3_str
+from s3validators import SEPARATORS
 
 DEFAULT = lambda: None
 
@@ -451,6 +440,9 @@ class S3MobileSchema(object):
         if not field.writable:
             description["writable"] = False
 
+        if hasattr(field.widget, "mobile"):
+            description["widget"] = field.widget.mobile
+
         # Add required flag if True (False is assumed)
         if self.is_required(field):
             description["required"] = True
@@ -612,6 +604,8 @@ class S3MobileSchema(object):
         """
 
         resource = self.resource
+        resolve_selector = resource.resolve_selector
+
         tablename = resource.tablename
 
         fields = []
@@ -626,7 +620,7 @@ class S3MobileSchema(object):
         for element in form.elements:
 
             if isinstance(element, S3SQLField):
-                rfield = resource.resolve_selector(element.selector)
+                rfield = resolve_selector(element.selector)
 
                 fname = rfield.fname
 
@@ -647,7 +641,7 @@ class S3MobileSchema(object):
             fkey = resource.fkey
             if fkey not in fnames:
                 fields.append(resource.table[fkey])
-                include(fkey)
+                #include(fkey)
 
         return fields
 
@@ -1002,27 +996,36 @@ class S3MobileForm(object):
 
         tablename = self.resource.tablename
 
-        # Use the title specified in deployment setting
+        # Use the label/plural specified in deployment setting
         config = self.config
-        title = config.get("title")
+        options = config["options"]
+        label = options.get("label")
+        plural = options.get("plural")
 
         # Fall back to CRUD title_list
-        if not title:
+        if not plural or not label:
             crud_strings = current.response.s3.crud_strings.get(tablename)
             if crud_strings:
-                title = crud_strings.get("title_list")
+                if not label:
+                    label = crud_strings.get("title_display")
+                if not plural:
+                    plural = crud_strings.get("title_list")
+
+        # Fall back to the title specified in deployment setting
+        if not plural:
+            plural = config.get("title")
 
         # Fall back to capitalized table name
-        if not title:
+        if not label:
             name = tablename.split("_", 1)[-1]
-            title = " ".join(word.capitalize() for word in name.split("_"))
+            label = " ".join(word.capitalize() for word in name.split("_"))
 
         # Build strings-dict
         strings = {}
-        if title:
-            title = s3_str(title)
-            strings["name"] = title
-            strings["namePlural"] = title
+        if label:
+            strings["label"] = s3_str(label)
+        if plural:
+            strings["plural"] = s3_str(plural)
 
         return strings
 
@@ -1095,12 +1098,17 @@ class S3MobileForm(object):
 
         # Construct component descriptions for schema export
         if aliases:
+            T = current.T
             hooks = current.s3db.get_components(tablename, names=aliases)
             for alias, hook in hooks.items():
 
                 description = {"table": hook.tablename,
                                "multiple": hook.multiple,
                                }
+                if hook.label:
+                    description["label"] = s3_str(T(hook.label))
+                if hook.plural:
+                    description["plural"] =  s3_str(T(hook.plural))
 
                 if hook.pkey != pkey:
                     description["pkey"] = hook.pkey

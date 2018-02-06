@@ -103,6 +103,9 @@ form {
             }
             &.single td:only-child {
                 padding: 0;
+                div.form-row {
+                    padding: 0 0.2rem 0.2rem;
+                }
             }
             select {
                 max-width: 18rem;
@@ -215,7 +218,7 @@ select {
             max-width: 100%;
         }
         &:not(.filter-form):not(.auth_login):not(.auth_register) {
-            input[type="text"]:not(.double):not(.datetimepicker):not(.date):not(.dms-input) {
+            input[type="text"]:not(.double):not(.datetimepicker):not(.date):not(.hours):not(.dms-input) {
                 width: 20rem !important;
             }
         }

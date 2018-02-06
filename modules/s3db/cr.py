@@ -2,7 +2,7 @@
 
 """ Shelter (Camp) Registry, model
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1034,7 +1034,7 @@ class CRShelterModel(S3Model):
 
         if hasattr(row, "id"):
             # Reload the record
-            s3_debug("Reloading cr_shelter_unit record")
+            current.log.debug("Reloading cr_shelter_unit record")
             table = current.s3db.cr_shelter_unit
             r = current.db(table.id == row.id).select(table.status,
                                                       table.capacity_day,

@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2017 (c) Sahana Software Foundation
+    @copyright: 2009-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -333,7 +333,7 @@ class S3Config(Storage):
         if os.path.exists(path):
             # Old-style config.py => deprecation warning (S3Log not available yet)
             import sys
-            print >> sys.stderr, "%s/config.py: script pattern deprecated." % name
+            sys.stderr.write("%s/config.py: script pattern deprecated.\n" % name)
             # Remember the non-standard location
             # (need to be in response.s3 for compiled views)
             # No longer supported

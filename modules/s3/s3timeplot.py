@@ -2,7 +2,7 @@
 
 """ S3 TimePlot Reports Method
 
-    @copyright: 2013-2017 (c) Sahana Software Foundation
+    @copyright: 2013-2018 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -947,8 +947,10 @@ class S3TimeSeries(object):
                                     orderby=event_start.field,
                                     as_rows=True)
             # Remove the filter we just added
-            resource.rfilter.filters.pop()
-            resource.rfilter.query = None
+            rfilter = resource.rfilter
+            rfilter.filters.pop()
+            rfilter.query = None
+            rfilter.transformed = None
             if rows:
                 first_event = rows.first()[event_start.colname]
                 if isinstance(first_event, datetime.date):
@@ -966,8 +968,10 @@ class S3TimeSeries(object):
                                     orderby=event_end.field,
                                     as_rows=True)
             # Remove the filter we just added
-            resource.rfilter.filters.pop()
-            resource.rfilter.query = None
+            rfilter = resource.rfilter
+            rfilter.filters.pop()
+            rfilter.query = None
+            rfilter.transformed = None
             if rows:
                 last_event = rows.first()[event_end.colname]
                 if isinstance(last_event, datetime.date):
@@ -1093,8 +1097,10 @@ class S3TimeSeries(object):
         data = resource.select(fields)
 
         # Remove the filter we just added
-        resource.rfilter.filters.pop()
-        resource.rfilter.query = None
+        rfilter = resource.rfilter
+        rfilter.filters.pop()
+        rfilter.query = None
+        rfilter.transformed = None
 
         # Do we need to convert dates into datetimes?
         convert_start = True if event_start.ftype == "date" else False
