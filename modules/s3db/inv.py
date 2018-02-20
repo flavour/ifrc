@@ -110,8 +110,11 @@ class S3WarehouseModel(S3Model):
         T = current.T
         db = current.db
         auth = current.auth
+
         messages = current.messages
         NONE = messages["NONE"]
+        OBSOLETE = messages.OBSOLETE
+
         configure = self.configure
         crud_strings = current.response.s3.crud_strings
         define_table = self.define_table
@@ -265,8 +268,7 @@ class S3WarehouseModel(S3Model):
                      Field("obsolete", "boolean",
                            default = False,
                            label = T("Obsolete"),
-                           represent = lambda opt: \
-                                       (opt and [T("Obsolete")] or NONE)[0],
+                           represent = lambda opt: OBSOLETE if opt else NONE,
                            readable = False,
                            writable = False,
                            ),
@@ -2219,9 +2221,6 @@ $.filterOptionsS3({
                 tracktable.pack_value.readable = False
 
         def prep(r):
-            # Default to the Search tab in the S3LocationSelectorWidget if still-used
-            # @ToDo: Port this functionality to S3LocationSelector
-            s3.gis.tab = "search"
             record = db(sendtable.id == r.id).select(sendtable.status,
                                                      sendtable.req_ref,
                                                      limitby=(0, 1)
