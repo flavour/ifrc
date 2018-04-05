@@ -68,7 +68,6 @@ from collections import OrderedDict
 
 from gluon import *
 from gluon.storage import Storage
-from gluon.tools import callback
 
 from ..s3 import *
 from s3layouts import S3PopupLink
@@ -2867,7 +2866,6 @@ class DVRCaseEffortModel(S3Model):
 
         T = current.T
 
-        db = current.db
         s3 = current.response.s3
 
         define_table = self.define_table
@@ -2896,7 +2894,13 @@ class DVRCaseEffortModel(S3Model):
                          comment = None,
                          ),
                      Field("hours", "double",
-                           requires = IS_FLOAT_IN_RANGE(0.0, None),
+                           represent = lambda v: \
+                                       IS_FLOAT_AMOUNT.represent(v,
+                                                                 precision = 2,
+                                                                 ),
+                           requires = IS_FLOAT_AMOUNT(minimum=0.0),
+                           widget = S3HoursWidget(precision = 2,
+                                                  ),
                            ),
                      s3_comments(),
                      *s3_meta_fields())
@@ -3664,6 +3668,9 @@ class DVRCaseEconomyInformationModel(S3Model):
         configure = self.configure
         define_table = self.define_table
 
+        float_represent = lambda v: \
+                          IS_FLOAT_AMOUNT.represent(v, precision=2)
+
         # ---------------------------------------------------------------------
         # Housing Types
         #
@@ -3770,15 +3777,18 @@ class DVRCaseEconomyInformationModel(S3Model):
                              ),
                      Field("monthly_costs", "double",
                            label = T("Monthly Costs"),
-                           requires = IS_EMPTY_OR(IS_FLOAT_IN_RANGE(0.0, None)),
+                           represent = float_represent,
+                           requires = IS_EMPTY_OR(IS_FLOAT_AMOUNT(minimum=0.0)),
                            ),
                      Field("average_weekly_income", "double",
                            label = T("Average Weekly Income"),
-                           requires = IS_EMPTY_OR(IS_FLOAT_IN_RANGE(0.0, None)),
+                           represent = float_represent,
+                           requires = IS_EMPTY_OR(IS_FLOAT_AMOUNT(minimum=0.0)),
                            ),
                      Field("monthly_income", "double",
                            label = T("Average Monthly Income"),
-                           requires = IS_EMPTY_OR(IS_FLOAT_IN_RANGE(0.0, None)),
+                           represent = float_represent,
+                           requires = IS_EMPTY_OR(IS_FLOAT_AMOUNT(minimum=0.0)),
                            ),
                      s3_currency(),
                      s3_comments(),
@@ -4042,7 +4052,6 @@ class DVRCaseAllowanceModel(S3Model):
     def model(self):
 
         T = current.T
-        db = current.db
 
         crud_strings = current.response.s3.crud_strings
 
@@ -4088,6 +4097,7 @@ class DVRCaseAllowanceModel(S3Model):
                                  ),
                      Field("amount", "double",
                            label = T("Amount"),
+                           requires = IS_EMPTY_OR(IS_FLOAT_AMOUNT(minimum=0.0)),
                            represent = amount_represent,
                            ),
                      s3_currency(),
@@ -4621,7 +4631,7 @@ class DVRCaseEventModel(S3Model):
                 return
 
             case_id = row.case_id
-            person_id == row.person_id
+            person_id = row.person_id
             type_id = row.type_id
 
         if not person_id:
@@ -4715,8 +4725,6 @@ class DVRCaseEventModel(S3Model):
                         # => create a new one unless there is an undated one
                         if undated:
                             update = undated
-                        else:
-                            create = True
                     else:
                         # Last appointment before today is still open
                         # => update it
@@ -5030,7 +5038,6 @@ class DVRActivityFundingModel(S3Model):
 
         T = current.T
 
-        db = current.db
         s3 = current.response.s3
 
         define_table = self.define_table
@@ -5095,7 +5102,6 @@ class DVRServiceContactModel(S3Model):
 
         db = current.db
         s3 = current.response.s3
-        settings = current.deployment_settings
 
         crud_strings = s3.crud_strings
 
@@ -5232,7 +5238,6 @@ class DVRSiteActivityModel(S3Model):
 
         T = current.T
 
-        db = current.db
         s3 = current.response.s3
         settings = current.deployment_settings
 
@@ -5244,7 +5249,6 @@ class DVRSiteActivityModel(S3Model):
         SITE = settings.get_org_site_label()
         site_represent = self.org_SiteRepresent(show_link=False)
 
-        default_organisation = settings.get_org_default_organisation()
         default_site = settings.get_org_default_site()
         permitted_facilities = current.auth.permitted_facilities(redirect_on_error=False)
 
@@ -5585,7 +5589,7 @@ class dvr_ActivityRepresent(S3Represent):
                                                     )
 
     # -------------------------------------------------------------------------
-    def lookup_rows(self, key, values, fields=[]):
+    def lookup_rows(self, key, values, fields=None):
         """
             Custom rows lookup
 
@@ -5697,7 +5701,7 @@ class dvr_CaseActivityRepresent(S3Represent):
             self.fmt = "%(first_name)s %(last_name)s"
 
     # -------------------------------------------------------------------------
-    def lookup_rows(self, key, values, fields=[]):
+    def lookup_rows(self, key, values, fields=None):
         """
             Custom rows lookup
 
@@ -5865,8 +5869,10 @@ class DVRManageAppointments(S3Method):
                               "sSortDir_0": "asc",
                               }
                 get_vars.update(dt_sorting)
-            filter, orderby, left = resource.datatable_filter(list_fields, get_vars)
-            resource.add_filter(filter)
+            dtfilter, orderby, left = resource.datatable_filter(list_fields,
+                                                                get_vars,
+                                                                )
+            resource.add_filter(dtfilter)
             data = resource.select(list_fields,
                                    start = 0,
                                    limit = limit,
@@ -6299,14 +6305,10 @@ class DVRRegisterCaseEvent(S3Method):
 
         T = current.T
 
-        s3db = current.s3db
         response = current.response
         settings = current.deployment_settings
 
-        s3 = response.s3
-
         output = {}
-        error = None
 
         http = r.http
         request_vars = r.get_vars
@@ -6596,7 +6598,7 @@ class DVRRegisterCaseEvent(S3Method):
                                               type_id = type_id,
                                               )
             if type_id in blocked:
-                msg, earliest = blocked[type_id]
+                msg = blocked[type_id][0]
                 form.errors["event"] = current.response.error = msg
 
     # -------------------------------------------------------------------------
@@ -7202,7 +7204,10 @@ class DVRRegisterCaseEvent(S3Method):
                     (FS("dvr_case.id") != None) & \
                     (FS("dvr_case.archived") != True) & \
                     (FS("dvr_case.status_id$is_closed") != True)
-            presource = s3db.resource("pr_person", filter=query)
+            presource = s3db.resource("pr_person",
+                                      components = ["dvr_case"],
+                                      filter = query,
+                                      )
             rows = presource.select(fields,
                                     start = 0,
                                     limit = 1,
@@ -7302,7 +7307,10 @@ class DVRRegisterCaseEvent(S3Method):
                      (FS("dvr_case.archived") != True) & \
                      (FS("dvr_case.status_id$is_closed") != True)
 
-            presource = s3db.resource("pr_person", filter=query)
+            presource = s3db.resource("pr_person",
+                                      components = ["dvr_case"],
+                                      filter = query,
+                                      )
             rows = presource.select(fields,
                                     start = 0,
                                     limit = 2,
@@ -7983,18 +7991,14 @@ class dvr_AssignMethod(S3Method):
             @param attr: controller options for this request
         """
 
-        component = self.component
-        components = r.resource.components
-        for c in components:
-            if c == component:
-                component = components[c]
-                break
         try:
-            if component.link:
-                component = component.link
-        except:
+            component = r.resource.components[self.component]
+        except KeyError:
             current.log.error("Invalid Component!")
             raise
+
+        if component.link:
+            component = component.link
 
         tablename = component.tablename
 
@@ -8100,17 +8104,17 @@ class dvr_AssignMethod(S3Method):
                 limit = 4 * display_length
             else:
                 limit = None
-            filter, orderby, left = resource.datatable_filter(list_fields,
-                                                              get_vars)
-            resource.add_filter(filter)
+            dtfilter, orderby, left = resource.datatable_filter(list_fields,
+                                                                get_vars,
+                                                                )
+            resource.add_filter(dtfilter)
 
             # Hide people already in the link table
             query = (table[fkey] == record_id) & \
                     (table.deleted != True)
             rows = db(query).select(table.case_id)
             already = [row.case_id for row in rows]
-            filter = (~db.dvr_case.id.belongs(already))
-            resource.add_filter(filter)
+            resource.add_filter((~db.dvr_case.id.belongs(already)))
 
             dt_id = "datatable"
 
@@ -8322,17 +8326,21 @@ def dvr_update_last_seen(person_id):
     if not person_id:
         return
 
-    # Get the last case event
-    etable = s3db.dvr_case_event
+    # Get event types that require presence
     ettable = s3db.dvr_case_event_type
-    join = ettable.on(ettable.id == etable.type_id)
+    query = (ettable.presence_required == True) & \
+            (ettable.deleted == False)
+    types = db(query).select(ettable.id, cache=s3db.cache)
+    type_ids = set(t.id for t in types)
+
+    # Get the last case event that required presence
+    etable = s3db.dvr_case_event
     query = (etable.person_id == person_id) & \
-            (ettable.presence_required == True) & \
+            (etable.type_id.belongs(type_ids)) & \
             (etable.date != None) & \
             (etable.date <= now) & \
             (etable.deleted != True)
     event = db(query).select(etable.date,
-                             join = join,
                              orderby = ~etable.date,
                              limitby = (0, 1),
                              ).first()
@@ -8359,19 +8367,24 @@ def dvr_update_last_seen(person_id):
     # Case appointments to update last_seen_on?
     if settings.get_dvr_appointments_update_last_seen_on():
 
+        # Get appointment types that require presence
+        attable = s3db.dvr_case_appointment_type
+        query = (attable.presence_required == True) & \
+                (attable.deleted == False)
+        types = db(query).select(attable.id, cache=s3db.cache)
+        type_ids = set(t.id for t in types)
+
+        # Get last appointment that required presence
         atable = s3db.dvr_case_appointment
-        ttable = s3db.dvr_case_appointment_type
-        left = ttable.on(ttable.id == atable.type_id)
         query = (atable.person_id == person_id) & \
                 (atable.date != None) & \
-                (ttable.presence_required == True) & \
+                (atable.type_id.belongs(type_ids)) & \
                 (atable.date <= now.date()) & \
                 (atable.status == 4) & \
                 (atable.deleted != True)
         if last_seen_on is not None:
             query &= atable.date > last_seen_on.date()
         appointment = db(query).select(atable.date,
-                                       left = left,
                                        orderby = ~atable.date,
                                        limitby = (0, 1),
                                        ).first()
@@ -8417,7 +8430,7 @@ def dvr_update_last_seen(person_id):
                      )
 
 # =============================================================================
-def dvr_rheader(r, tabs=[]):
+def dvr_rheader(r, tabs=None):
     """ DVR module resource headers """
 
     if r.representation != "html":
@@ -8456,7 +8469,7 @@ def dvr_rheader(r, tabs=[]):
                 case = case[0]
                 case_number = lambda row: case["dvr_case.reference"]
                 case_type = lambda row: case["dvr_case.case_type_id"]
-                name = lambda row: s3_fullname(row)
+                name = s3_fullname
             else:
                 # Target record exists, but doesn't match filters
                 return None

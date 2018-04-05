@@ -366,18 +366,22 @@ class IS_INT_AMOUNT(IS_INT_IN_RANGE):
     def __init__(self,
                  minimum=None,
                  maximum=None,
-                 error_message=None):
+                 error_message=None,
+                 ):
 
         IS_INT_IN_RANGE.__init__(self,
                                  minimum=minimum,
                                  maximum=maximum,
-                                 error_message=error_message)
+                                 error_message=error_message,
+                                 )
 
     # -------------------------------------------------------------------------
     def __call__(self, value):
 
-        thousands_sep = ","
-        value = s3_str(value).replace(thousands_sep, "")
+        thousands_sep = current.deployment_settings.get_L10n_thousands_separator()
+        if thousands_sep:
+            value = s3_str(value).replace(thousands_sep, "")
+
         return IS_INT_IN_RANGE.__call__(self, value)
 
     # -------------------------------------------------------------------------
@@ -405,7 +409,7 @@ class IS_INT_AMOUNT(IS_INT_IN_RANGE):
         else:
             sign = ""
 
-        str_number = unicode(intnumber)
+        str_number = str(intnumber)
 
         if str_number[0] == "-":
             str_number = str_number[1:]
@@ -442,19 +446,27 @@ class IS_FLOAT_AMOUNT(IS_FLOAT_IN_RANGE):
                  minimum=None,
                  maximum=None,
                  error_message=None,
-                 dot="."):
+                 dot=None,
+                 ):
+
+        if dot is None:
+            dot = current.deployment_settings.get_L10n_decimal_separator()
 
         IS_FLOAT_IN_RANGE.__init__(self,
                                    minimum=minimum,
                                    maximum=maximum,
                                    error_message=error_message,
-                                   dot=dot)
+                                   dot=dot,
+                                   )
 
     # -------------------------------------------------------------------------
     def __call__(self, value):
 
-        thousands_sep = ","
-        value = s3_str(value).replace(thousands_sep, "")
+        thousands_sep = current.deployment_settings.get_L10n_thousands_separator()
+        if thousands_sep and isinstance(value, basestring):
+            value = s3_unicode(value).replace(thousands_sep, "") \
+                                     .encode("utf-8")
+
         return IS_FLOAT_IN_RANGE.__call__(self, value)
 
     # -------------------------------------------------------------------------
@@ -474,19 +486,21 @@ class IS_FLOAT_AMOUNT(IS_FLOAT_IN_RANGE):
 
         DECIMAL_SEPARATOR = current.deployment_settings.get_L10n_decimal_separator()
 
-        str_number = unicode(number)
+        if precision is not None:
+            str_number = format(number, ".0%df" % precision)
+        else:
+            # Default to any precision
+            str_number = format(number, "f").rstrip("0") \
+                                            .rstrip(DECIMAL_SEPARATOR)
 
         if "." in str_number:
             int_part, dec_part = str_number.split(".")
-            if precision is not None:
-                dec_part = dec_part[:precision]
         else:
             int_part, dec_part = str_number, ""
 
         if dec_part and int(dec_part) == 0 and not fixed:
+            # Omit decimal part if zero
             dec_part = ""
-        elif precision is not None:
-            dec_part = dec_part + ("0" * (precision - len(dec_part)))
 
         if dec_part:
             dec_part = DECIMAL_SEPARATOR + dec_part

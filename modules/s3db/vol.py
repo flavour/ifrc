@@ -201,12 +201,12 @@ class S3VolunteerActivityModel(S3Model):
                        )
 
         crud_form = S3SQLCustomForm("name",
-                                    S3SQLInlineComponentCheckbox("sector",
-                                                                 label = T("Sectors"),
-                                                                 field = "sector_id",
-                                                                 option_help = "comments",
-                                                                 cols = 4,
-                                                                 ),
+                                    S3SQLInlineLink("sector",
+                                                    label = T("Sectors"),
+                                                    field = "sector_id",
+                                                    help_field = "comments",
+                                                    cols = 4,
+                                                    ),
                                     "comments",
                                     )
 
@@ -289,13 +289,6 @@ class S3VolunteerActivityModel(S3Model):
 
         crud_form = S3SQLCustomForm("organisation_id",
                                     "sector_id",
-                                    # @ToDo: Filter list based on Sector
-                                    #S3SQLInlineComponentCheckbox("activity_type",
-                                    #                             label = T("Activity Types"),
-                                    #                             field = "activity_type_id",
-                                    #                             option_help = "comments",
-                                    #                             cols = 4,
-                                    #                             ),
                                     S3SQLInlineLink("activity_type",
                                                     label = T("Activity Types"),
                                                     field = "activity_type_id",
@@ -437,9 +430,6 @@ $.filterOptionsS3({
 
         # Components
         add_components(tablename,
-                       # Format for Filter/Report
-                       vol_activity_hours_activity_type = "activity_hours_id",
-                       # Format for S3SQLInlineComponentCheckbox
                        vol_activity_type = {"link": "vol_activity_hours_activity_type",
                                             "joinby": "activity_hours_id",
                                             "key": "activity_type_id",
@@ -447,27 +437,27 @@ $.filterOptionsS3({
                                             },
                        )
 
-        # Done in the controller in order to limit options
-        #crud_form = S3SQLCustomForm("activity_id",
-        #                            "person_id",
-        #                            "date",
-        #                            #"end_date",
-        #                            "job_title_id",
-        #                            "hours",
-        #                            # @ToDo: Filter to just those in the parent Activity
-        #                            S3SQLInlineComponentCheckbox("activity_type",
-        #                                                         label = T("Activity Types"),
-        #                                                         field = "activity_type_id",
-        #                                                         option_help = "comments",
-        #                                                         cols = 4,
-        #                                                         ),
-        #                            "comments",
-        #                            )
+        # CRUD form
+        crud_form = S3SQLCustomForm("activity_id",
+                                    "person_id",
+                                    "date",
+                                    #"end_date",
+                                    "job_title_id",
+                                    "hours",
+                                    S3SQLInlineLink(
+                                        "activity_type",
+                                        field = "activity_type_id",
+                                        label = T("Activity Types"),
+                                        help_field = "comments",
+                                        cols = "4",
+                                        ),
+                                    "comments",
+                                    )
 
         configure(tablename,
                   context = {"person": "person_id",
                              },
-                  #crud_form = crud_form,
+                  crud_form = crud_form,
                   extra_fields = ["date"],
                   filter_widgets = filter_widgets,
                   list_fields = ["activity_id",
@@ -926,9 +916,9 @@ $.filterOptionsS3({
                      *s3_meta_fields())
 
         # Pass names back to global scope (s3.*)
-        return dict(vol_cluster_type_id = vol_cluster_type_id,
-                    vol_cluster_id = vol_cluster_id,
-                    )
+        return {"vol_cluster_type_id": vol_cluster_type_id,
+                "vol_cluster_id": vol_cluster_id,
+                }
 
     # =====================================================================
     @staticmethod
@@ -939,11 +929,12 @@ $.filterOptionsS3({
             deployment_settings.
         """
 
-        return dict(
-            vol_cluster_id = S3ReusableField("vol_cluster_id", "integer",
-                                             readable=False,
-                                             writable=False),
-            )
+        return {"vol_cluster_id": S3ReusableField("vol_cluster_id",
+                                                  "integer",
+                                                  readable = False,
+                                                  writable = False,
+                                                  ),
+                }
 
 # =============================================================================
 def vol_service_record(r, **attr):
@@ -1126,10 +1117,10 @@ def vol_service_record(r, **attr):
         for row in rows:
             _row = row["hrm_training"]
             _date = _row.date
-            hours[_date.date()] = dict(course = row["hrm_course"].name,
-                                       date = date_represent(_date),
-                                       hours = _row.hours or "",
-                                       )
+            hours[_date.date()] = {"course": row["hrm_course"].name,
+                                   "date": date_represent(_date),
+                                   "hours": _row.hours or "",
+                                   }
         courses = TABLE(TR(TH(T("Date")),
                            TH(T("Training")),
                            TH(T("Hours"))))
@@ -1184,10 +1175,10 @@ def vol_service_record(r, **attr):
                     a[role]["end_date"] = _date
                     a[role]["hours"] += hours
                 else:
-                    a[role] = dict(start_date = _date,
-                                   end_date = _date,
-                                   hours = hours,
-                                   )
+                    a[role] = {"start_date": _date,
+                               "end_date": _date,
+                               "hours": hours,
+                               }
             date_represent = hrstable.date.represent
             programme = TABLE(TR(TH(T("Start Date")),
                                  TH(T("End Date")),
@@ -1248,10 +1239,10 @@ def vol_service_record(r, **attr):
                     p[role]["end_date"] = _date
                     p[role]["hours"] += hours
                 else:
-                    p[role] = dict(start_date = _date,
-                                   end_date = _date,
-                                   hours = hours,
-                                   )
+                    p[role] = {"start_date": _date,
+                               "end_date": _date,
+                               "hours": hours,
+                               }
             date_represent = hrstable.date.represent
             programme = TABLE(TR(TH(T("Start Date")),
                                  TH(T("End Date")),
@@ -1598,7 +1589,7 @@ def vol_person_controller():
             )
 
     # Upload for configuration (add replace option)
-    s3.importerPrep = lambda: dict(ReplaceOption=T("Remove existing data before import"))
+    s3.importerPrep = lambda: {"ReplaceOption": T("Remove existing data before import")}
 
     # Import pre-process
     def import_prep(data, group=group):
@@ -1869,8 +1860,9 @@ def vol_person_controller():
                                    csv_template = ("hrm", "volunteer"),
                                    csv_stylesheet = ("hrm", "person.xsl"),
                                    csv_extra_fields = [
-                                        dict(label="Type",
-                                             field=s3db.hrm_human_resource.type)
+                                        {"label": "Type",
+                                         "field": s3db.hrm_human_resource.type,
+                                         }
                                         ],
                                    #orgname = orgname,
                                    replace_option = T("Remove existing data before import"),

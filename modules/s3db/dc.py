@@ -41,6 +41,9 @@ from gluon.languages import read_dict, write_dict
 from ..s3 import *
 from s3layouts import S3PopupLink
 
+# Compact JSON encoding
+SEPARATORS = (",", ":")
+
 # =============================================================================
 class DataCollectionTemplateModel(S3Model):
     """
@@ -484,7 +487,7 @@ class DataCollectionTemplateModel(S3Model):
             mobile_form = False # For SCPHIMS at least
             mobile_data = False
         else:
-            raise
+            raise TypeError
 
         # Create the Dynamic Table
         table_id = s3db.s3_table.insert(title = title,
@@ -753,6 +756,10 @@ class DataCollectionModel(S3Model):
             msg_record_modified = T("Data Collection Target updated"),
             msg_record_deleted = T("Data Collection Target deleted"),
             msg_list_empty = T("No Data Collection Targets currently registered"))
+
+        self.set_method("dc", "target",
+                        method = "results",
+                        action = dc_TargetReport())
 
         target_id = S3ReusableField("target_id", "reference %s" % tablename,
                                     requires = IS_EMPTY_OR(
@@ -1038,8 +1045,8 @@ class DataCollectionModel(S3Model):
                 if len_grid == 2:
                     # Grid Pseudo-Question
                     if not code:
-                        current.log.error("Code required for Grid Questions") # @ToDo: Make mandatory in onvalidation
-                        raise
+                        # @ToDo: Make mandatory in onvalidation
+                        raise ValueError("Code required for Grid Questions")
                     rows = [s3_str(T(v)) for v in grid[0]]
                     cols = [s3_str(T(v)) for v in grid[1]]
                     fields = [[0 for x in range(len(rows))] for y in range(len(cols))]
@@ -1273,6 +1280,237 @@ class DataCollectionModel(S3Model):
                 s3.scripts.append("/%s/static/scripts/S3/s3.dc_answer.min.js" % r.application)
 
 # =============================================================================
+class dc_TargetReport(S3Method):
+    """
+        Display a Summary of the Target (i.e. collection of Responses)
+
+        Results in charts for quantitative questions and
+                   full text of the qualitative answers
+    """
+
+    # -------------------------------------------------------------------------
+    def apply_method(self, r, **attr):
+        """
+            Entry point for REST API
+
+            @param r: the S3Request
+            @param attr: controller arguments
+        """
+
+        if r.name == "target":
+            representation = r.representation
+            label = current.deployment_settings.get_dc_response_label()
+            if label == "Assessment":
+                title = current.T("Assessment Report")
+            elif label == "Survey":
+                title = current.T("Survey Report")
+            elif label == "Evaluation":
+                title = current.T("Evaluation Report")
+            elif label == "Event":
+                title = current.T("Event Report")
+            else:
+                title = current.T("Target Report")
+            if representation == "html":
+                output = self.html(r, title, **attr)
+                return output
+            #elif representation == "pdf":
+            #    output = self.pdf(r, title, **attr)
+            #    return output
+        r.error(405, current.ERROR.BAD_METHOD)
+
+    # -------------------------------------------------------------------------
+    def _extract(self, r, **attr):
+        """
+            Extract the Data
+
+            @ToDo: Order by Section
+            @ToDo: Translate Question Names/Options
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        template_id = r.record.template_id
+
+        # Questions
+        qtable = s3db.dc_question
+        ftable = s3db.s3_field
+        query = (qtable.template_id == template_id) & \
+                (qtable.deleted == False) & \
+                (ftable.id == qtable.field_id)
+        questions = db(query).select(qtable.id,
+                                     qtable.name,
+                                     #qtable.field_type,
+                                     qtable.options,
+                                     qtable.posn,
+                                     ftable.name,
+                                     orderby = qtable.posn,
+                                     )
+
+        # Index Dictionary by Fieldname
+        FIELD_NAME = "s3_field.name"
+        fields = {row[FIELD_NAME]: [] for row in questions}
+
+        # Lookup the Dynamic Tablename from the Template
+        ttable = s3db.dc_template
+        dtable = s3db.s3_table
+        query = (ttable.id == template_id) & \
+                (ttable.table_id == dtable.id)
+        template = db(query).select(dtable.name,
+                                    limitby=(0, 1),
+                                    ).first()
+
+        # Answers
+        atable = s3db.table(template.name)
+        answer_fields = [atable[f] for f in fields]
+        rtable = s3db.dc_response
+        query = (rtable.target_id == r.id) & \
+                (atable.response_id == rtable.id)
+        answers = db(query).select(*answer_fields)
+
+        # Build Data structure
+        # Collate Answers
+        for answer in answers:
+            for fieldname in answer:
+                fields[fieldname].append(answer[fieldname])
+
+        # List of Questions
+        ID = "dc_question.id"
+        NAME = "dc_question.name"
+        OPTIONS = "dc_question.options"
+        for question in questions:
+            question.id = question[ID]
+            question.name = question[NAME]
+            answers = fields[question[FIELD_NAME]]
+            options = question[OPTIONS]
+            if options:
+                options = [s3_str(opt) for opt in options]
+                unsorted_options = {opt: 0 for opt in options}
+                for answer in answers:
+                    unsorted_options[answer] += 1
+                question.options = [(opt, unsorted_options[opt]) for opt in options]
+            else:
+                question.options = None
+                question.answers = answers
+
+        return questions
+
+    # -------------------------------------------------------------------------
+    def html(self, r, title, **attr):
+        """
+            HTML Representation
+        """
+
+        T = current.T
+        table = r.table
+        date_represent = table.date.represent
+
+        response = current.response
+        s3 = response.s3
+        jqready_append = s3.jquery_ready.append
+
+        #target_title = table.template_id.represent(r.record.template_id)
+
+        data = self._extract(r, **attr)
+
+        table = TABLE()
+        json_dumps = json.dumps
+        for question in data:
+            table.append(TR(TH(question.name)))
+            if question.options:
+                # Graph
+                svg_id = "svg_%s" % question.id
+                table.append(TR(TD(TAG["SVG"](_id=svg_id))))
+                data = []
+                data_append = data.append
+                for opt in question.options:
+                    data_append({"o": opt[0],
+                                 "v": opt[1],
+                                 })
+                script = '''S3.dc_results('%s','%s')''' % \
+                    ("#%s" % svg_id, json_dumps(data, separators=SEPARATORS))
+                jqready_append(script)
+            else:
+                # Enumerate Answers
+                for answer in question.answers:
+                    table.append(TR(TD(answer)))
+
+        item = DIV(H1(title),
+                   H3("%s: %s" % (T("Up To Date"), date_represent(r.utcnow))),
+                   table,
+                   )
+
+        output = {"item": item,
+                  "title": title,
+                  }
+
+        appname = r.application
+        s3.stylesheets.append("S3/dc_results.css")
+        scripts_append = s3.scripts.append
+        if s3.debug:
+            scripts_append("/%s/static/scripts/d3/d3.js" % appname)
+            scripts_append("/%s/static/scripts/S3/s3.dc_results.js" % appname)
+        else:
+            scripts_append("/%s/static/scripts/d3/d3.min.js" % appname)
+            scripts_append("/%s/static/scripts/S3/s3.dc_results.min.js" % appname)
+        response.view = "simple.html"
+        return output
+
+    # -------------------------------------------------------------------------
+    def pdf(self, r, title, **attr):
+        """
+            PDF Representation
+            @ToDo: Finish this stub when-required
+                   (original is project_SummaryReport)
+        """
+
+        from s3.s3codecs.pdf import EdenDocTemplate, S3RL_PDF
+
+        T = current.T
+        table = r.table
+        date_represent = table.date.represent
+
+        target_title = table.template_id.represent(r.record.template_id)
+
+        report_title = s3_str(title)
+        filename = "%s_%s.pdf" % (report_title, s3_str(target_title))
+
+        # @ToDo
+        #data = self._extract(r, **attr)
+
+        # @ToDo
+        header = DIV()
+
+        body = DIV(H1(title),
+                   H3("%s: %s" % (T("Up To Date"), date_represent(r.utcnow))),
+                   table,
+                   )
+
+        footer = DIV("%s: %s" % (title, target_title))
+
+        doc = EdenDocTemplate(title=report_title)
+        printable_width = doc.printable_width
+        get_html_flowable = S3RL_PDF().get_html_flowable
+        header_flowable = get_html_flowable(header, printable_width)
+        body_flowable = get_html_flowable(body, printable_width)#, styles)
+        footer_flowable = get_html_flowable(footer, printable_width)
+
+        # Build the PDF
+        doc.build(header_flowable,
+                  body_flowable,
+                  footer_flowable,
+                  )
+
+        # Return the generated PDF
+        response = current.response
+        from gluon.contenttype import contenttype
+        response.headers["Content-Type"] = contenttype(".pdf")
+        disposition = "attachment; filename=\"%s\"" % filename
+        response.headers["Content-disposition"] = disposition
+
+        return doc.output.getvalue()
+
+# =============================================================================
 def dc_rheader(r, tabs=None):
     """ Resource Headers for Data Collection Tool """
 
@@ -1436,6 +1674,7 @@ def dc_rheader(r, tabs=None):
                 RESPONSES = T("Responses")
 
             tabs = ((T("Basic Details"), None),
+                    (T("Report"), "results/"),
                     (RESPONSES, "response"),
                     )
 
@@ -1519,16 +1758,16 @@ def dc_target_check(target_id):
     event = survey["hrm_training_event"]
     event_date = event.start_date
     location_id = event.location_id
-    url = "%s%s" % (current.deployment_settings.get_base_public_url(),
-                    URL(c="dc", f="target", args=[target_id, "review"]),
-                    )
+    #url = "%s%s" % (current.deployment_settings.get_base_public_url(),
+    #                URL(c="dc", f="target", args=[target_id, "review"]),
+    #                )
     subject = T("Post-Event Survey hasn't been Approved/Rejected")
     message = T("The post-Event Survey for %(event_name)s on %(date)s in %(location)s has not been Approved or Rejected") % \
-            dict(date = "%(date)s", # Localise per-language
-                 event_name = event.name,
-                 location = "%(location)s", # Localise per-language
-                 #url = url,
-                 )
+                {"date": "%(date)s", # Localise per-language
+                 "event_name": event.name,
+                 "location": "%(location)s", # Localise per-language
+                 #"url": url,
+                 }
 
     # Send Localised Mail(s)
     send_email = current.msg.send_by_pe_id

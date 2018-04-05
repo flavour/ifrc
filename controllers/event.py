@@ -133,8 +133,19 @@ def incident():
                                    deletable = False,
                                    )
                     s3.crud.submit_button = T("Update")
-                elif cname in ("asset", "human_resource", "organisation", "site"):
 
+                elif cname == "sitrep":
+                    stable = s3db.event_sitrep
+                    stable.location_id.default = r.record.location_id
+                    stable.event_id.readable = stable.event_id.writable = False
+                    list_fields = s3db.get_config("event_sitrep", "list_fields")
+                    try:
+                        list_fields.remove("event_id")
+                    except ValueError:
+                        # Already removed
+                        pass
+
+                elif cname in ("asset", "human_resource", "organisation", "site"):
                     atable = s3db.table("budget_allocation")
                     if atable:
                         field = atable.budget_entity_id
@@ -158,7 +169,6 @@ def incident():
                                 f.widget = S3CalendarWidget(timepicker = True)
 
                 elif cname == "incident_asset":
-
                     atable = s3db.table("budget_allocation")
                     if atable:
                         field = atable.budget_entity_id
@@ -236,8 +246,8 @@ def incident_report():
                                             )
                         form = Storage(vars=form_vars)
                         s3db.gis_location_onvalidation(form)
-                        id = s3db.gis_location.insert(**form_vars)
-                        field.default = id
+                        location_id = s3db.gis_location.insert(**form_vars)
+                        field.default = location_id
                 # WKT from Feature?
                 wkt = get_vars.get("wkt", None)
                 if wkt is not None:
@@ -245,8 +255,8 @@ def incident_report():
                                         )
                     form = Storage(vars = form_vars)
                     s3db.gis_location_onvalidation(form)
-                    id = s3db.gis_location.insert(**form_vars)
-                    field.default = id
+                    location_id = s3db.gis_location.insert(**form_vars)
+                    field.default = location_id
 
         return True
     s3.prep = prep
@@ -447,14 +457,14 @@ def organisation():
 def compose():
     """ Send message to people/teams """
 
-    vars = request.vars
+    req_vars = request.vars
 
-    if "hrm_id" in vars:
-        id = vars.hrm_id
+    if "hrm_id" in req_vars:
+        hrm_id = req_vars.hrm_id
         fieldname = "hrm_id"
         table = s3db.pr_person
         htable = s3db.hrm_human_resource
-        pe_id_query = (htable.id == id) & \
+        pe_id_query = (htable.id == hrm_id) & \
                       (htable.person_id == table.id)
         title = T("Send a message to this person")
     else:
@@ -462,7 +472,8 @@ def compose():
         redirect(URL(f="index"))
 
     pe = db(pe_id_query).select(table.pe_id,
-                                limitby=(0, 1)).first()
+                                limitby=(0, 1),
+                                ).first()
     if not pe:
         session.error = T("Record not found")
         redirect(URL(f="index"))
@@ -473,7 +484,8 @@ def compose():
     table = s3db.pr_contact
     contact = db(table.pe_id == pe_id).select(table.contact_method,
                                               orderby="priority",
-                                              limitby=(0, 1)).first()
+                                              limitby=(0, 1),
+                                              ).first()
     if contact:
         s3db.msg_outbox.contact_method.default = contact.contact_method
     else:
@@ -481,13 +493,13 @@ def compose():
         redirect(URL(f="index"))
 
     # URL to redirect to after message sent
-    url = URL(c=module,
-              f="compose",
-              vars={fieldname: id})
+    url = URL(c = module,
+              f = "compose",
+              vars = {fieldname: hrm_id},
+              )
 
     # Create the form
-    output = msg.compose(recipient = pe_id,
-                         url = url)
+    output = msg.compose(recipient=pe_id, url=url)
 
     output["title"] = title
     response.view = "msg/compose.html"

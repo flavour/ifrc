@@ -668,7 +668,14 @@ var S3EnableNavigateAwayConfirm = function() {
             S3.showAlert(i18n.ajax_500, 'error');
         } else {
             // Other error or server unreachable
-            S3.showAlert(i18n.ajax_dwn, 'error');
+            var responseJSON = jqXHR.responseJSON;
+            if (responseJSON && responseJSON.message) {
+                // A json_message with a specific error text
+                S3.showAlert(responseJSON.message, 'error');
+            } else {
+                // HTTP status code only
+                S3.showAlert(i18n.ajax_dwn, 'error');
+            }
         }
 
         // Apply the caller's error callback
@@ -967,8 +974,6 @@ S3.openPopup = function(url, center) {
  *
  * @todo: fix updateAddResourceLink
  * @todo: move into separate file and load only when needed?
- * @todo: S3SQLInlineComponentCheckboxes not supported (but to be
- *        deprecated itself anyway, so just remove the case?)
  */
 
 (function() {
@@ -985,9 +990,7 @@ S3.openPopup = function(url, center) {
      * @param {string} setting.name - the field name
      * @param {string} setting.inlineType - the inline form type, 'link' (for S3SQLInlineLink),
      *                                      or 'sub' (for other S3SQLInlineComponent types)
-     * @param {string} setting.inlineRows - the inline form has multiple rows, default: true,
-     *                                      should be set to false for e.g.
-     *                                      S3SQLInlineComponentMultiSelectWidget
+     * @param {string} setting.inlineRows - the inline form has multiple rows, default: true
      */
     var getSelector = function(setting) {
 

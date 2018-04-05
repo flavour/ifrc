@@ -753,7 +753,7 @@ class S3HRModel(S3Model):
                                                   },
                            )
 
-        if group == "volunteer":
+        if group in ("volunteer", None):
             add_components(tablename,
                            # Programmes
                            hrm_programme_hours = {"link": "pr_person",
@@ -814,7 +814,45 @@ class S3HRModel(S3Model):
         if teams:
             report_fields.append((T(teams), "group_membership.group_id"))
 
-        if group == "volunteer":
+        if mix_staff:
+            crud_fields.insert(1, "site_id")
+            crud_fields.insert(2, "type")
+            posn = 4
+            if use_code:
+                posn += 1
+            crud_fields.insert(posn, "job_title_id")
+            if settings.get_hrm_staff_departments() or \
+               settings.get_hrm_vol_departments():
+                crud_fields.insert(posn, "department_id")
+            vol_experience = settings.get_hrm_vol_experience()
+            if vol_experience in ("programme", "both"):
+                crud_fields.insert(posn, S3SQLInlineComponent("programme_hours",
+                                                              label = "",
+                                                              fields = ["programme_id",
+                                                                        ],
+                                                              link = False,
+                                                              multiple = False,
+                                                              ))
+            elif vol_experience == "activity":
+                report_fields.append("person_id$activity_hours.activity_hours_activity_type.activity_type_id")
+            crud_fields.append("details.volunteer_type")
+            if settings.get_hrm_vol_availability_tab() is False and \
+               settings.get_pr_person_availability_options() is not None:
+                crud_fields.append("person_availability.options")
+            crud_fields.append("details.card")
+            vol_active = settings.get_hrm_vol_active()
+            if vol_active and not callable(vol_active):
+                # Set manually
+                crud_fields.append("details.active")
+            report_fields.extend(("site_id",
+                                  "department_id",
+                                  "job_title_id",
+                                  (T("Age Group"), "person_id$age_group"),
+                                  "person_id$education.level",
+                                  ))
+            # Needed for Age Group VirtualField to avoid extra DB calls
+            report_fields_extra = ["person_id$date_of_birth"]
+        elif group == "volunteer":
             # This gets copied to hrm_human_resource.location_id onaccept, faster to lookup without joins
             #location_context = "person_id$address.location_id" # When not using S3Track()
             if settings.get_hrm_vol_roles():
@@ -859,9 +897,6 @@ class S3HRModel(S3Model):
             #location_context = "site_id$location_id" # When not using S3Track()
             crud_fields.insert(1, "site_id")
             posn = 3
-            if mix_staff:
-                crud_fields.insert(2, "type")
-                posn += 1
             if use_code:
                 posn += 1
             crud_fields.insert(posn, "job_title_id")
@@ -1097,8 +1132,7 @@ class S3HRModel(S3Model):
         value = _vars.term or _vars.value or _vars.q or None
 
         if not value:
-            output = current.xml.json_message(False, 400, "No value provided!")
-            raise HTTP(400, body=output)
+            r.error(400, "No value provided!")
 
         # We want to do case-insensitive searches
         # (default anyway on MySQL/SQLite, but not PostgreSQL)
@@ -1188,8 +1222,7 @@ class S3HRModel(S3Model):
 
         hrm_id = r.id
         if not hrm_id:
-            output = current.xml.json_message(False, 400, "No id provided!")
-            raise HTTP(400, body=output)
+            r.error(400, "No id provided!")
 
         db = current.db
         s3db = current.s3db
@@ -1577,8 +1610,12 @@ class S3HRSalaryModel(S3Model):
                              set_max = "#hrm_salary_start_date",
                              ),
                      Field("monthly_amount", "double",
+                           represent = lambda v: \
+                                       IS_FLOAT_AMOUNT.represent(v,
+                                                                 precision = 2,
+                                                                 ),
                            requires = IS_EMPTY_OR(
-                                        IS_FLOAT_IN_RANGE(minimum=0.0)
+                                        IS_FLOAT_AMOUNT(minimum=0.0)
                                         ),
                            default = 0.0,
                            ),
@@ -2028,7 +2065,7 @@ class S3HRSkillModel(S3Model):
         ADMIN = current.session.s3.system_roles.ADMIN
         is_admin = auth.s3_has_role(ADMIN)
 
-        s3_string_represent = lambda s: s if s else NONE
+        float_represent = IS_FLOAT_AMOUNT.represent
 
         add_components = self.add_components
         configure = self.configure
@@ -2166,8 +2203,9 @@ class S3HRSkillModel(S3Model):
                                    widget = widget
                                    )
 
-        multi_skill_represent = S3Represent(lookup=tablename,
-                                            multiple=True)
+        multi_skill_represent = S3Represent(lookup = tablename,
+                                            multiple = True,
+                                            )
         multi_skill_id = S3ReusableField("skill_id", "list:reference hrm_skill",
                                          label = T("Skills"),
                                          ondelete = "SET NULL",
@@ -2429,12 +2467,17 @@ class S3HRSkillModel(S3Model):
                            ),
                      Field("hours", "integer",
                            label = T("Hours"),
+                           requires = IS_EMPTY_OR(
+                                        IS_INT_IN_RANGE(0, None)
+                                        ),
                            ),
                      Field("pass_mark", "float",
                            default = 0.0,
                            label = T("Pass Mark"),
+                           represent = lambda v: \
+                                       float_represent(v, precision=2),
                            requires = IS_EMPTY_OR(
-                                        IS_FLOAT_IN_RANGE(minimum=0.0)
+                                        IS_FLOAT_AMOUNT(minimum=0.0)
                                         ),
                            readable = course_pass_marks,
                            writable = course_pass_marks,
@@ -2558,7 +2601,8 @@ class S3HRSkillModel(S3Model):
                                   represent
                                   )),
             sortby = "name",
-            comment=S3PopupLink(f = "event_type",
+            comment=S3PopupLink(c = "hrm",
+                                f = "event_type",
                                 label = label_create,
                                 title = label_create,
                                 tooltip = T("Add a new event type to the catalog."),
@@ -2648,7 +2692,7 @@ class S3HRSkillModel(S3Model):
                      Field("hours", "integer",
                            label = T("Hours"),
                            requires = IS_EMPTY_OR(
-                                        IS_INT_IN_RANGE(1, 1000),
+                                        IS_INT_IN_RANGE(1, None),
                                         ),
                            ),
                      person_id(label = INSTRUCTOR,
@@ -2659,7 +2703,7 @@ class S3HRSkillModel(S3Model):
                      Field("instructor",
                            label = ext_instructor_label,
                            comment = ext_instructor_tooltip,
-                           represent = s3_string_represent,
+                           represent = lambda s: s if s else NONE,
                            readable = ext_instructor,
                            writable = ext_instructor,
                            ),
@@ -2939,6 +2983,9 @@ class S3HRSkillModel(S3Model):
                                  ),
                      Field("hours", "integer",
                            label = T("Hours"),
+                           requires = IS_EMPTY_OR(
+                                        IS_INT_IN_RANGE(0, None)
+                                        ),
                            ),
                      # This field can only be filled-out by specific roles
                      # Once this has been filled-out then the other fields are locked
@@ -2956,8 +3003,10 @@ class S3HRSkillModel(S3Model):
                      Field("grade_details", "float",
                            default = 0.0,
                            label = T("Grade Details"),
+                           represent = lambda v: \
+                                       float_represent(v, precision=2),
                            requires = IS_EMPTY_OR(
-                                        IS_FLOAT_IN_RANGE(minimum=0.0)
+                                        IS_FLOAT_AMOUNT(minimum=0.0)
                                         ),
                            readable = course_pass_marks,
                            writable = course_pass_marks,
@@ -3160,6 +3209,9 @@ class S3HRSkillModel(S3Model):
                                      ),
                      Field("expiry", "integer",
                            label = T("Expiry (months)"),
+                           requires = IS_EMPTY_OR(
+                                        IS_INT_IN_RANGE(1, None)
+                                        ),
                            ),
                      *s3_meta_fields())
 
@@ -4209,9 +4261,8 @@ class S3HRAppraisalModel(S3Model):
                      s3_comments(),
                      *s3_meta_fields())
 
-        ADD_APPRAISAL = T("Add Appraisal")
         current.response.s3.crud_strings[tablename] = Storage(
-            label_create = ADD_APPRAISAL,
+            label_create = T("Add Appraisal"),
             title_display = T("Appraisal Details"),
             title_list = T("Appraisals"),
             title_update = T("Edit Appraisal"),
@@ -4697,6 +4748,7 @@ class S3HRProgrammeModel(S3Model):
         define_table(tablename,
                      Field("name", notnull=True, length=64,
                            label = T("Name"),
+                           represent = T,
                            requires = [IS_NOT_EMPTY(),
                                        IS_LENGTH(64),
                                        ],
@@ -4735,7 +4787,7 @@ class S3HRProgrammeModel(S3Model):
         else:
             filter_opts = (None,)
 
-        represent = S3Represent(lookup=tablename)
+        represent = S3Represent(lookup=tablename, translate=True)
         programme_id = S3ReusableField("programme_id", "reference %s" % tablename,
             label = T("Program"),
             ondelete = "SET NULL",
@@ -5019,7 +5071,12 @@ class hrm_AssignMethod(S3Method):
             @param attr: controller options for this request
         """
 
-        component = r.resource.components[self.component]
+        try:
+            component = r.resource.components[self.component]
+        except KeyError:
+            current.log.error("Invalid Component!")
+            raise
+
         if component.link:
             component = component.link
 
@@ -7179,7 +7236,7 @@ def hrm_group_controller():
                                    )
 
 # =============================================================================
-def hrm_human_resource_controller(extra_filter=None):
+def hrm_human_resource_controller(extra_filter = None):
     """
         Human Resources Controller, defined in the model for use from
         multiple controllers for unified menus
@@ -7425,8 +7482,8 @@ def hrm_human_resource_controller(extra_filter=None):
                     T("Staff & Volunteers")
 
             # Filter Widgets
-            filter_widgets = hrm_human_resource_filters(resource_type="both",
-                                                        hrm_type_opts=s3db.hrm_type_opts)
+            filter_widgets = hrm_human_resource_filters(resource_type = "both",
+                                                        hrm_type_opts = s3db.hrm_type_opts)
 
             # List Fields
             list_fields = ["id",
@@ -8628,7 +8685,7 @@ class hrm_CV(S3Method):
             return output
 
         else:
-            raise HTTP(405, current.ERROR.BAD_METHOD)
+            r.error(405, current.ERROR.BAD_METHOD)
 
 # =============================================================================
 class hrm_Record(S3Method):
@@ -8674,10 +8731,10 @@ class hrm_Record(S3Method):
         """
 
         if r.name != "person" or not r.id or r.component:
-            raise HTTP(405, current.ERROR.BAD_METHOD)
+            r.error(405, current.ERROR.BAD_METHOD)
         representation = r.representation
         if representation not in ("html", "aadata"):
-            raise HTTP(405, current.ERROR.BAD_METHOD)
+            r.error(405, current.ERROR.BAD_METHOD)
 
         r.customise_resource("hrm_human_resource")
 
@@ -9604,9 +9661,9 @@ def hrm_training_list_layout(list_id, item_id, resource, rfields, record):
     return item
 
 # =============================================================================
-def hrm_human_resource_filters(resource_type=None,
-                               module=None,
-                               hrm_type_opts=None):
+def hrm_human_resource_filters(resource_type = None,
+                               module = None,
+                               hrm_type_opts = None):
     """
         Get filter widgets for human resources
 
@@ -9695,7 +9752,7 @@ def hrm_human_resource_filters(resource_type=None,
                                    ))
 
     # Active / Activity / Programme filters (volunteer only)
-    if module == "vol" or resource_type == "volunteer":
+    if module == "vol" or resource_type in ("both", "volunteer"):
         vol_active = settings.get_hrm_vol_active()
         if vol_active:
             # Active filter

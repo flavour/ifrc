@@ -269,8 +269,11 @@ class S3OrganisationModel(S3Model):
                                                       filterby="parent",
                                                       filter_opts=(None,),
                                                       orderby="org_region.name"))
+                # IFRC: Only show the Regions, not the Zones
+                opts_filter = ("parent", (None,))
             else:
                 hierarchy = None
+                opts_filter = (None, None)
 
             # CRUD strings
             crud_strings[tablename] = Storage(
@@ -293,9 +296,8 @@ class S3OrganisationModel(S3Model):
                             IS_ONE_OF(db, "org_region.id",
                                       region_represent,
                                       sort=True,
-                                      # IFRC: Only show the Regions, not the Zones
-                                      not_filterby="parent",
-                                      not_filter_opts=(None,)
+                                      not_filterby=opts_filter[0],
+                                      not_filter_opts=opts_filter[1],
                                       )),
                 sortby = "name",
                 comment = S3PopupLink(c = "org",
@@ -371,8 +373,9 @@ class S3OrganisationModel(S3Model):
                            label = T("Home Country"),
                            represent = self.gis_country_code_represent,
                            requires = IS_EMPTY_OR(IS_IN_SET_LAZY(
-                                lambda: gis.get_countries(key_type="code"),
-                                                          zero=messages.SELECT_LOCATION)),
+                                        lambda: gis.get_countries(key_type="code"),
+                                        zero = messages.SELECT_LOCATION
+                                        )),
                            ),
                      # Simple free-text contact field, can be enabled
                      # in templates as needed
@@ -415,8 +418,7 @@ class S3OrganisationModel(S3Model):
                            comment = DIV(_class="tooltip",
                                          _title="%s|%s" % (T("Logo"),
                                                            T("Logo of the organization. This should be a png or jpeg file and it should be no larger than 400x400"))),
-                           uploadfolder = os.path.join(
-                                            current.request.folder, "uploads"),
+                           uploadfolder = os.path.join(current.request.folder, "uploads"),
                            ),
                      s3_comments(),
                      #document_id(), # Better to have multiple Documents on a Tab
@@ -1065,9 +1067,7 @@ class S3OrganisationModel(S3Model):
         value = s3_unicode(value).lower().strip()
 
         if not value:
-            output = current.xml.json_message(False, 400,
-                            "Missing option! Require value")
-            raise HTTP(400, body=output)
+            r.error(400, "Missing option! Require value")
 
         response = current.response
         resource = r.resource
@@ -2081,7 +2081,7 @@ class S3OrganisationResourceModel(S3Model):
                                      ),
                           Field("value", "integer",
                                 label = T("Quantity"),
-                                requires = IS_INT_IN_RANGE(0, 999999),
+                                requires = IS_INT_IN_RANGE(0, None),
                                 ),
                           s3_comments(),
                           *s3_meta_fields())
@@ -2933,11 +2933,11 @@ class S3OrganisationSummaryModel(S3Model):
                           self.org_organisation_id(ondelete="CASCADE"),
                           Field("national_staff", "integer", # national is a reserved word in Postgres
                                 label = T("# of National Staff"),
-                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, 9999)),
+                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                                 ),
                           Field("international_staff", "integer",
                                 label = T("# of International Staff"),
-                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, 9999)),
+                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                                 ),
                           *s3_meta_fields())
 
@@ -3152,7 +3152,7 @@ class S3SiteModel(S3Model):
                                 writable = False,
                                 ),
                           Field("comments", "text"),
-                          *s3_ownerstamp())
+                          *S3MetaFields.owner_meta_fields())
 
         # ---------------------------------------------------------------------
         settings = current.deployment_settings
@@ -3221,14 +3221,11 @@ class S3SiteModel(S3Model):
         # Components
         add_components(tablename,
                        # Facility Types
-                       # Format for S3SQLInlineComponentCheckbox
                        org_facility_type = {"link": "org_site_facility_type",
                                             "joinby": "site_id",
                                             "key": "facility_type_id",
                                             "actuate": "hide",
                                             },
-                       # Format for filter_widgets & imports
-                       org_site_facility_type = "site_id",
 
                        # Locations
                        org_site_location = ({"name": "location",
@@ -3429,8 +3426,7 @@ class S3SiteModel(S3Model):
 
         site_id = r.id
         if not site_id:
-            output = current.xml.json_message(False, 400, "No id provided!")
-            raise HTTP(400, body=output)
+            r.error(400, "No id provided!")
 
         db = current.db
         s3db = current.s3db
@@ -3480,9 +3476,7 @@ class S3SiteModel(S3Model):
         value = s3_unicode(value).lower().strip()
 
         if not value:
-            output = current.xml.json_message(False, 400,
-                            "Missing option! Require value")
-            raise HTTP(400, body=output)
+            r.error(400, "Missing option! Require value")
 
         # Construct query
         query = (FS("name").lower().like(value + "%"))
@@ -4126,7 +4120,7 @@ class S3FacilityModel(S3Model):
             filter_widgets.append(
                 S3OptionsFilter("reqs",
                                 label = T("Highest Priority Open Requests"),
-                                options = self.req_priority_opts,
+                                options = lambda: self.req_priority_opts,
                                 cols = 3,
                                 ))
 
@@ -4939,11 +4933,11 @@ class S3OfficeSummaryModel(S3Model):
                                 ),
                           Field("national_staff", "integer", # national is a reserved word in Postgres
                                 label = T("# of National Staff"),
-                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, 9999)),
+                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                                 ),
                           Field("international_staff", "integer",
                                 label = T("# of International Staff"),
-                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, 9999)),
+                                requires = IS_EMPTY_OR(IS_INT_IN_RANGE(0, None)),
                                 ),
                           *s3_meta_fields())
 
@@ -6008,7 +6002,10 @@ class org_SiteCheckInMethod(S3Method):
                   ]
 
         query = (FS("pe_label") == label)
-        presource = s3db.resource("pr_person", filter=query)
+        presource = s3db.resource("pr_person",
+                                  components=[],
+                                  filter = query,
+                                  )
         rows = presource.select(fields,
                                 start = 0,
                                 limit = 1,
@@ -6584,14 +6581,26 @@ def org_organisation_controller():
                            )
 
         elif r.interactive or r.representation == "aadata":
-            component = r.component
-            gis = current.gis
+
             otable = r.table
+
+            gis = current.gis
             otable.country.default = gis.get_default_country("code")
-            type_filter = r.get_vars.get("organisation_type.name", None)
+
+            f = r.function
+            if settings.get_org_regions() and f != "organisation":
+                # Non-default function name (e.g. project/partners)
+                # => use same function for options lookup after popup-create
+                popup_link = otable.region_id.comment
+                if popup_link and isinstance(popup_link, S3PopupLink):
+                    popup_link.vars["parent"] = f
 
             method = r.method
+            component = r.component
+
             use_branches = settings.get_org_branches()
+            type_filter = r.get_vars.get("organisation_type.name", None)
+
             if use_branches and not component and \
                not r.record and \
                r.method != "deduplicate" and \
@@ -7819,7 +7828,7 @@ class org_AssignMethod(S3Method):
         e.g. Organisation Group
     """
 
-    def __init__(self, component, types=None):
+    def __init__(self, component):
         """
             @param component: the Component in which to create records
         """
@@ -7834,18 +7843,14 @@ class org_AssignMethod(S3Method):
             @param attr: controller options for this request
         """
 
-        component = self.component
-        components = r.resource.components
-        for c in components:
-            if c == component:
-                component = components[c]
-                break
         try:
-            if component.link:
-                component = component.link
-        except:
+            component = r.resource.components[self.component]
+        except KeyError:
             current.log.error("Invalid Component!")
             raise
+
+        if component.link:
+            component = component.link
 
         tablename = component.tablename
 

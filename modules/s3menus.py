@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """ Sahana Eden Menu Structure and Layout
 
@@ -272,6 +273,7 @@ class S3MainMenu(object):
         if has_role("ADMIN"):
             translate = settings.has_module("translate")
             menu_admin = MM(name_nice, c="admin", **attr)(
+                                MM("Setup", c="setup"),
                                 MM("Settings", f="setting"),
                                 MM("Users", f="user"),
                                 MM("Person Registry", c="pr"),
@@ -446,6 +448,13 @@ class S3OptionsMenu(object):
         # NB: Do not specify a controller for the main menu to allow
         #     re-use of this menu by other controllers
         return M(restrict=[ADMIN])(
+                    M("Setup", c="setup", f="deployment")(
+                        #M("Create", m="create"),
+                        #M("Servers", f="server")(
+                        #),
+                        #M("Instances", f="instance")(
+                        #),
+                    ),
                     M("Settings", c="admin", f="setting")(
                         settings_messaging,
                     ),
@@ -1869,6 +1878,12 @@ class S3OptionsMenu(object):
                         M("Create", m="create"),
                     ),
                 )
+
+    # -------------------------------------------------------------------------
+    def setup(self):
+        """ Setup """
+
+        return self.admin()
 
     # -------------------------------------------------------------------------
     @staticmethod

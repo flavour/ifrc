@@ -457,7 +457,7 @@ class S3AssetModel(S3Model):
                      Field("quantity", "integer", notnull=True,
                            default = 1,
                            label = T("Quantity"),
-                           requires = IS_INT_IN_RANGE(1, 1000),
+                           requires = IS_INT_IN_RANGE(1, None),
                            ),
                      Field("sn",
                            label = T("Serial Number"),
@@ -1328,7 +1328,7 @@ class asset_AssetRepresent(S3Represent):
                              multiple=multiple)
 
     # -------------------------------------------------------------------------
-    def custom_lookup_rows(self, key, values, fields=[]):
+    def custom_lookup_rows(self, key, values, fields=None):
         """
             Custom lookup method for organisation rows, does a
             left join with the parent organisation. Parameters

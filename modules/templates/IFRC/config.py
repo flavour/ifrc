@@ -22,8 +22,10 @@ def config(settings):
 
     # -------------------------------------------------------------------------
     # Pre-Populate
-    #settings.base.prepopulate += ("IFRC", "IFRC/Train", "IFRC/Demo")
-    settings.base.prepopulate += ("IFRC", "IFRC/Train")
+    settings.base.prepopulate += ("IFRC",)
+    settings.base.prepopulate_demo += ("IFRC/Train",
+                                       #"IFRC/Demo", # Takes a long time to import
+                                       )
 
     settings.base.system_name = T("Resource Management System")
     settings.base.system_name_short = T("RMS")
@@ -1735,6 +1737,7 @@ def config(settings):
             elif tablename == "dc_target":
 
                 tabs = ((T("Basic Details"), None),
+                        (T("Report"), "results"),
                         (T("Responses"), "response"),
                         )
 
@@ -3843,11 +3846,6 @@ def config(settings):
                                                     },
                                         )
 
-                    # Attach component (we're past resource initialization)
-                    hook = s3db.get_component("hrm_human_resource", "vol_training")
-                    if hook:
-                        r.resource._attach("vol_training", hook)
-
                     crud_form = S3SQLCustomForm("organisation_id",
                                                 "code",
                                                 S3SQLInlineComponent("programme_hours",
@@ -4146,10 +4144,8 @@ def config(settings):
                                                                          },
                                                             },
                                             )
-                        # Re-attach component (we're past resource initialization)
-                        hook = s3db.get_component("hrm_human_resource", "training")
-                        if hook:
-                            r.resource._attach("training", hook)
+                        # Reset the component (we're past resource initialization)
+                        r.resource.components.reset(("training",))
 
                 # Exclude None-values for training course pivot axis
                 s3db.configure(tablename,
@@ -6651,8 +6647,8 @@ def config(settings):
                                    )
 
                 elif controller == "member":
-                    crud_strings["pr_person"] = crud_strings["member_membership"]
                     mtable = s3db.member_membership
+                    crud_strings["pr_person"] = crud_strings["member_membership"]
                     f = mtable.leaving_reason
                     f.readable = f.writable = True
                     f = mtable.restart_date
@@ -6677,11 +6673,7 @@ def config(settings):
                     #                       )
                     f = s3db.pr_person_details.grandfather_name
                     f.readable = f.writable = True
-                    components = r.resource.components
-                    for c in components:
-                        if c == "membership":
-                            components[c].multiple = False
-                            break
+
                     s3db.add_components("pr_person",
                                         #hrm_training = {"name": "member_training",
                                         #                "joinby": "person_id",
@@ -6696,7 +6688,14 @@ def config(settings):
                                                           },
                                                       "multiple": False,
                                                       },
+                                        # Make single, so fields can be embedded:
+                                        member_membership = {"joinby": "person_id",
+                                                             "multiple": False,
+                                                             },
                                         )
+                    # Reset the component (we're past resource initialization)
+                    r.resource.components.reset(("membership",))
+
                     crud_form = S3SQLCustomForm("membership.organisation_id",
                                                 "membership.code",
                                                 (T("Name"), "first_name"),
@@ -7733,40 +7732,61 @@ def config(settings):
     # -------------------------------------------------------------------------
     def customise_project_location_resource(r, tablename):
 
-        from s3 import S3LocationSelector, S3SQLCustomForm, S3SQLInlineComponentCheckbox
 
-        s3db = current.s3db
 
-        s3db.project_location.location_id.widget = \
-            S3LocationSelector(show_postcode = False,
-                               show_latlon = False,
-                               show_map = False,
-                               )
+        if r.interactive:
 
-        crud_form = S3SQLCustomForm(
-            "project_id",
-            "location_id",
-            # @ToDo: Grouped Checkboxes
-            S3SQLInlineComponentCheckbox(
-                "activity_type",
-                label = T("Activity Types"),
-                field = "activity_type_id",
-                cols = 3,
-                # Filter Activity Type by Sector
-                filter = {"linktable": "project_activity_type_sector",
-                          "lkey": "activity_type_id",
-                          "rkey": "sector_id",
-                          "lookuptable": "project_project",
-                          "lookupkey": "project_id",
-                          },
-                translate = True,
-                ),
-            "comments",
-            )
+            from s3 import S3LocationSelector, S3SQLCustomForm, S3SQLInlineLink
 
-        s3db.configure(tablename,
-                       crud_form = crud_form,
-                       )
+            s3db = current.s3db
+            s3db.project_location.location_id.widget = \
+                S3LocationSelector(show_postcode = False,
+                                   show_latlon = False,
+                                   show_map = False,
+                                   )
+
+            if r.tablename == "project_project" and r.id:
+                # On component tab
+                # => limit activity types by project sector
+                ltable = s3db.project_sector_project
+                query = (ltable.project_id == r.id) & \
+                        (ltable.deleted == False)
+                rows = current.db(query).select(ltable.sector_id)
+                sector_ids = set(row.sector_id for row in rows)
+                script = None
+            else:
+                # Primary form
+                # => start empty until project selected
+                sector_ids = set()
+                # => update selectable activity types by project sector
+                script = '''
+$.filterOptionsS3({
+ 'trigger':'project_id',
+ 'target':{'alias':'activity_type','name':'activity_type_id','inlineType':'link'},
+ 'lookupPrefix':'project',
+ 'lookupResource':'activity_type',
+ 'lookupKey':'activity_type_id:project_activity_type_sector.sector_id$project_sector_project.project_id',
+ 'showEmptyField':false,
+})'''
+
+            crud_form = S3SQLCustomForm(
+                "project_id",
+                "location_id",
+                S3SQLInlineLink(
+                    "activity_type",
+                    label = T("Activity Types"),
+                    field = "activity_type_id",
+                    cols = 3,
+                    filterby = "activity_type_sector.sector_id",
+                    options = sector_ids,
+                    script = script,
+                    ),
+                    "comments",
+                )
+
+            s3db.configure(tablename,
+                           crud_form = crud_form,
+                           )
 
     settings.customise_project_location_resource = customise_project_location_resource
 

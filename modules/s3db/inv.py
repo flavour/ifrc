@@ -237,10 +237,16 @@ class S3WarehouseModel(S3Model):
                      Field("capacity", "integer",
                            label = T("Capacity (m3)"),
                            represent = lambda v: v or NONE,
+                           requires = IS_EMPTY_OR(
+                                        IS_INT_IN_RANGE(0, None)
+                                        ),
                            ),
                      Field("free_capacity", "integer",
                            label = T("Free Capacity (m3)"),
                            represent = lambda v: v or NONE,
+                           requires = IS_EMPTY_OR(
+                                        IS_INT_IN_RANGE(0, None)
+                                        ),
                            ),
                      Field("contact",
                            label = T("Contact"),
@@ -456,7 +462,7 @@ class S3InventoryModel(S3Model):
                                 label = T("Quantity"),
                                 represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2),
-                                requires = IS_FLOAT_IN_RANGE(0, None),
+                                requires = IS_FLOAT_AMOUNT(minimum=0.0),
                                 writable = False,
                                 ),
                           Field("bin", length=16,
@@ -882,7 +888,7 @@ $.filterOptionsS3({
         supply_org_id = data.get("supply_org_id")
         pack_value = data.get("pack_value")
         currency = data.get("currency")
-        bin = data.get("bin")
+        item_bin = data.get("bin")
 
         # Must match all of these exactly
         query = (table.site_id == site_id) & \
@@ -892,7 +898,7 @@ $.filterOptionsS3({
                 (table.supply_org_id == supply_org_id) & \
                 (table.pack_value == pack_value) & \
                 (table.currency == currency) & \
-                (table.bin == bin)
+                (table.bin == item_bin)
 
         duplicate = current.db(query).select(table.id,
                                              table.quantity,
@@ -1600,7 +1606,7 @@ class S3InventoryTrackingModel(S3Model):
                            label = T("Quantity"),
                            represent = lambda v, row=None: \
                             IS_FLOAT_AMOUNT.represent(v, precision=2),
-                           requires = IS_FLOAT_IN_RANGE(minimum=1),
+                           requires = IS_FLOAT_AMOUNT(minimum=1.0),
                            ),
                      s3_date(comment = DIV(_class="tooltip",
                                            _title="%s|%s" % \
@@ -1942,10 +1948,11 @@ $.filterOptionsS3({
             row = row.inv_track_item
         try:
             v = row.quantity * row.pack_value
-            return v
-        except:
-            # not available
+        except AttributeError:
+            # Not available
             return current.messages["NONE"]
+
+        return v
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1955,18 +1962,27 @@ $.filterOptionsS3({
         if hasattr(row, "inv_track_item"):
             row = row.inv_track_item
         try:
-            # Lookup Volume of each item
-            table = current.s3db.supply_item
-            item = current.db(table.id == row.item_id).select(table.volume,
-                                                              limitby=(0, 1)
-                                                              ).first()
-            # Return the total volume
             quantity = row.quantity if not received else row.recv_quantity
-            if not quantity:
-                quantity = 0
-            return quantity * item.volume
-        except:
-            # not available
+        except AttributeError:
+            # Not available
+            return current.messages["NONE"]
+
+        # Lookup Volume per item
+        table = current.s3db.supply_item
+        try:
+            volume = current.db(table.id == row.item_id).select(
+                                                            table.volume,
+                                                            limitby = (0, 1),
+                                                            ).first().volume
+        except AttributeError:
+            # No (such) item
+            return current.messages["NONE"]
+
+        # Return the total volume
+        if quantity is not None and volume is not None:
+            return quantity * volume
+        else:
+            # Unknown
             return current.messages["NONE"]
 
     # -------------------------------------------------------------------------
@@ -1977,18 +1993,27 @@ $.filterOptionsS3({
         if hasattr(row, "inv_track_item"):
             row = row.inv_track_item
         try:
-            # Lookup Weight of each item
-            table = current.s3db.supply_item
-            item = current.db(table.id == row.item_id).select(table.weight,
-                                                              limitby=(0, 1)
-                                                              ).first()
-            # Return the total weight
             quantity = row.quantity if not received else row.recv_quantity
-            if not quantity:
-                quantity = 0
-            return quantity * item.weight
-        except:
-            # not available
+        except AttributeError:
+            # Not available
+            return current.messages["NONE"]
+
+        # Lookup Weight per item
+        table = current.s3db.supply_item
+        try:
+            weight = current.db(table.id == row.item_id).select(
+                                                            table.weight,
+                                                            limitby = (0, 1),
+                                                            ).first().weight
+        except AttributeError:
+            # No (such) item
+            return current.messages["NONE"]
+
+        # Return the total weight
+        if quantity is not None and weight is not None:
+            return quantity * weight
+        else:
+            # Unknown
             return current.messages["NONE"]
 
     # -------------------------------------------------------------------------
@@ -2003,7 +2028,7 @@ $.filterOptionsS3({
             row = row.inv_track_item
         try:
             req_item_id = row.req_item_id
-        except:
+        except AttributeError:
             # not available
             req_item_id = None
 
@@ -2038,43 +2063,48 @@ $.filterOptionsS3({
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def inv_send_represent(id, row=None, show_link=True):
+    def inv_send_represent(record_id, row=None, show_link=True):
         """
             Represent a Sent Shipment
         """
 
         if row:
-            id = row.id
+            record_id = row.id
             table = current.db.inv_send
-        elif not id:
+        elif not record_id:
             return current.messages["NONE"]
         else:
             db = current.db
             table = db.inv_send
-            row = db(table.id == id).select(table.date,
-                                            table.send_ref,
-                                            table.to_site_id,
-                                            limitby=(0, 1)).first()
+            row = db(table.id == record_id).select(table.date,
+                                                   table.send_ref,
+                                                   table.to_site_id,
+                                                   limitby=(0, 1),
+                                                   ).first()
         try:
             send_ref_string = table.send_ref.represent(row.send_ref,
-                                                       show_link=False)
+                                                       show_link = False,
+                                                       )
             to_string = table.to_site_id.represent(row.to_site_id,
-                                                   show_link=False)
+                                                   show_link = False,
+                                                   )
             date_string = table.date.represent(row.date)
-
+        except AttributeError:
+            # Record not found, or not all required fields in row
+            return current.messages.UNKNOWN_OPT
+        else:
             T = current.T
             represent  = "%s (%s: %s %s %s)" % (send_ref_string,
                                                 T("To"),
                                                 to_string,
                                                 T("on"),
-                                                date_string)
+                                                date_string,
+                                                )
             if show_link:
                 return A(represent,
-                         _href = URL(c="inv", f="send", args=[id]))
+                         _href = URL(c="inv", f="send", args=[record_id]))
             else:
                 return represent
-        except:
-            return current.messages.UNKNOWN_OPT
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2085,24 +2115,24 @@ $.filterOptionsS3({
 
         db = current.db
 
-        vars = form.vars
-        id = vars.id
+        formvars = form.vars
+        record_id = formvars.id
 
-        type = vars.type
-        if type:
+        shipment_type = formvars.type
+        if shipment_type:
             # Add all inv_items with status matching the send shipment type
             # eg. Items for Dump, Sale, Reject, Surplus
             inv_track_item_onaccept = current.s3db.inv_track_item_onaccept
-            site_id = vars.site_id
+            site_id = formvars.site_id
             itable = db.inv_inv_item
             tracktable = db.inv_track_item
             query = (itable.site_id == site_id) & \
-                    (itable.status == int(type))
+                    (itable.status == int(shipment_type))
             rows = db(query).select()
             for row in rows:
                 if row.quantity != 0:
                     # Insert inv_item to inv_track_item
-                    inv_track_id = tracktable.insert(send_id = id,
+                    inv_track_id = tracktable.insert(send_id = record_id,
                                                      send_inv_item_id = row.id,
                                                      item_id = row.item_id,
                                                      quantity = row.quantity,
@@ -2117,24 +2147,24 @@ $.filterOptionsS3({
                                                      #status = TRACK_STATUS_PREPARING,
                                                      )
                     # Construct form.vars for inv_track_item_onaccept
-                    vars = Storage()
-                    vars.id = inv_track_id
-                    vars.quantity = row.quantity
-                    vars.item_pack_id = row.item_pack_id
-                    vars.send_inv_item_id = row.id
+                    formvars = Storage()
+                    formvars.id = inv_track_id
+                    formvars.quantity = row.quantity
+                    formvars.item_pack_id = row.item_pack_id
+                    formvars.send_inv_item_id = row.id
                     # Call inv_track_item_onaccept to remove inv_item from stock
-                    inv_track_item_onaccept(Storage(vars=vars))
+                    inv_track_item_onaccept(Storage(vars=formvars))
 
         stable = db.inv_send
         # If the send_ref is None then set it up
-        record = stable[id]
+        record = stable[record_id]
         if not record.send_ref:
             code = current.s3db.supply_get_shipping_code(
                     current.deployment_settings.get_inv_send_shortname(),
                     record.site_id,
                     stable.send_ref,
                   )
-            db(stable.id == id).update(send_ref=code)
+            db(stable.id == record_id).update(send_ref=code)
 
     # -------------------------------------------------------------------------
     @classmethod
@@ -2159,16 +2189,17 @@ $.filterOptionsS3({
         current.auth.permitted_facilities(table=sendtable, error_msg=error_msg)
 
         # Set Validator for checking against the number of items in the warehouse
-        vars = request.vars
-        send_inv_item_id = vars.send_inv_item_id
+        req_vars = request.vars
+        send_inv_item_id = req_vars.send_inv_item_id
         if send_inv_item_id:
-            if not vars.item_pack_id:
-                vars.item_pack_id = db(iitable.id == send_inv_item_id).select(iitable.item_pack_id,
-                                                                              limitby=(0, 1)
-                                                                              ).first().item_pack_id
+            if not req_vars.item_pack_id:
+                req_vars.item_pack_id = db(iitable.id == send_inv_item_id).select(
+                                                iitable.item_pack_id,
+                                                limitby = (0, 1),
+                                                ).first().item_pack_id
             tracktable.quantity.requires = QUANTITY_INV_ITEM(db,
                                                              send_inv_item_id,
-                                                             vars.item_pack_id)
+                                                             req_vars.item_pack_id)
 
         def set_send_attr(status):
             sendtable.send_ref.writable = False
@@ -2351,7 +2382,7 @@ $.filterOptionsS3({
                     if record.status == SHIP_STATUS_IN_PROCESS:
                         crud_strings.title_update = \
                         crud_strings.title_display = T("Process Shipment to Send")
-                    elif "site_id" in request.vars and status == SHIP_STATUS_SENT:
+                    elif "site_id" in req_vars and status == SHIP_STATUS_SENT:
                         crud_strings.title_update = \
                         crud_strings.title_display = T("Review Incoming Shipment to Receive")
             else:
@@ -2430,8 +2461,9 @@ $.filterOptionsS3({
             # if user enters the send id then it could so wrap in a try...
             try:
                 status = db(sendtable.id == args[0]).select(sendtable.status,
-                                                            limitby=(0, 1)).status
-            except:
+                                                            limitby = (0, 1),
+                                                            ).first().status
+            except AttributeError:
                 status = None
             if status:
                 editable = False
@@ -2461,7 +2493,7 @@ $.filterOptionsS3({
         request = current.request
         try:
             send_id = request.args[0]
-        except:
+        except KeyError:
             redirect(URL(f="send"))
 
         T = current.T
@@ -2599,9 +2631,9 @@ $.filterOptionsS3({
             # - show the req_item comments
             list_fields.append("req_item_id$comments")
         if settings.get_inv_track_pack_values():
-            list_fields + ["currency",
-                           "pack_value",
-                           ]
+            list_fields.extend(("currency",
+                                "pack_value",
+                                ))
         from s3.s3export import S3Exporter
         exporter = S3Exporter().pdf
         return exporter(r.resource,
@@ -2621,33 +2653,37 @@ $.filterOptionsS3({
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def inv_recv_represent(id, row=None, show_link=True):
+    def inv_recv_represent(record_id, row=None, show_link=True):
         """
             Represent a Received Shipment
         """
 
         if row:
-            id = row.id
+            record_id = row.id
             table = current.db.inv_recv
-        elif not id:
+        elif not record_id:
             return current.messages["NONE"]
         else:
             db = current.db
             table = db.inv_recv
-            row = db(table.id == id).select(table.date,
-                                            table.recv_ref,
-                                            table.from_site_id,
-                                            table.organisation_id,
-                                            limitby=(0, 1)).first()
+            row = db(table.id == record_id).select(table.date,
+                                                   table.recv_ref,
+                                                   table.from_site_id,
+                                                   table.organisation_id,
+                                                   limitby = (0, 1),
+                                                   ).first()
 
         recv_ref_string = table.send_ref.represent(row.recv_ref,
-                                                   show_link=False)
+                                                   show_link = False,
+                                                   )
         if row.from_site_id:
             from_string = table.from_site_id.represent(row.from_site_id,
-                                                       show_link=False)
+                                                       show_link = False,
+                                                       )
         else:
             from_string = table.organisation_id.represent(row.organisation_id,
-                                                          show_link=False)
+                                                          show_link = False,
+                                                          )
         date_string = table.date.represent(row.date)
 
         T = current.T
@@ -2655,10 +2691,12 @@ $.filterOptionsS3({
                                             T("From"),
                                             from_string,
                                             T("on"),
-                                            date_string)
+                                            date_string,
+                                            )
         if show_link:
             return A(represent,
-                     _href = URL(c="inv", f="recv", args=[id]))
+                     _href = URL(c="inv", f="recv", args=[record_id]),
+                     )
         else:
             return represent
 
@@ -2672,16 +2710,16 @@ $.filterOptionsS3({
         db = current.db
         rtable = db.inv_recv
         # If the recv_ref is None then set it up
-        id = form.vars.id
-        record = rtable[id]
+        record_id = form.vars.id
+        record = rtable[record_id]
         if not record.recv_ref:
             # AR Number
             code = current.s3db.supply_get_shipping_code(
                     current.deployment_settings.get_inv_recv_shortname(),
                     record.site_id,
                     rtable.recv_ref,
-                )
-            db(rtable.id == id).update(recv_ref = code)
+                    )
+            db(rtable.id == record_id).update(recv_ref=code)
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2707,12 +2745,12 @@ $.filterOptionsS3({
         """
 
         form_vars = form.vars
-        type = form_vars.type and int(form_vars.type)
-        if type == 11 and not form_vars.from_site_id:
+        shipment_type = form_vars.type and int(form_vars.type)
+        if shipment_type == 11 and not form_vars.from_site_id:
             # Internal Shipment needs from_site_id
             form.errors.from_site_id = current.T("Please enter a %(site)s") % \
                                             dict(site=current.deployment_settings.get_org_site_label())
-        if type >= 32 and not form_vars.organisation_id:
+        if shipment_type >= 32 and not form_vars.organisation_id:
             # Internal Shipment needs from_site_id
             form.errors.organisation_id = current.T("Please enter an Organization/Supplier")
 
@@ -3163,7 +3201,7 @@ $.filterOptionsS3({
         siptable = db.supply_item_pack
         supply_item_add = s3db.supply_item_add
         form_vars = form.vars
-        id = form_vars.id
+        record_id = form_vars.id
         record = form.record
 
         if form_vars.send_inv_item_id:
@@ -3189,19 +3227,21 @@ $.filterOptionsS3({
             if record:
                 if record.send_inv_item_id != None:
                     # Items have already been removed from stock, so first put them back
-                    old_track_pack_quantity = db(siptable.id == record.item_pack_id).select(siptable.quantity,
-                                                                                            limitby=(0, 1)
-                                                                                            ).first().quantity
+                    old_track_pack_quantity = db(siptable.id == record.item_pack_id).select(
+                                                    siptable.quantity,
+                                                    limitby=(0, 1),
+                                                    ).first().quantity
                     stock_quantity = supply_item_add(stock_quantity,
                                                      stock_pack,
                                                      record.quantity,
                                                      old_track_pack_quantity
                                                      )
             try:
-                new_track_pack_quantity = db(siptable.id == form_vars.item_pack_id).select(siptable.quantity,
-                                                                                           limitby=(0, 1)
-                                                                                           ).first().quantity
-            except:
+                new_track_pack_quantity = db(siptable.id == form_vars.item_pack_id).select(
+                                                    siptable.quantity,
+                                                    limitby=(0, 1)
+                                                    ).first().quantity
+            except AttributeError:
                 new_track_pack_quantity = record.item_pack_id.quantity
             newTotal = supply_item_add(stock_quantity,
                                        stock_pack,
@@ -3315,8 +3355,9 @@ $.filterOptionsS3({
                 db(ritable.id == record.req_item_id).update(quantity_fulfil = quantity_fulfil)
                 s3db.req_update_status(req_id)
 
-            db(tracktable.id == id).update(recv_inv_item_id = inv_item_id,
-                                           status = TRACK_STATUS_ARRIVED)
+            db(tracktable.id == record_id).update(recv_inv_item_id = inv_item_id,
+                                                  status = TRACK_STATUS_ARRIVED,
+                                                  )
             # If the receive quantity doesn't equal the sent quantity
             # then an adjustment needs to be set up
             if record.quantity != record.recv_quantity:
@@ -3362,11 +3403,11 @@ $.filterOptionsS3({
                                                   comments = record.comments,
                                                   )
                 # Copy the adj_item_id to the tracking record
-                db(tracktable.id == id).update(adj_item_id = adj_item_id)
+                db(tracktable.id == record_id).update(adj_item_id = adj_item_id)
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def inv_track_item_deleting(id):
+    def inv_track_item_deleting(record_id):
         """
            A track item can only be deleted if the status is Preparing
            When a track item record is deleted and it is linked to an inv_item
@@ -3379,7 +3420,7 @@ $.filterOptionsS3({
         inv_item_table = db.inv_inv_item
         ritable = s3db.req_req_item
         siptable = db.supply_item_pack
-        record = tracktable[id]
+        record = tracktable[record_id]
         if record.status != 1:
             return False
         # if this is linked to a request
@@ -3403,8 +3444,13 @@ $.filterOptionsS3({
             trackTotal = record.quantity
             # Remove the total from this record and place it back in the warehouse
             db(inv_item_table.id == record.send_inv_item_id).update(quantity = inv_item_table.quantity + trackTotal)
-            db(tracktable.id == id).update(quantity = 0,
-                                           comments = "%sQuantity was: %s" % (inv_item_table.comments, trackTotal))
+            db(tracktable.id == record_id).update(
+                        quantity = 0,
+                        comments = "%sQuantity was: %s" % (
+                                        inv_item_table.comments,
+                                        trackTotal,
+                                        ),
+                        )
         return True
 
     # -------------------------------------------------------------------------
@@ -3520,7 +3566,8 @@ S3.timeline.now="''', now.isoformat(), '''"
             return output
 
         else:
-            raise HTTP(501, "bad method")
+            r.error(405, current.ERROR.BAD_METHOD)
+
 # =============================================================================
 def inv_tabs(r):
     """
@@ -3950,7 +3997,7 @@ def inv_send_rheader(r):
                                                     args = [record.id]
                                                     ),
                                         _id = "send_process",
-                                        _class = "action-btn"
+                                        _class = "action-btn",
                                         )
                                       )
 
@@ -3972,21 +4019,21 @@ def inv_send_rheader(r):
                     #                           ))
 
             elif status == SHIP_STATUS_RETURNING:
-                    if cnt > 0:
-                        action.append(A(T("Complete Returns"),
-                                        _href = URL(c = "inv",
-                                                    f = "return_process",
-                                                    args = [record.id]
-                                                    ),
-                                        _id = "return_process",
-                                        _class = "action-btn"
-                                        )
-                                      )
-                        s3.jquery_ready.append('''S3.confirmClick("#return_process","%s")''' \
-                            % T("Do you want to complete the return process?") )
-                    else:
-                        msg = T("You need to check all item quantities before you can complete the return process")
-                        rfooter.append(SPAN(msg))
+                if cnt > 0:
+                    action.append(A(T("Complete Returns"),
+                                    _href = URL(c = "inv",
+                                                f = "return_process",
+                                                args = [record.id]
+                                                ),
+                                    _id = "return_process",
+                                    _class = "action-btn"
+                                    )
+                                  )
+                    s3.jquery_ready.append('''S3.confirmClick("#return_process","%s")''' \
+                        % T("Do you want to complete the return process?") )
+                else:
+                    msg = T("You need to check all item quantities before you can complete the return process")
+                    rfooter.append(SPAN(msg))
             elif status != SHIP_STATUS_CANCEL:
                 if status == SHIP_STATUS_SENT:
                     jappend = s3.jquery_ready.append
@@ -4134,7 +4181,7 @@ def inv_recv_rheader(r):
                                                                 ).first()
             try:
                 org_id = site.organisation_id
-            except:
+            except AttributeError:
                 org_id = None
             logo = s3db.org_organisation_logo(org_id)
             rData = TABLE(TR(TD(T(current.deployment_settings.get_inv_recv_form_name()),
@@ -4389,7 +4436,7 @@ class S3InventoryAdjustModel(S3Model):
                          5 : T("Found"),
                          6 : T("Transfer Ownership"),
                          7 : T("Issued without Record"),
-                         7 : T("Distributed without Record"),
+                         8 : T("Distributed without Record"),
                          }
 
         # CRUD strings
@@ -4438,12 +4485,14 @@ class S3InventoryAdjustModel(S3Model):
                      Field("old_quantity", "double", notnull=True,
                            default = 0,
                            label = T("Original Quantity"),
+                           represent = lambda v: \
+                                       IS_FLOAT_AMOUNT.represent(v, precision=2),
                            writable = False,
                            ),
                      Field("new_quantity", "double",
                            label = T("Revised Quantity"),
                            represent = self.qnty_adj_repr,
-                           requires = IS_NOT_EMPTY(),
+                           requires = IS_FLOAT_AMOUNT(minimum=0.0),
                            ),
                      Field("reason", "integer",
                            default = 1,
@@ -4543,9 +4592,10 @@ class S3InventoryAdjustModel(S3Model):
         """
 
         if value is None:
-            return B(value)
+            # We want the word "None" here, not just a bold dash
+            return B(T("None"))
         else:
-            return value
+            return IS_FLOAT_AMOUNT.represent(value, precision=2)
 
     # ---------------------------------------------------------------------
     @staticmethod
@@ -4556,12 +4606,12 @@ class S3InventoryAdjustModel(S3Model):
            created. If needed, extra adj_item records can be created later.
         """
 
-        id = form.vars.id
+        record_id = form.vars.id
         db = current.db
         inv_item_table = db.inv_inv_item
         adjitemtable = db.inv_adj_item
         adjtable = db.inv_adj
-        adj_rec = adjtable[id]
+        adj_rec = adjtable[record_id]
         if adj_rec.category == 1:
             site_id = form.vars.site_id
             # Only get inv. item with a positive quantity
@@ -4572,7 +4622,7 @@ class S3InventoryAdjustModel(S3Model):
             for inv_item in row:
                 # add an adjustment item record
                 adjitemtable.insert(reason = 0,
-                                    adj_id = id,
+                                    adj_id = record_id,
                                     inv_item_id = inv_item.id, # original source inv_item
                                     item_id = inv_item.item_id, # the supply item
                                     item_pack_id = inv_item.item_pack_id,
@@ -4590,69 +4640,78 @@ class S3InventoryAdjustModel(S3Model):
 
     # ---------------------------------------------------------------------
     @staticmethod
-    def inv_adj_represent(id, row=None, show_link=True):
+    def inv_adj_represent(record_id, row=None, show_link=True):
         """
             Represent an Inventory Adjustment
         """
 
         if row:
             table = current.db.inv_adj
-        elif not id:
+        elif not record_id:
             return current.messages["NONE"]
         else:
             db = current.db
             table = db.inv_adj
-            row = db(table.id == id).select(table.adjustment_date,
-                                            table.adjuster_id,
-                                            limitby=(0, 1)).first()
+            row = db(table.id == record_id).select(table.adjustment_date,
+                                                   table.adjuster_id,
+                                                   limitby=(0, 1),
+                                                   ).first()
 
         try:
-            repr = "%s - %s" % (table.adjuster_id.represent(row.adjuster_id),
-                                table.adjustment_date.represent(row.adjustment_date)
-                                )
-        except:
+            reprstr = "%s - %s" % (
+                    table.adjuster_id.represent(row.adjuster_id),
+                    table.adjustment_date.represent(row.adjustment_date),
+                    )
+        except AttributeError:
+            # Record not found, or not all required fields in row
             return current.messages.UNKNOWN_OPT
         else:
             if show_link:
-                return SPAN(repr)
+                return SPAN(reprstr)
             else:
-                return repr
+                return reprstr
 
     # ---------------------------------------------------------------------
     @staticmethod
-    def inv_adj_item_represent(id, row=None, show_link=True):
+    def inv_adj_item_represent(record_id, row=None, show_link=True):
         """
             Represent an Inventory Adjustment Item
         """
 
         if row:
             table = current.db.inv_adj_item
-        elif not id:
+        elif not record_id:
             return current.messages["NONE"]
         else:
             db = current.db
             table = db.inv_adj_item
-            row = db(table.id == id).select(table.item_id,
-                                            table.old_quantity,
-                                            table.new_quantity,
-                                            table.item_pack_id,
-                                            limitby=(0, 1)).first()
+            row = db(table.id == record_id).select(table.item_id,
+                                                   table.old_quantity,
+                                                   table.new_quantity,
+                                                   table.item_pack_id,
+                                                   limitby = (0, 1),
+                                                   ).first()
         changed_quantity = 0
         try:
             if row.new_quantity and row.old_quantity:
                 changed_quantity = row.new_quantity - row.old_quantity
-            repr = "%s:%s %s" % (table.item_id.represent(row.item_id,
-                                                         show_link=show_link),
-                                 changed_quantity,
-                                 table.item_pack_id.represent(row.item_pack_id),
-                                 )
-        except:
+            item_id = row.item_id
+            pack_id = row.item_pack_id
+        except AttributeError:
+            # Item not found, or not all required fields in row
             return current.messages.UNKNOWN_OPT
         else:
+            reprstr = "%s:%s %s" % (
+                        table.item_id.represent(item_id,
+                                                show_link = show_link,
+                                                ),
+                        changed_quantity,
+                        table.item_pack_id.represent(pack_id),
+                        )
             if show_link:
-                return SPAN(repr)
+                return SPAN(reprstr)
             else:
-                return repr
+                return reprstr
 
 # =============================================================================
 def inv_item_total_weight(row):
@@ -5017,7 +5076,7 @@ class inv_InvItemRepresent(S3Represent):
         super(inv_InvItemRepresent, self).__init__(lookup = "inv_inv_item")
 
     # -------------------------------------------------------------------------
-    def lookup_rows(self, key, values, fields=[]):
+    def lookup_rows(self, key, values, fields=None):
         """
             Custom rows lookup
 
@@ -5072,7 +5131,7 @@ class inv_InvItemRepresent(S3Represent):
 
         ctn = stringify(iitem.item_source_no)
         org = itable.owner_org_id.represent(iitem.owner_org_id)
-        bin = stringify(iitem.bin)
+        item_bin = stringify(iitem.bin)
 
         expires = iitem.expiry_date
         if expires:
@@ -5085,7 +5144,7 @@ class inv_InvItemRepresent(S3Represent):
 
         items = []
         append = items.append
-        for string in [sitem.name, expires, ctn, org, bin]:
+        for string in [sitem.name, expires, ctn, org, item_bin]:
             if string and string != NONE:
                 append(string)
                 append(" - ")

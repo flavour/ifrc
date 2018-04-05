@@ -18,8 +18,8 @@ def config(settings):
     settings.base.system_name_short = T("IMS")
 
     # PrePopulate data
-    #settings.base.prepopulate = ("skeleton", "default/users")
-    settings.base.prepopulate += ("SCPHIMS", "SCPHIMS/Demo", "default/users")
+    settings.base.prepopulate += ("SCPHIMS",)
+    settings.base.prepopulate_demo += ("SCPHIMS/Demo",)
 
     # Theme (folder to use for views/layout.html)
     settings.base.theme = "SCPHIMS"
@@ -780,6 +780,12 @@ def config(settings):
                                                         "plural": "Household Members",
                                                         "joinby": "person_id",
                                                         },
+                                pr_person_details = {"label": "Age and Disability",
+                                                     "joinby": "person_id",
+                                                     "multiple": False,
+                                                     },
+                                )
+            s3db.add_components("pr_pentity",
                                 pr_address = {"label": "Address",
                                               "joinby": "pe_id",
                                               "multiple": False,
@@ -788,16 +794,10 @@ def config(settings):
                                               "joinby": "pe_id",
                                               "multiple": False,
                                               },
-                                pr_person_details = {"label": "Age and Disability",
-                                                     "joinby": "person_id",
-                                                     "multiple": False,
-                                                     },
                                 )
-            # Attach components (we're past resource initialization)
-            attach = r.resource._attach
-            hooks = s3db.get_components("pr_person", names=("dvr_case", "household_member", "address", "contact", "person_details"))
-            for component_alias in hooks:
-                attach(component_alias, hooks[component_alias])
+            # Reset components where multiple was changed
+            # (we're past resource initialization)
+            r.resource.components.reset(("address", "contact"))
 
         crud_fields = [#"dvr_case.date",
                        "first_name",

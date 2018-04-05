@@ -1358,6 +1358,166 @@ class IS_DYNAMIC_FIELDTYPE_Test(unittest.TestCase):
         assertNotEqual(error, None)
 
 # =============================================================================
+class IS_FLOAT_AMOUNT_Tests(unittest.TestCase):
+    """
+        Tests for the IS_FLOAT_AMOUNT validator
+    """
+
+    # -------------------------------------------------------------------------
+    def setUp(self):
+
+        settings = current.deployment_settings
+
+        self.dot = settings.get_L10n_decimal_separator()
+        self.sep = settings.get_L10n_thousands_separator()
+        self.grp = settings.get_L10n_thousands_grouping()
+
+        settings.L10n.decimal_separator = ","
+        settings.L10n.thousands_separator = " "
+        settings.L10n.thousands_grouping = 3
+
+    def tearDown(self):
+
+        settings = current.deployment_settings
+
+        settings.L10n.decimal_separator = self.dot
+        settings.L10n.thousands_separator = self.sep
+        settings.L10n.thousands_grouping = self.grp
+
+    # -------------------------------------------------------------------------
+    def test_representation(self):
+        """ Test the IS_FLOAT_AMOUNT representation function """
+
+        represent = IS_FLOAT_AMOUNT.represent
+
+        samples = ((None, "", None, True),
+                   (0.0, "0", 0, True),
+                   (0.00325, "0,00", 2, True),
+                   (198.05, "198,05", 2, True),
+                   (1305.0, "1 305", 0, True),
+                   (123456789012.0, "123 456 789 012,000", 3, True),
+                   (0, "0", None, True),
+                   (1305, "1 305,00", 2, True),
+                   (987654321098, "987 654 321 098,00", 2, True),
+                   (-0, "0,00", 2, True),
+                   (-1305.730, "-1 305,73", None, True),
+                   (-123456789012345.0, "-123 456 789 012 345", 2, False),
+                   )
+
+        assertEqual = self.assertEqual
+        for number, expected, precision, fixed in samples:
+            assertEqual(represent(number,
+                                  precision = precision,
+                                  fixed = fixed,
+                                  ),
+                        expected,
+                        )
+
+    # -------------------------------------------------------------------------
+    def test_validation(self):
+        """ Test the IS_FLOAT_AMOUNT validation function """
+
+        validate = IS_FLOAT_AMOUNT()
+
+        samples = (("123 456 789 012,00", 123456789012.0),
+                   ("0,00", 0.0),
+                   ("1 305,00", 1305.0),
+                   (12.345, 12.345),
+                   )
+
+        assertEqual = self.assertEqual
+        for inputstr, expected in samples:
+            value, error = validate(inputstr)
+            assertEqual(value, expected)
+            assertEqual(error, None)
+
+    # -------------------------------------------------------------------------
+    def test_ambiguous_validation(self):
+        """ Test the ambiguous validation """
+
+        settings = current.deployment_settings
+
+        settings.L10n.decimal_separator = ","
+        settings.L10n.thousands_separator = "."
+        settings.L10n.thousands_grouping = 3
+
+        validate = IS_FLOAT_AMOUNT()
+
+        samples = (("123.456.789.012,00", 123456789012.0),
+                   ("0,00", 0.0),
+                   (u"1,305.234", 1.305234),
+                   (12.345, 12.345),
+                   )
+
+        assertEqual = self.assertEqual
+        for inputstr, expected in samples:
+            value, error = validate(inputstr)
+            assertEqual(value, expected)
+            assertEqual(error, None)
+
+# =============================================================================
+class IS_INT_AMOUNT_Tests(unittest.TestCase):
+    """
+        Tests for the IS_INT_AMOUNT validator
+    """
+
+    # -------------------------------------------------------------------------
+    def setUp(self):
+
+        settings = current.deployment_settings
+
+        self.sep = settings.get_L10n_thousands_separator()
+        self.grp = settings.get_L10n_thousands_grouping()
+
+        settings.L10n.thousands_separator = ","
+        settings.L10n.thousands_grouping = 3
+
+    def tearDown(self):
+
+        settings = current.deployment_settings
+
+        settings.L10n.thousands_separator = self.sep
+        settings.L10n.thousands_grouping = self.grp
+
+    # -------------------------------------------------------------------------
+    def test_representation(self):
+        """ Test the IS_INT_AMOUNT representation function """
+
+        represent = IS_INT_AMOUNT.represent
+        precision = 2
+        fixed = True
+
+        samples = ((None, ""),
+                   (0, "0"),
+                   (-0, "0"),
+                   (-12555, "-12,555"),
+                   (1305, "1,305"),
+                   (1234567.89, "1,234,567"),
+                   (123456789012, "123,456,789,012"),
+                   (1234567890123456789L, "1,234,567,890,123,456,789"),
+                   )
+
+        for number, expected in samples:
+            self.assertEqual(represent(number), expected)
+
+    # -------------------------------------------------------------------------
+    def test_validation(self):
+        """ Test the IS_INT_AMOUNT validation function """
+
+        validate = IS_INT_AMOUNT()
+
+        samples = (("123,456,789,012", 123456789012L),
+                   ("0", 0),
+                   ("993667", 993667),
+                   )
+
+        assertEqual = self.assertEqual
+        for inputstr, expected in samples:
+            value, error = validate(inputstr)
+            assertEqual(value, expected)
+            assertEqual(error, None)
+
+# =============================================================================
 if __name__ == "__main__":
 
     run_suite(
@@ -1370,6 +1530,8 @@ if __name__ == "__main__":
         IS_JSONS3_Tests,
         IS_DYNAMIC_FIELDNAME_Test,
         IS_DYNAMIC_FIELDTYPE_Test,
+        IS_FLOAT_AMOUNT_Tests,
+        IS_INT_AMOUNT_Tests,
     )
 
 # END ========================================================================

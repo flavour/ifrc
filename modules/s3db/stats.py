@@ -1419,7 +1419,7 @@ class S3StatsPeopleModel(S3Model):
                      Field("value", "integer",
                            label = T("Number of People"),
                            represent = IS_INT_AMOUNT.represent,
-                           requires = IS_INT_IN_RANGE(0, 999999),
+                           requires = IS_INT_IN_RANGE(0, None),
                            ),
                      self.gis_location_id(label = T("Address"),
                                           ),
@@ -1693,7 +1693,7 @@ class stats_SourceRepresent(S3Represent):
         return labels
 
     # -------------------------------------------------------------------------
-    def custom_lookup_rows(self, key, values, fields=[]):
+    def custom_lookup_rows(self, key, values, fields=None):
         """
             Custom lookup method for site rows, does a
             left join with any instance_types found. Parameters

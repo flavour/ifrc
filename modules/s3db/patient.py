@@ -203,9 +203,9 @@ class S3PatientModel(S3Model):
                                     ),
                           #person_id(label = T("Home Relative")),
                           self.gis_location_id(
-                              label = T("Home City"),
-                              requires = IS_LOCATION(level="L2"),
-                              widget = S3LocationAutocompleteWidget(level="L2"),
+                              label = T("Home Location"),
+                              requires = IS_LOCATION(),
+                              widget = S3LocationAutocompleteWidget(),
                               ),
                           Field("phone",
                                 label = T("Home Phone Number"),
@@ -238,7 +238,7 @@ class patient_PatientRepresent(S3Represent):
         Representation of Patient names by their full name
     """
 
-    def lookup_rows(self, key, values, fields=[]):
+    def lookup_rows(self, key, values, fields=None):
         """
             Custom lookup method for Patient names
 

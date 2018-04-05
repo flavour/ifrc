@@ -56,37 +56,85 @@ class S3Config(Storage):
                  }
 
     # Formats from static/scripts/ui/i18n converted to Python style
-    date_formats = {"ar": "%d/%m/%Y",
+    date_formats = {"af": "%d/%m/%Y",
+                    "ar": "%d/%m/%Y",
+                    "ar-dz": "%d/%m/%Y",
+                    "az": "%d.%m.%Y",
+                    "be": "%d.%m.%Y",
+                    "bg": "%d.%m.%Y",
                     "bs": "%d.%m.%Y",
+                    "ca": "%d/%m/%Y",
+                    "cs": "%d.%m.%Y",
+                    "cy-gb": "%d/%m/%Y",
+                    "da": "%d-%m-%Y",
                     "de": "%d.%m.%Y",
                     #"dv": "",
                     "el": "%d/%m/%Y",
+                    "eo": "%d/%m/%Y",
                     "es": "%d/%m/%Y",
+                    "et": "%d.%m.%Y",
+                    "eu": "%Y-%m-%d",
+                    "fa": "%Y/%m/%d",
+                    "fi": "%d.%m.%Y",
+                    "fo": "%d-%m-%Y",
                     "fr": "%d/%m/%Y",
+                    "fr-ca": "%Y-%m-%d",
+                    "fr-ch": "%d.%m.%Y",
+                    "gl": "%d/%m/%Y",
+                    "he": "%d/%m/%Y",
+                    "hi": "%d/%m/%Y",
                     "hr": "%d.%m.%Y",
+                    "hu": "%Y.%m.%d.",
+                    "hy": "%d.%m.%Y",
+                    "id": "%d/%m/%Y",
+                    "is": "%d.%m.%Y",
                     "it": "%d/%m/%Y",
                     "ja": "%Y/%m/%d",
+                    "ka": "%d-%m-%Y",
+                    "kk": "%d.%m.%Y",
                     "km": "%d-%m-%Y",
                     "ko": "%Y-%m-%d",
+                    "ky": "%d.%m.%Y",
+                    "lb": "%d.%m.%Y",
+                    "lt": "%Y-%m-%d",
+                    "lv": "%d.%m.%Y",
+                    "mk": "%d.%m.%Y",
+                    "ml": "%d/%m/%Y",
                     #"mn": "",
+                    "ms": "%d/%m/%Y",
                     #"my": "",
+                    "nb": "%d.%m.%Y",
                     "ne": "%d/%m/%Y",
+                    "nl": "%d-%m-%Y",
+                    "nl-be": "%d/%m/%Y",
+                    "nn": "%d.%m.%Y",
+                    "no": "%d.%m.%Y",
+                    "pl": "%d.%m.%Y",
                     "prs": "%Y/%m/%d",
                     "ps": "%Y/%m/%d",
                     "pt": "%d/%m/%Y",
                     "pt-br": "%d/%m/%Y",
+                    "rm": "%d/%m/%Y",
+                    "ro": "%d.%m.%Y",
                     "ru": "%d.%m.%Y",
                     #"si": "",
+                    "sk": "%d.%m.%Y",
+                    "sl": "%d.%m.%Y",
+                    "sq": "%d.%m.%Y",
                     "sr": "%d.%m.%Y",
+                    "sr-sr": "%d.%m.%Y",
                     "sv": "%Y-%m-%d",
                     "ta": "%d/%m/%Y",
                     #"tet": "",
                     "th": "%d/%m/%Y",
+                    "tj": "%d.%m.%Y",
                     #"tl": "",
                     "tr": "%d.%m.%Y",
+                    "uk": "%d.%m.%Y",
                     #"ur": "",
                     "vi": "%d/%m/%Y",
                     "zh-cn": "%Y-%m-%d",
+                    "zh-hk": "%Y-%m-%d",
                     "zh-tw": "%Y/%m/%d",
                     }
 
@@ -118,6 +166,7 @@ class S3Config(Storage):
         self.base = Storage()
         # Allow templates to append rather than replace
         self.base.prepopulate = ["default/base"]
+        self.base.prepopulate_demo = ["default/users"]
         self.cap = Storage()
         self.cms = Storage()
         self.cr = Storage()
@@ -846,14 +895,11 @@ class S3Config(Storage):
 
     def get_base_prepopulate(self):
         """ Whether to prepopulate the database &, if so, which set of data to use for this """
-        base = self.base
-        setting = base.get("prepopulate", 1)
-        if setting:
-            options = base.get("prepopulate_options")
-            return self.resolve_profile(options, setting)
-        else:
-            # Pre-populate off (production mode), don't bother resolving
-            return 0
+        return self.base.get("prepopulate", 1)
+
+    def get_base_prepopulate_demo(self):
+        """For demo sites, which additional options to add to the list """
+        return self.base.get("prepopulate_demo", 0)
 
     def get_base_guided_tour(self):
         """ Whether the guided tours are enabled """
@@ -5027,96 +5073,6 @@ class S3Config(Storage):
     # -------------------------------------------------------------------------
     # Utilities
     #
-    def resolve_profile(self, options, setting, resolved=None):
-        """
-            Resolve option profile (e.g. prepopulate)
-
-            @param options: the template options as dict like:
-                            {"name": ("item1", "item2",...),...},
-                            The "mandatory" list will always be
-                            added, while the "default" list will
-                            be added only if setting is None.
-            @param setting: the active setting, as single item
-                            or tuple/list, items with a "template:"
-                            prefix (like "template:name") refer to
-                            the respective list in options
-            @param resolved: internal (for recursion)
-
-            @example:
-
-                # Template provides:
-                settings.base.prepopulate_options = {
-                    "mandatory": "locations/intl",
-                    "brazil": "locations/brazil",
-                    "germany": "locations/germany",
-                    "default": "default",
-                    "demo": ("template:default", "demo/users"),
-                }
-
-                # Set up a demo for Brazil:
-                settings.base.prepopulate = ("template:brazil", "template:demo")
-                # result:
-                ["locations/intl", "locations/brazil", "default", "demo/users"]
-
-                # Set up a production instance for Germany:
-                settings.base.prepopulate = ("template:germany", "template:default")
-                # result:
-                ["locations/intl", "locations/germany", "default"]
-
-                # Default setup:
-                settings.base.prepopulate = None
-                # result:
-                ["locations/intl", "default"]
-
-                # Custom options:
-                settings.base.prepopulate = ["template:demo", "IFRC/Train"]
-                # result:
-                ["locations/intl", "default", "demo/users", "IFRC/Train"]
-
-            @note: the result list is deduplicated, maintaining the original
-                   order by first occurrence
-        """
-
-        default = resolved is None
-        if default:
-            resolved = set()
-        seen = resolved.add
-
-        resolve = self.resolve_profile
-        result = []
-
-        def append(item):
-            if item not in resolved:
-                seen(item)
-                if isinstance(item, basestring) and item[:9] == "template:":
-                    if options:
-                        option = options.get(item[9:])
-                        if option:
-                            result.extend(resolve(options,
-                                                  option,
-                                                  resolved=resolved,
-                                                  ))
-                else:
-                    result.append(item)
-            return
-
-        if default:
-            if "default/base" in setting:
-                # Always first
-                append("default/base")
-            if options:
-                # Always second
-                append("template:mandatory")
-        if setting is not None:
-            if not isinstance(setting, (tuple, list)):
-                setting = (setting,)
-            for item in setting:
-                append(item)
-        elif default:
-            append("template:default")
-        return result
-
-    # -------------------------------------------------------------------------
     def __lazy(self, subset, key, default=None):
         """
             Resolve a "lazy" setting: when the config setting is callable,

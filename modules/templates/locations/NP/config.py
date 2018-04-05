@@ -25,7 +25,7 @@ def config(settings):
     # Default Country Code for telephone numbers
     settings.L10n.default_country_code = 977
 
-    settings.fin.currencies["NPR"] = "Nepalese Rrupee"
+    settings.fin.currencies["NPR"] = "Nepalese Rupee"
     settings.fin.currency_default = "NPR"
 
 # END =========================================================================

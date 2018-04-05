@@ -39,7 +39,7 @@ def is_affiliated():
     else:
         table = auth.settings.table_user
         auth_user = db(table.id == auth.user.id).select(table.organisation_id,
-                                                        limitby=(0, 1)
+                                                        limitby=(0, 1),
                                                         ).first()
         if auth_user and auth_user.organisation_id:
             return True
@@ -90,7 +90,8 @@ def marker_fn(record):
                                               mtable.height,
                                               mtable.width,
                                               cache=s3db.cache,
-                                              limitby=(0, 1)).first()
+                                              limitby=(0, 1),
+                                              ).first()
     return marker
 
 # -----------------------------------------------------------------------------
@@ -223,7 +224,7 @@ def req_controller(template = False):
                 iitable = s3db.inv_inv_item
                 inv_item = db(iitable.id == get_vars.inv_item_id).select(iitable.site_id,
                                                                          iitable.item_id,
-                                                                         limitby=(0, 1)
+                                                                         limitby=(0, 1),
                                                                          ).first()
                 site_id = inv_item.site_id
                 # @ToDo: Check Permissions & Avoid DB updates in GETs
@@ -238,8 +239,6 @@ def req_controller(template = False):
                 table.site_id.writable = False
                 if r.http == "POST":
                     del r.get_vars["req.site_id"]
-
-            table.requester_id.represent = requester_represent
 
             # Set Fields and Labels depending on type
             if req_type:
@@ -311,7 +310,7 @@ def req_controller(template = False):
                     s3task.configure_tasktable_crud(
                         function="req_add_from_template",
                         args = [r.id],
-                        vars = dict(user_id = auth.user is not None and auth.user.id or 0),
+                        vars = {"user_id": 0 if auth.user is None else auth.user.id},
                         period = 86400, # seconds, so 1 day
                         )
                     db.scheduler_task.timeout.writable = False
@@ -341,9 +340,9 @@ def req_controller(template = False):
                                                          name = tag,
                                                          multiple = False,
                                                          fields = [("", "value")],
-                                                         filterby = dict(field = "tag",
-                                                                         options = tag,
-                                                                         )
+                                                         filterby = {"field": "tag",
+                                                                     "options": tag,
+                                                                     },
                                                          ))
                             add_component(tablename,
                                           org_organisation_tag = {"name": tag,
@@ -427,9 +426,11 @@ def req_controller(template = False):
                                        )
 
             elif r.component.name == "commit":
+
                 table = r.component.table
                 record = r.record
                 record_id = record.id
+
                 stable = s3db.org_site
                 rtype = record.type
 
@@ -445,23 +446,51 @@ def req_controller(template = False):
                         # Allow commitments to be added when doing so as a component
                         insertable = True
 
-                # Commits belonging to this request
-                rsites = []
-                query = (table.deleted == False) & (table.req_id == record_id)
-                req_sites = db(query).select(table.site_id)
-                for req_site in req_sites:
-                    rsites.append(req_site.site_id)
+                # Limit site_id to permitted sites which have not
+                # yet committed to this request
+                current_site = None
+                if r.component_id:
+                    query = (table.id == r.component_id) & \
+                            (table.deleted == False)
+                    commit = db(query).select(table.site_id,
+                                              limitby = (0, 1),
+                                              ).first()
+                    if commit:
+                        current_site = commit.site_id
 
-                # All the sites
-                commit_sites = db((stable.deleted == False)).select(stable.id,
-                                                                  stable.code)
+                allowed_sites = auth.permitted_facilities(redirect_on_error=False)
+                if current_site and current_site not in allowed_sites:
+                    table.site_id.writable = False
+                else:
+                    # Committing sites
+                    query = (table.req_id == record_id) & \
+                            (table.deleted == False)
+                    commits = db(query).select(table.site_id)
+                    committing_sites = set(c.site_id for c in commits)
 
-                # Sites which have not committed to this request yet
-                site_opts = {}
-                for site in commit_sites:
-                    if (site.id not in site_opts) and (site.id not in rsites):
-                        site_opts[site.id] = site.code
-                table.site_id.requires = IS_IN_SET(site_opts)
+                    # Acceptable sites
+                    acceptable = set(allowed_sites) - committing_sites
+                    if current_site:
+                        acceptable.add(current_site)
+                    if acceptable:
+                        query = (stable.site_id.belongs(acceptable)) & \
+                                (stable.deleted == False)
+                        sites = db(query).select(stable.id,
+                                                 stable.code,
+                                                 orderby = stable.code,
+                                                 )
+                        site_opts = OrderedDict((s.id, s.code) for s in sites)
+                        table.site_id.requires = IS_IN_SET(site_opts)
+                    else:
+                        if r.method == "create":
+                            # Can't commit if we have no acceptable sites
+                            # TODO do not redirect if site is not required,
+                            #      e.g. org-only commits of skills
+                            error_msg=T("You do not have permission for any facility to make a commitment.")
+                            current.session.error = error_msg
+                            redirect(r.url(component="", method=""))
+                        else:
+                            insertable = False
 
                 s3db.configure(table,
                                # Don't want filter_widgets in the component view
@@ -470,9 +499,6 @@ def req_controller(template = False):
                                )
 
                 if req_type == 1: # Items
-                    # Limit site_id to facilities the user has permissions for
-                    auth.permitted_facilities(table=r.table,
-                                              error_msg=T("You do not have permission for any facility to make a commitment."))
                     if r.interactive:
                         # Dropdown not Autocomplete
                         itable = s3db.req_commit_item
@@ -491,7 +517,7 @@ $.filterOptionsS3({
  'target':{'alias':'commit_item','name':'item_pack_id'},
  'scope':'row',
  'lookupPrefix':'req',
- 'lookupResource':'req_item_packs.json',
+ 'lookupResource':'req_item_packs',
  'lookupKey':'req_item_id',
  'lookupField':'id',
  'msgNoRecords':i18n.no_packs,
@@ -625,14 +651,13 @@ $.filterOptionsS3({
                     if r.component.name == "req_item" and \
                        settings.get_req_prompt_match():
                         s3.actions.append(
-                                dict(label = s3_unicode(T("Request from Facility")).encode("utf8"),
-                                     url = URL(c = "req",
-                                               f = "req_item_inv_item",
-                                               args = ["[id]"]
-                                               ),
-                                     _class = "action-btn",
-                                     )
-                            )
+                            {"label": s3_str(T("Request from Facility")),
+                             "url": URL(c = "req",
+                                        f = "req_item_inv_item",
+                                        args = ["[id]"],
+                                        ),
+                             "_class": "action-btn",
+                             })
 
                     elif r.component.name == "commit":
                         if "form" in output:
@@ -655,32 +680,40 @@ $.filterOptionsS3({
                             elif r.record.type == 1:
                                 # Items
                                 s3.actions.append(
-                                              dict(label = s3_unicode(T("Prepare Shipment")).encode("utf8"),
-                                                   url = URL(c="req", f="send_commit",
-                                                             args = ["[id]"]),
-                                                   _class = "action-btn send-btn",
-                                                   )
-                                           )
+                                      {"label": s3_str(T("Prepare Shipment")),
+                                       "url": URL(c = "req",
+                                                  f = "send_commit",
+                                                  args = ["[id]"],
+                                                  ),
+                                       "_class": "action-btn send-btn",
+                                       })
                                 s3.jquery_ready.append(
 '''S3.confirmClick('.send-btn','%s')''' % T("Are you sure you want to send this shipment?"))
 
                     elif r.component.alias == "job":
                         record_id = r.id
                         s3.actions = [
-                            dict(label = s3_unicode(T("Open")).encode("utf8"),
-                                 url = URL(c="req", f="req_template",
-                                           args=[record_id, "job", "[id]"]),
-                                 ),
-                            dict(label = s3_unicode(T("Reset")).encode("utf8"),
-                                 url = URL(c="req", f="req_template",
-                                           args=[record_id, "job", "[id]", "reset"]),
-                                 _class = "action-btn",
-                                 ),
-                            dict(label = s3_unicode(T("Run Now")).encode("utf8"),
-                                 url = URL(c="req", f="req_template",
-                                           args=[record_id, "job", "[id]", "run"]),
-                                 _class = "action-btn",
-                                 ),
+                            {"label": s3_str(T("Open")),
+                             "url": URL(c="req",
+                                        f="req_template",
+                                        args=[record_id, "job", "[id]"],
+                                        ),
+                             "_class": "action-btn",
+                             },
+                            {"label": s3_str(T("Reset")),
+                             "url": URL(c="req",
+                                        f="req_template",
+                                        args=[record_id, "job", "[id]", "reset"],
+                                        ),
+                             "_class": "action-btn",
+                             },
+                            {"label": s3_str(T("Run Now")),
+                             "url": URL(c="req",
+                                        f="req_template",
+                                        args=[record_id, "job", "[id]", "run"],
+                                        ),
+                             "_class": "action-btn",
+                             },
                             ]
 
                 else:
@@ -711,22 +744,24 @@ $.filterOptionsS3({
                         rows = db(query).select(table.id)
                         restrict = [str(row.id) for row in rows]
                         s3.actions.append(
-                            dict(label = s3_unicode(s3.crud_labels.DELETE).encode("utf8"),
-                                 url = URL(c="req", f="req",
-                                           args=["[id]", "delete"]),
-                                 _class="delete-btn",
-                                 restrict = restrict,
-                                 )
-                            )
+                            {"label": s3_str(s3.crud_labels.DELETE),
+                             "url": URL(c = "req",
+                                        f = "req",
+                                        args = ["[id]", "delete"],
+                                        ),
+                             "_class": "delete-btn",
+                             "restrict": restrict,
+                             })
                         if not template and settings.get_req_use_commit():
                             # This is appropriate to both Items and People
                             s3.actions.append(
-                                dict(label = s3_unicode(T("Commit")).encode("utf8"),
-                                     url = URL(c="req", f="req",
-                                               args=["[id]", "commit_all"]),
-                                     _class = "action-btn commit-btn",
-                                     )
-                                )
+                                {"label": s3_str(T("Commit")),
+                                 "url": URL(c = "req",
+                                            f = "req",
+                                            args = ["[id]", "commit_all"],
+                                            ),
+                                 "_class": "action-btn commit-btn",
+                                 })
                             s3.jquery_ready.append(
 '''S3.confirmClick('.commit-btn','%s')''' % T("Do you want to commit to this request?"))
                         # This is only appropriate for item requests
@@ -734,33 +769,36 @@ $.filterOptionsS3({
                         #rows = db(query).select(table.id)
                         #restrict = [str(row.id) for row in rows]
                         #s3.actions.append(
-                        #    dict(label = s3_unicode(T("View Items")).encode("utf8"),
-                        #         url = URL(c="req", f="req",
-                        #                   args=["[id]", "req_item"]),
-                        #         _class = "action-btn",
-                        #         restrict = restrict,
-                        #         )
-                        #    )
+                        #    {"label": s3_str(T("View Items")),
+                        #     "url": URL(c = "req",
+                        #                f = "req",
+                        #                args = ["[id]", "req_item"],
+                        #                ),
+                        #     "_class": "action-btn",
+                        #     "restrict": restrict,
+                        #     })
                         # This is only appropriate for people requests
                         #query = (table.type == 3)
                         #rows = db(query).select(table.id)
                         #restrict = [str(row.id) for row in rows]
                         #s3.actions.append(
-                        #    dict(label = s3_unicode(T("View Skills")).encode("utf8"),
-                        #         url = URL(c="req", f="req",
-                        #                   args=["[id]", "req_skill"]),
-                        #         _class = "action-btn",
-                        #         restrict = restrict,
-                        #         )
-                        #    )
+                        #    {"label": s3_str(T("View Skills")),
+                        #     "url": URL(c = "req",
+                        #                f = "req",
+                        #                args = ["[id]", "req_skill"],
+                        #                ),
+                        #     "_class": "action-btn",
+                        #     "restrict": restrict,
+                        #     })
                         if settings.get_req_copyable():
                             s3.actions.append(
-                                dict(label = s3_unicode(T("Copy")).encode("utf8"),
-                                     url = URL(c="req", f="req",
-                                               args=["[id]", "copy_all"]),
-                                     _class = "action-btn copy_all",
-                                     )
-                                )
+                                {"label": s3_str(T("Copy")),
+                                 "url": URL(c = "req",
+                                            f = "req",
+                                            args = ["[id]", "copy_all"],
+                                            ),
+                                 "_class": "action-btn copy_all",
+                                 })
                             confirm = T("Are you sure you want to create a new request as a copy of this one?")
                             s3.jquery_ready.append('''S3.confirmClick('.copy_all','%s')''' % confirm)
                         req_types = settings.get_req_req_type()
@@ -777,29 +815,33 @@ $.filterOptionsS3({
                                     # All Requests are Items requests so no need to restrict
                                     restrict = None
                                 if settings.get_req_use_commit():
-                                    action = dict(label = s3_unicode(T("Send")).encode("utf8"),
-                                                  url = URL(c="req", f="req",
-                                                            args=["[id]", "commit_all", "send"]),
-                                                  _class = "action-btn send-btn dispatch",
-                                                  )
+                                    action = {"label": s3_str(T("Send")),
+                                              "url": URL(c = "req",
+                                                         f = "req",
+                                                         args = ["[id]", "commit_all", "send"],
+                                                         ),
+                                              "_class": "action-btn send-btn dispatch",
+                                              }
                                     if restrict is not None:
                                         action["restrict"] = restrict
                                     s3.actions.append(action)
                                     confirm = T("Are you sure you want to commit to this request and send a shipment?")
                                     s3.jquery_ready.append('''S3.confirmClick('.send-btn','%s')''' % confirm)
                                 elif auth.user and auth.user.site_id:
-                                    action = dict(# Better to force users to go through the Check process
-                                                  #label = s3_unicode(T("Send")).encode("utf8"),
-                                                  #url = URL(c="req", f="send_req",
-                                                  #          args=["[id]"],
-                                                  #          vars=dict(site_id=auth.user.site_id)
-                                                  #          ),
-                                                  label = s3_unicode(T("Check")).encode("utf8"),
-                                                  url = URL(c="req", f="req",
-                                                            args=["[id]", "check"],
-                                                            ),
-                                                  _class = "action-btn send-btn dispatch",
-                                                  )
+                                    action = {# Better to force users to go through the Check process
+                                              #"label": s3_str(T("Send")),
+                                              #"url": URL(c = "req",
+                                              #           f = "send_req",
+                                              #           args = ["[id]"],
+                                              #           vars = {"site_id": auth.user.site_id},
+                                              #           ),
+                                              "label": s3_str(T("Check")),
+                                              "url": URL(c = "req",
+                                                         f = "req",
+                                                         args = ["[id]", "check"],
+                                                         ),
+                                              "_class": "action-btn send-btn dispatch",
+                                              }
                                     if restrict is not None:
                                         action["restrict"] = restrict
                                     s3.actions.append(action)
@@ -817,12 +859,13 @@ $.filterOptionsS3({
                                     # All Requests are Skills requests so no need to restrict
                                     restrict = None
                                 if auth.user and auth.user.organisation_id:
-                                    action = dict(label = s3_unicode(T("Check")).encode("utf8"),
-                                                  url = URL(c="req", f="req",
-                                                            args=["[id]", "check"],
-                                                            ),
-                                                  _class = "action-btn",
-                                                  )
+                                    action = {"label": s3_str(T("Check")),
+                                              "url": URL(c = "req",
+                                                         f = "req",
+                                                         args = ["[id]", "check"],
+                                                         ),
+                                              "_class": "action-btn",
+                                              }
                                     if restrict is not None:
                                         action["restrict"] = restrict
                                     s3.actions.append(action)
@@ -846,63 +889,6 @@ $.filterOptionsS3({
     return s3_rest_controller("req", "req",
                               rheader = s3db.req_rheader,
                               )
-
-# =============================================================================
-def requester_represent(id, show_link=True):
-    """
-        Represent a Requester as Name + Tel#
-
-        @ToDo: Migrate to S3Represent
-    """
-
-    if not id:
-        return current.messages["NONE"]
-
-    if settings.has_module("hrm"):
-        has_hrm = True
-    else:
-        has_hrm = False
-
-    ptable = s3db.pr_person
-    ctable = s3db.pr_contact
-
-    query = (ptable.id == id)
-    left = ctable.on((ctable.pe_id == ptable.pe_id) & \
-                     (ctable.contact_method == "SMS"))
-    fields = [ptable.first_name,
-              ptable.middle_name,
-              ptable.last_name,
-              ctable.value,
-              ]
-    if has_hrm:
-        htable = s3db.hrm_human_resource
-        left = [left, htable.on(htable.person_id == ptable.id)]
-        fields.append(htable.type)
-    row = db(query).select(*fields,
-                           left=left,
-                           limitby=(0, 1)).first()
-
-    repr = s3_fullname(row.pr_person)
-    contact = row["pr_contact.value"]
-    if contact:
-        repr = "%s %s" % (repr, contact)
-    if show_link:
-        hr_type = row.get("hrm_human_resource.type")
-        if hr_type:
-            if hr_type == 1:
-                controller = "hrm"
-            else:
-                controller = "vol"
-        else:
-            controller = "pr"
-        request.extension = "html"
-        return A(repr,
-                 _href = URL(c = controller,
-                             f = "person",
-                             args = [id, "contacts"]
-                             )
-                 )
-    return repr
 
 # =============================================================================
 def req_item():
@@ -944,11 +930,13 @@ def req_item():
     output = s3_rest_controller("req", "req_item")
 
     if settings.get_req_prompt_match():
-        req_item_inv_item_btn = dict(url = URL(c="req", f="req_item_inv_item",
-                                               args=["[id]"]),
-                                     _class = "action-btn",
-                                     label = str(T("Request from Facility")),
-                                     )
+        req_item_inv_item_btn = {"label": s3_str(T("Request from Facility")),
+                                 "url": URL(c = "req",
+                                            f = "req_item_inv_item",
+                                            args = ["[id]"],
+                                            ),
+                                 "_class": "action-btn",
+                                 }
         if s3.actions:
             s3.actions.append(req_item_inv_item_btn)
         else:
@@ -982,7 +970,8 @@ def req_item_packs():
     response.headers["Content-Type"] = "application/json"
     return db(query).select(table.id,
                             table.name,
-                            table.quantity).json()
+                            table.quantity,
+                            ).json()
 
 # -----------------------------------------------------------------------------
 def req_item_inv_item():
@@ -1061,15 +1050,17 @@ def req_item_inv_item():
             output["items_alt"] = T("No Inventories currently have suitable alternative items in stock")
 
     response.view = "req/req_item_inv_item.html"
-    s3.actions = [dict(url = URL(c = request.controller,
-                                 f = "req",
-                                 args = [req_item.req_id, "req_item"],
-                                 vars = dict(req_item_id = req_item_id,
-                                              inv_item_id = "[id]")
-                                 ),
-                       _class = "action-btn",
-                       label = str(T("Request From")),
-                       )]
+    s3.actions = [{"label": s3_str(T("Request From")),
+                   "url": URL(c = request.controller,
+                              f = "req",
+                              args = [req_item.req_id, "req_item"],
+                              vars = {"req_item_id": req_item_id,
+                                      "inv_item_id": "[id]",
+                                      },
+                              ),
+                   "_class": "action-btn",
+                   }
+                  ]
 
     return output
 
@@ -1108,13 +1099,14 @@ def req_skill():
     # Post-process
     def postp(r, output):
         if r.interactive:
-            s3.actions = [
-                dict(url = URL(c="req", f="req",
-                               args=["req_skill", "[id]"]),
-                     _class = "action-btn",
-                     label = str(READ)
-                    )
-                ]
+            s3.actions = [{"label": s3_str(READ),
+                           "url": URL(c = "req",
+                                      f = "req",
+                                      args=["req_skill", "[id]"],
+                                      ),
+                           "_class": "action-btn",
+                           },
+                          ]
         return output
     s3.postp = postp
 
@@ -1251,7 +1243,7 @@ $.filterOptionsS3({
  'target':{'alias':'commit_item','name':'item_pack_id'},
  'scope':'row',
 'lookupPrefix':'req',
-'lookupResource':'req_item_packs.json',
+'lookupResource':'req_item_packs',
 'lookupKey':'req_item_id',
 'lookupField':'id',
 'msgNoRecords':i18n.no_packs,
@@ -1351,12 +1343,12 @@ $.filterOptionsS3({
                     else:
                         # All Requests are Items requests so no need to restrict
                         restrict = None
-                    action = dict(label = s3_unicode(T("Prepare Shipment")).encode("utf8"),
-                                  url = URL(f="send_commit",
-                                            args=["[id]"],
-                                            ),
-                                  _class = "action-btn send-btn dispatch",
-                                  )
+                    action = {"label": s3_str(T("Prepare Shipment")),
+                              "url": URL(f = "send_commit",
+                                         args = ["[id]"],
+                                         ),
+                              "_class": "action-btn send-btn dispatch",
+                              }
                     if restrict is not None:
                         action["restrict"] = restrict
                     s3.actions.append(action)
@@ -1502,6 +1494,22 @@ def send_process():
 def commit_item():
     """ REST Controller """
 
+    def prep(r):
+
+        table = r.table
+
+        # Filter to item commits
+        field = table.commit_id
+        field.requires = IS_EMPTY_OR(IS_ONE_OF(db, "req_commit.id",
+                                               field.represent,
+                                               filterby = "type",
+                                               filter_opts = (1,),
+                                               orderby="req_commit.date",
+                                               sort=True,
+                                               ))
+        return True
+    s3.prep = prep
+
     return s3_rest_controller()
 
 # =============================================================================
@@ -1569,23 +1577,20 @@ def commit_req():
 
         if commit_item_quantity:
             req_item_id = req_item.req_req_item.id
-            commit_item_id = citable.insert(commit_id = commit_id,
-                                            req_item_id = req_item_id,
-                                            item_pack_id = req_item.req_req_item.item_pack_id,
-                                            quantity = commit_item_quantity
-                                            )
 
-            # Update the req_item.commit_quantity & req.commit_status
-            s3base.s3_store_last_record_id("req_commit_item", commit_item_id)
-            form = Storage()
-            form.vars = Storage(
-                    req_item_id = req_item_id
-                )
-            s3db.req_commit_item_onaccept(form)
+            commit_item = {"commit_id": commit_id,
+                           "req_item_id": req_item_id,
+                           "item_pack_id": req_item.req_req_item.item_pack_id,
+                           "quantity": commit_item_quantity,
+                           }
+
+            commit_item_id = citable.insert(**commit_item)
+            commit_item["id"] = commit_item_id
+
+            s3db.onaccept("req_commit_item", commit_item)
 
     # Redirect to commit
-    redirect(URL(c="req", f="commit",
-                 args=[commit_id, "commit_item"]))
+    redirect(URL(c="req", f="commit", args=[commit_id, "commit_item"]))
 
 # =============================================================================
 def send_req():
@@ -1827,11 +1832,14 @@ def commit_item_json():
                                ctable.date,
                                stable.name,
                                itable.quantity,
-                               orderby = db.req_commit.date)
+                               orderby = db.req_commit.date,
+                               )
 
-    json_str = '''[%s,%s''' % (json.dumps(dict(id = str(T("Committed")),
-                                               quantity = "#")),
-                               records.json()[1:])
+    json_str = '''[%s,%s''' % (json.dumps({"id": s3_str(T("Committed")),
+                                           "quantity": "#"
+                                           }),
+                               records.json()[1:],
+                               )
 
     response.headers["Content-Type"] = "application/json"
     return json_str

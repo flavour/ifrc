@@ -239,6 +239,7 @@ settings.import_template()
 #settings.L10n.default_language = "en"
 #settings.security.policy = 7 # Organisation-ACLs
 # Enable Additional Module(s)
+#from gluon.storage import Storage
 #settings.modules["delphi"] = Storage(
 #        name_nice = T("Delphi Decision Maker"),
 #        restricted = False,
@@ -247,6 +248,9 @@ settings.import_template()
 # Disable a module which is normally used by the template
 # - NB Only templates with adaptive menus will work nicely with this!
 #del settings.modules["irs"]
+
+# Production instances should set this before prepopulate is run
+#settings.base.prepopulate_demo = 0
 
 # After 1st_run, set this for Production to save 1x DAL hit/request
 #settings.base.prepopulate = 0

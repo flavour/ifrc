@@ -40,7 +40,8 @@ def human_resource():
     # Custom method for Service Record
     s3db.set_method("hrm", "human_resource",
                     method = "form",
-                    action = s3db.vol_service_record)
+                    action = s3db.vol_service_record,
+                    )
 
     return s3db.hrm_human_resource_controller()
 
@@ -169,8 +170,9 @@ def job_title():
             current.messages["NONE"] = ""
             table = s3db.hrm_job_title
             table.organisation_id.represent = \
-                s3db.org_OrganisationRepresent(acronym=False,
-                                               parent=False)
+                s3db.org_OrganisationRepresent(acronym = False,
+                                               parent = False,
+                                               )
             table.organisation_id.label = None
             table.type.label = None
             table.comments.label = None
@@ -322,7 +324,8 @@ def skill_competencies():
             (rtable.skill_type_id == table.skill_type_id)
     records = db(query).select(rtable.id,
                                rtable.name,
-                               orderby=~rtable.priority)
+                               orderby = ~rtable.priority,
+                               )
 
     response.headers["Content-Type"] = "application/json"
     return records.json()
@@ -340,7 +343,8 @@ def staff_org_site_json():
             (table.organisation_id == otable.id)
     records = db(query).select(table.site_id,
                                otable.id,
-                               otable.name)
+                               otable.name,
+                               )
 
     response.headers["Content-Type"] = "application/json"
     return records.json()
@@ -355,42 +359,22 @@ def activity():
 
     def prep(r):
         if r.component_name == "hours":
+
             # Limit Activity Types to those for the Activity
             ltable = s3db.vol_activity_activity_type
-            query = (ltable.deleted == False) & \
-                    (ltable.activity_id == r.id)
+            query = (ltable.activity_id == r.id) & \
+                    (ltable.deleted == False)
             rows = db(query).select(ltable.activity_type_id)
             activity_types = [row.activity_type_id for row in rows]
-            # S3SQLInlineComponentCheckbox uses it's own filter, not the requires
-            #field = s3db.vol_activity_hours_activity_type.activity_type_id
-            #field.requires = \
-            #    IS_EMPTY_OR(IS_ONE_OF(db,
-            #                          "vol_activity_type.id",
-            #                          field.represent,
-            #                          filterby="id",
-            #                          filter_opts=activity_types,
-            #                          ))
 
-            from s3 import S3SQLCustomForm, S3SQLInlineComponentCheckbox
-            crud_form = S3SQLCustomForm("person_id",
-                                        "date",
-                                        #"end_date",
-                                        "job_title_id",
-                                        "hours",
-                                        S3SQLInlineComponentCheckbox("activity_type",
-                                                                     label = T("Activity Types"),
-                                                                     field = "activity_type_id",
-                                                                     #filter = {"lookuptable": ,
-                                                                     #          "lookuptable": ,
-                                                                     #          }
-                                                                     filterby = {"field": "id",
-                                                                                 "options": activity_types,
-                                                                                 },
-                                                                     option_help = "comments",
-                                                                     cols = 4,
-                                                                     ),
-                                        "comments",
-                                        )
+            field = s3db.vol_activity_hours_activity_type.activity_type_id
+            field.requires = \
+               IS_EMPTY_OR(IS_ONE_OF(db,
+                                     "vol_activity_type.id",
+                                     field.represent,
+                                     filterby = "id",
+                                     filter_opts = activity_types,
+                                     ))
 
             # Limit the Dates to the same as the Activity
             record = r.record
@@ -402,15 +386,11 @@ def activity():
                 field.readable = field.writable = False
             else:
                 # @ToDo: Check widget options (currently this branch is never taken)
-                s3db.vol_activity_hours.date.requires = IS_UTC_DATE(calendar="Gregorian",
-                                                                    minimum=start_date,
-                                                                    maximum=end_date,
-                                                                    )
-
-            s3db.configure("vol_activity_hours",
-                           crud_form = crud_form,
-                           )
-
+                s3db.vol_activity_hours.date.requires = IS_UTC_DATE(
+                                                            calendar = "Gregorian",
+                                                            minimum = start_date,
+                                                            maximum = end_date,
+                                                            )
         return True
     s3.prep = prep
 
@@ -435,7 +415,8 @@ def facility():
     # Open record in this controller after creation
     s3db.configure("org_facility",
                    create_next = URL(c="vol", f="facility",
-                                     args = ["[id]", "read"]),
+                                     args = ["[id]", "read"],
+                                     ),
                    )
 
     return s3db.org_facility_controller()
