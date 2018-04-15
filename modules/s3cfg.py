@@ -206,9 +206,10 @@ class S3Config(Storage):
         self.proc = Storage()
         self.project = Storage()
         self.req = Storage()
-        self.supply = Storage()
         self.search = Storage()
         self.security = Storage()
+        self.setup = Storage()
+        self.supply = Storage()
         self.sync = Storage()
         self.ui = Storage()
         self.vulnerability = Storage()
@@ -2472,8 +2473,7 @@ class S3Config(Storage):
 
     # =========================================================================
     # Search
-
-    # -------------------------------------------------------------------------
+    #
     def get_search_max_results(self):
         """
             The maximum number of results to return in an Autocomplete Search
@@ -2493,7 +2493,6 @@ class S3Config(Storage):
         """
         return self.search.get("dates_auto_range", False)
 
-    # -------------------------------------------------------------------------
     # Filter Manager Widget
     def get_search_filter_manager(self):
         """ Enable the filter manager widget """
@@ -2518,6 +2517,15 @@ class S3Config(Storage):
     def get_search_filter_manager_load(self):
         """ Text for saved filter load-button """
         return self.search.get("filter_manager_load")
+
+    # =========================================================================
+    # Setup
+    #
+    def get_setup_monitor_template(self):
+        """
+            Which template folder to use to load monitor.py
+        """
+        return self.setup.get("monitor_template", "default")
 
     # =========================================================================
     # Sync
@@ -3180,11 +3188,29 @@ class S3Config(Storage):
         """
         return self.dvr.get("manage_response_actions", False)
 
+    def get_dvr_response_types(self):
+        """
+            Use response type categories
+        """
+        return self.dvr.get("response_types", True)
+
     def get_dvr_response_types_hierarchical(self):
         """
             Response types are hierarchical
         """
         return self.dvr.get("response_types_hierarchical", False)
+
+    def get_dvr_response_themes(self):
+        """
+            Use themes for response actions
+        """
+        return self.dvr.get("response_themes", False)
+
+    def get_dvr_response_themes_org_specific(self):
+        """
+            Response themes are org-specific
+        """
+        return self.dvr.get("response_themes_org_specific", True)
 
     # -------------------------------------------------------------------------
     # Education
