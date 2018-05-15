@@ -127,6 +127,8 @@ class S3OrganisationModel(S3Model):
         hierarchical_organisation_types = settings.get_org_organisation_types_hierarchical()
         multiple_organisation_types = settings.get_org_organisation_types_multiple()
 
+        use_country = settings.get_org_country()
+
         # ---------------------------------------------------------------------
         # Organisation Types
         #
@@ -376,6 +378,8 @@ class S3OrganisationModel(S3Model):
                                         lambda: gis.get_countries(key_type="code"),
                                         zero = messages.SELECT_LOCATION
                                         )),
+                           readable = use_country,
+                           writable = use_country,
                            ),
                      # Simple free-text contact field, can be enabled
                      # in templates as needed
@@ -431,14 +435,14 @@ class S3OrganisationModel(S3Model):
                        S3SQLInlineLink(
                             "organisation_type",
                             field = "organisation_type_id",
-                            # Default 10 options just triggers which adds unnecessary complexity to a commonly-used form & commonly an early one (crerate Org when registering)
+                            # Default 10 options just triggers which adds unnecessary complexity to a commonly-used form & commonly an early one (create Org when registering)
                             filter = False,
                             label = T("Type"),
                             multiple = multiple_organisation_types,
                             widget = type_widget,
                        ),
                        "region_id",
-                       "country",
+                       "country" if use_country else None,
                        "phone",
                        "website",
                        "year",
@@ -549,12 +553,12 @@ class S3OrganisationModel(S3Model):
         list_fields = ["id",
                        "name",
                        "acronym",
-                       "organisation_organisation_type.organisation_type_id",
+                       (T("Type"), "organisation_organisation_type.organisation_type_id"),
                        "website"
                        ]
 
         if use_sector:
-            list_fields.insert(4,"sector_organisation.sector_id")
+            list_fields.insert(4, (T("Sectors"), "sector_organisation.sector_id"))
 
         filter_widgets = [S3TextFilter(text_fields,
                                        label = T("Search"),
@@ -578,26 +582,35 @@ class S3OrganisationModel(S3Model):
                                        )
                        )
 
-        append(S3OptionsFilter("country",
-                               #label = T("Home Country"),
-                                ),
-               )
+        if use_country:
+            append(S3OptionsFilter("country",
+                                   #label = T("Home Country"),
+                                   ),
+                   )
 
         report_fields = ["organisation_organisation_type.organisation_type_id",
-                         "country",
                          ]
+        if use_country:
+            report_fields.append("country")
+
+        default_col = "organisation_organisation_type.organisation_type_id"
         if use_sector:
             report_fields.insert(1, "sector_organisation.sector_id")
             default_row = "sector_organisation.sector_id"
-        else:
+        elif use_country:
             default_row = "country"
+        else:
+            # Single column (switch axes)
+            default_row = default_col
+            default_col = None
+
         report_options = Storage(rows = report_fields,
                                  cols = report_fields,
                                  fact = [(T("Number of Organizations"), "count(id)"),
                                          (T("List of Organizations"), "list(name)"),
                                          ],
                                  defaults=Storage(rows = default_row,
-                                                  cols = "organisation_organisation_type.organisation_type_id",
+                                                  cols = default_col,
                                                   fact = "count(id)",
                                                   totals = True,
                                                   chart = "spectrum:cols",
@@ -720,10 +733,12 @@ class S3OrganisationModel(S3Model):
                        # Assets
                        asset_asset = "organisation_id",
                        # Needs
-                       req_organisation_needs = {"name": "needs",
-                                                 "joinby": "organisation_id",
-                                                 "multiple": False,
-                                                 },
+                       req_need = {"name": "needs",
+                                   "link": "req_need_organisation",
+                                   "joinby": "organisation_id",
+                                   "key": "need_id",
+                                   "multiple": False,
+                                   },
                        # Requests
                        #req_req = "donated_by_id",
 
@@ -1451,7 +1466,7 @@ class S3OrganisationCapacityModel(S3Model):
         tablename = "org_capacity_assessment"
         define_table(tablename,
                      self.org_organisation_id(empty = False),
-                     s3_date(future=0),
+                     s3_date(future = 0),
                      self.pr_person_id(label = T("Lead Facilitator")),
                      s3_comments(),
                      *s3_meta_fields()
@@ -2272,6 +2287,8 @@ class S3OrganisationSectorModel(S3Model):
                                            "key": "organisation_id",
                                            "actuate": "hide",
                                           },
+                       org_sector_organisation = {"joinby": "sector_id",
+                                                  },
                        project_project = {"link": "project_sector_project",
                                           "joinby": "sector_id",
                                           "key": "project_id",
@@ -2358,6 +2375,13 @@ class S3OrganisationSectorModel(S3Model):
         define_table(tablename,
                      sector_id(),
                      self.org_organisation_id(),
+                     Field("lead", "boolean",
+                           label = T("Lead Organization?"),
+                           represent = s3_yes_no_represent,
+                           comment = DIV(_class="tooltip",
+                                         _title="%s|%s" % (T("Lead Organisation?"),
+                                                           T("If the organization is a lead for this sector."))),
+                           ),
                      *s3_meta_fields()
                      )
 
@@ -3279,16 +3303,12 @@ class S3SiteModel(S3Model):
                        org_site_org_group = "site_id",
 
                        # Needs
-                       req_site_needs = (# with alias
-                                         {"name": "needs",
-                                          "joinby": "site_id",
-                                          "multiple": False,
-                                          },
-                                         # without alias
-                                         {"joinby": "site_id",
-                                          "multiple": False,
-                                          },
-                                         ),
+                       req_need = {"name": "needs",
+                                   "link": "req_need_site",
+                                   "joinby": "site_id",
+                                   "key": "need_id",
+                                   "multiple": False,
+                                   },
 
                        # Requests
                        req_req = "site_id",
@@ -4322,7 +4342,7 @@ class S3FacilityModel(S3Model):
         ltable = db.org_site_facility_type
         ttable = db.org_facility_type
         gtable = db.gis_location
-        ntable = s3db.req_site_needs
+        #ntable = s3db.req_need
 
         # Limit the number of decimal places
         formatter = ".%sf" % decimals
@@ -4331,9 +4351,9 @@ class S3FacilityModel(S3Model):
         query = (stable.deleted != True) & \
                 (stable.obsolete != True) & \
                 (gtable.id == stable.location_id)
-        lquery = (ntable.deleted != True) & \
-                 (ntable.site_id == stable.site_id)
-        left = [ntable.on(lquery),
+        #lquery = (ntable.deleted != True) & \
+        #         (ntable.site_id == stable.site_id)
+        left = [#ntable.on(lquery),
                 ltable.on(stable.site_id == ltable.site_id),
                 ttable.on(ttable.id == ltable.facility_type_id),
                 ]
@@ -4346,7 +4366,7 @@ class S3FacilityModel(S3Model):
                                 stable.phone2,
                                 stable.email,
                                 stable.website,
-                                ntable.needs,
+                                #ntable.needs,
                                 gtable.addr_street,
                                 gtable.L1,
                                 gtable.L4,
@@ -4382,12 +4402,12 @@ class S3FacilityModel(S3Model):
             if g.L1:
                 # Encode smaller if-possible
                 L1 = g.L1
-                if L1 == "New York":
-                    properties["L1"] = "NY"
-                elif L1 == "New Jersey":
-                    properties["L1"] = "NJ"
-                else:
-                    properties["L1"] = L1
+                #if L1 == "New York":
+                #    properties["L1"] = "NY"
+                #elif L1 == "New Jersey":
+                #    properties["L1"] = "NJ"
+                #else:
+                properties["L1"] = L1
             if g.L4:
                 properties["L4"] = g.L4
             if o.phone1:
@@ -4398,16 +4418,16 @@ class S3FacilityModel(S3Model):
                 properties["email"] = o.email
             if o.website:
                 properties["web"] = o.website
-            n = f.req_site_needs
-            if n:
-                if n.needs:
-                    needs = json.loads(n.needs)
-                    if "urgent" in needs:
-                        properties["urgent"] = needs["urgent"]
-                    if "need" in needs:
-                        properties["need"] = needs["need"]
-                    if "no" in needs:
-                        properties["no"] = needs["no"]
+            #n = f.req_site_needs
+            #if n:
+            #    if n.needs:
+            #        needs = json.loads(n.needs)
+            #        if "urgent" in needs:
+            #            properties["urgent"] = needs["urgent"]
+            #        if "need" in needs:
+            #            properties["need"] = needs["need"]
+            #        if "no" in needs:
+            #            properties["no"] = needs["no"]
             f = dict(type = "Feature",
                      properties = properties,
                      geometry = json.loads(geojson)
@@ -6393,53 +6413,72 @@ def org_rheader(r, tabs=None):
 
         rheader_tabs = s3_rheader_tabs(r, tabs)
 
-        # @ToDo: Update for Component
-        # if record.sector_id:
-        #    if settings.get_ui_label_cluster():
-        #        sector_label = T("Cluster(s)")
-        #    else:
-        #        sector_label = T("Sector(s)")
-        #    sectors = TR(TH("%s: " % sector_label),
-        #                 table.sector_id.represent(record.sector_id))
-        # else:
-        #    sectors = None
-
-        if record.website:
-            website = TR(TH("%s: " % table.website.label),
-                         A(record.website, _href=record.website))
-        else:
-            website = None
-
-        if record.root_organisation != record.id:
-            btable = s3db.org_organisation_branch
-            query = (btable.branch_id == record.id) & \
-                    (btable.organisation_id == table.id)
-            row = current.db(query).select(table.id,
-                                           table.name,
-                                           limitby=(0, 1)
-                                           ).first()
-            if row:
-                parent = TR(TH("%s: " % T("Branch of")),
-                            A(row.name, _href=URL(args=[row.id, "read"])),
-                            )
-            else:
-                parent = None
-        else:
-            parent = None
-
         rheader = DIV()
         logo = org_organisation_logo(record)
 
         record_data = TABLE(TR(TH("%s: " % table.name.label),
                                record.name,
                                ),
-                      )
-        for item in (parent, website): #, sectors):
-            if item is not None:
-                record_data.append(item)
+                            )
+
+        db = current.db
+        record_id = record.id
+
+        if record.acronym:
+            record_data.append(TR(TH("%s: " % table.acronym.label),
+                                  record.acronym))
+
+        if record.root_organisation != record_id:
+            btable = s3db.org_organisation_branch
+            query = (btable.branch_id == record.id) & \
+                    (btable.organisation_id == table.id)
+            row = db(query).select(table.id,
+                                   table.name,
+                                   limitby=(0, 1)
+                                   ).first()
+            if row:
+                record_data.append(TR(TH("%s: " % T("Branch of")),
+                                      A(row.name, _href=URL(args=[row.id, "read"])),
+                                      ))
+
+        if settings.get_org_organisation_type_rheader():
+            ltable = s3db.org_organisation_organisation_type
+            query = (ltable.organisation_id == record_id) & \
+                    (ltable.deleted == False)
+            rows = db(query).select(ltable.organisation_type_id)
+            if rows:
+                if settings.get_org_organisation_types_multiple():
+                    label = T("Types")
+                else:
+                    label = T("Type")
+                record_data.append(TR(TH("%s: " % label),
+                                      ltable.organisation_type_id.represent.multiple([row.organisation_type_id for row in rows])))
+
+        if settings.get_org_sector_rheader():
+            ltable = s3db.org_sector_organisation
+            query = (ltable.organisation_id == record_id) & \
+                    (ltable.deleted == False)
+            rows = db(query).select(ltable.sector_id)
+            if rows:
+                if settings.get_ui_label_cluster():
+                    label = T("Clusters")
+                else:
+                    label = T("Sectors")
+                record_data.append(TR(TH("%s: " % label),
+                                      ltable.sector_id.represent.multiple([row.sector_id for row in rows])))
+
+        if settings.get_org_country() and record.country:
+            record_data.append(TR(TH("%s: " % table.country.label),
+                                  table.country.represent(record.country)))
+
+        if record.website:
+            record_data.append(TR(TH("%s: " % table.website.label),
+                                  A(record.website, _href=record.website)))
 
         if logo:
-            rheader.append(TABLE(TR(TD(logo), TD(record_data))))
+            rheader.append(TABLE(TR(TD(logo),
+                                    TD(record_data),
+                                    )))
         else:
             rheader.append(record_data)
 
@@ -6467,7 +6506,7 @@ def org_rheader(r, tabs=None):
         if settings.has_module("inv"):
             tabs = tabs + s3db.inv_tabs(r)
         if settings.get_org_needs_tab():
-            append_tab((T("Needs"), "site_needs"))
+            append_tab((T("Needs"), "needs"))
         elif settings.has_module("req"):
             tabs = tabs + s3db.req_tabs(r)
         if settings.has_module("asset"):
@@ -6493,9 +6532,14 @@ def org_rheader(r, tabs=None):
                     return ", ".join([row.name for row in rows])
                 else:
                     return current.messages["NONE"]
-            rheader_fields = [["name", "organisation_id", "email"],
+            rheader_fields = [["name",
+                               "organisation_id",
+                               "email",
+                               ],
                               [(T("Facility Type"), facility_type_lookup),
-                               "location_id", "phone1"],
+                               "location_id",
+                               "phone1",
+                               ],
                               ]
 
         rheader_fields, rheader_tabs = S3ResourceHeader(rheader_fields,

@@ -7,12 +7,7 @@ from gluon.storage import Storage
 
 def config(settings):
     """
-        Template settings: 'Skeleton' designed to be copied to quickly create
-                           custom templates
-
-        All settings which are to configure a specific template are located
-        here. Deployers should ideally not need to edit any other files outside
-        of their template folder.
+        Settings for the SHARE Teamplate
     """
 
     T = current.T
@@ -27,8 +22,7 @@ def config(settings):
                                 )
 
     # PrePopulate data
-    #settings.base.prepopulate = ("skeleton", "default/users")
-    settings.base.prepopulate += ("SHARE", "default/users", "SHARE/Demo")
+    settings.base.prepopulate += ("SHARE", "default/users")
 
     # Theme (folder to use for views/layout.html)
     #settings.base.theme = "SHARE"
@@ -40,7 +34,24 @@ def config(settings):
     #settings.auth.registration_requires_verification = True
     # Do new users need to be approved by an administrator prior to being able to login?
     #settings.auth.registration_requires_approval = True
-    #settings.auth.registration_requests_organisation = True
+    settings.auth.registration_requests_organisation = True
+    #settings.auth.registration_organisation_required = True
+    #settings.auth.registration_requests_site = True
+
+    settings.auth.registration_link_user_to = {"staff": T("Staff"),
+                                               "volunteer": T("Volunteer"),
+                                               #"member": T("Member")
+                                               }
+
+    def registration_organisation_default(default):
+        auth = current.auth
+        has_role = auth.s3_has_role
+        if has_role("ORG_ADMIN") and not has_role("ADMIN"):
+            return auth.user.organisation_id
+        else:
+            return default
+
+    settings.auth.registration_organisation_default = registration_organisation_default
 
     # Approval emails get sent to all admins
     settings.mail.approver = "ADMIN"
@@ -58,69 +69,11 @@ def config(settings):
     #settings.gis.print_button = True
 
     # L10n settings
-    # Languages used in the deployment (used for Language Toolbar, GIS Locations, etc)
-    # http://www.loc.gov/standards/iso639-2/php/code_list.php
-    settings.L10n.languages = OrderedDict([
-    #    ("ar", "Arabic"),
-    #    ("bs", "Bosnian"),
-    #    #("dv", "Divehi"), # Maldives
-        ("en", "English"),
-    #    ("fr", "French"),
-    #    ("de", "German"),
-    #    ("el", "Greek"),
-    #    ("es", "Spanish"),
-    #    #("id", "Bahasa Indonesia"),
-    #    ("it", "Italian"),
-    #    ("ja", "Japanese"),
-    #    ("km", "Khmer"), # Cambodia
-    #    ("ko", "Korean"),
-    #    #("lo", "Lao"),
-    #    #("mg", "Malagasy"),
-    #    ("mn", "Mongolian"),
-    #    #("ms", "Malaysian"),
-    #    ("my", "Burmese"), # Myanmar
-    #    ("ne", "Nepali"),
-    #    ("prs", "Dari"), # Afghan Persian
-    #    ("ps", "Pashto"), # Afghanistan, Pakistan
-    #    ("pt", "Portuguese"),
-    #    ("pt-br", "Portuguese (Brazil)"),
-    #    ("ru", "Russian"),
-    #    ("tet", "Tetum"),
-        ("si", "Sinhala"), # Sri Lanka
-        ("ta", "Tamil"), # India, Sri Lanka
-    #    ("th", "Thai"),
-    #    ("tl", "Tagalog"), # Philippines
-    #    ("tr", "Turkish"),
-    #    ("ur", "Urdu"), # Pakistan
-    #    ("vi", "Vietnamese"),
-    #    ("zh-cn", "Chinese (Simplified)"), # Mainland China
-    #    ("zh-tw", "Chinese (Taiwan)"),
-    ])
-    # Default language for Language Toolbar (& GIS Locations in future)
-    #settings.L10n.default_language = "en"
-    # Uncomment to Hide the language toolbar
-    #settings.L10n.display_toolbar = False
-    # Default timezone for users
-    #settings.L10n.utc_offset = "+0100"
     # Number formats (defaults to ISO 31-0)
     # Decimal separator for numbers (defaults to ,)
     settings.L10n.decimal_separator = "."
     # Thousands separator for numbers (defaults to space)
     settings.L10n.thousands_separator = ","
-    # Uncomment this to Translate Layer Names
-    #settings.L10n.translate_gis_layer = True
-    # Uncomment this to Translate Location Names
-    #settings.L10n.translate_gis_location = True
-    # Uncomment this to Translate Organisation Names/Acronyms
-    #settings.L10n.translate_org_organisation = True
-    # Finance settings
-    settings.fin.currencies = {
-    #    "EUR" : "Euros",
-    #    "GBP" : "Great British Pounds",
-        "USD" : "United States Dollars",
-        "LKR" : "Sri Lanka Rupees",
-    }
-    #settings.fin.currency_default = "USD"
 
     # Security Policy
     # http://eden.sahanafoundation.org/wiki/S3AAA#System-widePolicy
@@ -133,12 +86,35 @@ def config(settings):
     # 7: Apply Controller, Function, Table ACLs and Entity Realm + Hierarchy
     # 8: Apply Controller, Function, Table ACLs, Entity Realm + Hierarchy and Delegations
 
-    settings.security.policy = 5 # Controller, Function & Table ACLs
+    settings.security.policy = 6 # Controller, Function, Table ACLs and Entity Realm
+
+    # -------------------------------------------------------------------------
+    # Events
+    settings.event.label = "Disaster"
 
     # -------------------------------------------------------------------------
     # Messaging
-    # Parser
-    settings.msg.parser = "SAFIRE"
+    settings.msg.parser = "SAMBRO" # for parse_tweet
+
+    # -------------------------------------------------------------------------
+    # Organisations
+    settings.org.sector = True
+    # Show Organisation Types in the rheader
+    settings.org.organisation_type_rheader = True
+
+    # -------------------------------------------------------------------------
+    # Projects
+    # Don't use Beneficiaries
+    settings.project.activity_beneficiaries = False
+    # Don't use Item Catalog for Distributions
+    settings.project.activity_items = False
+    settings.project.activity_sectors = True
+    # Links to Filtered Components for Donors & Partners
+    settings.project.organisation_roles = {
+        1: T("Agency"),
+        2: T("Implementing Partner"),
+        3: T("Donor"),
+    }
 
     # -------------------------------------------------------------------------
     # Comment/uncomment modules here to disable/enable them
@@ -211,12 +187,12 @@ def config(settings):
             restricted = True,
             module_type = 2,
         )),
-        #("vol", Storage(
-        #    name_nice = T("Volunteers"),
-        #    #description = "Human Resources Management",
-        #    restricted = True,
-        #    module_type = 2,
-        #)),
+        ("vol", Storage(
+            name_nice = T("Volunteers"),
+            #description = "Human Resources Management",
+            restricted = True,
+            module_type = 2,
+        )),
         ("cms", Storage(
           name_nice = "Content Management",
           #description = "Content Management System",
@@ -242,12 +218,12 @@ def config(settings):
             restricted = True,
             module_type = None, # Not displayed
         )),
-        #("inv", Storage(
-        #    name_nice = T("Warehouses"),
-        #    #description = "Receiving and Sending Items",
-        #    restricted = True,
-        #    module_type = 4
-        #)),
+        ("inv", Storage(
+            name_nice = T("Warehouses"),
+            #description = "Receiving and Sending Items",
+            restricted = True,
+            module_type = 4
+        )),
         ("asset", Storage(
             name_nice = "Assets",
             #description = "Recording and Assigning Assets",
@@ -267,12 +243,12 @@ def config(settings):
             restricted = True,
             module_type = 10,
         )),
-        #("project", Storage(
-        #    name_nice = "Tasks",
-        #    #description = "Tracking of Projects, Activities and Tasks",
-        #    restricted = True,
-        #    module_type = 2
-        #)),
+        ("project", Storage(
+            name_nice = "Tasks",
+            #description = "Tracking of Projects, Activities and Tasks",
+            restricted = True,
+            module_type = 2
+        )),
         #("cr", Storage(
         #    name_nice = T("Shelters"),
         #    #description = "Tracks the location, capacity and breakdown of victims in Shelters",
@@ -302,12 +278,12 @@ def config(settings):
         #   restricted = True,
         #   module_type = 10,
         #)),
-        #("stats", Storage(
-        #    name_nice = T("Statistics"),
-        #    #description = "Manages statistics",
-        #    restricted = True,
-        #    module_type = None,
-        #)),
+        ("stats", Storage(
+            name_nice = T("Statistics"),
+            #description = "Manages statistics",
+            restricted = True,
+            module_type = None,
+        )),
     ])
 
     # -------------------------------------------------------------------------
@@ -327,17 +303,257 @@ def config(settings):
             _id = table.insert(channel_id=channel_id, function_name="parse_tweet", enabled=True)
             s3db.msg_parser_enable(_id)
 
-            async = current.s3task.async
+            run_async = current.s3task.async
             # Poll
-            async("msg_poll", args=["msg_twitter_channel", channel_id])
+            run_async("msg_poll", args=["msg_twitter_channel", channel_id])
 
             # Parse
-            async("msg_parse", args=[channel_id, "parse_tweet"])
+            run_async("msg_parse", args=[channel_id, "parse_tweet"])
 
         s3db.configure(tablename,
                        create_onaccept = onaccept,
                        )
 
     settings.customise_msg_twitter_channel_resource = customise_msg_twitter_channel_resource
+
+    # -------------------------------------------------------------------------
+    def customise_org_organisation_resource(r, tablename):
+
+        from s3 import S3SQLCustomForm, S3SQLInlineComponent, S3SQLInlineLink, s3_comments_widget
+
+        s3db = current.s3db
+        s3db.org_organisation_tag.value.widget = s3_comments_widget
+
+        crud_form = S3SQLCustomForm("name",
+                                    "acronym",
+                                    S3SQLInlineLink(
+                                        "organisation_type",
+                                        field = "organisation_type_id",
+                                        # Default 10 options just triggers which adds unnecessary complexity to a commonly-used form & commonly an early one (create Org when registering)
+                                        filter = False,
+                                        label = T("Type"),
+                                        multiple = False,
+                                        widget = "multiselect",
+                                    ),
+                                    S3SQLInlineLink("sector",
+                                       columns = 4,
+                                       label = T("Sectors"),
+                                       field = "sector_id",
+                                       ),
+                                    S3SQLInlineLink("service",
+                                       columns = 4,
+                                       label = T("Services"),
+                                       field = "service_id",
+                                       ),
+                                    "country",
+                                    "phone",
+                                    "website",
+                                    "logo",
+                                    (T("About"), "comments"),
+                                    S3SQLInlineComponent("tag",
+                                       label = T("Vision"),
+                                       fields = [("", "value")],
+                                       filterby = {"field": "tag",
+                                                   "options": "vision",
+                                                   },
+                                       multiple = False,
+                                       ),
+                                    )
+
+        s3db.configure(tablename,
+                       crud_form = crud_form,
+                       )
+
+    settings.customise_org_organisation_resource = customise_org_organisation_resource
+
+    # -------------------------------------------------------------------------
+    def customise_org_sector_controller(**attr):
+
+        s3db = current.s3db
+        tablename = "org_sector"
+
+        # Just 1 set of sectors / sector leads nationally
+        # @ToDo: Deployment Setting
+        #f = s3db.org_sector.location_id
+        #f.readable = f.writable = False
+
+        # Custom Component for Sector Leads
+        s3db.add_components(tablename,
+                            org_sector_organisation = {"name": "sector_lead",
+                                                       "joinby": "sector_id",
+                                                       "filterby": {"lead": True,
+                                                                    },
+                                                       },
+                            )
+
+        from s3 import S3SQLCustomForm, S3SQLInlineComponent
+        crud_form = S3SQLCustomForm("name",
+                                    "abrv",
+                                    "comments",
+                                    S3SQLInlineComponent("sector_lead",
+                                                         label = T("Lead Organization(s)"),
+                                                         fields = [("", "organisation_id"),],
+                                                         ),
+                                    )
+
+        s3db.configure(tablename,
+                       crud_form = crud_form,
+                       list_fields = ["name",
+                                      "abrv",
+                                      (T("Lead Organization(s)"), "sector_lead.organisation_id"),
+                                      ],
+                       )
+
+        return attr
+
+    settings.customise_org_sector_controller = customise_org_sector_controller
+
+    # -------------------------------------------------------------------------
+    def customise_project_activity_resource(r, tablename):
+
+        s3db = current.s3db
+        tablename = "project_activity"
+
+        # Custom Components for Agency, Partners & Donors; Modality & Number
+        s3db.add_components(tablename,
+                            project_activity_organisation = (# Agency
+                                                             {"name": "agency",
+                                                              "joinby": "activity_id",
+                                                              "filterby": {"role": 1,
+                                                                           },
+                                                              #"multiple": False,
+                                                              },
+                                                             # Partners
+                                                             {"name": "partner",
+                                                              "joinby": "activity_id",
+                                                              "filterby": {"role": 2,
+                                                                           },
+                                                              #"multiple": False,
+                                                              },
+                                                             # Donors
+                                                             {"name": "donor",
+                                                              "joinby": "activity_id",
+                                                              "filterby": {"role": 3,
+                                                                           },
+                                                              #"multiple": False,
+                                                              },
+                                                             ),
+                            project_activity_tag = (# Modality
+                                                    {"name": "modality",
+                                                     "joinby": "activity_id",
+                                                     "filterby": {"tag": "modality",
+                                                                  },
+                                                     "multiple": False,
+                                                     },
+                                                    # Number
+                                                    {"name": "number",
+                                                     "joinby": "activity_id",
+                                                     "filterby": {"tag": "number",
+                                                                  },
+                                                     "multiple": False,
+                                                     },
+                                                    )
+                            )
+
+        # Individual settings for specific tag components
+        from gluon import IS_EMPTY_OR, IS_IN_SET, IS_INT_IN_RANGE
+        components_get = r.resource.components.get
+
+        modality = components_get("modality")
+        modality.table.value.requires = IS_EMPTY_OR(IS_IN_SET(("Cash", "In-kind")))
+
+        number = components_get("number")
+        number.table.value.requires = IS_EMPTY_OR(IS_INT_IN_RANGE())
+
+        s3db.project_activity_data.unit.requires = IS_EMPTY_OR(IS_IN_SET(("People", "Households")))
+
+        from s3 import S3SQLCustomForm, S3SQLInlineComponent #, S3SQLInlineLink
+        crud_form = S3SQLCustomForm(S3SQLInlineComponent("agency",
+                                                         name = "agency",
+                                                         label = T("Agency"),
+                                                         fields = [("", "organisation_id"),],
+                                                         #multiple = False,
+                                                         required = True,
+                                                         ),
+                                    # @ToDo: MultiSelectWidget is nicer UI but S3SQLInlineLink
+                                    #        requires the link*ed* table as component (not the
+                                    #        link table as applied here) and linked components
+                                    #        cannot currently be filtered by link table fields
+                                    #        (=> should solve the latter rather than the former)
+                                    # @ToDo: Create Popups
+                                    S3SQLInlineComponent("partner",
+                                                         name = "partner",
+                                                         label = T("Implementing Partner"),
+                                                         fields = [{"name": "organisation_id",
+                                                                    "label": "",
+                                                                    "default": None,
+                                                                    },
+                                                                   ],
+                                                         ),
+                                    S3SQLInlineComponent("donor",
+                                                         name = "donor",
+                                                         label = T("Donor"),
+                                                         fields = [{"name": "organisation_id",
+                                                                    "label": "",
+                                                                    "default": None,
+                                                                    },
+                                                                   ],
+                                                         ),
+                                    "location_id",
+                                    S3SQLInlineComponent("sector_activity",
+                                                         label = T("Sector"),
+                                                         fields = [("", "sector_id"),],
+                                                         multiple = False,
+                                                         ),
+                                    (T("Relief Items/Activity"), "name"),
+                                    S3SQLInlineComponent("modality",
+                                                         name = "modality",
+                                                         label = T("Modality"),
+                                                         fields = [("", "value"),],
+                                                         multiple = False,
+                                                         ),
+                                    S3SQLInlineComponent("number",
+                                                         name = "number",
+                                                         label = T("Number of Items/Kits/Activities"),
+                                                         fields = [("", "value"),],
+                                                         multiple = False,
+                                                         ),
+                                    (T("Activity Date (Planned/Start Date)"), "date"),
+                                    (T("Activity Date (Completion Date)"), "end_date"),
+                                    S3SQLInlineComponent("activity_data",
+                                                         label = "",
+                                                         fields = [(T("People / Households"), "unit"),
+                                                                   (T("Total Number People/HH Targeted"), "target_value"),
+                                                                   (T("Total Number Of People/HH Reache"), "value"),
+                                                                   ],
+                                                         multiple = False,
+                                                         ),
+                                    (T("Activity Status"), "status_id"),
+                                    "comments",
+                                    )
+
+        s3db.configure(tablename,
+                       crud_form = crud_form,
+                       list_fields = [(T("Agency"), "agency.organisation_id"),
+                                      (T("Implementing Partner"), "partner.organisation_id"),
+                                      (T("Donor"), "donor.organisation_id"),
+                                      (T("District"), "location_id$L1"),
+                                      (T("DS Division"), "location_id$L2"),
+                                      (T("GN Division"), "location_id$L3"),
+                                      (T("Sector"), "sector_activity.sector_id"),
+                                      (T("Relief Items/Activity"), "name"),
+                                      (T("Modality"), "modality.value"),
+                                      (T("Number of Items/Kits/Activities"), "number.value"),
+                                      (T("Activity Date (Planned/Start Date)"), "date"),
+                                      (T("Activity Date (Completion Date)"), "end_date"),
+                                      (T("People / Households"), "activity_data.unit"),
+                                      (T("Total Number People/HH Targeted"), "activity_data.target_value"),
+                                      (T("Total Number Of People/HH Reached"), "activity_data.value"),
+                                      (T("Activity Status"), "status_id"),
+                                      "comments",
+                                      ],
+                       )
+
+    settings.customise_project_activity_resource = customise_project_activity_resource
 
 # END =========================================================================

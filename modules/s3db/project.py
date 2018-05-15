@@ -35,6 +35,7 @@ __all__ = ("S3ProjectModel",
            "S3ProjectActivityPersonModel",
            "S3ProjectActivityOrganisationModel",
            "S3ProjectActivitySectorModel",
+           "S3ProjectActivityTagModel",
            "S3ProjectAnnualBudgetModel",
            "S3ProjectBeneficiaryModel",
            "S3ProjectCampaignModel",
@@ -1106,7 +1107,7 @@ class S3ProjectActivityModel(S3Model):
                      self.gis_location_id(readable = not mode_task,
                                           writable = not mode_task,
                                           ),
-                     s3_date("date",
+                     s3_date(#"date", # default
                              label = T("Start Date"),
                              set_min = "#project_activity_end_date",
                              ),
@@ -1261,8 +1262,7 @@ class S3ProjectActivityModel(S3Model):
                                 #represent = "%(name)s",
                                 ))
 
-        # @ToDo: deployment_setting
-        if settings.has_module("supply"):
+        if settings.get_project_activity_items():
             rappend("distribution.parameter_id")
             # This has the wrong perspective to be meaningful, use supply/distribution/report instead
             #fact_fields.insert(0,
@@ -1278,8 +1278,7 @@ class S3ProjectActivityModel(S3Model):
                                (T("Items"), "distribution.parameter_id"))
             list_index += 1
 
-        # @ToDo: deployment_setting
-        if settings.has_module("stats"):
+        if settings.get_project_activity_beneficiaries():
             rappend("beneficiary.parameter_id")
             # This has the wrong perspective to be meaningful, use project/beneficiary/report instead
             #fact_fields.insert(0,
@@ -1419,6 +1418,8 @@ class S3ProjectActivityModel(S3Model):
                                     #"actuate": "hide",
                                     "actuate": "replace",
                                     },
+                       # Data
+                       project_activity_data = "activity_id",
                        # Distributions
                        supply_distribution = "activity_id",
                        # Events
@@ -1451,6 +1452,10 @@ class S3ProjectActivityModel(S3Model):
                                      },
                        # Format for InlineComponent/filter_widget
                        project_sector_activity = "activity_id",
+                       # Tags
+                       project_activity_tag = {"name": "tag",
+                                               "joinby": "activity_id",
+                                               },
                        # Tasks
                        project_task = {"link": "project_task_activity",
                                        "joinby": "activity_id",
@@ -1748,7 +1753,7 @@ class S3ProjectActivityTypeModel(S3Model):
                            )
 
         # ---------------------------------------------------------------------
-        # Activity Type - Sector Link Table
+        # Activity Type <> Sector Link Table
         #
         tablename = "project_activity_type_sector"
         define_table(tablename,
@@ -1762,7 +1767,7 @@ class S3ProjectActivityTypeModel(S3Model):
                      *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Activity Type - Project Location Link Table
+        # Activity Type <> Project Location Link Table
         #
         tablename = "project_activity_type_location"
         define_table(tablename,
@@ -1775,7 +1780,7 @@ class S3ProjectActivityTypeModel(S3Model):
                      *s3_meta_fields())
 
         # ---------------------------------------------------------------------
-        # Activity Type - Project Link Table
+        # Activity Type <> Project Link Table
         #
         tablename = "project_activity_type_project"
         define_table(tablename,
@@ -1889,11 +1894,16 @@ class S3ProjectActivityOrganisationModel(S3Model):
 
         configure = self.configure
         define_table = self.define_table
+
         project_activity_id = self.project_activity_id
+
+        NONE = current.messages["NONE"]
 
         # ---------------------------------------------------------------------
         # Activities <> Organisations - Link table
         #
+        project_organisation_roles = current.deployment_settings.get_project_organisation_roles()
+
         tablename = "project_activity_organisation"
         define_table(tablename,
                      project_activity_id(empty = False,
@@ -1903,6 +1913,15 @@ class S3ProjectActivityOrganisationModel(S3Model):
                      self.org_organisation_id(empty = False,
                                               ondelete = "CASCADE",
                                               ),
+                     Field("role", "integer",
+                           default = 1, # Lead
+                           label = T("Role"),
+                           requires = IS_EMPTY_OR(
+                                        IS_IN_SET(project_organisation_roles)
+                                      ),
+                           represent = lambda opt: \
+                                        project_organisation_roles.get(opt,
+                                                                       NONE)),
                      *s3_meta_fields())
 
         # CRUD Strings
@@ -1980,6 +1999,49 @@ class S3ProjectActivitySectorModel(S3Model):
         self.configure(tablename,
                        deduplicate = S3Duplicate(primary = ("activity_id",
                                                             "sector_id",
+                                                            ),
+                                                 ),
+                       )
+
+        # Pass names back to global scope (s3.*)
+        return {}
+
+# =============================================================================
+class S3ProjectActivityTagModel(S3Model):
+    """
+        Activity Tags
+    """
+
+    names = ("project_activity_tag",)
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Activity Tags
+        # - Key-Value extensions
+        # - can be used to provide conversions to external systems, such as:
+        #   * HXL, IATI
+        # - can be a Triple Store for Semantic Web support
+        # - can be used to add custom fields
+        #
+        tablename = "project_activity_tag"
+        self.define_table(tablename,
+                          self.project_activity_id(),
+                          # key is a reserved word in MySQL
+                          Field("tag",
+                                label = T("Key"),
+                                ),
+                          Field("value",
+                                label = T("Value"),
+                                ),
+                          s3_comments(),
+                          *s3_meta_fields())
+
+        self.configure(tablename,
+                       deduplicate = S3Duplicate(primary = ("activity_id",
+                                                            "tag",
                                                             ),
                                                  ),
                        )
@@ -4889,13 +4951,14 @@ class S3ProjectPlanningModel(S3Model):
         # Indicators <> Activities link table 2
         # - only used if status_from_activities is True
         #
+        activity_id = self.project_activity_id
         tablename = "project_indicator_activity_activity"
         define_table(tablename,
                      indicator_activity_id(ondelete = "CASCADE"),
-                     self.project_activity_id(empty = False,
-                                              # Default:
-                                              #ondelete = "CASCADE",
-                                              ),
+                     activity_id(empty = False,
+                                 # Default:
+                                 #ondelete = "CASCADE",
+                                 ),
                      *s3_meta_fields())
 
         # ---------------------------------------------------------------------
@@ -4911,9 +4974,12 @@ class S3ProjectPlanningModel(S3Model):
                                              project_represent,
                                              )
                         ),
+                     # Used for SHARE
+                     activity_id(),
                      indicator_id(readable = False,
                                   writable = False,
                                   ),
+                     # Used as linktable for RMSAmericas HNRC for their UI
                      indicator_activity_id(),
                      # Populated Automatically
                      # Used for Timeplot &, in future, to ease changing the monitoring frequency
@@ -6537,6 +6603,11 @@ class S3ProjectPlanningModel(S3Model):
             current.log.error("Cannot find Project Activity Data record (no record for this ID), so cannot update start_date or statuses")
             return
 
+        if not indicator_activity_id:
+            # SHARE
+            return
+
+        # RMS HNRC
         # Populate the Indicator from the Activity
         atable = s3db.project_indicator_activity
         activity = db(atable.id == indicator_activity_id).select(atable.indicator_id,
@@ -6613,6 +6684,12 @@ class S3ProjectPlanningModel(S3Model):
         except:
             current.log.error("Cannot find Project Activity Data record (no record for this ID), so cannot update start_date or statuses")
             return
+
+        if not indicator_activity_id:
+            # SHARE
+            return
+
+        # RMS HNRC
         start_date = record.start_date
         end_date = record.end_date
 
@@ -12807,7 +12884,7 @@ def project_rheader(r):
         tabs = [(T("Details"), None),
                 (T("Contact People"), "contact"),
                 ]
-        if settings.has_module("supply"):
+        if settings.get_project_activity_items():
             tabs.append((T("Distribution Items"), "distribution"))
         if settings.has_module("dvr"):
             tabs.append((T("Beneficiaries"), "person"))

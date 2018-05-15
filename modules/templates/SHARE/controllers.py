@@ -10,22 +10,15 @@ THEME = "SHARE"
 
 # =============================================================================
 class index(S3CustomController):
-    """ Custom Home Page """
-    
-    # procedure contains:
-    # 1. custom edit homepage (c=cms, f=blog)
-    # 2. display map of requests
-    # 3. list a summary of requests
-    # 4. option to filter requests
+    """
+        Custom Home Page
+        - simple CMS with links to Dashboard, etc
+    """
 
     def __call__(self):
 
-        #---------------------------------
-        # initialize variables and objects
-        output = {}
         T = current.T
-        s3db = current.s3db
-        request = current.request
+        output = {}
 
         #------------------------------------------------------------
         # Allow editing of page content from browser using CMS module
@@ -72,11 +65,57 @@ class index(S3CustomController):
             custom_info = ""
         output["custom_info"] = custom_info
 
+        #----------------------
+        # Button to upload 4W data
+        upload_4W_activity_btn = A(T("Upload 4W Activity"),
+                         _href = URL(c="project",
+                                     f="activity",
+                                     args="import",
+                                     ),
+                         _class = "action-btn button small",
+                         )
+        output["upload_4W_activity_btn"] = upload_4W_activity_btn
+
+        #----------------------
+        # Button to access Dashboard
+        dashboard_btn = A(T("Dashboard"),
+                          _href = URL(c="default",
+                                      f="index",
+                                      args="dashboard",
+                                      ),
+                          _class = "action-btn button small",
+                          )
+        output["dashboard_btn"] = dashboard_btn
+
+        # View title
+        output["title"] = current.deployment_settings.get_system_name()
+
+        self._view(THEME, "index.html")
+
+        return output
+
+# =============================================================================
+class dashboard(S3CustomController):
+    """
+        Custom Dashboard
+        - recent Events
+        - set of Filters
+        - 2 Tabs: Activities & Needs
+            Each tab has DataList & Map
+    """
+
+    def __call__(self):
+
+        T = current.T
+        output = {}
+        s3db = current.s3db
+        request = current.request
+
         #------------------------
-        # Map to display requests
+        # Map to display needs
         ftable = s3db.gis_layer_feature
         query = (ftable.controller == "req") & \
-                (ftable.function == "req")
+                (ftable.function == "need")
         layer = current.db(query).select(ftable.layer_id,
                                          limitby=(0, 1)
                                          ).first()
@@ -86,7 +125,7 @@ class index(S3CustomController):
             current.log.error("Cannot find Layer for Map")
             layer_id = None
 
-        feature_resources = [{"name"      : T("Requests"),
+        feature_resources = [{"name"      : T("Needs"),
                               "id"        : "search_results",
                               "layer_id"  : layer_id,
                               "active"    : False,
@@ -102,28 +141,29 @@ class index(S3CustomController):
                                     )
         output["_map"] = _map
 
-        #--------------------
-        # diplay request list
-        resource = s3db.resource("req_req")
-        resource.table.commit_status.represent = None
+        # ---------------------------------------------------------------------
+        # Display needs list
+        resource = s3db.resource("req_need")
+        #resource.table.commit_status.represent = None
         list_id = "req_datalist"
-        list_fields = ["purpose",
+        list_fields = [#"purpose",
+                       "location_id",
                        "priority",
-                       "req_ref",
-                       "site_id",
+                       #"req_ref",
+                       #"site_id",
                        "date",
                        ]
         # Order with most recent request first
-        orderby = "req_req.date"
+        orderby = "req_need.date"
         datalist, numrows = resource.datalist(fields = list_fields,
                                               limit = None,
                                               list_id = list_id,
                                               orderby = orderby,
                                               )
         if numrows == 0:
-            current.response.s3.crud_strings["req_req"].msg_no_match = T("No requests at present.")
+            current.response.s3.crud_strings["req_need"].msg_no_match = T("No needs at present.")
 
-        ajax_url = URL(c="req", f="req", args="datalist.dl",
+        ajax_url = URL(c="req", f="need", args="datalist.dl",
                        vars={"list_id": list_id})
         #@ToDo: Implement pagination properly
         output[list_id] = datalist.html(ajaxurl = ajax_url,
@@ -131,17 +171,13 @@ class index(S3CustomController):
                                         )
 
         # ----------------------------
-        # filter requests summary list
-        filter_widgets = [S3OptionsFilter("req.priority",
+        # Filter Form
+        # - can we have a single form for both Activities & Needs?
+        #
+        filter_widgets = [S3OptionsFilter("priority",
                                           label=T("Priority"),
                                           ),
-                          S3OptionsFilter("req.type",
-                                          label=T("Type"),
-                                          ),
-                          S3OptionsFilter("req.site_id",
-                                          label=T("Site"),
-                                          ),
-                          S3DateFilter("req.date",
+                          S3DateFilter("date",
                                        label = T("Date"),
                                        hide_time=True,
                                        ),
@@ -153,32 +189,13 @@ class index(S3CustomController):
                                    )
         output["req_filter_form"] = filter_form.html(resource, request.get_vars, list_id)
 
-        #----------------------
-        # Create request button
-        upload_4W_activity_btn = A(T("Upload 4W Activity"),
-                         _href = URL(c="req",
-                                     f="req",
-                                     args="import",
-                                     ),
-                         _class = "action-btn button small",
-                         )
-
-#        system_roles = current.auth.get_system_roles()
-#        can_request = current.auth.s3_has_role("NEEDS_LOGGER"): or (system_roles.ADMIN in current.session.s3.roles
-        #print (current.session.s3.roles)
-#        if can_request: 
-        output["upload_4W_activity_btn"] = upload_4W_activity_btn
-#        else:
-#            output["upload_4W_activity_btn"] = ""
-
         # View title
         output["title"] = current.deployment_settings.get_system_name()
 
-        self._view(THEME, "index.html")
+        self._view(THEME, "dashboard.html")
 
-        s3 = current.response.s3
         # Custom JS
-        s3.scripts.append("/%s/static/themes/SHARE/js/homepage.js" % request.application)
+        current.response.s3.scripts.append("/%s/static/themes/SHARE/js/homepage.js" % request.application)
 
         return output
 

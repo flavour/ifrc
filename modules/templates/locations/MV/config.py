@@ -17,7 +17,7 @@ def config(settings):
     settings.gis.countries.append("MV")
 
     # L10n (Localization) settings
-    settings.L10n.languages["dv"] = "ދިވެހި"
+    settings.L10n.languages["dv"] = "Divehi"
     # Default Language (put this in custom template if-required)
     #settings.L10n.default_language = "dv"
     # Default timezone for users
