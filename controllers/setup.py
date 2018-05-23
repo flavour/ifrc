@@ -187,7 +187,7 @@ def deployment():
                                         )
                 restrict_d = [str(row.id) for row in rows if row.task_id is None]
                 restrict_s = [str(row.id) for row in rows if row.task_id is not None]
-                restrict_c = [str(row.id) for row in rows if row.type in (3, 4)]
+                restrict_c = [str(row.id) for row in rows if row.type in (3, 4, 5, 6)]
                 s3.actions += [{"url": URL(c = module,
                                            f = "deployment",
                                            args = [deployment_id, "instance", "[id]", "deploy"],
