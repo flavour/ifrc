@@ -113,6 +113,8 @@ def deployment():
                                  2: "setup",
                                  3: "test",
                                  4: "demo",
+                                 5: "dev",
+                                 6: "train",
                                  }
                         for row in rows:
                             del types[row.type]
