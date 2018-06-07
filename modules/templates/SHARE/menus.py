@@ -18,24 +18,25 @@ class S3MainMenu(default.S3MainMenu):
     def menu_modules(cls):
         """ Custom Modules Menu """
 
-        menu= [MM("Needs", c="req", f="need")( # @ToDo m=summary ?
-                #MM("Approve", c="req", f="req"),
-                #MM("Commitments", c="req", f="commit"),
-                MM("Statistics", m="report"),
+        menu= [MM("Needs", c="req", f="need", m="summary")(
+                #MM("Statistics", m="report"),
+                #MM("Map", m="map"),
                 ),
-               MM("4W", c="project", f="activity")( # @ToDo m=summary ?
-                MM("Statistics",  m="report"),
+               MM("4W", c="project", f="activity", m="summary")(
+                #MM("Statistics",  m="report"),
+                #MM("Map", m="map"),
                 ),
-               MM("Sitreps", c="event", f="sitrep"),
+               MM("Situational Updates", c="event", f="sitrep"),
                MM("Organizations", c="org", f="organisation")(
                 MM("Offices", c="org", f="office"),
                 MM("Facilities", c="org", f="facility"),
                ),
                MM("more", link=False)(
                 MM("Documents", c="doc", f="document"),
-                MM("Events", c="event", f="event"),
+                MM("Disasters", c="event", f="event"),
+                MM("Items", c="supply", f="item"),
                 MM("Sectors", c="org", f="sector"),
-                MM("Services", c="org", f="service"),
+                #MM("Services", c="org", f="service"),
                 ),
                ]
 
@@ -50,36 +51,23 @@ class S3OptionsMenu(default.S3OptionsMenu):
     def event():
         """ Events Module """
 
-        ADMIN = current.session.s3.system_roles.ADMIN
-
-        return M()(
-                    #M("Scenarios", c="event", f="scenario")(
-                    #    M("Create", m="create"),
-                    #    #M("Import", m="import", p="create"),
-                    #),
-                    M("Disasters", c="event", f="event")(
-                        M("Create", m="create"),
-                    ),
-                    M("Disaster Types", c="event", f="event_type",
-                      restrict=[ADMIN])(
-                        M("Create", m="create"),
-                        #M("Import", m="import", p="create"),
-                    ),
-                    #M("Incidents", c="event", f="incident")(
-                    #    M("Create", m="create"),
-                    #),
-                    #M("Incident Reports", c="event", f="incident_report", m="summary")(
-                    #    M("Create", m="create"),
-                    #),
-                    #M("Incident Types", c="event", f="incident_type")(
-                    #    M("Create", m="create"),
-                    #    #M("Import", m="import", p="create"),
-                    #),
-                    M("Situation Reports", c="event", f="sitrep")(
-                        M("Create", m="create"),
-                        #M("Import", m="import", p="create"),
-                    ),
-                )
+        if current.request.function == "sitrep":
+            return M()(
+                        M("Situational Updates", c="event", f="sitrep")(
+                            M("Create", m="create"),
+                        ),
+                    )
+        else:
+            ADMIN = current.session.s3.system_roles.ADMIN
+            return M()(
+                        M("Disasters", c="event", f="event")(
+                            M("Create", m="create"),
+                        ),
+                        M("Disaster Types", c="event", f="event_type",
+                          restrict=[ADMIN])(
+                            M("Create", m="create"),
+                        ),
+                    )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -91,16 +79,16 @@ class S3OptionsMenu(default.S3OptionsMenu):
         return M(c="org")(
                     M("Organizations", f="organisation")(
                         M("Create", m="create"),
-                        M("Import", m="import")
+                        #M("Import", m="import")
                     ),
                     M("Offices", f="office")(
                         M("Create", m="create"),
                         M("Map", m="map"),
-                        M("Import", m="import")
+                        #M("Import", m="import")
                     ),
                     M("Facilities", f="facility")(
                         M("Create", m="create"),
-                        M("Import", m="import"),
+                        #M("Import", m="import"),
                     ),
                     M("Organization Types", f="organisation_type",
                       restrict=[ADMIN])(
@@ -117,6 +105,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     M("Sectors", f="sector", restrict=[ADMIN])(
                         M("Create", m="create"),
                     ),
+                    #M("Services", f="service", restrict=[ADMIN])(
+                    #    M("Create", m="create"),
+                    #),
                 )
 
     # -------------------------------------------------------------------------
@@ -124,15 +115,13 @@ class S3OptionsMenu(default.S3OptionsMenu):
     def project():
         """ Project Module """
 
-        ADMIN = current.session.s3.system_roles.ADMIN
+        #ADMIN = current.session.s3.system_roles.ADMIN
 
         return M()(
-                    M("Activities", c="project", f="activity")(
+                    M("Activities", c="project", f="activity", m="summary")(
                         M("Create", m="create"),
-                    ),
-                    M("Activity Types", c="project", f="activity_type",
-                      restrict=[ADMIN])(
-                        M("Create", m="create"),
+                        #M("Statistics", m="report"),
+                        #M("Map", m="map"),
                         #M("Import", m="import", p="create"),
                     ),
                 )
@@ -145,11 +134,22 @@ class S3OptionsMenu(default.S3OptionsMenu):
         ADMIN = current.session.s3.system_roles.ADMIN
 
         return M(c="req")(
-                    M("Needs", f="need")(
+                    M("Needs", f="need", m="summary")(
                         M("Create", m="create"),
-                        M("Report", m="report"),
+                        #M("Statistics", m="report"),
+                        #M("Map", m="map"),
                         #M("Import", m="import", p="create"),
                     ),
+                )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def supply():
+        """ Supply Management """
+
+        ADMIN = current.session.s3.system_roles.ADMIN
+
+        return M(c="supply")(
                     M("Items", c="supply", f="item")(
                         M("Create", m="create"),
                         M("Report", m="report"),
@@ -159,9 +159,9 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     #M("Catalog Items", c="supply", f="catalog_item")(
                        #M("Create", m="create"),
                     #),
-                    M("Catalogs", c="supply", f="catalog")(
-                        M("Create", m="create"),
-                    ),
+                    #M("Catalogs", c="supply", f="catalog")(
+                    #    M("Create", m="create"),
+                    #),
                     M("Item Categories", c="supply", f="item_category",
                       restrict=[ADMIN])(
                         M("Create", m="create"),

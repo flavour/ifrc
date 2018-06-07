@@ -31,6 +31,11 @@ import json
 import sys
 import datetime
 
+try:
+    from cStringIO import StringIO # Faster, where available
+except ImportError:
+    from StringIO import StringIO
+
 from gluon import current, URL, DIV
 from gluon.storage import Storage
 
@@ -458,19 +463,25 @@ class S3Sync(S3Method):
                       mode = log.NONE,
                       action = "connect",
                       remote = False,
-                      result = self.log.FATAL,
+                      result = log.FATAL,
                       message = error,
                       )
             return False
 
+        # Should we update sync tasks from peer?
+        connector = S3SyncRepository(repository)
+        if hasattr(connector, "refresh"):
+            success = connector.refresh()
+
+        # Look up current sync tasks
         db = current.db
         s3db = current.s3db
         ttable = s3db.sync_task
         query = (ttable.repository_id == repository_id) & \
-                (ttable.deleted != True)
+                (ttable.deleted == False)
         tasks = db(query).select()
 
-        connector = S3SyncRepository(repository)
+        # Login at repository
         error = connector.login()
         if error:
             log.write(repository_id = repository_id,
@@ -488,6 +499,12 @@ class S3Sync(S3Method):
         s3 = current.response.s3
         s3.synchronise_uuids = connector.synchronise_uuids
 
+        # Delta for msince progress = 1 second after the mtime of
+        # the youngest item transmitted (without this, the youngest
+        # items would be re-transmitted until there is another update,
+        # because msince means greater-or-equal)
+        delta = datetime.timedelta(seconds=1)
+
         success = True
         for task in tasks:
 
@@ -503,7 +520,7 @@ class S3Sync(S3Method):
                                   (task.resource_name, error))
                 continue
             if mtime is not None:
-                task.update_record(last_pull=mtime)
+                task.update_record(last_pull=mtime+delta)
 
             # Push
             mtime = None
@@ -515,7 +532,7 @@ class S3Sync(S3Method):
                                   (task.resource_name, error))
                 continue
             if mtime is not None:
-                task.update_record(last_push=mtime)
+                task.update_record(last_push=mtime+delta)
 
             current.log.debug("S3Sync.synchronize: %s done" % task.resource_name)
 
@@ -523,6 +540,8 @@ class S3Sync(S3Method):
         db(s3db.sync_repository.id == repository_id).update(
                             last_connected = datetime.datetime.utcnow(),
                             )
+
+        connector.close_archives()
 
         return success
 
@@ -594,6 +613,123 @@ class S3Sync(S3Method):
                 # No rule - accept always
                 debug("Accept because no rule found")
                 item.conflict = False
+
+    # -------------------------------------------------------------------------
+    def create_archive(self, dataset_id, task_id=None):
+        """
+            Create an archive for a data set
+
+            @param dataset_id: the data set record ID
+            @param task_id: the scheduler task ID if the archive is
+                            created asynchronously
+
+            @return: error message if an error occured, otherwise None
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        T = current.T
+
+        # Standard download path for archives
+        DOWNLOAD = "/default/download"
+
+        # Get the data set
+        dtable = s3db.sync_dataset
+        query = (dtable.id == dataset_id) & \
+                (dtable.deleted == False)
+        dataset = db(query).select(dtable.id,
+                                   dtable.code,
+                                   dtable.archive_url,
+                                   dtable.repository_id,
+                                   limitby = (0, 1),
+                                   ).first()
+        if not dataset:
+            return T("Data Set not found")
+        elif dataset.repository_id:
+            return T("Cannot create archive from remote data set")
+        else:
+            code = dataset.code
+            if code:
+                filename = "%s.zip" % code
+            else:
+                filename = "dataset-%s.zip" % dataset_id
+
+        # Get all sync tasks for the data set
+        ttable = s3db.sync_task
+        query = (ttable.dataset_id == dataset_id) & \
+                (ttable.repository_id == None) & \
+                (ttable.mode == 1) & \
+                (ttable.deleted == False)
+        tasks = db(query).select(ttable.id,
+                                 ttable.uuid,
+                                 ttable.resource_name,
+                                 ttable.components,
+                                 )
+
+        if not tasks:
+            return T("No resources defined for dataset")
+
+        # Get the current archive record
+        atable = s3db.sync_dataset_archive
+        query = (atable.dataset_id == dataset_id) & \
+                (atable.deleted == False)
+        row = db(query).select(atable.id,
+                               limitby = (0, 1),
+                               ).first()
+        if row:
+            archive_id = row.id
+            if task_id:
+                row.update_record(task_id=task_id)
+                db.commit()
+        else:
+            archive_id = atable.insert(dataset_id = dataset_id)
+        if not archive_id:
+            return T("Could not create or update archive")
+
+        # Create archive
+        archive = S3SyncDataArchive()
+
+        for task in tasks:
+
+            # Define the resource
+            components = [] if task.components is False else None
+            resource = current.s3db.resource(task.resource_name,
+                                             components = components,
+                                             )
+
+            # Get the sync filters for this task
+            filters = current.sync.get_filters(task.id)
+
+            # Export the resource as S3XML
+            data = resource.export_xml(filters = filters,
+                                       #pretty_print = True,
+                                       )
+
+            # Add to archive, using the UUID of the task as object name
+            archive.add("%s.xml" % task.uuid, data)
+
+        # Close the archive and get the output as file-like object
+        fileobj = archive.close()
+
+        # Store the fileobj in the archive-field
+        stored_filename = atable.archive.store(fileobj, filename)
+        db(atable.id == archive_id).update(date = datetime.datetime.utcnow(),
+                                           archive = stored_filename,
+                                           task_id = None,
+                                           )
+
+        # Update archive URL if it is empty or a local path
+        # pointing to the standard download location
+        archive_url = dataset.archive_url
+        if not archive_url or archive_url.startswith(DOWNLOAD):
+            dataset.update_record(
+                use_archive = True,
+                archive_url = "%s/%s" % (DOWNLOAD, stored_filename),
+                )
+
+        # Return None to indicate success
+        return None
 
     # -------------------------------------------------------------------------
     # Utility methods:
@@ -679,10 +815,10 @@ class S3SyncLog(S3Method):
     TABLENAME = "sync_log"
 
     # Outcomes
-    SUCCESS = "success"
-    WARNING = "warning"
-    ERROR = "error"
-    FATAL = "fatal"
+    SUCCESS = "success"     # worked
+    WARNING = "warning"     # worked, but had issues
+    ERROR = "error"         # failed, but may work later
+    FATAL = "fatal"         # failed, will never work unless reconfigured
 
     # Transmissions
     IN = "incoming"
@@ -847,6 +983,7 @@ class S3SyncRepository(object):
         # Processing Options
         self.synchronise_uuids = repository.synchronise_uuids
         self.keep_source = repository.keep_source
+        self.last_refresh = repository.last_refresh
 
         # Instantiate Adapter
         import sync_adapter
@@ -857,6 +994,7 @@ class S3SyncRepository(object):
             adapter = S3SyncBaseAdapter(self)
 
         self.adapter = adapter
+        self.archives = {}
 
     # -------------------------------------------------------------------------
     @property
@@ -881,6 +1019,17 @@ class S3SyncRepository(object):
 
         return object.__getattribute__(self.adapter, name)
 
+    # -------------------------------------------------------------------------
+    def close_archives(self):
+        """
+            Close any open archives
+        """
+
+        for archive in self.archives.values():
+            if archive:
+                archive.close()
+        self.archives = {}
+
 # =============================================================================
 class S3SyncBaseAdapter(object):
     """
@@ -901,6 +1050,8 @@ class S3SyncBaseAdapter(object):
         self.repository = repository
         self.log = repository.log
 
+        self.archives = {}
+
     # -------------------------------------------------------------------------
     # Methods to be implemented by subclasses:
     # -------------------------------------------------------------------------
@@ -908,7 +1059,8 @@ class S3SyncBaseAdapter(object):
         """
             Register this site at the peer repository
 
-            @return: True to indicate success, otherwise False
+            @return: True|False to indicate success|failure,
+                     or None if registration is not required
         """
 
         raise NotImplementedError
@@ -961,7 +1113,9 @@ class S3SyncBaseAdapter(object):
              limit=None,
              msince=None,
              filters=None,
-             mixed=False):
+             mixed=False,
+             pretty_print=False,
+             ):
         """
             Respond to an incoming pull from the peer repository
 
@@ -971,6 +1125,7 @@ class S3SyncBaseAdapter(object):
             @param msince: minimum modification date/time for records to send
             @param filters: URL filters for record extraction
             @param mixed: negotiate resource with peer (disregard resource)
+            @param pretty_print: make the output human-readable
 
             @return: a dict {status, remote, message, response}, with:
                         - status....the outcome of the operation
@@ -1011,5 +1166,135 @@ class S3SyncBaseAdapter(object):
         """
 
         raise NotImplementedError
+
+# =============================================================================
+class S3SyncDataArchive(object):
+    """
+        Simple abstraction layer for (compressed) data archives, currently
+        based on zipfile (Python standard library). Compression additionally
+        requires zlib to be installed (both for write and read).
+    """
+
+    def __init__(self, fileobj=None, compressed=True):
+        """
+            Create or open an archive
+
+            @param fileobj: the file object containing the archive,
+                            None to create a new archive
+            @param compress: enable (or suppress) compression of new
+                             archives
+        """
+
+        import zipfile
+
+        if compressed:
+            compression = zipfile.ZIP_DEFLATED
+        else:
+            compression = zipfile.ZIP_STORED
+
+        if fileobj is not None:
+            if not hasattr(fileobj, "seek"):
+                # Possibly a addinfourl instance from urlopen,
+                # => must copy to StringIO buffer for random access
+                fileobj = StringIO(fileobj.read())
+            try:
+                archive = zipfile.ZipFile(fileobj, "r")
+            except RuntimeError:
+                current.log.warn("invalid ZIP archive: %s" % sys.exc_info()[1])
+                archive = None
+        else:
+            fileobj = StringIO()
+            try:
+                archive = zipfile.ZipFile(fileobj, "w", compression, True)
+            except RuntimeError:
+                # Zlib not available? => try falling back to STORED
+                compression = zipfile.ZIP_STORED
+                archive = zipfile.ZipFile(fileobj, "w", compression, True)
+                current.log.warn("zlib not available - cannot compress archive")
+
+        self.fileobj = fileobj
+        self.archive = archive
+
+    # -------------------------------------------------------------------------
+    def add(self, name, obj):
+        """
+            Add an object to the archive
+
+            @param name: the file name for the object inside the archive
+            @param obj: the object to add (string or file-like object)
+
+            @raises UserWarning: when adding a duplicate name (overwrites
+                                 the existing object in the archive)
+            @raises RuntimeError: if the archive is not writable, or
+                                  no valid object name has been provided
+            @raises TypeError: if the object is not a unicode, str or
+                               file-like object
+        """
+
+        # Make sure the object name is an utf-8 encoded str
+        if not name:
+            raise RuntimeError("name is required")
+        elif type(name) is not str:
+            name = s3_str(name)
+
+        # Make sure the archive is available
+        archive = self.archive
+        if not archive:
+            raise RuntimeError("cannot add to closed archive")
+
+        # Convert unicode objects to str
+        if type(obj) is unicode:
+            obj = obj.encode("utf-8")
+
+        # Write the object
+        if type(obj) is str:
+            archive.writestr(name, obj)
+
+        elif hasattr(obj, "read"):
+            if hasattr(obj, "seek"):
+                obj.seek(0)
+            archive.writestr(name, obj.read())
+
+        else:
+            raise TypeError("invalid object type")
+
+    # -------------------------------------------------------------------------
+    def extract(self, name):
+        """
+            Extract an object from the archive by name
+
+            @param name: the object name
+
+            @return: the object as file-like object, or None if
+                     the object could not be found in the archive
+        """
+
+        if not self.archive:
+            raise RuntimeError("cannot extract from closed archive")
+
+        try:
+            return self.archive.open(name)
+        except KeyError:
+            # Object doesn't exist
+            return None
+
+    # -------------------------------------------------------------------------
+    def close(self):
+        """
+            Close the archive and return it as file-like object; no further
+            add/extract operations will be possible after closing.
+
+            @return: the file-like object containing the archive
+        """
+
+        if self.archive:
+            self.archive.close()
+            self.archive = None
+
+        fileobj = self.fileobj
+        if fileobj:
+            fileobj.seek(0)
+
+        return fileobj
 
 # End =========================================================================

@@ -575,6 +575,8 @@ def config(settings):
     # Events
     # Uncomment to use the term Disaster instead of Event
     #settings.event.label = "Disaster"
+    # Uncomment to not use Incidents under Events
+    #settings.event.incident = False
     # Uncomment to preserve linked Incidents when an Event is deleted
     # NB Changing this setting requires a DB migration
     #settings.event.cascade_delete_incidents = False
@@ -928,9 +930,12 @@ def config(settings):
 
     # -------------------------------------------------------------------------
     # Supply
+    # Name of the Default Item Catalog. Do not edit after deployment
+    #settings.supply.catalog_default = "Default"
+    # Disable the use of Multiple Item Catalogs
+    #settings.supply.catalog_multi = False
+    # Disable the use of Alternative Items
     #settings.supply.use_alt_name = False
-    # Do not edit after deployment
-    #settings.supply.catalog_default = T("Default")
 
     # -------------------------------------------------------------------------
     # Projects

@@ -1525,8 +1525,8 @@ class S3ResourceQuery(object):
                 rfield = 0
 
         query = query_bare(op, lfield, rfield)
-        if invert:
-            query = ~(query)
+        if invert and query is not None:
+            query = ~query
         return query
 
     # -------------------------------------------------------------------------
@@ -2183,6 +2183,8 @@ class S3ResourceQuery(object):
 class S3URLQuery(object):
     """ URL Query Parser """
 
+    FILTEROP = re.compile(r"__(?!link\.)([_a-z\!]+)$")
+
     # -------------------------------------------------------------------------
     @classmethod
     def parse(cls, resource, get_vars):
@@ -2307,30 +2309,55 @@ class S3URLQuery(object):
         return get_vars
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def parse_expression(key):
+    @classmethod
+    def parse_key(cls, key):
         """
-            Parse a URL expression
+            Parse a URL filter key
 
-            @param key: the key for the URL variable
-            @return: tuple (selectors, operator, invert)
+            @param key: the filter key
+
+            @return: tuple (selector, operator, invert)
         """
 
         if key[-1] == "!":
             invert = True
         else:
             invert = False
+
         fs = key.rstrip("!")
         op = None
-        if "__" in fs:
-            fs, op = fs.split("__", 1)
-            op = op.strip("_")
+
+        # Find the operator
+        m = cls.FILTEROP.search(fs)
+        if m:
+            op = m.group(0).strip("_")
+            fs = fs[:m.span(0)[0]]
+        else:
+            fs = fs.rstrip("_")
         if not op:
             op = "eq"
+
+        return fs, op, invert
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def parse_expression(cls, key):
+        """
+            Parse a URL filter key, separating multiple field selectors
+            if the key specifies alternatives
+
+            @param key: the filter key
+
+            @return: tuple ([field selectors], operator, invert)
+        """
+
+        fs, op, invert = cls.parse_key(key)
+
         if "|" in fs:
             selectors = [s for s in fs.split("|") if s]
         else:
             selectors = [fs]
+
         return selectors, op, invert
 
     # -------------------------------------------------------------------------

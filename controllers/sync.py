@@ -152,6 +152,30 @@ def repository():
                                                 DIV(s3base.s3_strip_markup(msg),
                                                     _class="message-body",
                                                     )
+
+                elif alias == "dataset":
+
+                    table = r.component.table
+                    tablename = r.component.tablename
+
+                    # Adapt CRUD strings to perspective
+                    s3.crud_strings[tablename].update(
+                       label_create = T("Add Data Set"),
+                       title_list = T("Data Sets"),
+                       label_list_button = T("List Data Sets"),
+                       msg_record_created = T("Data Set added"),
+                       msg_list_empty = T("No Data Sets currently registered"),
+                    )
+
+                    # Allow the same data set code only once per repository
+                    field = table.code
+                    field.requires = s3db.sync_dataset_code_requires + \
+                                     [IS_NOT_ONE_OF(db(table.repository_id == r.id),
+                                        "sync_dataset.code",
+                                        error_message = "Code already registered for this repository",
+                                        ),
+                                      ]
+
                 s3.cancel = URL(c = "sync",
                                 f = "repository",
                                 args = [str(r.id), alias],
@@ -179,23 +203,36 @@ def repository():
         return output
     s3.postp = postp
 
-    # Rheader tabs for repositories
-    tabs = [(T("Configuration"), None),
-            (T("Resources"), "task"),
-            (T("Schedule"), "job"),
-            (T("Log"), "log"),
-            ]
-
-    rheader = lambda r: s3db.sync_rheader(r, tabs=tabs)
-    return s3_rest_controller("sync", "repository", rheader=rheader)
+    return s3_rest_controller("sync", "repository", rheader=s3db.sync_rheader)
 
 # -----------------------------------------------------------------------------
 def dataset():
     """ Public Data Sets: RESTful CRUD controller """
 
     def prep(r):
+
+        resource = r.resource
+
         # Filter to locally hosted data sets
-        r.resource.add_filter(FS("repository_id") == None)
+        resource.add_filter(FS("repository_id") == None)
+
+        if not r.component:
+
+            table = resource.table
+
+            if r.interactive:
+                # Require code to be unique among exposed data sets
+                field = table.code
+                field.requires = s3db.sync_dataset_code_requires + \
+                                 [IS_NOT_ONE_OF(db(table.repository_id == None),
+                                    "sync_dataset.code",
+                                    error_message = "Code already in use",
+                                    ),
+                                  ]
+
+            # Name is required for locally hosted data sets
+            field = table.name
+            field.requires = IS_NOT_EMPTY()
 
         if r.record and r.component_name == "task":
 
@@ -310,6 +347,25 @@ def task():
         # Limit to local public data sets
         # (=do not expose repositories and corresponding credentials)
         r.resource.add_filter(FS("repository_id") == None)
+
+        return True
+    s3.prep = prep
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def resource_filter():
+    """ Sync Resource Filters: RESTful CRUD controller """
+
+    def prep(r):
+
+        # Only XML and S3JSON formats allowed
+        if r.representation not in ("s3json", "xml"):
+            r.error(415, current.ERROR.BAD_FORMAT)
+
+        # Limit to local public data sets
+        # (=do not expose repositories and corresponding credentials)
+        r.resource.add_filter(FS("task_id$repository_id") == None)
 
         return True
     s3.prep = prep

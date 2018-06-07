@@ -176,6 +176,7 @@ class SyncRepositoryModel(S3Model):
         sync_repository_types = {
             "adashi": "ADASHI",
             "ccrm": "CiviCRM",
+            "data": "Sahana Eden Data Repository",
             "eden": "Sahana Eden",
             "filesync": "Local Filesystem",
             "ftp": "FTP",
@@ -210,7 +211,9 @@ class SyncRepositoryModel(S3Model):
                            default = "eden",
                            label = T("Repository Type"),
                            represent = S3Represent(options=sync_repository_types),
-                           requires = IS_IN_SET(sync_repository_types),
+                           requires = IS_IN_SET(sync_repository_types,
+                                                sort = True,
+                                                ),
                            ),
                      Field("backend",
                            default = "eden",
@@ -337,6 +340,12 @@ class SyncRepositoryModel(S3Model):
                                  label = T("Last Connected"),
                                  writable = False,
                                  ),
+                     # For data repositories
+                     s3_datetime("last_refresh",
+                                 label = T("Last Refresh"),
+                                 readable = False,
+                                 writable = False,
+                                 ),
                      # System fields
                      Field.Method("last_pull_time",
                                   self.sync_repository_last_pull_time),
@@ -368,10 +377,7 @@ class SyncRepositoryModel(S3Model):
                                       ],
                        onaccept = self.sync_repository_onaccept,
                        ondelete = self.sync_repository_ondelete,
-                       create_next = URL(c="sync",
-                                         f="repository",
-                                         args=["[id]", "task"],
-                                         ),
+                       create_next = self.sync_repository_create_next,
                        update_next = URL(c="sync",
                                          f="repository",
                                          args=["[id]"],
@@ -411,6 +417,7 @@ class SyncRepositoryModel(S3Model):
         self.add_components(tablename,
                             sync_task = "repository_id",
                             sync_log = "repository_id",
+                            sync_dataset = "repository_id",
                             # Scheduler Jobs
                             **{S3Task.TASK_TABLENAME: {"name": "job",
                                                        "joinby": "repository_id",
@@ -470,19 +477,28 @@ class SyncRepositoryModel(S3Model):
             return
 
         if repository_id:
+
             rtable = current.s3db.sync_repository
             query = (rtable.id == repository_id)
             repository = current.db(query).select(limitby=(0, 1)).first()
+
             if repository and repository.url:
+
                 from s3 import S3SyncRepository
                 connector = S3SyncRepository(repository)
                 success = connector.register()
-                if not success:
-                    current.response.warning = \
-                        current.T("Could not auto-register at the repository, please register manually.")
-                else:
+
+                if success is None:
+                    # No registration required
+                    return
+
+                elif success:
                     current.response.confirmation = \
                         current.T("Successfully registered at the repository.")
+
+                else:
+                    current.response.warning = \
+                        current.T("Could not auto-register at the repository, please register manually.")
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -522,11 +538,31 @@ class SyncRepositoryModel(S3Model):
         else:
             return current.T("never")
 
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def sync_repository_create_next(r):
+        """ API-type-dependent redirect after create """
+
+        create_next = "task"
+
+        record_id = r.resource.lastid
+        if record_id:
+            table = current.s3db.sync_repository
+            query = table.id == record_id
+            row = current.db(query).select(table.apitype,
+                                           limitby = (0, 1),
+                                           ).first()
+            if row and row.apitype == "data":
+                create_next = "dataset"
+
+        return URL(c="sync", f="repository", args=["[id]", create_next])
+
 # =============================================================================
 class SyncDatasetModel(S3Model):
     """ Model representing a public data set """
 
     names = ("sync_dataset",
+             "sync_dataset_archive",
              "sync_dataset_id",
              )
 
@@ -536,9 +572,22 @@ class SyncDatasetModel(S3Model):
 
         db = current.db
         s3 = current.response.s3
+        folder = current.request.folder
+
+        crud_strings = s3.crud_strings
 
         define_table = self.define_table
-        crud_strings = s3.crud_strings
+        configure = self.configure
+
+        # ---------------------------------------------------------------------
+        # Common requirements for data set codes
+        #
+        code_requires = [IS_NOT_EMPTY(),
+                         IS_LENGTH(64),
+                         IS_MATCH(r"^[A-Za-z][A-Za-z0-9_\-\.]*$",
+                                  error_message = "Code must start with a letter, and only contain ASCII letters, digits, . (dot), _ (underscore), or - (dash).",
+                                  ),
+                         ]
 
         # ---------------------------------------------------------------------
         # Public Data Set (=a collection of sync_tasks)
@@ -550,24 +599,55 @@ class SyncDatasetModel(S3Model):
                      self.sync_repository_id(readable = False,
                                              writable = False,
                                              ),
+                     Field("code", length=64,
+                           label = T("Code"),
+                           requires = code_requires,
+                           ),
                      Field("name",
                            label = T("Name"),
-                           requires = IS_NOT_EMPTY(),
                            ),
-                     Field("code", unique=True, length=64,
-                           label = T("Code"),
-                           requires = [IS_NOT_EMPTY(),
-                                       IS_LENGTH(64),
-                                       IS_NOT_ONE_OF(db,
-                                                     "%s.code" % tablename,
-                                                     ),
-                                       ],
+                     # A URL for peers to download the archive from:
+                     # - can be overridden manually to indicate external
+                     #   hosting of the archive (e.g. on GitHub)
+                     # - relative URLs must be inside the application,
+                     #   i.e. relative to http(s)://host/appname
+                     Field("archive_url",
+                           label = T("Archive URL"),
+                           requires = IS_EMPTY_OR(IS_URL(mode="generic")),
+                           comment = DIV(_class = "tooltip",
+                                         _title = "%s|%s" % (
+                                                T("Archive URL"),
+                                                T("URL to download an archive of the data set, or a URL path relative to the application if the archive is hosted locally"),
+                                                ),
+                                         ),
+                           ),
+                     Field("use_archive", "boolean",
+                           default = False,
+                           readable = False,
+                           writable = False,
                            ),
                      s3_comments(),
                      *s3_meta_fields())
 
+        # Table configuration
+        configure(tablename,
+                  deduplicate = S3Duplicate(primary = ("code",),
+                                            secondary = ("repository_id",),
+                                            ),
+                  onaccept = self.dataset_onaccept,
+                  )
+
+        # REST Methods
+        self.set_method("sync", "dataset",
+                        method = "archive",
+                        action = sync_CreateArchive,
+                        )
+
         # Components
         self.add_components(tablename,
+                            sync_dataset_archive = {"joinby": "dataset_id",
+                                                    "multiple": False,
+                                                    },
                             sync_task = "dataset_id",
                             )
 
@@ -597,10 +677,180 @@ class SyncDatasetModel(S3Model):
                                      )
 
         # ---------------------------------------------------------------------
+        # Data Set Archive
+        #
+        tablename = "sync_dataset_archive"
+        define_table(tablename,
+                     dataset_id(),
+                     s3_date(writable = False,
+                             ),
+                     Field("archive", "upload",
+                           autodelete = True,
+                           represent = self.archive_file_represent,
+                           uploadfolder = os.path.join(folder,
+                                                       "uploads",
+                                                       "datasets",
+                                                       ),
+                           writable = False,
+                           ),
+                     s3.scheduler_task_id(readable = False,
+                                          writable = False,
+                                          ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        # Table Configuration
+        configure(tablename,
+                  insertable = False,
+                  editable = False,
+                  ondelete = self.archive_ondelete,
+                  )
+
+        # CRUD Strings
+        crud_strings[tablename] = Storage(
+           label_create = T("Create Archive"),
+           title_display = T("Archive Details"),
+           title_list = T("Archives"),
+           title_update = T("Edit Archive"),
+           label_list_button = T("List Archives"),
+           label_delete_button = T("Delete Archive"),
+           msg_record_created = T("Archive created"),
+           msg_record_modified = T("Archive updated"),
+           msg_record_deleted = T("Archive deleted"),
+           msg_list_empty = T("No Archives currently registered"),
+        )
+
+        # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
         return {"sync_dataset_id": dataset_id,
+                "sync_dataset_code_requires": code_requires,
                 }
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def dataset_onaccept(form):
+        """
+            Onaccept routine for datasets:
+            - toggle use_archive flag in locally hosted repositories
+            - remove archive URL for remote update setting use_archive=False
+        """
+
+        try:
+            record_id = form.vars.id
+        except AttributeError:
+            return
+
+        table = current.s3db.sync_dataset
+        query = (table.id == record_id)
+        dataset = current.db(query).select(table.id,
+                                           table.use_archive,
+                                           table.archive_url,
+                                           limitby = (0, 1),
+                                           ).first()
+        if not dataset:
+            return
+
+        archive_url = dataset.archive_url
+        use_archive = dataset.use_archive
+
+        if not dataset.archive_url and use_archive:
+            # We cannot use an archive if no URL is available, so...
+            dataset.update_record(use_archive=False)
+        elif not use_archive:
+            if "archive_url" not in form.vars:
+                # Assume remote-update (None-URLs not transmitted)
+                dataset.update_record(archive_url = None)
+            elif "use_archive" not in form.vars and archive_url:
+                # Assume local update (user has added a URL manually)
+                dataset.update_record(use_archive = True)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def archive_ondelete(row):
+        """
+            Ondelete-routine for archives
+            - remove the archive file (field is not nulled automatically)
+            - remove archive URL in data set and set use_archive to False,
+              so that remote sites do no longer attempt to download it
+              (unless the archive is hosted externally)
+        """
+
+        db = current.db
+        s3db = current.s3db
+
+        # Get the full row
+        table = s3db.sync_dataset_archive
+        query = (table.id == row.id)
+        row = db(query).select(table.id,
+                               table.archive,
+                               table.deleted_fk,
+                               limitby = (0, 1),
+                               ).first()
+
+        if not row:
+            return
+
+        # Extract the dataset_id
+        deleted_fk = row.deleted_fk
+        if deleted_fk:
+            try:
+                deleted_fk = json.loads(deleted_fk)
+            except:
+                dataset_id = None
+            else:
+                dataset_id = deleted_fk.get("dataset_id")
+
+        # Look up the dataset
+        if dataset_id:
+            dtable = s3db.sync_dataset
+            query = (dtable.id == dataset_id)
+            dataset = db(query).select(dtable.id,
+                                       dtable.archive_url,
+                                       limitby = (0, 1),
+                                       ).first()
+        else:
+            dataset = None
+
+        # Remove the archive_url if pointing to local file
+        if dataset:
+            archive_url = dataset.archive_url
+            if archive_url and archive_url.startswith("/default/download"):
+                # Remove it
+                dataset.update_record(use_archive = False,
+                                      archive_url = None,
+                                      )
+
+        # Delete the file
+        row.update_record(archive = None)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def archive_file_represent(filename):
+        """
+            File representation
+
+            @param filename: the stored file name (field value)
+
+            @return: a link to download the file
+        """
+
+        if filename:
+            try:
+                # Check whether file exists and extract the original
+                # file name from the stored file name
+                origname = current.db.sync_dataset_archive.archive.retrieve(filename)[0]
+            except IOError:
+                return current.T("File not found")
+            else:
+                return A(origname,
+                         _href=URL(c = "default",
+                                   f = "download",
+                                   args = [filename],
+                                   ),
+                         )
+        else:
+            return current.messages["NONE"]
 
 # =============================================================================
 class SyncLogModel(S3Model):
@@ -687,6 +937,9 @@ class SyncTaskModel(S3Model):
         define_table = self.define_table
 
         configure = self.configure
+
+        s3_datetime_represent = lambda dt: \
+                                S3DateTime.datetime_represent(dt, utc=True)
 
         # -------------------------------------------------------------------------
         # Task
@@ -810,11 +1063,13 @@ class SyncTaskModel(S3Model):
                            label = T("Last pull on"),
                            readable = True,
                            writable = False,
+                           represent = s3_datetime_represent,
                            ),
                      Field("last_push", "datetime",
                            label = T("Last push on"),
                            readable = True,
                            writable = False,
+                           represent = s3_datetime_represent,
                            ),
                      Field("mode", "integer",
                            default = 3,
@@ -1126,7 +1381,26 @@ def sync_rheader(r, tabs=None):
 
         if tablename == "sync_repository":
 
-            repository = record
+            if not tabs:
+                # Standard tabs
+                tabs = [(T("Configuration"), None),
+                        (T("Resources"), "task"),
+                        (T("Schedule"), "job"),
+                        (T("Log"), "log"),
+                        ]
+
+            if record.apitype == "data":
+                # Expose data set tab
+                tabs.insert(1, (T("Data Sets"), "dataset"))
+
+            if record.url or \
+               record.apitype == "filesync" and record.path:
+                # Expose manual sync method on tab
+                tabs.append((T("Manual Synchronization"), "now"))
+
+            rheader_tabs = s3_rheader_tabs(r, tabs)
+
+            # Link to purge the sync log for this repository
             if r.component and r.component_name=="log" and not r.component_id:
                 purge_log = A(T("Remove all log entries"),
                               _href = r.url(method="delete"),
@@ -1134,34 +1408,31 @@ def sync_rheader(r, tabs=None):
             else:
                 purge_log = ""
 
-            if repository:
-                if tabs is not None and \
-                   repository.url or \
-                   repository.apitype == "filesync" and repository.path:
-                    tabs.append((T("Manual Synchronization"), "now"))
-
-                rheader_tabs = s3_rheader_tabs(r, tabs)
-
-                rheader = DIV(TABLE(
-                    TR(TH("%s: " % T("Name")),
-                       repository.name,
-                       TH(""),
-                       purge_log),
-                    TR(TH("URL: "),
-                       repository.url,
-                       TH(""),
-                       ""),
-                    ), rheader_tabs)
+            rheader = DIV(TABLE(
+                TR(TH("%s: " % T("Name")),
+                   record.name,
+                   TH(""),
+                   purge_log),
+                TR(TH("URL: "),
+                   record.url,
+                   TH(""),
+                   ""),
+                ), rheader_tabs)
 
         elif tablename == "sync_dataset":
 
             if not tabs:
+
+
                 tabs = [(T("Basic Details"), None),
                         (T("Resources"), "task"),
+                        (T("Archive"), "dataset_archive"),
                         ]
 
-            rheader_fields = [["name"],
-                              ["code"],
+            create_archive = lambda row, r=r: sync_CreateArchive.form(r, row)
+            rheader_fields = [["code"],
+                              ["name"],
+                              [(None, create_archive)],
                               ]
 
             rheader = S3ResourceHeader(rheader_fields, tabs)(
@@ -1220,9 +1491,15 @@ def sync_now(r, **attr):
             repository = r.record
             if not repository:
                 r.error(404, current.ERROR.BAD_RECORD)
-            form = FORM(TABLE(
-                        TR(TD(T("Click 'Start' to synchronize with this repository now:"))),
-                        TR(TD(INPUT(_type="submit", _value=T("Start"))))))
+            form = FORM(DIV(T("Click 'Start' to synchronize with this repository now:"),
+                            ),
+                        DIV(INPUT(_class = "tiny primary button",
+                                  _type = "submit",
+                                  _value = T("Start"),
+                                  ),
+                            ),
+                        _class="sync-now-form",
+                        )
             if form.accepts(r.post_vars, current.session):
                 task_id = s3task.async("sync_synchronize",
                                        args = [repository.id],
@@ -1233,6 +1510,7 @@ def sync_now(r, **attr):
                 if task_id is False:
                     response.error = T("Could not initiate manual synchronization.")
                 elif task_id is None:
+                    # No scheduler running, has run synchronously
                     response.flash = T("Manual synchronization completed.")
                 else:
                     sync.set_status(manual=True)
@@ -1252,5 +1530,93 @@ def sync_now(r, **attr):
 
     response.view = "update.html"
     return output
+
+# =============================================================================
+class sync_CreateArchive(S3Method):
+    """ Method to create an archive of a dataset """
+
+    # -------------------------------------------------------------------------
+    def apply_method(self, r, **attr):
+        """
+            Entry point for REST controller
+
+            @param r: the S3Request
+            @param attr: controller parameters
+
+            @todo: perform archive creation async?
+        """
+
+        T = current.T
+
+        auth = current.auth
+        if not auth.s3_logged_in():
+            auth.permission.fail()
+
+        if r.http == "POST":
+            if r.id:
+                error = current.sync.create_archive(r.id)
+                if error:
+                    # Report error, go back to data set record
+                    current.response.error = error
+                    self.next = r.url(id = r.id,
+                                      method = "",
+                                      )
+                else:
+                    # Confirmation, move to archive-tab
+                    current.response.confirmation = T("Archive created/updated")
+                    self.next = r.url(id = r.id,
+                                      method = "",
+                                      component = "dataset_archive",
+                                      )
+            else:
+                r.error(400, T("No dataset specified by request"))
+        else:
+            r.error(405, current.ERROR.BAD_METHOD)
+
+        return {}
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def form(r, row):
+        """
+            Simple UI form to trigger POST method
+
+            @param r: the S3Request embedding the form
+            @param row: the data set Row
+
+            @todo: if archive is currently being built (async),
+                   then hide the button (provide a message instead?)
+        """
+
+        try:
+            dataset_id = row.id
+        except AttributeError:
+            return ""
+
+        try:
+            archive_url = row.archive_url
+        except AttributeError:
+            archive_url = None
+
+        if not archive_url:
+            table = current.s3db.sync_dataset_archive
+            query = (table.dataset_id == dataset_id) & \
+                    (table.deleted == False)
+            archive = current.db(query).select(table.id,
+                                               limitby = (0, 1),
+                                               ).first()
+        else:
+            archive = True
+
+        if archive:
+            label = current.T("Rebuild Archive")
+        else:
+            label = current.T("Create Archive")
+
+        return FORM(BUTTON(label, _class="action-btn"),
+                    _action = r.url(method = "archive",
+                                    component = "",
+                                    ),
+                    )
 
 # END =========================================================================

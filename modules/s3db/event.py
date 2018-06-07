@@ -28,6 +28,9 @@
 """
 
 __all__ = ("S3EventModel",
+           "S3EventLocationModel",
+           "S3EventNameModel",
+           "S3EventTagModel",
            "S3IncidentModel",
            "S3IncidentReportModel",
            "S3IncidentReportOrganisationGroupModel",
@@ -90,8 +93,6 @@ class S3EventModel(S3Model):
              "event_type_id",
              "event_event",
              "event_event_id",
-             "event_event_location",
-             "event_event_tag",
              )
 
     def model(self):
@@ -462,6 +463,7 @@ class S3EventModel(S3Model):
                                           "actuate": "replace",
                                           },
                             event_bookmark = "event_id",
+                            event_event_name = "event_id",
                             event_tag = "event_id",       # cms_tag
                             event_event_tag = "event_id", # Key-Value Store
                             event_incident = "event_id",
@@ -587,61 +589,6 @@ class S3EventModel(S3Model):
         set_method("event", "event",
                    method = "assign",
                    action = self.pr_AssignMethod(component="human_resource"))
-
-        # ---------------------------------------------------------------------
-        # Event Locations (link table)
-        #
-        tablename = "event_event_location"
-        define_table(tablename,
-                     event_id(),
-                     self.gis_location_id(
-                        widget = S3LocationSelector(show_map=False),
-                        #widget = S3LocationAutocompleteWidget(),
-                        requires = IS_LOCATION(),
-                        represent = self.gis_LocationRepresent(sep=", "),
-                        #comment = S3PopupLink(c = "gis",
-                        #                      f = "location",
-                        #                      label = T("Create Location"),
-                        #                      title = T("Location"),
-                        #                      tooltip = AUTOCOMPLETE_HELP,
-                        #                      ),
-                        ),
-                     *s3_meta_fields())
-
-        configure(tablename,
-                  deduplicate = S3Duplicate(primary = ("event_id",
-                                                       "location_id",
-                                                       ),
-                                            ),
-                  )
-
-        # ---------------------------------------------------------------------
-        # Event Tags
-        # - Key-Value extensions
-        # - can be used to identify a Source
-        # - can be used to add extra attributes (e.g. Area, Population)
-        # - can link Events to other Systems, such as:
-        #   * GLIDE (http://glidenumber.net/glide/public/about.jsp)
-        #   * OCHA Financial Tracking System, for HXL (http://fts.unocha.org/api/v1/emergency/year/2013.xml)
-        #   * Mayon
-        #   * WebEOC
-        # - can be a Triple Store for Semantic Web support
-        #
-        tablename = "event_event_tag"
-        define_table(tablename,
-                     event_id(),
-                     # key is a reserved word in MySQL
-                     Field("tag", label=T("Key")),
-                     Field("value", label=T("Value")),
-                     s3_comments(),
-                     *s3_meta_fields())
-
-        configure(tablename,
-                  deduplicate = S3Duplicate(primary = ("event_id",
-                                                       "tag",
-                                                       ),
-                                            ),
-                  )
 
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
@@ -982,6 +929,140 @@ class S3EventModel(S3Model):
             rows = db(ltable.event_id == event).select(ltable.post_id)
             for row in rows:
                 db(table.id == row.post_id).update(expired=True)
+
+# =============================================================================
+class S3EventLocationModel(S3Model):
+    """
+        Event Locations model
+        - locations for Events
+    """
+
+    names = ("event_event_location",
+             )
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Event Locations (link table)
+        #
+        tablename = "event_event_location"
+        self.define_table(tablename,
+                          self.event_event_id(empty = False,
+                                              ondelete = "CASCADE",
+                                              ),
+                          self.gis_location_id(
+                            widget = S3LocationSelector(show_map=False),
+                            #widget = S3LocationAutocompleteWidget(),
+                            requires = IS_LOCATION(),
+                            represent = self.gis_LocationRepresent(sep=", "),
+                            #comment = S3PopupLink(c = "gis",
+                            #                      f = "location",
+                            #                      label = T("Create Location"),
+                            #                      title = T("Location"),
+                            #                      tooltip = AUTOCOMPLETE_HELP,
+                            #                      ),
+                            ),
+                          *s3_meta_fields())
+
+        self.configure(tablename,
+                       deduplicate = S3Duplicate(primary = ("event_id",
+                                                            "location_id",
+                                                            ),
+                                                 ),
+                       )
+
+        # Pass names back to global scope (s3.*)
+        return {}
+
+# =============================================================================
+class S3EventNameModel(S3Model):
+    """
+        Event Names model
+        - local names for Events
+    """
+
+    names = ("event_event_name",
+             )
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Local Names
+        #
+        tablename = "event_event_name"
+        self.define_table(tablename,
+                          self.event_event_id(empty = False,
+                                              ondelete = "CASCADE",
+                                              ),
+                          s3_language(empty = False),
+                          Field("name_l10n",
+                                label = T("Local Name"),
+                                ),
+                          s3_comments(),
+                          *s3_meta_fields())
+
+        self.configure(tablename,
+                       deduplicate = S3Duplicate(primary = ("event_id",
+                                                            "language",
+                                                            ),
+                                                 ),
+                       )
+
+        # Pass names back to global scope (s3.*)
+        return {}
+
+# =============================================================================
+class S3EventTagModel(S3Model):
+    """
+        Event Tags model
+        - tags for Events
+    """
+
+    names = ("event_event_tag",
+             )
+
+    def model(self):
+
+        T = current.T
+
+        # ---------------------------------------------------------------------
+        # Event Tags
+        # - Key-Value extensions
+        # - can be used to identify a Source
+        # - can be used to add extra attributes (e.g. Area, Population)
+        # - can link Events to other Systems, such as:
+        #   * GLIDE (http://glidenumber.net/glide/public/about.jsp)
+        #   * OCHA Financial Tracking System, for HXL (http://fts.unocha.org/api/v1/emergency/year/2013.xml)
+        #   * Mayon
+        #   * WebEOC
+        # - can be a Triple Store for Semantic Web support
+        #
+        tablename = "event_event_tag"
+        define_table(tablename,
+                     self.event_event_id(),
+                     # key is a reserved word in MySQL
+                     Field("tag",
+                           label = T("Key"),
+                           ),
+                     Field("value",
+                           label = T("Value"),
+                           ),
+                     s3_comments(),
+                     *s3_meta_fields())
+
+        configure(tablename,
+                  deduplicate = S3Duplicate(primary = ("event_id",
+                                                       "tag",
+                                                       ),
+                                            ),
+                  )
+
+        # Pass names back to global scope (s3.*)
+        return {}
 
 # =============================================================================
 class S3IncidentModel(S3Model):
@@ -3916,6 +3997,11 @@ class S3EventShelterModel(S3Model):
 class S3EventSitRepModel(S3Model):
     """
         Situation Reports
+        - can be simple text/rich text
+        - can add documents/photos
+        - can add structured components such as Impacts / Staff Assignments
+        - can add Tags
+        - can add User-controlled Fields (Dynamic Tables)
         - can be compliant with EDXL SitRep 1.0:
         http://docs.oasis-open.org/emergency/edxl-sitrep/v1.0/cs02/edxl-sitrep-v1.0-cs02.html
         messageID 1..1 uuid
@@ -3949,6 +4035,7 @@ class S3EventSitRepModel(S3Model):
         settings = current.deployment_settings
         sitrep_dynamic = settings.get_event_sitrep_dynamic()
         sitrep_edxl = settings.get_event_sitrep_edxl()
+        use_incidents = settings.get_event_incident()
 
         # ---------------------------------------------------------------------
         # Situation Reports
@@ -3995,7 +4082,10 @@ class S3EventSitRepModel(S3Model):
         self.define_table(tablename,
                           self.super_link("doc_id", "doc_entity"),
                           self.event_event_id(ondelete = "CASCADE"),
-                          self.event_incident_id(ondelete = "CASCADE"),
+                          self.event_incident_id(ondelete = "CASCADE",
+                                                 readable = use_incidents,
+                                                 writable = use_incidents,
+                                                 ),
                           #Field("phase", "integer",
                           #      label = T("Incident Lifecycle Phase"),
                           #      represent = S3Represent(options = phase_opts),
@@ -4089,14 +4179,18 @@ class S3EventSitRepModel(S3Model):
                           #            readable = sitrep_edxl,
                           #            writable = sitrep_edxl,
                           #            ),
-                          self.dc_template_id(
-                                readable = sitrep_dynamic,
-                                writable = sitrep_dynamic,
-                                ),
-                          s3_comments(
-                                #readable = not sitrep_edxl,
-                                #writable = not sitrep_edxl,
-                                ),
+                          self.dc_template_id(readable = sitrep_dynamic,
+                                              writable = sitrep_dynamic,
+                                              ),
+                          s3_comments("summary",
+                                      label = T("Summary"),
+                                      #readable = not sitrep_edxl,
+                                      #writable = not sitrep_edxl,
+                                      widget = s3_richtext_widget,
+                                      ),
+                          s3_comments(#readable = not sitrep_edxl,
+                                      #writable = not sitrep_edxl,
+                                      ),
                           *s3_meta_fields())
 
         # CRUD strings
@@ -4124,6 +4218,7 @@ class S3EventSitRepModel(S3Model):
                                         "organisation_id",
                                         "location_id",
                                         "date",
+                                        "summary",
                                         S3SQLInlineComponent(
                                             "document",
                                             name = "document",
@@ -4132,6 +4227,20 @@ class S3EventSitRepModel(S3Model):
                                         ),
                                         "comments",
                                         )
+
+        list_fields = ["date",
+                       "event_id",
+                       "location_id$L1",
+                       "location_id$L2",
+                       "location_id$L3",
+                       "organisation_id",
+                       "number",
+                       "name",
+                       "summary",
+                       (T("Attachments"), "document.file"),
+                       ]
+        if use_incidents:
+            list_fields.insert(2, "incident_id")
 
         if sitrep_edxl:
             org_filter = None
@@ -4150,6 +4259,8 @@ class S3EventSitRepModel(S3Model):
                           S3LocationFilter(),
                           S3DateFilter("date"),
                           ]
+        if use_incidents:
+            filter_widgets.insert(1, S3OptionsFilter("incident_id"))
 
         self.configure(tablename,
                        crud_form = crud_form,
@@ -4157,18 +4268,7 @@ class S3EventSitRepModel(S3Model):
                        # - however they all have the same component name so add correct one in controller instead!
                        #dynamic_components = True,
                        filter_widgets = filter_widgets,
-                       list_fields = ["date",
-                                      "event_id",
-                                      "incident_id",
-                                      "location_id$L1",
-                                      "location_id$L2",
-                                      "location_id$L3",
-                                      "organisation_id",
-                                      "number",
-                                      "name",
-                                      (T("Attachments"), "document.file"),
-                                      "comments",
-                                      ],
+                       list_fields = list_fields,
                        orderby = "event_sitrep.date desc",
                        super_entity = "doc_entity",
                        )
