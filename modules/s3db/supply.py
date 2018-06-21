@@ -372,9 +372,8 @@ $.filterOptionsS3({
         define_table(tablename,
                      catalog_id(),
                      # Needed to auto-create a catalog_item
-                     item_category_id(
-                        script = item_category_script
-                     ),
+                     item_category_id(script = item_category_script,
+                                      ),
                      Field("name", length=128, notnull=True,
                            label = T("Name"),
                            requires = [IS_NOT_EMPTY(),
@@ -478,7 +477,7 @@ $.filterOptionsS3({
             msg_no_match = T("No Matching Items")
             )
 
-        supply_item_represent = supply_ItemRepresent(show_link=True)
+        supply_item_represent = supply_ItemRepresent(show_link = True)
 
         # Reusable Field
         supply_item_tootip = T("Type the name of an existing catalog item OR Click 'Create Item' to add an item which is not in the catalog.")
@@ -489,15 +488,16 @@ $.filterOptionsS3({
             represent = supply_item_represent,
             requires = IS_ONE_OF(db, "supply_item.id",
                                  supply_item_represent,
-                                 sort=True),
+                                 sort = True,
+                                 ),
             sortby = "name",
             widget = S3AutocompleteWidget("supply", "item"),
-            comment=S3PopupLink(c = "supply",
-                                f = "item",
-                                label = ADD_ITEM,
-                                title = T("Item"),
-                                tooltip = supply_item_tootip,
-                                ),
+            comment = S3PopupLink(c = "supply",
+                                  f = "item",
+                                  label = ADD_ITEM,
+                                  title = T("Item"),
+                                  tooltip = supply_item_tootip,
+                                  ),
             )
 
         # ---------------------------------------------------------------------
@@ -590,7 +590,7 @@ $.filterOptionsS3({
         if settings.get_supply_use_alt_name():
             add_components(tablename,
                            # Alternative Items
-                           supply_item_alt="item_id",
+                           supply_item_alt = "item_id",
                            )
 
         # =====================================================================
@@ -602,9 +602,8 @@ $.filterOptionsS3({
         tablename = "supply_catalog_item"
         define_table(tablename,
                      catalog_id(),
-                     item_category_id(
-                        script = item_category_script
-                     ),
+                     item_category_id(script = item_category_script,
+                                      ),
                      supply_item_id(script = None), # No Item Pack Filter
                      s3_comments(), # These comments do *not* pull through to an Inventory's Items or a Request's Items
                      *s3_meta_fields())
@@ -678,7 +677,7 @@ $.filterOptionsS3({
         #
         tablename = "supply_item_pack"
         define_table(tablename,
-                     supply_item_id(empty=False),
+                     supply_item_id(empty = False),
                      Field("name", length=128,
                            notnull=True, # Ideally this would reference another table for normalising Pack names
                            default = T("piece"),
@@ -923,41 +922,33 @@ $.filterOptionsS3({
         # ---------------------------------------------------------------------
         # Pass names back to global scope (s3.*)
         #
-        return dict(supply_item_id = supply_item_id,
-                    supply_item_entity_id = item_id,
-                    supply_item_category_id = item_category_id,
-                    supply_item_pack_id = item_pack_id,
-                    supply_item_represent = supply_item_represent,
-                    supply_item_category_represent = item_category_represent,
-                    supply_item_pack_quantity = SupplyItemPackQuantity,
-                    supply_item_add = self.supply_item_add,
-                    supply_item_pack_represent = item_pack_represent,
-                    )
+        return {"supply_item_id": supply_item_id,
+                "supply_item_entity_id": item_id,
+                "supply_item_category_id": item_category_id,
+                "supply_item_pack_id": item_pack_id,
+                "supply_item_represent": supply_item_represent,
+                "supply_item_category_represent": item_category_represent,
+                "supply_item_pack_quantity": SupplyItemPackQuantity,
+                "supply_item_add": self.supply_item_add,
+                "supply_item_pack_represent": item_pack_represent,
+                }
 
     # -------------------------------------------------------------------------
     @staticmethod
     def defaults():
         """ Return safe defaults for names in case the model is disabled """
 
-        supply_item_id = S3ReusableField("item_id", "integer",
-                                         writable=False,
-                                         readable=False)
-        supply_item_category_id = S3ReusableField("item_category_id", "integer",
-                                                  writable=False,
-                                                  readable=False)
-        item_id = S3ReusableField("item_entity_id", "integer",
-                                  writable=False,
-                                  readable=False)
-        item_pack_id = S3ReusableField("item_pack_id", "integer",
-                                       writable=False,
-                                       readable=False)
+        dummy = S3ReusableField("dummy_id", "integer",
+                                readable = False,
+                                writable = False,
+                                )
 
-        return dict(supply_item_id = supply_item_id,
-                    supply_item_category_id = supply_item_category_id,
-                    supply_item_entity_id = item_id,
-                    supply_item_pack_id = item_pack_id,
-                    supply_item_pack_quantity = lambda tablename: lambda row: 0,
-                    )
+        return {"supply_item_id": lambda **attr: dummy("item_id"),
+                "supply_item_category_id": lambda **attr: dummy("item_category_id"),
+                "supply_item_entity_id": lambda **attr: dummy("item_entity_id"),
+                "supply_item_pack_id": lambda **attr: dummy("item_pack_id"),
+                "supply_item_pack_quantity": lambda tablename: lambda row: 0,
+                }
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -1238,6 +1229,10 @@ class S3SupplyDistributionModel(S3Model):
 
         A Distribution is an Item (which could be a Kit) distributed to a single Location
         - usually as part of an Activity
+
+        @ToDo: Deprecate this in favour of S3ProjectActivityItemModel?
+               - not based on stats, but simpler as less joins.
+               - could be based on stats if we make all supply_item into stats_parameter instances
     """
 
     names = ("supply_distribution_item",
@@ -1278,8 +1273,8 @@ class S3SupplyDistributionModel(S3Model):
                            label = T("Label"),
                            requires = [IS_LENGTH(128),
                                        IS_NOT_IN_DB(db,
-                                                   "supply_distribution_item.name",
-                                                   ),
+                                                    "supply_distribution_item.name",
+                                                    ),
                                        ],
                            ),
                      *s3_meta_fields())
@@ -1753,12 +1748,18 @@ class supply_ItemRepresent(S3Represent):
     """ Representation of Supply Items """
 
     def __init__(self,
-                 translate=False,
-                 show_link=False,
-                 show_um=False,
-                 multiple=False):
+                 multiple = False,
+                 show_link = False,
+                 show_um = False,
+                 translate = False,
+                 truncate = None,
+                 ):
 
         self.show_um = show_um
+        if truncate is None:
+            # Default: Truncate unless exporting in XLS format
+            truncate = current.auth.permission.format != "xls"
+        self.truncate = truncate
 
         # Need a custom lookup to join with Brand
         self.lookup_rows = self.custom_lookup_rows
@@ -1833,6 +1834,10 @@ class supply_ItemRepresent(S3Represent):
             um = row["supply_item.um"]
             if um:
                 name = "%s (%s)" % (name, um)
+
+        if self.truncate:
+            name = s3_truncate(name)
+
         return s3_str(name)
 
 # =============================================================================
@@ -2497,22 +2502,24 @@ def supply_item_controller():
             if r.component_name == "inv_item":
                 # Inventory Items need proper accountability so are edited through inv_adj
                 s3db.configure("inv_inv_item",
-                               listadd=False,
-                               deletable=False)
+                               listadd = False,
+                               deletable = False,
+                               )
                 # Filter to just item packs for this Item
-                inv_item_pack_requires = IS_ONE_OF(current.db,
-                                                   "supply_item_pack.id",
-                                                   s3db.supply_item_pack_represent,
-                                                   sort=True,
-                                                   filterby = "item_id",
-                                                   filter_opts = (r.record.id,),
-                                                   )
-                s3db.inv_inv_item.item_pack_id.requires = inv_item_pack_requires
+                s3db.inv_inv_item.item_pack_id.requires = IS_ONE_OF(current.db,
+                                                                    "supply_item_pack.id",
+                                                                    s3db.supply_item_pack_represent,
+                                                                    sort = True,
+                                                                    filterby = "item_id",
+                                                                    filter_opts = (r.record.id,),
+                                                                    )
+
             elif r.component_name == "req_item":
                 # This is a report not a workflow
                 s3db.configure("req_req_item",
-                               listadd=False,
-                               deletable=False)
+                               listadd = False,
+                               deletable = False,
+                               )
 
         # Needs better workflow as no way to add the Kit Items
         # else:

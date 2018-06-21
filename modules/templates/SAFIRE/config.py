@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 
-from gluon import current
+from gluon import current, URL
 from gluon.storage import Storage
 
 def config(settings):
@@ -351,7 +351,7 @@ def config(settings):
     # -------------------------------------------------------------------------
     def customise_event_incident_report_controller(**attr):
 
-        from gluon import A, URL
+        from gluon import A
 
         s3 = current.response.s3
 
@@ -361,6 +361,8 @@ def config(settings):
             # Call standard postp
             if callable(standard_prep):
                 result = standard_prep(r)
+                if not result:
+                    return False
 
             if r.method in (None, "create"):
                 current.s3db.gis_location.addr_street.label = T("Street Address or Location Details")
@@ -402,25 +404,29 @@ def config(settings):
         s3db = current.s3db
         s3 = current.response.s3
 
-        # Load default model, so we can over-ride
-        s3db.event_incident
-
-        from gluon import URL
-        s3db.configure("event_incident",
-                       create_next = URL(c="event", f="incident",
-                                         args=["[id]", "plan"]),
-                       )
-
         # Custom prep
         standard_prep = s3.prep
         def custom_prep(r):
             # Call standard postp
             if callable(standard_prep):
                 result = standard_prep(r)
+                if not result:
+                    return False
+
+            resource = r.resource
+
+            # Redirect to action plan after create
+            resource.configure(create_next = URL(c="event", f="incident",
+                                                 args = ["[id]", "plan"]),
+                               )
 
             if r.method == "create":
                 incident_report_id = r.get_vars.get("incident_report_id")
                 if incident_report_id:
+                    # Got here from incident report assign => "New Incident"
+                    # - prepopulate incident name from report title
+                    # - copy incident type and location from report
+                    # - onaccept: link the incident report to the incident
                     if r.http == "GET":
                         from s3 import s3_truncate
                         rtable = s3db.event_incident_report
@@ -440,9 +446,8 @@ def config(settings):
                                                                        incident_report_id = incident_report_id,
                                                                        )
 
-                        r.resource.configure(create_onaccept = create_onaccept,
-                                             )
-
+                        resource.configure(create_onaccept = create_onaccept,
+                                           )
             return True
         s3.prep = custom_prep
 
@@ -519,11 +524,12 @@ def config(settings):
             # Call standard postp
             if callable(standard_prep):
                 result = standard_prep(r)
+                if not result:
+                    return False
 
             if r.method == "create"and r.http == "POST":
-                from gluon import URL
                 r.resource.configure(create_next = URL(c="event", f="scenario",
-                                                       args=["[id]", "plan"]),
+                                                       args = ["[id]", "plan"]),
                                      )
 
             return True
