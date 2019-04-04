@@ -3139,13 +3139,9 @@ $.filterOptionsS3({
             """ Customise hrm_human_resource """
             customise = settings.customise_resource(htablename)
             if customise:
-                if hr_id:
-                    args = [str(hr_id)]
-                else:
-                    args = None
                 request = S3Request("hrm", "human_resource",
                                     current.request,
-                                    args = args,
+                                    args = [str(hr_id)] if hr_id else [],
                                     )
                 customise(request, htablename)
 
