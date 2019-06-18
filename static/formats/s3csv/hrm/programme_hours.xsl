@@ -7,23 +7,43 @@
 
          CSV fields:
          Organisation....................hrm_programme.owned_by_entity
+         Branch..........................hrm_human_resource.organisation_id
          Programme.......................hrm_programme.name
          Job Title.......................hrm_programme.job_title_id$name
          First Name......................pr_person.first_name
+         Middle Name.....................pr_person.middle_name
          Last Name.......................pr_person.last_name
          Email...........................pr_contact (to deduplicate person)
          Mobile Phone....................pr_contact (to deduplicate person)
+         National ID.....................pr_identity (to deduplicate person)
+         Organisation ID.................hrm_human_resource.code (to deduplicate person)
          Date............................hrm_programme_hours.date
          Hours...........................hrm_programme_hours.hours
 
     *********************************************************************** -->
+    <xsl:import href="person.xsl"/>
     <xsl:import href="../commons.xsl"/>
 
     <xsl:output method="xml"/>
 
     <!-- ****************************************************************** -->
+    <!-- Lookup column names -->
+
+    <xsl:variable name="MiddleName">
+        <xsl:call-template name="ResolveColumnHeader">
+            <xsl:with-param name="colname">MiddleName</xsl:with-param>
+        </xsl:call-template>
+    </xsl:variable>
+
+    <xsl:variable name="LastName">
+        <xsl:call-template name="ResolveColumnHeader">
+            <xsl:with-param name="colname">LastName</xsl:with-param>
+        </xsl:call-template>
+    </xsl:variable>
+
+    <!-- ****************************************************************** -->
     <!-- Indexes for faster processing -->
-    <xsl:key name="orgs" match="row"
+    <xsl:key name="root_orgs" match="row"
              use="col[@field='Organisation']"/>
 
     <xsl:key name="programmes" match="row"
@@ -36,19 +56,25 @@
 
     <xsl:key name="persons" match="row"
              use="concat(col[@field='First Name'],
-                         col[@field='Last Name'],
+                         col[contains(document('../labels.xml')/labels/column[@name='MiddleName']/match/text(),
+                             concat('|', @field, '|'))],
+                         col[contains(document('../labels.xml')/labels/column[@name='LastName']/match/text(),
+                             concat('|', @field, '|'))],
                          col[@field='Email'],
-                         col[@field='Mobile Phone'])"/>
+                         col[@field='Mobile Phone'],
+                         col[@field='National ID'],
+                         col[@field='Organisation ID'])"/>
     
     <!-- ****************************************************************** -->
 
     <xsl:template match="/">
         <s3xml>
-            <!-- Organisations -->
-            <xsl:for-each select="//row[generate-id(.)=
-                                        generate-id(key('orgs',
-                                                        col[@field='Organisation'])[1])]">
-                <xsl:call-template name="Organisation"/>
+            <!-- Import the Organisation hierarchy -->
+            <xsl:for-each select="table/row[1]">
+                <xsl:call-template name="OrganisationHierarchy">
+                    <xsl:with-param name="level">Organisation</xsl:with-param>
+                    <xsl:with-param name="rows" select="//table/row"/>
+                </xsl:call-template>
             </xsl:for-each>
 
             <!-- Programmes -->
@@ -71,9 +97,14 @@
             <xsl:for-each select="//row[generate-id(.)=
                                         generate-id(key('persons',
                                                         concat(col[@field='First Name'],
-                                                               col[@field='Last Name'],
+                                                               col[contains(document('../labels.xml')/labels/column[@name='MiddleName']/match/text(),
+                                                                   concat('|', @field, '|'))],
+                                                               col[contains(document('../labels.xml')/labels/column[@name='LastName']/match/text(),
+                                                                   concat('|', @field, '|'))],
                                                                col[@field='Email'],
-                                                               col[@field='Mobile Phone']))[1])]">
+                                                               col[@field='Mobile Phone'],
+                                                               col[@field='National ID'],
+                                                               col[@field='Organisation ID']))[1])]">
                 <xsl:call-template name="Person"/>
             </xsl:for-each>
 
@@ -92,9 +123,14 @@
             <reference field="person_id" resource="pr_person">
                 <xsl:attribute name="tuid">
                     <xsl:value-of select="concat(col[@field='First Name'],
-                                                 col[@field='Last Name'],
+                                                 col[contains(document('../labels.xml')/labels/column[@name='MiddleName']/match/text(),
+                                                     concat('|', @field, '|'))],
+                                                 col[contains(document('../labels.xml')/labels/column[@name='LastName']/match/text(),
+                                                     concat('|', @field, '|'))],
                                                  col[@field='Email'],
-                                                 col[@field='Mobile Phone'])"/>
+                                                 col[@field='Mobile Phone'],
+                                                 col[@field='National ID'],
+                                                 col[@field='Organisation ID'])"/>
                 </xsl:attribute>
             </reference>
             <reference field="programme_id" resource="hrm_programme">
@@ -130,7 +166,7 @@
 
             <reference field="organisation_id" resource="org_organisation">
                 <xsl:attribute name="tuid">
-                    <xsl:value-of select="$Organisation"/>
+                    <xsl:value-of select="concat('ORG:', $Organisation)"/>
                 </xsl:attribute>
             </reference>
 
@@ -152,7 +188,7 @@
 
             <reference field="organisation_id" resource="org_organisation">
                 <xsl:attribute name="tuid">
-                    <xsl:value-of select="$Organisation"/>
+                    <xsl:value-of select="concat('ORG:', $Organisation)"/>
                 </xsl:attribute>
             </reference>
 
@@ -163,19 +199,34 @@
     <!-- ****************************************************************** -->
     <xsl:template name="Person">
         <xsl:variable name="FirstName" select="col[@field='First Name']/text()"/>
-        <xsl:variable name="LastName" select="col[@field='Last Name']/text()"/>
+        <xsl:variable name="MiddleName">
+            <xsl:call-template name="GetColumnValue">
+                <xsl:with-param name="colhdrs" select="$MiddleName"/>
+            </xsl:call-template>
+        </xsl:variable>
+        <xsl:variable name="LastName">
+            <xsl:call-template name="GetColumnValue">
+                <xsl:with-param name="colhdrs" select="$LastName"/>
+            </xsl:call-template>
+        </xsl:variable>
         <xsl:variable name="Email" select="col[@field='Email']/text()"/>
         <xsl:variable name="MobilePhone" select="col[@field='Mobile Phone']/text()"/>
+        <xsl:variable name="NationalID" select="col[@field='National ID']/text()"/>
+        <xsl:variable name="OrganisationID" select="col[@field='Organisation ID']/text()"/>
 
         <resource name="pr_person">
             <xsl:attribute name="tuid">
                 <xsl:value-of select="concat($FirstName,
+                                             $MiddleName,
                                              $LastName,
                                              $Email,
-                                             $MobilePhone)"/>
+                                             $MobilePhone,
+                                             $NationalID,
+                                             $OrganisationID)"/>
             </xsl:attribute>
 
             <data field="first_name"><xsl:value-of select="$FirstName"/></data>
+            <data field="middle_name"><xsl:value-of select="$MiddleName"/></data>
             <data field="last_name"><xsl:value-of select="$LastName"/></data>
 
             <xsl:if test="$Email!=''">
@@ -195,6 +246,33 @@
                     </data>
                 </resource>
             </xsl:if>
+
+            <xsl:if test="$NationalID!=''">
+                <resource name="pr_identity">
+                    <data field="type" value="2"/>
+                    <data field="value">
+                        <xsl:value-of select="$NationalID"/>
+                    </data>
+                </resource>
+            </xsl:if>
+
+            <xsl:if test="$OrganisationID!=''">
+                <resource name="hrm_human_resource">
+                    <reference field="organisation_id" resource="org_organisation">
+                        <xsl:attribute name="tuid">
+                            <xsl:call-template name="OrganisationID"/>
+                        </xsl:attribute>
+                    </reference>
+                    <data field="type">
+                        <!-- Volunteer -->
+                        <xsl:value-of select="2"/>
+                    </data>
+                    <data field="code">
+                        <xsl:value-of select="$OrganisationID"/>
+                    </data>
+                </resource>
+            </xsl:if>
+
         </resource>
 
     </xsl:template>

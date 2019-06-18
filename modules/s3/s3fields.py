@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -39,11 +39,11 @@ from gluon.storage import Storage
 from gluon.languages import lazyT
 
 from s3dal import SQLCustomType
-from s3datetime import S3DateTime
-from s3navigation import S3ScriptItem
-from s3utils import s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode, s3_str, S3MarkupStripper
-from s3validators import IS_ISO639_2_LANGUAGE_CODE, IS_ONE_OF, IS_UTC_DATE, IS_UTC_DATETIME
-from s3widgets import S3CalendarWidget, S3DateWidget
+from .s3datetime import S3DateTime
+from .s3navigation import S3ScriptItem
+from .s3utils import s3_auth_user_represent, s3_auth_user_represent_name, s3_unicode, s3_str, S3MarkupStripper
+from .s3validators import IS_ISO639_2_LANGUAGE_CODE, IS_ONE_OF, IS_UTC_DATE, IS_UTC_DATETIME
+from .s3widgets import S3CalendarWidget, S3DateWidget
 
 # =============================================================================
 class FieldS3(Field):
@@ -300,14 +300,14 @@ class S3Represent(object):
         self.func_code = Storage(co_argcount = 1)
         self.func_defaults = None
 
-        if hasattr(self, "lookup_rows"):
+        # Detect lookup_rows override
+        if self.lookup_rows.__func__ is not S3Represent.lookup_rows.__func__:
             self.custom_lookup = True
         else:
-            self.lookup_rows = self._lookup_rows
             self.custom_lookup = False
 
     # -------------------------------------------------------------------------
-    def _lookup_rows(self, key, values, fields=None):
+    def lookup_rows(self, key, values, fields=None):
         """
             Lookup all rows referenced by values.
             (in foreign key representations)
@@ -336,6 +336,7 @@ class S3Represent(object):
             (in foreign key representations)
 
             @param row: the row
+            @param prefix: prefix for hierarchical representation
 
             @return: the representation of the Row, or None if there
                      is an error in the Row
@@ -691,7 +692,7 @@ class S3Represent(object):
 
         if table and self.hierarchy:
             # Does the lookup table have a hierarchy?
-            from s3hierarchy import S3Hierarchy
+            from .s3hierarchy import S3Hierarchy
             h = S3Hierarchy(table._tablename)
             if h.config:
                 def lookup_parent(node_id):
@@ -1333,8 +1334,13 @@ def s3_comments(name="comments", **attr):
         attr["represent"] = lambda comments: \
             XML(comments) if comments else current.messages["NONE"]
     if "widget" not in attr:
-        from s3widgets import s3_comments_widget
-        attr["widget"] = s3_comments_widget
+        from .s3widgets import s3_comments_widget
+        _placeholder = attr.pop("_placeholder", None)
+        if _placeholder:
+            attr["widget"] = lambda f, v: \
+                s3_comments_widget(f, v, _placeholder=_placeholder)
+        else:
+            attr["widget"] = s3_comments_widget
     if "comment" not in attr:
         attr["comment"] = DIV(_class="tooltip",
                               _title="%s|%s" % \

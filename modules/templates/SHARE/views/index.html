@@ -1,11 +1,53 @@
 {{extend "layout.html"}}
 <div id='home'>
- <h1>{{=title}}</h1>
- <div>
-  {{=custom_info}} 
+ <div class='row'>
+  <div class='small-12 columns' id='intro'>
+   <h1>{{=T("A platform that manages")}}</h1>
+   <h1>{{=T("RELIEF SUPPLIES & RELATED INFORMATION")}}</h1>
+   {{=needs_btn}}
+  </div>
  </div>
- <div align='center'>
-  {{=upload_4W_activity_btn}}
-  {{=dashboard_btn}}
+ <div class='row'>
+  <div class='small-12 columns' id='current-needs'>
+   <h1>{{=T("Current Needs & Commitments at a glance")}}</h1>
+   <div class='row'>
+     <div class='small-12 medium-4 columns'>
+       <h6>Needs by Status</h6>
+       <div class='homepage-chart' data-type='piechart' data-source='/{{=appname}}/static/themes/SHARE/data/needs_by_status.json' data-legend='on' data-url='/{{=appname}}/req/need_line/summary' data-items='~.status__belongs'></div>
+     </div>
+     <div class='small-12 medium-4 columns'>
+       <h6>Needs by District</h6>
+       <div class='homepage-chart' data-type='multibarchart' data-source='/{{=appname}}/static/themes/SHARE/data/needs_by_district.json' data-controls='off' data-url='/{{=appname}}/req/need_line/summary' data-items='~.location_id$L2__belongs' data-series='~.status__belongs'></div>
+     </div>
+     <div class='small-12 medium-4 columns'>
+       <h6>People Affected</h6>
+	   <h6>(by categories as defined by organisations at data collection)</h6>
+       <div class='homepage-chart' data-type='barchart' data-source='/{{=appname}}/static/themes/SHARE/data/people_affected.json' data-url='/{{=appname}}/req/need_line/summary' data-items='~.parameter_id__belongs'></div>
+     </div>
+   </div>
+   {{if last_stats_update:}}<div class='row last-stats-update'>
+    <div class='small-12 columns'>
+     <span>{{=last_stats_update}}</span>
+    </div>
+   </div>{{pass}}
+  </div>
+ </div>
+ <div class='row' data-equalizer>
+  <div class='medium-6 columns' id='about-platform' data-equalizer-watch>
+   <img alt='Logo' class='logo' src='/{{=appname}}/static/themes/SHARE/img/logo_small.png'>
+   <h1>{{=T("About the 'ShaReHub' platform")}}</h1>
+   <p>A real-time humanitarian needs and responses coordination mapping platform used by the Humanitarian Country Team (HCT) during a disaster.</p>
+   {{=about_btn}}
+  </div>
+  <div class='medium-6 columns' id='active-events' data-equalizer-watch>
+   <h1>{{=T("Recent Updates")}}</h1>
+   {{=recent_updates}}
+  </div>
+ </div>
+ <div class='row'>
+  <div class='small-12 columns' id='resources'>
+   <h1>{{=T("Resources")}}</h1>
+   {{=item}}
+  </div>
  </div>
 </div>

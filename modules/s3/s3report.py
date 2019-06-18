@@ -2,7 +2,7 @@
 
 """ S3 Pivot Table Reports Method
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     @requires: U{B{I{Python 2.6}} <http://www.python.org>}
@@ -31,6 +31,7 @@
 
 __all__ = ("S3Report",
            "S3PivotTable",
+           "S3ReportRepresent",
            )
 
 import datetime
@@ -49,11 +50,11 @@ from gluon.sqlhtml import OptionsWidget
 from gluon.storage import Storage
 from gluon.validators import IS_IN_SET, IS_EMPTY_OR
 
-from s3query import FS
-from s3rest import S3Method
-from s3utils import s3_flatlist, s3_has_foreign_key, s3_str, s3_unicode, S3MarkupStripper, s3_represent_value
-from s3xml import S3XMLFormat
-from s3validators import IS_NUMBER
+from .s3query import FS
+from .s3rest import S3Method
+from .s3utils import s3_flatlist, s3_has_foreign_key, s3_str, S3MarkupStripper, s3_represent_value
+from .s3xml import S3XMLFormat
+from .s3validators import IS_NUMBER, JSONERRORS
 
 # Compact JSON encoding
 DEFAULT = lambda: None
@@ -81,6 +82,13 @@ class S3Report(S3Method):
                 output = self.geojson(r, **attr)
             else:
                 output = self.report(r, **attr)
+        elif r.http == "POST":
+            if r.representation == "json":
+                # NB can additionally check for ?explore=1 to
+                # distinguish from other POSTs (if necessary)
+                output = self.explore(r, **attr)
+            else:
+                r.error(415, current.ERROR.BAD_FORMAT)
         else:
             r.error(405, current.ERROR.BAD_METHOD)
         return output
@@ -104,7 +112,7 @@ class S3Report(S3Method):
             filter_widgets = get_config("filter_widgets", None)
             if filter_widgets and not self.hide_filter:
                 # Apply filter defaults (before rendering the data!)
-                from s3filter import S3FilterForm
+                from .s3filter import S3FilterForm
                 show_filter_form = True
                 S3FilterForm.apply_filter_defaults(r, resource)
 
@@ -177,6 +185,8 @@ class S3Report(S3Method):
             if show_filter_form:
                 advanced = False
                 for widget in filter_widgets:
+                    if not widget:
+                        continue
                     if "hidden" in widget.opts and widget.opts.hidden:
                         advanced = resource.get_config("report_advanced", True)
                         break
@@ -560,6 +570,205 @@ class S3Report(S3Method):
 
         return output
 
+    # -------------------------------------------------------------------------
+    def explore(self, r, **attr):
+        """
+            Ajax-lookup of representations for items contributing to the
+            aggregate value in a pivot table cell (cell explore)
+            - called with a body JSON containing the record IDs to represent,
+              and the URL params for the pivot table (rows, cols, fact)
+
+            @param r: the S3Request instance
+            @param attr: controller attributes for the request
+        """
+
+        # Read+parse body JSON
+        s = r.body
+        s.seek(0)
+        try:
+            record_ids = json.load(s)
+        except JSONERRORS:
+            record_ids = None
+
+        # Must be a list of record IDs
+        if not isinstance(record_ids, list):
+            r.error(404, current.ERROR.BAD_RECORD)
+
+        # Create filtered resource
+        resource = current.s3db.resource(self.tablename, id=record_ids)
+
+        prefix = resource.prefix_selector
+        pkey = prefix(resource._id.name)
+        pkey_colname = str(resource._id)
+
+        # Parse the facts
+        get_vars = r.get_vars
+        facts = S3PivotTableFact.parse(get_vars.get("fact"))
+
+        selectors = set()   # all fact selectors other than "id"
+        ofacts = []         # all facts other than "count(id)"
+
+        for fact in facts:
+            selector = prefix(fact.selector)
+            is_pkey = selector == pkey
+            if not is_pkey:
+                selectors.add(selector)
+            if not is_pkey or fact.method != "count":
+                ofacts.append(fact)
+
+        # Extract the data
+        if len(selectors):
+            selectors.add(pkey)
+            records = resource.select(selectors,
+                                      raw_data = True,
+                                      represent = True,
+                                      limit = None,
+                                      ).rows
+        else:
+            # All we need is the record IDs, so skip the select and
+            # construct some pseudo-rows
+            records = []
+            for record_id in record_ids:
+                record = Storage({pkey_colname: record_id})
+                record._row = record
+                records.append(record)
+
+        # Get the record representation method and initialize it with the
+        # report context (rows, cols, facts)
+        represent = resource.get_config("report_represent", S3ReportRepresent)
+        if represent:
+            rows = get_vars.get("rows")
+            cols = get_vars.get("cols")
+            represent = represent(resource, rows=rows, cols=cols, facts=facts)
+
+        # Determine what the items list should contain
+
+        rfields = {} # resolved fact selectors
+
+        key = None
+        aggregate = True
+        if len(ofacts) == 1:
+
+            fact = ofacts[0]
+
+            if fact.method == "count":
+
+                # When counting foreign keys in the master record, then
+                # show a list of all unique values of that foreign key
+                # rather than the number of unique values per master
+                # record (as that would always be 1)
+
+                selector = prefix(fact.selector)
+                rfield = resource.resolve_selector(selector)
+                field = rfield.field
+                if field and s3_has_foreign_key(field):
+                    multiple = True
+                    if rfield.tname == resource.tablename or \
+                       selector[:2] == "~." and "." not in selector[2:]:
+                        multiple = False
+                    else:
+                        # Get the component prefix
+                        alias = selector.split("$", 1)[0].split(".", 1)[0]
+                        component = resource.components.get(alias)
+                        if component:
+                            multiple = component.multiple
+
+                    if not multiple:
+                        represent = None
+                        key = rfield.colname
+                        aggregate = False
+                rfields[selector] = rfield
+
+        # Get the record representations
+        records_repr = represent(record_ids) if represent else None
+
+        # Build the output items (as dict, will be alpha-sorted on client-side)
+        output = {}
+        UNKNOWN_OPT = current.messages.UNKNOWN_OPT
+        for record in records:
+
+            raw = record._row
+            record_id = raw[pkey_colname]
+
+            values = []
+            for fact in ofacts:
+
+                # Resolve the selector
+                selector = prefix(fact.selector)
+                rfield = rfields.get(selector)
+                if not rfield:
+                    rfield = rfields[selector] = resource.resolve_selector(selector)
+
+                # Get the value, sub-aggregate
+                if aggregate:
+                    value = raw[rfield.colname]
+                    if type(value) is list:
+                        value = fact.compute(value)
+                    else:
+                        value = fact.compute([value])
+                    if fact.method != "count":
+                        field = rfield.field
+                        if field and field.represent:
+                            value = field.represent(value)
+                else:
+                    value = record[rfield.colname]
+
+                # Extend values list
+                if len(values):
+                    values.extend([" / ", value])
+                else:
+                    values.append(value)
+
+            repr_items = [TAG[""](values)] if values else []
+
+            # Add the record representation
+            if records_repr is not None:
+                repr_items.insert(0, records_repr.get(record_id, UNKNOWN_OPT))
+            if len(repr_items) == 2:
+                repr_items.insert(1, ": ")
+
+            # Build output item
+            # - using TAG not str.join() to allow representations to contain
+            #   XML helpers like A, SPAN or DIV
+            repr_str = TAG[""](repr_items).xml()
+            if key:
+                # Include raw field value for client-side de-duplication
+                output[record_id] = [repr_str, s3_str(raw[key])]
+            else:
+                output[record_id] = repr_str
+
+        current.response.headers["Content-Type"] = "application/json"
+        return json.dumps(output, separators=SEPARATORS)
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def inject_d3():
+        """
+            Re-usable helper function to inject D3/NVD3 scripts
+            into the current page
+        """
+
+        appname = current.request.application
+        s3 = current.response.s3
+
+        scripts_append = s3.scripts.append
+        if s3.debug:
+            if s3.cdn:
+                scripts_append("https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.js")
+                # We use a patched v1.8.5 currently, so can't use the CDN version
+                #scripts_append("https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.5/nv.d3.js")
+            else:
+                scripts_append("/%s/static/scripts/d3/d3.js" % appname)
+            scripts_append("/%s/static/scripts/d3/nv.d3.js" % appname)
+        else:
+            if s3.cdn:
+                scripts_append("https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js")
+                # We use a patched v1.8.5 currently, so can't use the CDN version
+                #scripts_append("https://cdnjs.cloudflare.com/ajax/libs/nvd3/1.8.5/nv.d3.min.js")
+            else:
+                scripts_append("/%s/static/scripts/d3/d3.min.js" % appname)
+            scripts_append("/%s/static/scripts/d3/nv.d3.min.js" % appname)
+
 # =============================================================================
 class S3ReportForm(object):
     """ Helper class to render a report form """
@@ -679,6 +888,7 @@ class S3ReportForm(object):
             "thousandSeparator": settings.get_L10n_thousands_separator(),
             "thousandGrouping": settings.get_L10n_thousands_grouping(),
             "textAll": str(T("All")),
+            "textRecords": str(T("Records")),
         }
         chart_opt = get_vars["chart"]
         if chart_opt is not None:
@@ -698,30 +908,25 @@ class S3ReportForm(object):
                 opts["collapseTable"] = True
 
         # Scripts
+        S3Report.inject_d3()
         s3 = current.response.s3
         scripts = s3.scripts
         if s3.debug:
-            # @todo: support CDN
-            script = "/%s/static/scripts/d3/d3.js" % appname
-            if script not in scripts:
-                scripts.append(script)
-            script = "/%s/static/scripts/d3/nv.d3.js" % appname
-            if script not in scripts:
-                scripts.append(script)
             script = "/%s/static/scripts/S3/s3.ui.pivottable.js" % appname
             if script not in scripts:
                 scripts.append(script)
         else:
-            script = "/%s/static/scripts/S3/s3.pivotTables.min.js" % appname
+            script = "/%s/static/scripts/S3/s3.ui.pivottable.min.js" % appname
             if script not in scripts:
                 scripts.append(script)
 
+        # Instantiate widget
         script = '''$('#%(widget_id)s').pivottable(%(opts)s)''' % \
-                                        dict(widget_id = widget_id,
-                                             opts = json.dumps(opts,
-                                                               separators=SEPARATORS),
-                                             )
-
+                                        {"widget_id": widget_id,
+                                         "opts": json.dumps(opts,
+                                                            separators=SEPARATORS,
+                                                            ),
+                                         }
         s3.jquery_ready.append(script)
 
         return output
@@ -858,7 +1063,9 @@ class S3ReportForm(object):
         rfields = []
         append = rfields.append
         for f in fields:
-            if isinstance(f, (tuple, list)):
+            if not f:
+                continue
+            elif isinstance(f, (tuple, list)):
                 label, selector = f[:2]
             else:
                 label, selector = None, f
@@ -937,7 +1144,9 @@ class S3ReportForm(object):
         layer_opts = []
         for option in layers:
 
-            if isinstance(option, tuple):
+            if not option:
+                continue
+            elif isinstance(option, tuple):
                 title, layer = option
             else:
                 title, layer = None, option
@@ -1078,6 +1287,117 @@ class S3ReportForm(object):
                         ),
                         widgets,
                         **attr)
+
+# =============================================================================
+class S3ReportRepresent(object):
+    """
+        Method to represent the contributing records in a pivot table
+        cell (cell explore)
+
+        The cell-explore record list will typically look like:
+            - <record representation>: <fact value(s)>
+            - ...
+        This method controls the first part of each entry.
+
+        For customization, configure for the table as:
+                report_represent = <subclass>
+    """
+
+    def __init__(self, resource, rows=None, cols=None, facts=None):
+        """
+            Constructor, initializes the method with the report context
+            to allow it to adapt the representation (e.g. it may often
+            be desirable to not repeat the report axes in the record list)
+
+            @param resource: the resource of the report
+            @param rows: the rows-selector (can be None)
+            @param cols: the columns-selector (can be None)
+            @param facts: the list of S3PivotTableFacts showing in
+                          the pivot table
+        """
+
+        self.resource = resource
+        self.rows = rows
+        self.cols = cols
+        self.facts = facts
+
+    # -------------------------------------------------------------------------
+    def __call__(self, record_ids):
+        """
+            Represent record IDs, can be overloaded in subclasses
+
+            @param record_ids: list of record IDs
+
+            @returns: a JSON-serializable dict {recordID: representation},
+                      or None to suppress recordID representation in the
+                      cell explorer
+
+            NB default behavior is not sensitive for report axes
+        """
+
+        # Take a list of record ids
+        resource = self.resource
+        table = resource.table
+
+        represent = self.repr_method()
+        if represent:
+            if hasattr(represent, "bulk"):
+                # Bulk-represent the record IDs
+                output = represent.bulk(record_ids)
+            else:
+                # Represent the record IDs one by one
+                output = {record_id: represent(record_id)
+                          for record_id in record_ids}
+
+        elif "name" in table.fields:
+            # Extract the names and return dict {id: name}
+            query = table._id.belongs(record_ids)
+            rows = current.db(query).select(table._id, table.name)
+
+            output = {}
+            UNKNOWN_OPT = current.messages.UNKNOWN_OPT
+            for row in rows:
+                name = row.name
+                if not name:
+                    name = UNKNOWN_OPT
+                output[row[table._id]] = s3_str(row.name)
+        else:
+            # No reasonable default
+
+            # Render as record IDs (just as useful as nothing):
+            #output = {record_id: s3_str(record_id) for record_id in record_ids}
+
+            # Return None to reduces the list to the fact values
+            # NB if fact is ID, this will suppress the record list
+            #    altogether and show the number of records instead
+            output = None
+
+        return output
+
+    # -------------------------------------------------------------------------
+    def repr_method(self):
+        """
+            Return a representation method for the id-field of
+            self.resource, can be overloaded in subclasses (simpler
+            than implementing __call__ if producing a representation
+            method is sufficient)
+
+            @returns: a representation method (preferrably a S3Represent)
+        """
+
+        s3db = current.s3db
+
+        resource = self.resource
+        pkey = resource._id
+
+        represent = pkey.represent
+        if not represent:
+            # Standard representation methods can be listed here
+            # (if they don't normally depend on the report context)
+            if resource.tablename == "pr_person":
+                represent = s3db.pr_PersonRepresent()
+
+        return represent
 
 # =============================================================================
 class S3PivotTableFact(object):
@@ -1314,7 +1634,7 @@ class S3PivotTableFact(object):
         label = None
 
         if not rfield:
-            return
+            return ""
         resource = rfield.resource
 
         fields = list(fact_options) if fact_options else []
@@ -1618,7 +1938,7 @@ class S3PivotTable(object):
             location_ids = []
         else:
             numeric = lambda x: isinstance(x, (int, long, float))
-            row_repr = s3_unicode
+            row_repr = s3_str
 
             ids = {}
             irows = self.row
@@ -1644,7 +1964,7 @@ class S3PivotTable(object):
             db = current.db
             gtable = current.s3db.gis_location
             query = (gtable.level == level) & (gtable.deleted == False)
-            for rindex, rtotal, rtitle in rows:
+            for _, rtotal, rtitle in rows:
                 rval = rtitle.value
                 if rval:
                     # @ToDo: Handle duplicate names ;)
@@ -1663,7 +1983,7 @@ class S3PivotTable(object):
                         # Cache
                         ids[rval] = _id
 
-                    attribute = dict(name=s3_unicode(rval),
+                    attribute = dict(name=s3_str(rval),
                                      value=rtotal)
                     attributes[_id] = attribute
 
@@ -1736,7 +2056,7 @@ class S3PivotTable(object):
             col_repr = self._represent_method(cols_dim)
 
             # Label for the "Others" row/columns
-            others = s3_unicode(T("Others"))
+            others = s3_str(T("Others"))
 
             # Get the layers (fact.selector, fact.method),
             # => used as keys to access the pivot data
@@ -1836,7 +2156,6 @@ class S3PivotTable(object):
                                 else:
                                     ocell = orow[ci]
 
-
                                 if layer_index == 0:
                                     # Extend the list of records
                                     ocell["records"].extend(cell_records)
@@ -1860,7 +2179,6 @@ class S3PivotTable(object):
             represents = self._represents(layers)
 
             # Aggregate the grouped values
-            value_maps = {}
             add_columns = True # do this only once
             for rindex, rtotal, rtotals, rtitle in rows:
 
@@ -1869,9 +2187,9 @@ class S3PivotTable(object):
                 # Row value for filter construction
                 rval = rtitle["value"]
                 if rindex == OTHER and isinstance(rval, list):
-                    rval = ",".join(s3_unicode(v) for v in rval)
+                    rval = ",".join(s3_str(v) for v in rval)
                 elif rval is not None:
-                    rval = s3_unicode(rval)
+                    rval = s3_str(rval)
 
                 # The output row summary
                 rappend((rindex,
@@ -1890,40 +2208,37 @@ class S3PivotTable(object):
                     items_array = cell["items"]
 
                     # Initialize the output cell
-                    # @todo: deflate JSON keys
-                    ocell = {"items": [], "values": [], "keys": []}
+                    ocell = {"i": [], "v": []}
+                    okeys = None
 
                     for layer_index, fact in enumerate(facts):
 
                         selector, method = fact.layer
-                        if selector not in lookups:
-                            lookup = lookups[selector] = {}
-                        else:
-                            lookup = lookups[selector]
-                        if selector not in value_maps:
-                            value_map = value_maps[selector] = {}
-                        else:
-                            value_map = value_maps[selector]
 
-                        # Add the cell value
+                        # The value(s) to render in this cell
+                        items = items_array[layer_index]
+
+                        # The cell total for this layer (for charts)
                         value = value_array[layer_index]
                         if type(value) is list:
                             # "Others" cell with multiple totals
                             value = fact.aggregate_totals(value)
-                        ocell["values"].append(value)
+                        ocell["v"].append(value)
 
-                        has_fk, _repr = represents[selector]
                         rfield = self.rfields[selector]
-                        items = items_array[layer_index]
-                        okeys = None
 
-                        # Build a lookup table for field values if method is
-                        # count (...of something else than ids), or list
-                        expand = method == "count" and \
-                                 rfield.field.represent or rfield.ftype != "id"
-                        if expand or method == "list":
+                        if method == "list":
+                            # Build a look-up table with field value representations
+                            if selector not in lookups:
+                                lookup = lookups[selector] = {}
+                            else:
+                                lookup = lookups[selector]
+
+                            represent = represents[selector]
+
                             keys = []
                             for record_id in cell["records"]:
+
                                 record = self.records[record_id]
                                 try:
                                     fvalue = record[rfield.colname]
@@ -1933,35 +2248,43 @@ class S3PivotTable(object):
                                     continue
                                 if type(fvalue) is not list:
                                     fvalue = [fvalue]
+
                                 for v in fvalue:
                                     if v is None:
                                         continue
-                                    if has_fk:
-                                        if v not in keys:
-                                            keys.append(v)
-                                        if v not in lookup:
-                                            lookup[v] = _repr(v)
-                                    else:
-                                        if v not in value_map:
-                                            next_id = len(value_map)
-                                            value_map[v] = next_id
-                                            keys.append(next_id)
-                                            lookup[next_id] = _repr(v)
-                                        else:
-                                            prev_id = value_map[v]
-                                            if prev_id not in keys:
-                                                keys.append(prev_id)
+                                    if v not in keys:
+                                        keys.append(v)
+                                    if v not in lookup:
+                                        lookup[v] = represent(v)
 
                             # Sort the keys by their representations
                             keys.sort(key=lambda i: lookup[i])
-                            if method == "list":
-                                items = [lookup[key] for key in keys if key in lookup]
-                            else:
-                                okeys = keys
+                            items = [lookup[key] for key in keys if key in lookup]
 
-                        ocell["items"].append(items)
-                        ocell["keys"].append(okeys)
+                        elif method in ("sum", "count") and okeys is None:
+                            # Include only cell records in okeys which actually
+                            # contribute to the aggregate
+                            okeys = []
+                            for record_id in cell["records"]:
+                                record = self.records[record_id]
+                                try:
+                                    fvalue = record[rfield.colname]
+                                except AttributeError:
+                                    continue
+                                if method == "sum" and \
+                                   isinstance(fvalue, (int, long, float)) and fvalue:
+                                    okeys.append(record_id)
+                                elif method == "count" and \
+                                   fvalue is not None:
+                                    okeys.append(record_id)
+                        else:
+                            # Include all cell records in okeys
+                            okeys = cell["records"]
 
+                        ocell["i"].append(items)
+
+                    if okeys:
+                        ocell["k"] = okeys
                     orow.append(ocell)
 
                     if add_columns:
@@ -1969,9 +2292,9 @@ class S3PivotTable(object):
                         # Column value for filter construction
                         cval = ctitle["value"]
                         if cindex == OTHER and isinstance(cval, list):
-                            cval = ",".join(s3_unicode(v) for v in cval)
+                            cval = ",".join(s3_str(v) for v in cval)
                         elif cval is not None:
-                            cval = s3_unicode(cval)
+                            cval = s3_str(cval)
 
                         # The output column summary
                         cappend((cindex,
@@ -2027,7 +2350,6 @@ class S3PivotTable(object):
                   "cols": ocols,
                   "facts": fact_data,
                   "cells": ocells,
-                  "lookups": lookups,
                   "total": self._totals(self.totals, [fact]),
                   "nodata": None if not self.empty else str(T("No data available")),
                   "labels": labels,
@@ -2051,7 +2373,7 @@ class S3PivotTable(object):
             @returns: the XLS file as stream
         """
 
-        from s3codec import S3Codec
+        from .s3codec import S3Codec
         exporter = S3Codec.get_codec("xls")
 
         return exporter.encode_pt(self, title)
@@ -2078,9 +2400,8 @@ class S3PivotTable(object):
             f = rfield.field
 
             # Utilize bulk-representation for field values
-            if method in ("list", "count") and \
-               f is not None and \
-               hasattr(f.represent, "bulk"):
+            if method == "list" and \
+               f is not None and hasattr(f.represent, "bulk"):
                 all_values = values[(selector, method)]
                 if all_values:
                     f.represent.bulk(list(s3_flatlist(all_values)))
@@ -2088,12 +2409,12 @@ class S3PivotTable(object):
             # Get the representation method
             has_fk = f is not None and s3_has_foreign_key(f)
             if has_fk:
-                represent = lambda v, f=f: s3_unicode(f.represent(v))
+                represent = lambda v, f=f: s3_str(f.represent(v))
             else:
                 m = self._represent_method(selector)
-                represent = lambda v, m=m: s3_unicode(m(v))
+                represent = lambda v, m=m: s3_str(m(v))
 
-            represents[selector] = (has_fk, represent)
+            represents[selector] = represent
 
         return represents
 
@@ -2121,12 +2442,13 @@ class S3PivotTable(object):
         if ftype in ("integer", "string"):
             # Sort option keys by their representation
             requires = rfield.requires
-            if isinstance(requires, (tuple, list)):
-                requires = requires[0]
-            if isinstance(requires, IS_EMPTY_OR):
-                requires = requires.other
-            if isinstance(requires, IS_IN_SET):
-                sortby = "text"
+            if requires:
+                if isinstance(requires, (tuple, list)):
+                    requires = requires[0]
+                if isinstance(requires, IS_EMPTY_OR):
+                    requires = requires.other
+                if isinstance(requires, IS_IN_SET):
+                    sortby = "text"
 
         elif ftype[:9] == "reference":
             # Sort foreign keys by their representation
@@ -2193,7 +2515,7 @@ class S3PivotTable(object):
                 #value = value and len(value) or 0
             if not len(totals) and append is not None:
                 append(value)
-            totals.append(s3_unicode(number_represent(value)))
+            totals.append(s3_str(number_represent(value)))
         totals = " / ".join(totals)
         return totals
 
@@ -2413,8 +2735,8 @@ class S3PivotTable(object):
                 return s
 
         self.pkey = pkey = prefix(table._id.name)
-        self.rows = rows = self.rows and prefix(self.rows) or None
-        self.cols = cols = self.cols and prefix(self.cols) or None
+        self.rows = rows = prefix(self.rows) if self.rows else None
+        self.cols = cols = prefix(self.cols) if self.cols else None
 
         if not fields:
             fields = ()
@@ -2479,7 +2801,7 @@ class S3PivotTable(object):
                 # If rfield defines a represent, use it
                 represent = rfield.represent
                 if not represent:
-                    represent = s3_unicode
+                    represent = s3_str
 
                 # Wrap with markup stripper
                 stripper = S3MarkupStripper()

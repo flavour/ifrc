@@ -8,39 +8,229 @@
 import unittest
 from gluon import current
 
-from s3.s3datetime import S3Calendar
+from s3.s3datetime import S3Calendar, S3DefaultTZ
 from s3.s3fields import *
 from s3.s3validators import *
 
 from unit_tests import run_suite
 
 # =============================================================================
+class EAST5(datetime.tzinfo):
+    """ Dummy time zone for tests """
+    def utcoffset(self, dt):
+        return datetime.timedelta(hours=5)
+
+class WEST6(datetime.tzinfo):
+    """ Dummy time zone for tests """
+    def utcoffset(self, dt):
+        return datetime.timedelta(hours=-6)
+
+# =============================================================================
 class ISLatTest(unittest.TestCase):
     """
         Latitude has to be in decimal degrees between -90 & 90
-        - we can convert D/M/S or D°M'S" format into decimal degrees:
-        Zero padded, separated by spaces or : or (d, m, s) or (°, ', ") or run together and followed by cardinal direction initial (N,S) Note: Only seconds can have decimals places. A decimal point with no trailing digits is invalid.
-        Matches
-        40:26:46N | 40°26'47?N | 40d 26m 47s N | 90 00 00.0 | 89 59 50.4141 S | 00 00 00.0
-        Non-Matches
-        90 00 00.001 N | 9 00 00.00 N | 9 00 00.00 | 90 61 50.4121 S | -90 48 50. N | 90 00 00. N | 00 00 00.
+
+        We can convert D/M/S or D°M'S" format into decimal degrees:
+
+          Zero padded, separated by spaces or : or (d, m, s) or (°, ', ") or run
+          together and followed by cardinal direction initial (N,S). Only seconds
+          can have decimals places. A decimal point with no trailing digits is invalid.
     """
 
-    pass
+    # -------------------------------------------------------------------------
+    def testValid(self):
+        """ Test valid latitude expressions """
+
+        assertEqual = self.assertEqual
+
+        validator = IS_LAT()
+
+        # Accepts numeric values inside limit
+        value, error = validator(56.75)
+        assertEqual(error, None)
+        assertEqual(value, 56.75)
+
+        # Accepts decimal degrees as string
+        value, error = validator("32.9975")
+        assertEqual(error, None)
+        assertEqual(value, 32.9975)
+
+        # Accepts correctly formatted DMS strings
+        value, error = validator("40:23:15N")
+        assertEqual(error, None)
+        assertEqual(value, 40.3875)
+
+        value, error = validator("81°16'42.348\"N")
+        assertEqual(error, None)
+        assertEqual(value, 81.27843)
+
+        value, error = validator("40d 023m 15s S")
+        assertEqual(error, None)
+        assertEqual(value, -40.3875)
+
+        value, error = validator("90 00 00.0")
+        assertEqual(error, None)
+        assertEqual(value, 90.0)
+
+        value, error = validator("89 59 50.4141 S")
+        assertEqual(error, None)
+        assertEqual(value, -89.99733725)
+
+        value, error = validator("00 00 00.0")
+        assertEqual(error, None)
+        assertEqual(value, 0.0)
+
+        value, error = validator("43 23 15S")
+        assertEqual(error, None)
+        assertEqual(value, -43.3875)
+
+    # -------------------------------------------------------------------------
+    def testInvalid(self):
+        """ Test invalid latitude expressions """
+
+        assertNotEqual = self.assertNotEqual
+
+        validator = IS_LAT()
+
+        # Doesn't accept None or empty string
+        value, error = validator(None)
+        assertNotEqual(error, None)
+
+        value, error = validator("")
+        assertNotEqual(error, None)
+
+        # Doesn't syntactically incorrect strings
+        value, error = validator("   ")
+        assertNotEqual(error, None)
+
+        value, error = validator("invalid")
+        assertNotEqual(error, None)
+
+        value, error = validator("-43 17 11")
+        assertNotEqual(error, None)
+
+        # Doesn't accept invalid cardinal direction
+        value, error = validator("43 23 15W")
+        assertNotEqual(error, None)
+
+        # Doesn't accept values outside of limits
+        value, error = validator(101)
+        assertNotEqual(error, None)
+
+        value, error = validator("91°16'42.348\"N")
+        assertNotEqual(error, None)
+
+        value, error = validator("90 00 00.001 S")
+        assertNotEqual(error, None)
+
+        value, error = validator("89 61 50.4121 S") # Minutes excess
+        assertNotEqual(error, None)
+
+        value, error = validator("89 59 78.4141") # Seconds excess
+        assertNotEqual(error, None)
 
 # =============================================================================
 class ISLonTest(unittest.TestCase):
     """
         Longitude has to be in decimal degrees between -180 & 180
-        - we can convert D/M/S format into decimal degrees
-        Zero padded, separated by spaces or : or (d, m, s) or (°, ', ") or run together and followed by cardinal direction initial (E,W) Note: Only seconds can have decimals places. A decimal point with no trailing digits is invalid.
-        Matches
-        079:56:55W | 079°58'36?W | 079d 58' 36? W | 180 00 00.0 | 090 29 20.4 E | 000 00 00.0
-        Non-Matches
-        180 00 00.001 E | 79 00 00.00 E | -79 00 00.00 | 090 29 20.4 E | -090 29 20.4 E | 180 00 00. E | 000 00 00.
+        We can convert D/M/S or D°M'S" format into decimal degrees:
+
+          Zero padded, separated by spaces or : or (d, m, s) or (°, ', ") or run
+          together and followed by cardinal direction initial (E,W). Only seconds
+          can have decimals places. A decimal point with no trailing digits is invalid.
     """
 
-    pass
+    # -------------------------------------------------------------------------
+    def testValid(self):
+        """ Test valid latitude expressions """
+
+        assertEqual = self.assertEqual
+
+        validator = IS_LON()
+
+        # Accepts numeric values inside limit
+        value, error = validator(116.75)
+        assertEqual(error, None)
+        assertEqual(value, 116.75)
+
+        # Accepts decimal degrees as string
+        value, error = validator("132.9975")
+        assertEqual(error, None)
+        assertEqual(value, 132.9975)
+
+        # Accepts correctly formatted DMS strings
+        value, error = validator("99:23:15E")
+        assertEqual(error, None)
+        assertEqual(value, 99.3875)
+
+        value, error = validator("121°16'42.348\"E")
+        assertEqual(error, None)
+        assertEqual(value, 121.27843)
+
+        value, error = validator("40d 023m 15s W")
+        assertEqual(error, None)
+        assertEqual(value, -40.3875)
+
+        value, error = validator("180 00 00.0")
+        assertEqual(error, None)
+        assertEqual(value, 180.0)
+
+        value, error = validator("179 59 50.4141 W")
+        assertEqual(error, None)
+        assertEqual(value, -179.99733725)
+
+        value, error = validator("00 00 00.0")
+        assertEqual(error, None)
+        assertEqual(value, 0.0)
+
+        value, error = validator("143 23 15W")
+        assertEqual(error, None)
+        assertEqual(value, -143.3875)
+
+    # -------------------------------------------------------------------------
+    def testInvalid(self):
+        """ Test invalid latitude expressions """
+
+        assertNotEqual = self.assertNotEqual
+
+        validator = IS_LON()
+
+        # Doesn't accept None or empty string
+        value, error = validator(None)
+        assertNotEqual(error, None)
+
+        value, error = validator("")
+        assertNotEqual(error, None)
+
+        # Doesn't syntactically incorrect strings
+        value, error = validator("   ")
+        assertNotEqual(error, None)
+
+        value, error = validator("invalid")
+        assertNotEqual(error, None)
+
+        value, error = validator("-43 17 11")
+        assertNotEqual(error, None)
+
+        # Doesn't accept invalid cardinal direction
+        value, error = validator("43 23 15S")
+        assertNotEqual(error, None)
+
+        # Doesn't accept values outside of limits
+        value, error = validator(201)
+        assertNotEqual(error, None)
+
+        value, error = validator("181°16'42.348\"E")
+        assertNotEqual(error, None)
+
+        value, error = validator("180 00 00.001 W")
+        assertNotEqual(error, None)
+
+        value, error = validator("179 61 50.4121 W") # Minutes excess
+        assertNotEqual(error, None)
+
+        value, error = validator("179 59 78.4141") # Seconds excess
+        assertNotEqual(error, None)
 
 # =============================================================================
 class ISONEOFLazyRepresentationTests(unittest.TestCase):
@@ -48,15 +238,18 @@ class ISONEOFLazyRepresentationTests(unittest.TestCase):
     def setUp(self):
 
         s3db = current.s3db
+        settings = current.deployment_settings
+
         current.auth.override = True
-        current.deployment_settings.org.branches = True
 
-        orgs = [Storage(name="ISONEOF%s" % i,
-                        acronym="IOO%s" % i)
-                for i in xrange(5)]
+        self.org_branches = settings.get_org_branches()
+        settings.org.branches = True
 
-        ids = []
+        # Generate some organisation records
+        orgs = [Storage(name="ISONEOF%s" % i, acronym="IOO%s" % i) for i in xrange(5)]
+
         table = s3db.org_organisation
+        ids = []
         for org in orgs:
             org_id = table.insert(**org)
             org["id"] = org_id
@@ -69,79 +262,96 @@ class ISONEOFLazyRepresentationTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def tearDown(self):
 
-        current.deployment_settings.org.branches = False
+        current.deployment_settings.org.branches = self.org_branches
+
         current.auth.override = False
         current.db.rollback()
 
     # -------------------------------------------------------------------------
     def testIsOneOfBuildSet(self):
+        """ Test building of options set """
 
-        renderer = S3Represent(lookup="org_organisation")
+        assertEqual = self.assertEqual
+        assertIn = self.assertIn
 
         db = current.db
         table = current.s3db.org_organisation
+
+        renderer = S3Represent(lookup="org_organisation")
         validator = IS_ONE_OF(db(table.id.belongs(self.ids)),
                               "org_organisation.id",
-                              renderer)
+                              renderer,
+                              )
 
-        options = Storage(validator.options())
+        # Verify the options set
+        options = dict(validator.options())
         for org in self.orgs:
-            self.assertTrue(str(org.id) in options)
-            self.assertEqual(options[str(org.id)], org.name)
-        self.assertEqual(renderer.queries, 0)
+            assertIn(str(org.id), options)
+            assertEqual(options[str(org.id)], org.name)
+
+        # IS_ONE_OF passes all rows, no lookups inside renderer
+        assertEqual(renderer.queries, 0)
 
     # -------------------------------------------------------------------------
     def testOrgOrganisationRepresent(self):
+        """ Test IS_ONE_OF in combination with org_OrganisationRepresent """
 
+        # @todo: move into s3db/org tests?
         s3db = current.s3db
-        renderer = s3db.org_OrganisationRepresent()
+
+        assertTrue = self.assertTrue
+        assertEqual = self.assertEqual
 
         db = current.db
         table = s3db.org_organisation
+
+        renderer = s3db.org_OrganisationRepresent()
         validator = IS_ONE_OF(db(table.id.belongs(self.ids)),
                               "org_organisation.id",
-                              renderer)
-
-        options = Storage(validator.options())
+                              renderer,
+                              )
+        options = dict(validator.options())
         for org in self.orgs:
-            self.assertTrue(str(org.id) in options)
-            self.assertEqual(options[str(org.id)],
-                             "%s (%s)" % (org.name, org.acronym))
-        self.assertEqual(renderer.queries, 1) # using custom query
+            assertTrue(str(org.id) in options)
+            assertEqual(options[str(org.id)], "%s (%s)" % (org.name, org.acronym))
+        assertEqual(renderer.queries, 1) # using custom query
 
         renderer = s3db.org_OrganisationRepresent(parent=False)
-
-        db = current.db
-        table = current.s3db.org_organisation
         validator = IS_ONE_OF(db(table.id.belongs(self.ids)),
                               "org_organisation.id",
-                              renderer)
-
-        options = Storage(validator.options())
+                              renderer,
+                              )
+        options = dict(validator.options())
         for org in self.orgs:
-            self.assertTrue(str(org.id) in options)
-            self.assertEqual(options[str(org.id)],
+            assertTrue(str(org.id) in options)
+            assertEqual(options[str(org.id)],
                              "%s (%s)" % (org.name, org.acronym))
-        self.assertEqual(renderer.queries, 0) # using default query
+        assertEqual(renderer.queries, 0) # using default query
 
-        renderer = s3db.org_OrganisationRepresent(parent=False,
-                                                  acronym=False)
-
-        db = current.db
-        table = current.s3db.org_organisation
+        renderer = s3db.org_OrganisationRepresent(parent=False, acronym=False)
         validator = IS_ONE_OF(db(table.id.belongs(self.ids)),
                               "org_organisation.id",
-                              renderer)
-
-        options = Storage(validator.options())
+                              renderer,
+                              )
+        options = dict(validator.options())
         for org in self.orgs:
-            self.assertTrue(str(org.id) in options)
-            self.assertEqual(options[str(org.id)], org.name)
-        self.assertEqual(renderer.queries, 0) # using default query
+            assertTrue(str(org.id) in options)
+            assertEqual(options[str(org.id)], org.name)
+        assertEqual(renderer.queries, 0) # using default query
 
 # =============================================================================
 class IS_PHONE_NUMBER_Tests(unittest.TestCase):
     """ Test IS_PHONE_NUMBER single phone number validator """
+
+    def setUp(self):
+
+        settings = current.deployment_settings
+        self.intl = settings.get_msg_require_international_phone_numbers()
+
+    def tearDown(self):
+
+        settings = current.deployment_settings
+        settings.msg.require_international_phone_numbers = self.intl
 
     # -------------------------------------------------------------------------
     def testStandardNotationRequirement(self):
@@ -205,12 +415,11 @@ class IS_PHONE_NUMBER_Tests(unittest.TestCase):
     def testInternationalFormat(self):
         """ Test phone number validation with international notation requirement """
 
-        # Store current setting
         settings = current.deployment_settings
-        current_setting = settings.get_msg_require_international_phone_numbers()
 
         assertEqual = self.assertEqual
         assertNotEqual = self.assertNotEqual
+
         validate = IS_PHONE_NUMBER(international=True)
 
         # Turn on notation requirement globally
@@ -259,9 +468,6 @@ class IS_PHONE_NUMBER_Tests(unittest.TestCase):
         assertEqual(error, None)
         assertEqual(value, "1-364-283745")
 
-        # Restore current setting
-        settings.msg.require_international_phone_numbers = current_setting
-
 # =============================================================================
 class IS_UTC_DATETIME_Tests(unittest.TestCase):
     """ Test IS_UTC_DATETIME validator """
@@ -278,9 +484,9 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
         settings.L10n.time_format = "%H:%M:%S"
 
         # Set timezone to UTC
-        session = current.session
-        self.utc_offset = session.s3.utc_offset
-        session.s3.utc_offset = 0
+        self.tzinfo = current.response.s3.tzinfo
+        self.tzname = current.session.s3.tzname
+        self.utc_offset = current.session.s3.utc_offset
 
         # Set current calendar to Gregorian
         self.calendar = current.calendar
@@ -296,6 +502,8 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
         settings.L10n.time_format = self.time_format
 
         # Reset time zone
+        current.response.s3.tzinfo = self.tzinfo
+        current.session.s3.tzname = self.tzname
         current.session.s3.utc_offset = self.utc_offset
 
         # Restore current calendar
@@ -305,24 +513,38 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
     def testValidation(self):
         """ Test validation with valid datetime string """
 
+        response = current.response
+        session = current.session
+
+        response.s3.tzinfo = None
+        session.s3.tzname = "America/Detroit"
+
         validate = IS_UTC_DATETIME()
 
         assertEqual = self.assertEqual
 
-        # Test timezone-naive string
-        dtstr = "2011-11-19 14:00:00"
+        # Test timezone-naive string (winter)
+        dtstr = "2011-11-19 14:03:00"
         value, error = validate(dtstr)
         assertEqual(error, None)
-        assertEqual(value, datetime.datetime(2011, 11, 19, 14, 0, 0))
+        assertEqual(value, datetime.datetime(2011, 11, 19, 19, 3, 0))
+
+        # Test timezone-naive string (summer)
+        dtstr = "2011-06-11 14:00:00"
+        value, error = validate(dtstr)
+        assertEqual(error, None)
+        assertEqual(value, datetime.datetime(2011, 6, 11, 18, 0, 0))
 
         # Test timezone-aware string
-        dtstr = "2011-11-19 14:00:00+0500"
+        dtstr = "2011-11-19 14:28:22+0500"
         value, error = validate(dtstr)
         assertEqual(error, None)
-        assertEqual(value, datetime.datetime(2011, 11, 19, 9, 0, 0))
+        assertEqual(value, datetime.datetime(2011, 11, 19, 9, 28, 22))
 
-        # Change time zone
-        current.session.s3.utc_offset = -8
+        # Fall back to offset
+        response.s3.tzinfo = None
+        session.s3.tzname = None
+        session.s3.utc_offset = -8
 
         # Test timezone-naive string
         dtstr = "2011-11-19 14:00:00"
@@ -340,28 +562,39 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
     def testValidationWithDateTime(self):
         """ Test validation with datetime """
 
-        validate = IS_UTC_DATETIME()
+        response = current.response
+        session = current.session
 
-        class EAST5(datetime.tzinfo):
-            def utcoffset(self, dt):
-                return datetime.timedelta(hours=5)
+        response.s3.tzinfo = None
+        session.s3.tzname = "Australia/Tasmania"
+        session.s3.utc_offset = "+0200"
+
+        validate = IS_UTC_DATETIME()
 
         assertEqual = self.assertEqual
 
-        # Test timezone-naive datetime
+        # Test timezone-naive datetime (winter, UTC+11 to UTC)
         dt = datetime.datetime(2011, 11, 19, 14, 0, 0)
         value, error = validate(dt)
         assertEqual(error, None)
-        assertEqual(value, datetime.datetime(2011, 11, 19, 14, 0, 0))
+        assertEqual(value, datetime.datetime(2011, 11, 19, 3, 0, 0))
 
-        # Test timezone-aware datetime
+        # Test timezone-naive datetime (summer, UTC+10)
+        dt = datetime.datetime(2011, 6, 8, 5, 0, 0)
+        value, error = validate(dt)
+        assertEqual(error, None)
+        assertEqual(value, datetime.datetime(2011, 6, 7, 19, 0, 0))
+
+        # Test timezone-aware datetime (UTC+5 to UTC)
         dt = datetime.datetime(2011, 11, 19, 14, 0, 0, tzinfo=EAST5())
         value, error = validate(dt)
         assertEqual(error, None)
         assertEqual(value, datetime.datetime(2011, 11, 19, 9, 0, 0))
 
-        # Change time zone
-        current.session.s3.utc_offset = -8
+        # Fall back to fixed offset
+        response.s3.tzinfo = None
+        session.s3.tzname = None
+        session.s3.utc_offset = -8
 
         # Test timezone-naive datetime
         dt = datetime.datetime(2011, 11, 19, 14, 0, 0)
@@ -379,11 +612,14 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
     def testValidationWithDate(self):
         """ Test validation with date """
 
-        validate = IS_UTC_DATETIME()
+        response = current.response
+        session = current.session
 
-        class EAST5(datetime.tzinfo):
-            def utcoffset(self, dt):
-                return datetime.timedelta(hours=5)
+        response.s3.tzinfo = None
+        session.s3.tzname = "UTC"
+        session.s3.utc_offset = "+0200"
+
+        validate = IS_UTC_DATETIME()
 
         assertEqual = self.assertEqual
 
@@ -393,23 +629,33 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
         assertEqual(error, None)
         assertEqual(value, datetime.datetime(2011, 11, 19, 8, 0, 0))
 
-        # Change time zone
-        current.session.s3.utc_offset = -8
+        # Change time zone (far West, fixed offset)
+        response.s3.tzinfo = None
+        session.s3.tzname = None
+        session.s3.utc_offset = -8
 
-        # Check that date defaults to 08:00 hours (Western time zone)
+        # Check that date defaults to 08:00 hours
         dt = datetime.date(2011, 11, 19)
         value, error = validate(dt)
         assertEqual(error, None)
         assertEqual(value, datetime.datetime(2011, 11, 19, 16, 0, 0))
 
-        # Change time zone
-        current.session.s3.utc_offset = +11
+        # Change time zone (extreme East, with DST-awareness)
+        response.s3.tzinfo = None
+        session.s3.tzname = "Australia/Tasmania"
+        session.s3.utc_offset = -2
 
-        # Check that date defaults to 08:00 hours (Extreme Eastern time zone)
+        # Check that date defaults to 08:00 hours
         dt = datetime.date(2011, 11, 19)
         value, error = validate(dt)
         assertEqual(error, None)
         assertEqual(value, datetime.datetime(2011, 11, 18, 21, 0, 0))
+
+        # Check that date defaults to 08:00 hours
+        dt = datetime.date(2011, 05, 11)
+        value, error = validate(dt)
+        assertEqual(error, None)
+        assertEqual(value, datetime.datetime(2011, 05, 10, 22, 0, 0))
 
     # -------------------------------------------------------------------------
     def testValidationDestructive(self):
@@ -527,6 +773,9 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
     def testFormatter(self):
         """ Test formatter """
 
+        response = current.response
+        session = current.session
+
         validate = IS_UTC_DATETIME()
 
         assertEqual = self.assertEqual
@@ -542,24 +791,31 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
         assertEqual(dtstr, "2011-11-19 14:00:00")
 
         # Change time zone
-        current.session.s3.utc_offset = -8
+        response.s3.tzinfo = None
+        session.s3.tzname = "Canada/Eastern"
+        session.s3.utc_offset = +5
 
-        # Test with default UTC offset
+        # Test with default timezone (alternate DST)
         dt = datetime.datetime(2011, 11, 19, 14, 0, 0)
         dtstr = validate.formatter(dt)
-        assertEqual(dtstr, "2011-11-19 06:00:00")
+        assertEqual(dtstr, "2011-11-19 09:00:00")
+        dt = datetime.datetime(2011, 6, 8, 14, 0, 0)
+        dtstr = validate.formatter(dt)
+        assertEqual(dtstr, "2011-06-08 10:00:00")
 
-        # Test with UTC offset and format override
-        validate = IS_UTC_DATETIME(utc_offset="+0200",
-                                   format="%d.%m.%Y %I:%M %p",
+        # Test format override
+        validate = IS_UTC_DATETIME(format="%d.%m.%Y %I:%M %p",
                                    )
         dt = datetime.datetime(2011, 11, 19, 14, 0, 0)
         dtstr = validate.formatter(dt)
-        assertEqual(dtstr, "19.11.2011 04:00 PM")
+        assertEqual(dtstr, "19.11.2011 09:00 AM")
 
     # -------------------------------------------------------------------------
     def testLocalizedErrorMessages(self):
         """ Test localized date/time in default error messages """
+
+        response = current.response
+        session = current.session
 
         assertEqual = self.assertEqual
         assertTrue = self.assertTrue
@@ -569,7 +825,9 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
         current.deployment_settings.L10n.time_format = "%I:%M %p"
 
         # Change time zone
-        current.session.s3.utc_offset = +3
+        response.s3.tzinfo = None
+        session.s3.tzname = "US/Pacific"
+        session.s3.utc_offset = +3
 
         # Minimum/maximum
         mindt = datetime.datetime(2011, 11, 19, 14, 0, 0)
@@ -579,13 +837,13 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
         validate = IS_UTC_DATETIME(minimum=mindt)
         msg = validate.error_message
         assertEqual(validate.minimum, mindt)
-        assertTrue(msg.find("19/11/2011 05:00 PM") != -1)
+        assertTrue(msg.find("19/11/2011 06:00 AM") != -1)
 
         # Test maximum error
         validate = IS_UTC_DATETIME(maximum=maxdt)
         msg = validate.error_message
         assertEqual(validate.maximum, maxdt)
-        assertTrue(msg.find("21/11/2011 01:00 AM") != -1)
+        assertTrue(msg.find("20/11/2011 02:00 PM") != -1)
 
         # Test minimum error with custom format
         validate = IS_UTC_DATETIME(minimum=mindt,
@@ -593,7 +851,7 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
                                    )
         msg = validate.error_message
         assertEqual(validate.minimum, mindt)
-        assertTrue(msg.find("2011-11-19 17:00") != -1)
+        assertTrue(msg.find("2011-11-19 06:00") != -1)
 
         # Test maximum error with custom format
         validate = IS_UTC_DATETIME(maximum=maxdt,
@@ -601,7 +859,7 @@ class IS_UTC_DATETIME_Tests(unittest.TestCase):
                                    )
         msg = validate.error_message
         assertEqual(validate.maximum, maxdt)
-        assertTrue(msg.find("2011-11-21 01:00") != -1)
+        assertTrue(msg.find("2011-11-20 14:00") != -1)
 
 # =============================================================================
 class IS_UTC_DATE_Tests(unittest.TestCase):
@@ -621,9 +879,9 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         settings.L10n.date_format = "%Y-%m-%d"
 
         # Set timezone to UTC
-        session = current.session
-        self.utc_offset = session.s3.utc_offset
-        session.s3.utc_offset = 0
+        self.tzinfo = current.response.tzinfo
+        self.tzname = current.session.tzname
+        self.utc_offset = current.session.s3.utc_offset
 
     # -------------------------------------------------------------------------
     def tearDown(self):
@@ -634,6 +892,8 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         settings.L10n.date_format = self.date_format
 
         # Reset time zone
+        current.response.s3.tzinfo = self.tzinfo
+        current.session.s3.tzname = self.tzname
         current.session.s3.utc_offset = self.utc_offset
 
         # Reset calendar
@@ -642,6 +902,8 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def testValidation(self):
         """ Test validation with valid datetime string """
+
+        response = current.response
 
         validate = IS_UTC_DATE()
 
@@ -654,7 +916,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(value, datetime.date(2011, 11, 19))
 
         # Change time zone
-        current.session.s3.utc_offset = -6
+        response.s3.tzinfo = S3DefaultTZ(-6)
 
         # Test western time zone (6 hours West, same day)
         dtstr = "2011-11-19"
@@ -663,7 +925,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(value, datetime.date(2011, 11, 19))
 
         # Change time zone
-        current.session.s3.utc_offset = +5
+        response.s3.tzinfo = S3DefaultTZ(+5)
 
         # Test eastern time zone (5 hours East, same day)
         dtstr = "2011-11-19"
@@ -672,7 +934,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(value, datetime.date(2011, 11, 19))
 
         # Change time zone
-        current.session.s3.utc_offset = +11
+        response.s3.tzinfo = S3DefaultTZ(+11)
 
         # Test eastern time zone (11 hours East, next day)
         dtstr = "2011-11-19"
@@ -684,15 +946,9 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
     def testValidationWithDateTime(self):
         """ Test validation with datetime """
 
+        response = current.response
+
         validate = IS_UTC_DATE()
-
-        class WEST6(datetime.tzinfo):
-            def utcoffset(self, dt):
-                return datetime.timedelta(hours=-6)
-
-        class EAST5(datetime.tzinfo):
-            def utcoffset(self, dt):
-                return datetime.timedelta(hours=5)
 
         assertEqual = self.assertEqual
 
@@ -709,7 +965,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(value, datetime.date(2011, 11, 20))
 
         # Change time zone
-        current.session.s3.utc_offset = -8
+        response.s3.tzinfo = S3DefaultTZ(-8)
 
         # Test timezone-naive datetime (8 hours West, previous day)
         dt = datetime.datetime(2011, 11, 19, 18, 0, 0)
@@ -729,12 +985,14 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
 
         # Representation of a parsed string must give the same string
 
+        response = current.response
+
         assertEqual = self.assertEqual
 
         validate = IS_UTC_DATE()
         represent = S3DateTime.date_represent
 
-        current.session.s3.utc_offset = -10
+        response.s3.tzinfo = S3DefaultTZ(-10)
 
         dtstr = "1998-03-21"
         value, error = validate(dtstr)
@@ -744,7 +1002,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         representation = represent(value, utc=True)
         assertEqual(representation, dtstr)
 
-        current.session.s3.utc_offset = 0
+        response.s3.tzinfo = S3DefaultTZ(0)
 
         dtstr = "1998-03-21"
         value, error = validate(dtstr)
@@ -754,7 +1012,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         representation = represent(value, utc=True)
         assertEqual(representation, dtstr)
 
-        current.session.s3.utc_offset = 6
+        response.s3.tzinfo = S3DefaultTZ(+6)
 
         dtstr = "1998-03-21"
         value, error = validate(dtstr)
@@ -764,7 +1022,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         representation = represent(value, utc=True)
         assertEqual(representation, dtstr)
 
-        current.session.s3.utc_offset = 11
+        response.s3.tzinfo = S3DefaultTZ(+12)
 
         dtstr = "1998-03-21"
         value, error = validate(dtstr)
@@ -778,11 +1036,9 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
     def testValidationWithDate(self):
         """ Test validation with date """
 
-        validate = IS_UTC_DATE()
+        response = current.response
 
-        class EAST5(datetime.tzinfo):
-            def utcoffset(self, dt):
-                return datetime.timedelta(hours=5)
+        validate = IS_UTC_DATE()
 
         assertEqual = self.assertEqual
 
@@ -792,28 +1048,22 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(error, None)
         assertEqual(value, datetime.date(2011, 11, 19))
 
-        # Change time zone
-        current.session.s3.utc_offset = -5
-
         # Test western time zone (5 hours West, same day)
+        response.s3.tzinfo = S3DefaultTZ(-5)
         dt = datetime.date(2011, 11, 19)
         value, error = validate(dt)
         assertEqual(error, None)
         assertEqual(value, datetime.date(2011, 11, 19))
-
-        # Change time zone
-        current.session.s3.utc_offset = +5
 
         # Test eastern time zone (5 hours East, same day)
+        response.s3.tzinfo = S3DefaultTZ(+5)
         dt = datetime.date(2011, 11, 19)
         value, error = validate(dt)
         assertEqual(error, None)
         assertEqual(value, datetime.date(2011, 11, 19))
 
-        # Change time zone
-        current.session.s3.utc_offset = +9
-
         # Test eastern time zone (9 hours East, next day)
+        response.s3.tzinfo = S3DefaultTZ(+9)
         dt = datetime.date(2011, 11, 19)
         value, error = validate(dt)
         assertEqual(error, None)
@@ -927,6 +1177,9 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
     def testFormatter(self):
         """ Test formatter """
 
+        response = current.response
+        session = current.session
+
         validate = IS_UTC_DATE()
 
         assertEqual = self.assertEqual
@@ -942,7 +1195,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(dtstr, "2011-11-19")
 
         # Change time zone
-        current.session.s3.utc_offset = -6
+        response.s3.tzinfo = S3DefaultTZ(-6)
 
         # Test with default UTC offset (6 hours West, same day)
         dt = datetime.date(2011, 11, 19)
@@ -950,7 +1203,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(dtstr, "2011-11-19")
 
         # Change time zone
-        current.session.s3.utc_offset = +6
+        response.s3.tzinfo = S3DefaultTZ(+6)
 
         # Test with default UTC offset (6 hours East, same day)
         dt = datetime.date(2011, 11, 19)
@@ -958,16 +1211,19 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         assertEqual(dtstr, "2011-11-19")
 
         # Change time zone
-        current.session.s3.utc_offset = +9
+        response.s3.tzinfo = S3DefaultTZ(+12)
 
-        # Test with default UTC offset (9 hours East, next day)
+        # Test with default UTC offset (12 hours East, next day)
         dt = datetime.date(2011, 11, 19)
         dtstr = validate.formatter(dt)
         assertEqual(dtstr, "2011-11-20")
 
-        # Test with UTC offset and format override (12 hours East, next day)
-        validate = IS_UTC_DATE(utc_offset="+1200",
-                               format="%d.%m.%Y",
+        response.s3.tzinfo = None
+        session.s3.tzname = "Australia/Melbourne"
+        session.s3.utc_offset = +1
+
+        # Test format override
+        validate = IS_UTC_DATE(format="%d.%m.%Y",
                                )
         dt = datetime.datetime(2011, 11, 19, 8, 0, 0)
         dtstr = validate.formatter(dt)
@@ -981,9 +1237,15 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         dtstr = validate.formatter(dt)
         assertEqual(dtstr, "20.11.2011")
 
+        dt = datetime.date(2011, 5, 19)
+        dtstr = validate.formatter(dt)
+        assertEqual(dtstr, "20.05.2011")
+
     # -------------------------------------------------------------------------
     def testLocalizedErrorMessages(self):
         """ Test localized date/time in default error messages """
+
+        response = current.response
 
         assertEqual = self.assertEqual
         assertTrue = self.assertTrue
@@ -992,7 +1254,7 @@ class IS_UTC_DATE_Tests(unittest.TestCase):
         current.deployment_settings.L10n.date_format = "%d/%m/%Y"
 
         # Change time zone
-        current.session.s3.utc_offset = +3
+        response.s3.tzinfo = S3DefaultTZ(+3)
 
         # Minimum/maximum
         mindt = datetime.date(2011, 11, 16)
@@ -1521,8 +1783,8 @@ class IS_INT_AMOUNT_Tests(unittest.TestCase):
 if __name__ == "__main__":
 
     run_suite(
-        #ISLatTest,
-        #ISLonTest,
+        ISLatTest,
+        ISLonTest,
         ISONEOFLazyRepresentationTests,
         IS_PHONE_NUMBER_Tests,
         IS_UTC_DATETIME_Tests,

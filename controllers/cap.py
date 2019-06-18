@@ -23,7 +23,7 @@ def alerting_authority():
     """
 
     return s3_rest_controller()
-    
+
 # -----------------------------------------------------------------------------
 def alert_history():
     """
@@ -67,7 +67,7 @@ def info_prep(r):
                 template_id = db(table.id == r.id).select(table.template_info_id,
                                                           limitby=(0, 1)
                                                           ).first().template_info_id
-            except AttributeError, KeyError:
+            except (AttributeError, KeyError):
                 pass
         elif r.component_name == "info":
             # cap/x/info component tab
@@ -216,13 +216,6 @@ def alert():
                      (table.approved_on != None)
             resource.add_filter(filter)
 
-        #elif r.representation == "cap":
-        #    # This is either importing from or exporting to cap format. Set both
-        #    # postprocessing hooks so we don't have to enumerate methods.
-        #    s3db.configure("gis_location",
-        #                   xml_post_parse = s3db.cap_gis_location_xml_post_parse,
-        #                   xml_post_render = s3db.cap_gis_location_xml_post_render,
-        #                   )
         record = r.record
         if r.id:
 
@@ -251,7 +244,7 @@ def alert():
                 # Don't allow to delete
                 s3db.configure(tablename,
                                deletable = False,
-                               editable = False,                               
+                               editable = False,
                                insertable = False,
                                )
             if record.reference is not None:
@@ -354,7 +347,7 @@ def alert():
                                    deletable = False,
                                    editable = False,
                                    filter_widgets = filter_widgets,
-                                   insertable = False,                                  
+                                   insertable = False,
                                    )
 
                 if r.method == "review":
@@ -538,7 +531,7 @@ def alert():
 
                     widget = s3db.cap_AlertProfileWidget
                     component = widget.component
-    
+
                     @widget(None)
                     def alert_widget(r, **attr):
                         return (
@@ -622,10 +615,10 @@ def alert():
                                       params,
                                       ),
                         )
-    
+
                     @widget("Alert Qualifiers")
                     def qualifiers_widget(r, **attr):
-    
+
                         return (
                             component("Sender ID",
                                       record.sender,
@@ -659,7 +652,7 @@ def alert():
                                       represent = table.incidents.represent,
                                       ),
                         )
-    
+
                     resource_desc = info["cap_resource.resource_desc"]
                     dtable = s3db.doc_document
                     documents_ = []
@@ -772,7 +765,7 @@ def alert():
                                              URL(c="cap", f=fn, args=alert_id)
                         itable.event_type_id.default = row.event_type_id
                     else:
-                        s3db.configure("cap_info",                              
+                        s3db.configure("cap_info",
                                        insertable = False,
                                        )
                 if record.approved_by is not None:
@@ -923,8 +916,8 @@ def alert():
                     row_clone["template_info_id"] = row.id
                     row_clone["is_template"] = False
                     row_clone["effective"] = request.utcnow
-                    row_clone["expires"] = s3db.cap_expiry_date()
-                    row_clone["sender_name"] = s3db.cap_sender_name()
+                    row_clone["expires"] = s3db.cap_expirydate()
+                    row_clone["sender_name"] = s3db.cap_sendername()
                     row_clone["web"] = settings.get_base_public_url() + \
                                         URL(c="cap", f=fn, args=lastid)
                     row_clone["audience"] = audience
@@ -1198,7 +1191,7 @@ def template():
                                          URL(c="cap", f=fn, args=alert_id)
                     itable.event_type_id.default = row.event_type_id
                 else:
-                    s3db.configure("cap_info",                              
+                    s3db.configure("cap_info",
                                    insertable = False,
                                    )
         elif r.component_name == "resource":
@@ -1416,7 +1409,7 @@ def notify_approver():
                         url = s3_str(Shortener('Tinyurl', timeout=3).short(url))
                     except:
                         pass
-                        
+
                 message = """
 Hello Approver,
 %(full_name)s has created the alert message.

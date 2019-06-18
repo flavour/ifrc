@@ -2,7 +2,7 @@
 
 """ S3 RESTful API
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -45,9 +45,9 @@ except ImportError:
 from gluon import current, redirect, HTTP, URL
 from gluon.storage import Storage
 
-from s3datetime import s3_parse_datetime
-from s3resource import S3Resource
-from s3utils import s3_get_extension, s3_remove_last_record_id, s3_store_last_record_id
+from .s3datetime import s3_parse_datetime
+from .s3resource import S3Resource
+from .s3utils import s3_get_extension, s3_keep_messages, s3_remove_last_record_id, s3_store_last_record_id, s3_str
 
 REGEX_FILTER = re.compile(r".+\..+|.*\(.+\).*")
 HTTP_METHODS = ("GET", "PUT", "POST", "DELETE")
@@ -566,13 +566,13 @@ class S3Request(object):
                     continue
                 # Catch any non-str values
                 if type(value) is list:
-                    value = [str(item)
+                    value = [s3_str(item)
                              if not isinstance(item, basestring) else item
                              for item in value
                              ]
-                elif not isinstance(value, basestring):
-                    value = str(value)
-                get_vars[k] = value
+                elif type(value) is not str:
+                    value = s3_str(value)
+                get_vars[s3_str(k)] = value
                 # Remove filter expression from POST vars
                 if k in post_vars:
                     del post_vars[k]
@@ -711,11 +711,7 @@ class S3Request(object):
                     if form and form.errors:
                         return output
 
-            session = current.session
-            session.flash = response.flash
-            session.confirmation = response.confirmation
-            session.error = response.error
-            session.warning = response.warning
+            s3_keep_messages()
             redirect(self.next)
 
         return output
@@ -1958,10 +1954,11 @@ class S3Method(object):
 
         settings = current.deployment_settings
         theme = settings.get_theme()
-        location = settings.get_template_location()
+        theme_layouts = settings.get_theme_layouts()
+
         if theme != "default":
             # See if there is a Custom View for this Theme
-            view = join(folder, location, "templates", theme, "views",
+            view = join(folder, "modules", "templates", theme_layouts, "views",
                         "%s_%s_%s" % (prefix, r.name, default))
             if exists(view):
                 # There is a view specific to this page
@@ -1970,22 +1967,22 @@ class S3Method(object):
                 return open(view, "rb")
             else:
                 if "/" in default:
-                    subfolder, _default = default.split("/", 1)
+                    subfolder, default_ = default.split("/", 1)
                 else:
                     subfolder = ""
-                    _default = default
-                if exists(join(folder, location, "templates", theme, "views",
-                               subfolder, "_%s" % _default)):
+                    default_ = default
+                if exists(join(folder, "modules", "templates", theme_layouts, "views",
+                               subfolder, "_%s" % default_)):
                     # There is a general view for this page type
                     # NB This should not include {{extend layout.html}}
                     if subfolder:
                         subfolder = "%s/" % subfolder
                     # Pass this mapping to the View
                     current.response.s3.views[default] = \
-                        "../%s/templates/%s/views/%s_%s" % (location,
-                                                            theme,
-                                                            subfolder,
-                                                            _default)
+                        "../modules/templates/%s/views/%s_%s" % (theme_layouts,
+                                                                 subfolder,
+                                                                 default_,
+                                                                 )
 
         if r.component:
             view = "%s_%s_%s" % (r.name, r.component_name, default)

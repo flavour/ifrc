@@ -2,7 +2,7 @@
 
 """ S3 Date/Time Toolkit
 
-    @copyright: 2015-2018 (c) Sahana Software Foundation
+    @copyright: 2015-2019 (c) Sahana Software Foundation
     @license: MIT
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
@@ -34,12 +34,13 @@ __all__ = ("ISOFORMAT",
            "S3Calendar",
            "S3DateTimeParser",
            "S3DateTimeFormatter",
+           "S3DefaultTZ",
            "s3_parse_datetime",
            "s3_format_datetime",
            "s3_decode_iso_datetime",
            "s3_encode_iso_datetime",
            "s3_utc",
-           "s3_get_utc_offset",
+           "s3_get_tzinfo",
            "s3_relative_datetime",
            )
 
@@ -94,15 +95,7 @@ class S3DateTime(object):
 
         if dt:
             if utc:
-                offset = cls.get_offset_value(current.session.s3.utc_offset)
-                if offset:
-                    delta = datetime.timedelta(seconds=offset)
-                    if not isinstance(dt, datetime.datetime):
-                        combine = datetime.datetime.combine
-                        # Compute the break point
-                        bp = (combine(dt, datetime.time(8, 0, 0)) - delta).time()
-                        dt = combine(dt, bp)
-                    dt = dt + delta
+                dt = cls.to_local(dt)
             dtstr = calendar.format_date(dt, dtfmt=format, local=True)
         else:
             dtstr = current.messages["NONE"]
@@ -130,14 +123,7 @@ class S3DateTime(object):
 
         if dt:
             if utc:
-                offset = cls.get_offset_value(current.session.s3.utc_offset)
-                if offset:
-                    delta = datetime.timedelta(seconds=offset)
-                    if not isinstance(dt, datetime.datetime):
-                        combine = datetime.datetime.combine
-                        bp = (combine(dt, datetime.time(8, 0, 0)) - delta).time()
-                        dt = combine(dt, bp)
-                    dt = dt + datetime.timedelta(seconds=offset)
+                dt = cls.to_local(dt)
             dtstr = calendar.format_datetime(dt, dtfmt=format, local=True)
         else:
             dtstr = current.messages["NONE"]
@@ -165,10 +151,7 @@ class S3DateTime(object):
             if not isinstance(time, datetime.datetime):
                 today = datetime.datetime.utcnow().date()
                 time = datetime.datetime.combine(today, time)
-            # Add UTC offset
-            offset = cls.get_offset_value(current.session.s3.utc_offset)
-            if offset:
-                time = time + datetime.timedelta(seconds=offset)
+            time = cls.to_local(time)
         if isinstance(time, datetime.datetime):
             # Prevent error with dates<1900: convert into datetime.time
             time = time.time()
@@ -180,6 +163,118 @@ class S3DateTime(object):
                 raise TypeError("Invalid argument type: %s" % type(time))
         else:
             return current.messages["NONE"]
+
+    # -----------------------------------------------------------------------------
+    @classmethod
+    def to_local(cls, dt):
+        """
+            Convert a date or datetime to local timezone
+
+            @param dt: the date/datetime; if it is tz-naive it is assumed to
+                       be in UTC
+            @returns: a tz-naive datetime in local timezone
+        """
+
+        if not dt:
+            return None
+
+        tzinfo = s3_get_tzinfo()
+        if tzinfo:
+            if not isinstance(dt, datetime.datetime):
+                # Compute breakpoint local time for UTC date
+                combine = datetime.datetime.combine
+                bp = cls.to_utc(combine(dt, datetime.time(8, 0, 0))).time()
+                dt = combine(dt, bp)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=dateutil.tz.tzutc())
+            dt = dt.astimezone(tz=tzinfo).replace(tzinfo=None)
+        else:
+            offset = cls.get_offset_value(cls.get_utc_offset())
+            if offset:
+                delta = datetime.timedelta(seconds=offset)
+            else:
+                delta = datetime.timedelta(0)
+            if not isinstance(dt, datetime.datetime):
+                # Compute breakpoint local time for UTC date
+                combine = datetime.datetime.combine
+                bp = (combine(dt, datetime.time(8, 0, 0)) - delta).time()
+                dt = combine(dt, bp)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(tz=dateutil.tz.tzutc()).replace(tzinfo=None)
+            dt = dt + delta
+
+        return dt
+
+    # -----------------------------------------------------------------------------
+    @classmethod
+    def to_utc(cls, dt):
+        """
+            Convert a date or datetime to UTC
+
+            @param dt: the date or datetime; if it is tz-naive it is assumed to
+                       be in local time
+            @returns: tz-naive datetime in UTC
+        """
+
+        if not dt:
+            return None
+
+        date_only = not isinstance(dt, datetime.datetime)
+
+        if date_only or not dt.tzinfo:
+            tzinfo = s3_get_tzinfo()
+            if tzinfo:
+                if date_only:
+                    # Compute UTC date for 08:00 local time
+                    dt = datetime.datetime.combine(dt, datetime.time(8, 0, 0))
+                dt = dt.replace(tzinfo=tzinfo)
+            else:
+                offset = cls.get_offset_value(cls.get_utc_offset())
+                if offset:
+                    delta = datetime.timedelta(seconds=offset)
+                else:
+                    delta = datetime.timedelta(0)
+                if date_only:
+                    # Compute UTC date for 08:00 local time
+                    dt = datetime.datetime.combine(dt, datetime.time(8, 0, 0))
+                dt = dt - datetime.timedelta(seconds=offset)
+
+        if dt.tzinfo:
+            dt = dt.astimezone(tz=dateutil.tz.tzutc()).replace(tzinfo=None)
+
+        return dt
+
+    #--------------------------------------------------------------------------
+    @staticmethod
+    def get_utc_offset():
+        """
+            Get the current UTC offset for the client, fallback if the
+            client does not support timezone introspection and no default
+            timezone is configured
+        """
+
+        offset = None
+        session = current.session
+        request = current.request
+
+        # 1st choice is what the client provides in the hidden form
+        # field (for form POSTs)
+        offset = request.post_vars.get("_utc_offset", None)
+        if offset:
+            offset = int(offset)
+            utcstr = offset < 0 and "+" or "-"
+            hours = abs(int(offset/60))
+            minutes = abs(int(offset % 60))
+            offset = "%s%02d%02d" % (utcstr, hours, minutes)
+
+        if not offset:
+            # 2nd choice is the previous value from the current session
+            offset = session.s3.utc_offset
+        else:
+            # Remember it
+            session.s3.utc_offset = offset
+
+        return offset
 
     # -----------------------------------------------------------------------------
     @staticmethod
@@ -429,7 +524,7 @@ class S3Calendar(object):
                 dtfmt = "%Y-%m-%d" # ISO Date Format
 
         # Deal with T's
-        from s3utils import s3_str
+        from .s3utils import s3_str
         dtfmt = s3_str(dtfmt)
 
         return self.calendar._format(dt, dtfmt)
@@ -454,7 +549,7 @@ class S3Calendar(object):
                 dtfmt = ISOFORMAT # ISO Date/Time Format
 
         # Deal with T's
-        from s3utils import s3_str
+        from .s3utils import s3_str
         dtfmt = s3_str(dtfmt)
 
         # Remove microseconds
@@ -549,7 +644,7 @@ class S3Calendar(object):
             # Gregorian calendar - use strptime
             try:
                 timetuple = time.strptime(dtstr, dtfmt)
-            except ValueError, e:
+            except ValueError as e:
                 # Seconds missing?
                 try:
                     timetuple = time.strptime(dtstr + ":00", dtfmt)
@@ -1163,7 +1258,7 @@ class S3DateTimeParser(object):
         import pyparsing as pp
         self.ParseException = pp.ParseException
 
-        from s3utils import s3_unicode
+        from .s3utils import s3_unicode
 
         # Get the rules
         rules = self.rules
@@ -1430,7 +1525,7 @@ class S3DateTimeFormatter(object):
         T = current.T
         calendar = self.calendar
 
-        from s3utils import s3_unicode
+        from .s3utils import s3_unicode
 
         rules = {"d": "%02d" % d,
                  "b": T(calendar.MONTH_ABBR[m - 1]),
@@ -1524,32 +1619,33 @@ def s3_format_datetime(dt=None, dtfmt=None):
 #
 def s3_decode_iso_datetime(dtstr):
     """
-        Convert date/time string in ISO-8601 format into a
-        datetime object
+        Convert date/time string in ISO-8601 format into a datetime object
 
-        @note: this routine is named "iso" for consistency reasons,
-                but can actually read a broad variety of datetime
-                formats, but may raise a ValueError where not
+        @note: this has "iso" in its name for consistency reasons,
+               but can actually read a variety of formats
 
         @param dtstr: the date/time string
+
+        @returns: a timezone-aware datetime.datetime object
+
+        @raises: ValueError if the string cannot be parsed
     """
 
     # Default seconds/microseconds=zero
-    DEFAULT = datetime.datetime.utcnow().replace(second = 0,
+    DEFAULT = datetime.datetime.utcnow().replace(hour = 8,
+                                                 minute = 0,
+                                                 second = 0,
                                                  microsecond = 0,
                                                  )
 
-    dt = dateutil.parser.parse(dtstr, default=DEFAULT)
+    try:
+        dt = dateutil.parser.parse(dtstr, default=DEFAULT)
+    except (AttributeError, TypeError, ValueError):
+        raise ValueError("Invalid date/time string: %s (%s)" % (dtstr, type(dtstr)))
+
     if dt.tzinfo is None:
-        try:
-            dt = dateutil.parser.parse(dtstr + " +0000",
-                                       default = DEFAULT,
-                                       )
-        except ValueError:
-            # time part missing?
-            dt = dateutil.parser.parse(dtstr + " 00:00:00 +0000",
-                                       default = DEFAULT,
-                                       )
+        dt = dt.replace(tzinfo=dateutil.tz.tzutc())
+
     return dt
 
 #--------------------------------------------------------------------------
@@ -1586,42 +1682,73 @@ def s3_utc(dt):
         return None
 
 #--------------------------------------------------------------------------
-def s3_get_utc_offset():
-    """ Get the current UTC offset for the client """
+class S3DefaultTZ(datetime.tzinfo):
+    """
+        A datetime.tzinfo class that can be instantiated from
+        a UTC offset string or integer hours, used for testing and
+        as fallback for s3_get_tzinfo if the client's timezone cannot
+        be determined but an offset is available
+    """
 
-    offset = None
-    session = current.session
-    request = current.request
+    def __init__(self, offset=None):
 
-    logged_in = current.auth.is_logged_in()
-    if logged_in:
-        # 1st choice is the personal preference (useful for GETs if user
-        # wishes to see times in their local timezone)
-        offset = session.auth.user.utc_offset
+        super(S3DefaultTZ, self).__init__(self)
+
         if offset:
-            offset = offset.strip()
+            offset_sec = S3DateTime.get_offset_value(offset)
+            self._offset = datetime.timedelta(seconds=offset_sec)
+        else:
+            self._offset = datetime.timedelta(0)
 
-    if not offset:
-        # 2nd choice is what the client provides in the hidden form
-        # field (for form POSTs)
-        offset = request.post_vars.get("_utc_offset", None)
-        if offset:
-            offset = int(offset)
-            utcstr = offset < 0 and "+" or "-"
-            hours = abs(int(offset/60))
-            minutes = abs(int(offset % 60))
-            offset = "%s%02d%02d" % (utcstr, hours, minutes)
-            # Make this the preferred value during this session
-            if logged_in:
-                session.auth.user.utc_offset = offset
+    def utcoffset(self, dt):
 
-    if not offset:
-        # 3rd choice is the server default (what most clients should see
-        # the timezone as)
-        offset = current.deployment_settings.L10n.utc_offset
+        return self._offset
 
-    session.s3.utc_offset = offset
-    return offset
+    def dst(self, dt):
+
+        return datetime.timedelta(0)
+
+#--------------------------------------------------------------------------
+def s3_get_tzinfo():
+    """
+        Get a datetime.tzinfo object for the client's timezone
+    """
+
+    response = current.response
+
+    tzinfo = response.s3.tzinfo
+    if tzinfo is None:
+
+        session = current.session
+
+        # 1st choice: use the _timezone parameter from the current form
+        tzname = current.request.post_vars.get("_timezone")
+        if tzname:
+            session.s3.tzname = tzname
+        else:
+            # Fall back to the previous _timezone of the same session
+            tzname = session.s3.tzname
+        if tzname:
+            tzinfo = dateutil.tz.gettz(tzname)
+
+        # 2nd choice: use the _utc_offset parameter from the current form
+        # (e.g. client not supporting Intl)
+        if not tzinfo:
+            offset = S3DateTime.get_utc_offset()
+            if offset:
+                tzinfo = S3DefaultTZ(offset=offset)
+
+        # 3rd choice: use the timezone specified in deployment settings
+        if not tzinfo:
+            tzname = current.deployment_settings.get_L10n_timezone()
+            if tzname:
+                tzinfo = dateutil.tz.gettz(tzname)
+        if tzinfo:
+            response.s3.tzinfo = tzinfo
+
+        # No further fallback, treat as UTC
+
+    return tzinfo
 
 # =============================================================================
 # Utilities

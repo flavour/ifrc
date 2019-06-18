@@ -2,7 +2,7 @@
 
 """ Translation API
 
-    @copyright: 2012-2018 (c) Sahana Software Foundation
+    @copyright: 2012-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -35,7 +35,7 @@ from gluon import current
 from gluon.languages import read_dict, write_dict
 from gluon.storage import Storage
 
-from s3fields import S3ReusableField
+from .s3fields import S3ReusableField
 
 """
     List of classes with description :
@@ -812,7 +812,7 @@ class TranslateReadFiles(object):
             which are to be considered for translation.
         """
 
-        from s3import import S3BulkImporter
+        from .s3import import S3BulkImporter
 
         # List of database strings
         database_strings = []

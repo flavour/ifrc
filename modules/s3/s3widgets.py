@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -38,6 +38,7 @@ __all__ = ("S3ACLWidget",
            "S3AgeWidget",
            "S3AutocompleteWidget",
            "S3BooleanWidget",
+           "S3CascadeSelectWidget",
            "S3ColorPickerWidget",
            "S3CalendarWidget",
            "S3DateWidget",
@@ -80,6 +81,7 @@ __all__ = ("S3ACLWidget",
            "s3_richtext_widget",
            "search_ac",
            "S3XMLContents",
+           "S3TagCheckboxWidget",
            "ICON",
            )
 
@@ -106,10 +108,11 @@ from gluon.languages import lazyT
 from gluon.sqlhtml import *
 from gluon.storage import Storage
 
-from s3datetime import S3Calendar, S3DateTime
-from s3utils import *
-from s3validators import *
+from .s3datetime import S3Calendar, S3DateTime
+from .s3utils import *
+from .s3validators import *
 
+DEFAULT = lambda:None
 ogetattr = object.__getattribute__
 repr_select = lambda l: len(l.name) > 48 and "%s..." % l.name[:44] or l.name
 
@@ -1100,7 +1103,7 @@ class S3AddPersonWidget(FormWidget):
             return (None, T("Date of Birth is Required"))
 
         # Validate the email
-        email, error = self.validate_email(data.get("email"))
+        error = self.validate_email(data.get("email"))[1]
         if error:
             return (None, error)
 
@@ -1118,7 +1121,7 @@ class S3AddPersonWidget(FormWidget):
                      submitted data like: {fieldname: value, ...}
         """
 
-        from s3validators import JSONERRORS
+        from .s3validators import JSONERRORS
         try:
             data = json.loads(value)
         except JSONERRORS:
@@ -1545,10 +1548,9 @@ class S3BooleanWidget(BooleanWidget):
         fields = self.fields
         click_to_show = self.click_to_show
 
-        default = dict(
-                        _type="checkbox",
-                        value=value,
-                    )
+        default = {"_type": "checkbox",
+                   "value": value,
+                   }
 
         attr = BooleanWidget._attributes(field, default, **attributes)
 
@@ -1896,8 +1898,6 @@ class S3CalendarWidget(FormWidget):
         extremes = {}
         now = current.request.utcnow
 
-        offset = S3DateTime.get_offset_value(current.session.s3.utc_offset)
-
         # RAD : default to something quite generous
         pyears, fyears = 80, 80
 
@@ -1919,9 +1919,7 @@ class S3CalendarWidget(FormWidget):
         if earliest is not None:
             if not fallback:
                 pyears = abs(earliest.year - now.year)
-            earliest = earliest.replace(microsecond=0)
-            if offset:
-                earliest += datetime.timedelta(seconds=offset)
+            earliest = S3DateTime.to_local(earliest.replace(microsecond=0))
             extremes["minDateTime"] = earliest.isoformat()
 
         # Maximum
@@ -1942,9 +1940,7 @@ class S3CalendarWidget(FormWidget):
         if latest is not None:
             if not fallback:
                 fyears = abs(latest.year - now.year)
-            latest = latest.replace(microsecond=0)
-            if offset:
-                latest += datetime.timedelta(seconds=offset)
+            latest = S3DateTime.to_local(latest.replace(microsecond=0))
             extremes["maxDateTime"] = latest.isoformat()
 
         # Default date/time
@@ -1970,8 +1966,7 @@ class S3CalendarWidget(FormWidget):
             elif rounded > latest:
                 rounded = latest
             # Translate into local time
-            if offset:
-                rounded += datetime.timedelta(seconds=offset)
+            rounded = S3DateTime.to_local(rounded)
             # Convert into user format
             default = rounded.strftime(dtformat)
             extremes["defaultValue"] = default
@@ -2430,7 +2425,6 @@ class S3DateTimeWidget(FormWidget):
         # Limits
         now = request.utcnow
         timedelta = datetime.timedelta
-        offset = S3DateTime.get_offset_value(current.session.s3.utc_offset)
 
         if "min" in opts:
             earliest = opts["min"]
@@ -2461,16 +2455,14 @@ class S3DateTimeWidget(FormWidget):
                 rounded = earliest
             elif rounded > latest:
                 rounded = latest
-            if offset:
-                rounded += timedelta(seconds=offset)
+            rounded = S3DateTime.to_local(rounded)
             default = rounded.strftime(dtformat)
         else:
             default = ""
 
-        # Add timezone offset to limits
-        if offset:
-            earliest += timedelta(seconds=offset)
-            latest += timedelta(seconds=offset)
+        # Convert extremes to local time
+        earliest = S3DateTime.to_local(earliest)
+        latest = S3DateTime.to_local(latest)
 
         # Update limits of another widget?
         set_min = opts.get("set_min", None)
@@ -2574,22 +2566,33 @@ class S3HoursWidget(FormWidget):
     """
         Widget to enter a duration in hours (e.g. of a task), supporting
         flexible input format (e.g. "1h 15min", "1.75", "2:10")
+
+        NB users who frequently enter minutes-fragments sometimes forget
+           that the field expects hours, e.g. input of "15" interpreted
+           as 15 hours while the user actually meant 15 minutes. To avoid
+           this, use the explicit_above parameter to require an explicit
+           time unit or colon notation for implausible numbers (e.g. >10)
+           - so the user must enter "15h", "15m", "15:00" or "0:15" explicitly.
     """
 
     PARTS = re.compile(r"((?:[+-]{0,1}\s*)(?:[0-9,.:]+)\s*(?:[^0-9,.:+-]*))")
     TOKEN = re.compile(r"([+-]{0,1}\s*)([0-9,.:]+)([^0-9,.:+-]*)")
 
-    def __init__(self, interval=None, precision=2):
+    def __init__(self, interval=None, precision=2, explicit_above=None):
         """
             Constructor
 
             @param interval: standard interval to round up to (minutes),
                              None to disable rounding
             @param precision: number of decimal places to keep
+            @param explicit_above: require explicit time unit or colon notation
+                                   for value fragments above this limit
         """
 
         self.interval = interval
         self.precision = precision
+
+        self.explicit_above = explicit_above
 
     # -------------------------------------------------------------------------
     def __call__(self, field, value, **attributes):
@@ -2623,6 +2626,9 @@ class S3HoursWidget(FormWidget):
 
         try:
             return self.s3_parse(value), None
+        except SyntaxError as e:
+            # Input format violation
+            return value, str(e)
         except:
             return value, "invalid value"
 
@@ -2642,6 +2648,8 @@ class S3HoursWidget(FormWidget):
         elif not value:
             return hours
 
+        explicit_above = self.explicit_above
+
         parts = self.PARTS.split(value)
         for part in parts:
 
@@ -2657,7 +2665,7 @@ class S3HoursWidget(FormWidget):
             num = m.group(2)
 
             unit = m.group(3).lower()
-            unit = unit[0] if unit else "h"
+            unit, implicit = (unit[0], False) if unit else ("h", ":" not in num)
             if unit == "s":
                 length = 1
                 factor = 3600.0
@@ -2678,6 +2686,9 @@ class S3HoursWidget(FormWidget):
                 total += v / factor
                 factor *= 60
 
+            if explicit_above is not None and total > explicit_above and implicit:
+                msg = current.T("Specify a time unit or use HH:MM format")
+                raise SyntaxError(s3_str(msg))
             if sign == "-":
                 hours -= total
             else:
@@ -2689,7 +2700,8 @@ class S3HoursWidget(FormWidget):
             interval = float(interval)
             hours = math.ceil(hours * 60.0 / interval) * interval / 60.0
 
-        return round(hours, self.precision)
+        precision = self.precision
+        return round(hours, precision) if precision is not None else hours
 
 # =============================================================================
 class S3EmbeddedComponentWidget(FormWidget):
@@ -2943,7 +2955,7 @@ class S3EmbeddedComponentWidget(FormWidget):
             if "deleted" in linktable:
                 fq &= (linktable.deleted != True)
             linked = current.db(fq).select(table._id)
-            from s3query import FS
+            from .s3query import FS
             pkey = FS("id")
             exclude = (~(pkey.belongs([r[table._id.name] for r in linked])))
             return exclude
@@ -4092,14 +4104,25 @@ class S3LocationAutocompleteWidget(FormWidget):
 class S3LocationDropdownWidget(FormWidget):
     """
         Renders a dropdown for an Lx level of location hierarchy
-
     """
 
-    def __init__(self, level="L0", default=None, empty=False):
-        """ Set Defaults """
+    def __init__(self, level="L0", default=None, validate=False, empty=DEFAULT, blank=False):
+        """
+            Constructor
+
+            @param level: the Lx-level (as string)
+            @param default: the default location name
+            @param validate: validate input in-widget (special purpose)
+            @param empty: allow selection to be empty
+            @param blank: start without options (e.g. when options are
+                          Ajax-added later by filterOptionsS3)
+        """
+
         self.level = level
         self.default = default
+        self.validate = validate
         self.empty = empty
+        self.blank = blank
 
     def __call__(self, field, value, **attributes):
 
@@ -4107,9 +4130,13 @@ class S3LocationDropdownWidget(FormWidget):
         default = self.default
         empty = self.empty
 
+        opts = []
+        # Get locations
         s3db = current.s3db
         table = s3db.gis_location
-        if level:
+        if self.blank:
+            query = (table.id == value)
+        elif level:
             query = (table.deleted != True) & \
                     (table.level == level)
         else:
@@ -4118,27 +4145,40 @@ class S3LocationDropdownWidget(FormWidget):
         locations = current.db(query).select(table.name,
                                              table.id,
                                              cache=s3db.cache)
-        opts = []
+
+        # Build OPTIONs
         for location in locations:
             opts.append(OPTION(location.name, _value=location.id))
             if not value and default and location.name == default:
                 value = location.id
-        locations = locations.as_dict()
+
+        # Widget attributes
         attr = dict(attributes)
         attr["_type"] = "int"
         attr["value"] = value
-        attr_dropdown = OptionsWidget._attributes(field, attr)
-        requires = IS_IN_SET(locations)
-        if empty:
-            requires = IS_EMPTY_OR(requires)
-        attr_dropdown["requires"] = requires
+        attr = OptionsWidget._attributes(field, attr)
 
-        attr_dropdown["represent"] = \
-            lambda id: locations["id"]["name"] or current.messages.UNKNOWN_OPT
+        if self.validate:
+            # Validate widget input to enforce Lx subset
+            # - not normally needed (Field validation should suffice)
+            requires = IS_IN_SET(locations.as_dict())
+            if empty is DEFAULT:
+                # Introspect the field
+                empty = isinstance(field.requires, IS_EMPTY_OR)
+            if empty:
+                requires = IS_EMPTY_OR(requires)
 
-        return TAG[""](SELECT(*opts, **attr_dropdown),
-                       requires=field.requires
-                       )
+            # Skip in-widget validation on POST if inline
+            widget_id = attr.get("_id")
+            if widget_id and widget_id[:4] == "sub_":
+                from .s3forms import SKIP_POST_VALIDATION
+                requires = SKIP_POST_VALIDATION(requires)
+
+            widget = TAG[""](SELECT(*opts, **attr), requires = requires)
+        else:
+            widget = SELECT(*opts, **attr)
+
+        return widget
 
 # =============================================================================
 class S3LocationLatLonWidget(FormWidget):
@@ -4366,7 +4406,7 @@ class S3Selector(FormWidget):
 
         fieldname = str(field).replace(".", "_")
         if fieldname.startswith("sub_"):
-            from s3forms import SKIP_POST_VALIDATION
+            from .s3forms import SKIP_POST_VALIDATION
             requires = SKIP_POST_VALIDATION(requires)
 
         defaults = dict(requires = requires,
@@ -4490,6 +4530,7 @@ class S3LocationSelector(S3Selector):
 
             @param levels: list or tuple of hierarchy levels (names) to expose,
                            in order (e.g. ("L0", "L1", "L2"))
+                           or False to disable completely
             @param required_levels: list or tuple of required hierarchy levels (if empty,
                                     only the highest selectable Lx will be required)
             @param hide_lx: hide Lx selectors until higher level has been selected
@@ -4585,11 +4626,13 @@ class S3LocationSelector(S3Selector):
         levels = self._levels
         if self._initlx:
             lx = []
-            if not levels:
+            if levels is False:
+                levels = []
+            elif not levels:
                 # Which levels of Hierarchy are we using?
                 levels = current.gis.get_relevant_hierarchy_levels()
-            if levels is None:
-                levels = []
+                if levels is None:
+                    levels = []
             if not isinstance(levels, (tuple, list)):
                 levels = [levels]
             for level in levels:
@@ -4823,11 +4866,12 @@ class S3LocationSelector(S3Selector):
 
         # Lx Dropdowns
         multiselect = settings.get_ui_multiselect_widget()
-        lx_rows = self._lx_selectors(fieldname,
+        lx_rows = self._lx_selectors(field,
+                                     fieldname,
                                      levels,
                                      labels,
-                                     required=required,
                                      multiselect=multiselect,
+                                     required=required,
                                      )
         components.update(lx_rows)
 
@@ -4965,7 +5009,8 @@ class S3LocationSelector(S3Selector):
                        )
 
     # -------------------------------------------------------------------------
-    def _labels(self, levels, country=None):
+    @staticmethod
+    def _labels(levels, country=None):
         """
             Extract the hierarchy labels
 
@@ -5016,24 +5061,27 @@ class S3LocationSelector(S3Selector):
                     for level in levels:
                         if level == "L0":
                             continue
-                        labels[level] = d[int(level[1:])] = s3_unicode(T(row[level]))
+                        label = row[level]
+                        label = s3_str(T(label)) if label else level
+                        labels[level] = d[int(level[1:])] = label
         else:
             row = rows.first()
             d = compact["d"] = {}
             for level in levels:
                 if level == "L0":
                     continue
-                d[int(level[1:])] = s3_unicode(T(row[level]))
+                d[int(level[1:])] = s3_str(T(row[level]))
 
         return labels, compact
 
     # -------------------------------------------------------------------------
-    def _locations(self,
-                   levels,
+    @staticmethod
+    def _locations(levels,
                    values,
                    default_bounds = None,
                    lowest_lx = None,
-                   config = None):
+                   config = None,
+                   ):
         """
             Build initial location dict (to populate Lx dropdowns)
 
@@ -5145,7 +5193,12 @@ class S3LocationSelector(S3Selector):
         else:
             translate = settings.get_L10n_translate_gis_location()
 
-        if query is not None:
+        if query is None:
+            locations = []
+            if levels != []:
+                # Misconfigured (e.g. no default for a hidden Lx level)
+                current.log.warning("S3LocationSelector: no default for hidden Lx level?")
+        else:
             query &= (gtable.deleted == False) & \
                      (gtable.end_date == None)
             fields = [gtable.id,
@@ -5168,10 +5221,6 @@ class S3LocationSelector(S3Selector):
             else:
                 left = None
             locations = db(query).select(*fields, left=left)
-        else:
-            # Misconfigured (e.g. no default for a hidden Lx level)
-            current.log.warning("S3LocationSelector: no default for hidden Lx level?")
-            locations = []
 
         location_dict = {}
         if default_bounds:
@@ -5270,11 +5319,8 @@ class S3LocationSelector(S3Selector):
         return location_dict
 
     # -------------------------------------------------------------------------
-    def _layout(self,
-                components,
-                map_icon=None,
-                formstyle=None,
-                inline=False):
+    @staticmethod
+    def _layout(components, map_icon=None, formstyle=None, inline=False):
         """
             Overall layout for visible components
 
@@ -5339,20 +5385,22 @@ class S3LocationSelector(S3Selector):
 
     # -------------------------------------------------------------------------
     def _lx_selectors(self,
+                      field,
                       fieldname,
                       levels,
                       labels,
-                      required=False,
-                      multiselect=False):
+                      multiselect=False,
+                      required=False):
         """
             Render the Lx-dropdowns
 
+            @param field: the field (to construct the HTML Names)
             @param fieldname: the fieldname (to construct the HTML IDs)
             @param levels: tuple of levels in order, like ("L0", "L1", ...)
             @param labels: the labels for the hierarchy levels as dict {level:label}
-            @param required: whether selection is required,
             @param multiselect: Use multiselect-dropdowns (specify "search" to
                                 make the dropdowns searchable)
+            @param required: whether selection is required
 
             @return: a dict of components
                      {name: (label, widget, id, hidden)}
@@ -5372,9 +5420,13 @@ class S3LocationSelector(S3Selector):
         # 1st level is always hidden until populated
         hidden = True
 
+        _fieldname = fieldname.split("%s_" % field.tablename)[1]
+
         #T = current.T
         required_levels = self.required_levels
         for level in levels:
+
+            _name = "%s_%s" % (_fieldname, level)
 
             _id = "%s_%s" % (fieldname, level)
 
@@ -5384,6 +5436,7 @@ class S3LocationSelector(S3Selector):
             #placeholder = T("Select %(level)s") % {"level": label}
             placeholder = ""
             widget = SELECT(OPTION(placeholder, _value=""),
+                            _name = _name,
                             _id = _id,
                             _class = _class,
                             )
@@ -5438,11 +5491,11 @@ class S3LocationSelector(S3Selector):
 
         input_id = "%s_%s" % (fieldname, name)
 
-        if self.labels:
+        if label and self.labels:
             _label = LABEL("%s:" % label, _for=input_id)
         else:
             _label = ""
-        if self.placeholders:
+        if label and self.placeholders:
             _placeholder = label
         else:
             _placeholder = None
@@ -6230,6 +6283,11 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                 ## Get lowest selected Lx
 
             if location_id:
+                levels = self.levels
+                if levels == []:
+                    # Widget set to levels=False
+                    # No Street Address specified, so skip
+                    return (None, None)
                 query = (table.id == location_id) & \
                         (table.deleted == False)
                 location = current.db(query).select(table.level,
@@ -6240,7 +6298,6 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
                 level = location.level
                 if level:
                     # Accept all levels above and including the lowest selectable level
-                    levels = self.levels
                     for i in xrange(5,-1,-1):
                         if "L%s" % i in levels:
                             accepted_levels = set("L%s" % l for l in xrange(i,-1,-1))
@@ -6392,151 +6449,6 @@ i18n.location_not_found="%s"''' % (T("Address Mapped"),
         return location_id, None
 
 # =============================================================================
-class S3MultiSelectWidget(MultipleOptionsWidget):
-    """
-        Standard MultipleOptionsWidget, but using the jQuery UI:
-            http://www.erichynds.com/jquery/jquery-ui-multiselect-widget/
-            static/scripts/ui/multiselect.js
-    """
-
-    def __init__(self,
-                 filter = "auto",
-                 header = True,
-                 multiple = True,
-                 selectedList = 3,
-                 noneSelectedText = "Select",
-                 columns = None,
-                 create = None,
-                 ):
-        """
-            Constructor
-
-            @param filter: show an input field in the widget to filter for options,
-                           can be:
-                                - True (always show filter field)
-                                - False (never show the filter field)
-                                - "auto" (show filter if more than 10 options)
-                                - <number> (show filter if more than <number> options)
-            @param header: show a header for the options list, can be:
-                                - True (show the default Select All/Deselect All header)
-                                - False (don't show a header unless required for filter)
-            @param selectedList: maximum number of individual selected options to show
-                                 on the widget button (before collapsing into "<number>
-                                 selected")
-            @param noneSelectedText: text to show on the widget button when no option is
-                                     selected (automatic l10n, no T() required)
-            @param columns: set the columns width class for Foundation forms
-            @param create: options to create a new record {c: 'controller',
-                                                           f: 'function',
-                                                           label: 'label',
-                                                           parent: 'parent', (optional: which function to lookup options from)
-                                                           child: 'child', (optional: which field to lookup options for)
-                                                           }
-            @ToDo: Complete the 'create' feature:
-                * Ensure the Create option doesn't get filtered out when searching for items
-                * Style option to make it clearer that it's an Action item
-        """
-
-        self.filter = filter
-        self.header = header
-        self.multiple = multiple
-        self.selectedList = selectedList
-        self.noneSelectedText = noneSelectedText
-        self.columns = columns
-        self.create = create
-
-    def __call__(self, field, value, **attr):
-
-        T = current.T
-
-        if isinstance(field, Field):
-            selector = str(field).replace(".", "_")
-        else:
-            selector = field.name.replace(".", "_")
-
-        # Widget
-        _class = attr.get("_class", None)
-        if _class:
-            if "multiselect-widget" not in _class:
-                attr["_class"] = "%s multiselect-widget" % _class
-        else:
-            attr["_class"] = "multiselect-widget"
-
-        multiple_opt = self.multiple
-        if multiple_opt:
-            w = MultipleOptionsWidget
-        else:
-            w = OptionsWidget
-            if value:
-                # Base widget requires single value, so enforce that
-                # if necessary, and convert to string to match options
-                value = str(value[0] if type(value) is list else value)
-
-        # Set explicit columns width for the formstyle
-        if self.columns:
-            attr["s3cols"] = self.columns
-
-        widget = w.widget(field, value, **attr)
-        options_len = len(widget)
-
-        # Filter and header for multiselect options list
-        filter_opt = self.filter
-        header_opt = self.header
-        if not multiple_opt and header_opt is True:
-            # Select All / Unselect All doesn't make sense if multiple == False
-            header_opt = False
-        if not isinstance(filter_opt, bool) and \
-           (filter_opt == "auto" or isinstance(filter_opt, (int, long))):
-            max_options = 10 if filter_opt == "auto" else filter_opt
-            if options_len > max_options:
-                filter_opt = True
-            else:
-                filter_opt = False
-        if filter_opt is True and header_opt is False:
-            # Must have at least "" as header to show the filter
-            header_opt = ""
-
-        # Other options:
-        # * Show Selected List
-        if header_opt is True:
-            header = '''checkAllText:'%s',uncheckAllText:"%s"''' % \
-                     (T("Select All"),
-                      T("Clear All"))
-        elif header_opt is False:
-            header = '''header:false'''
-        else:
-            header = '''header:"%s"''' % header_opt
-        noneSelectedText = self.noneSelectedText
-        if not isinstance(noneSelectedText, lazyT):
-            noneSelectedText = T(noneSelectedText)
-        create = self.create or ""
-        if create:
-            tablename = "%s_%s" % (create["c"], create["f"])
-            if current.auth.s3_has_permission("create", tablename):
-                create = ",create:%s" % json.dumps(create, separators=SEPARATORS)
-            else:
-                create = ""
-        script = '''$('#%s').multiselect({allSelectedText:'%s',selectedText:'%s',%s,height:300,minWidth:0,selectedList:%s,noneSelectedText:'%s',multiple:%s%s})''' % \
-                 (selector,
-                  T("All selected"),
-                  T("# selected"),
-                  header,
-                  self.selectedList,
-                  noneSelectedText,
-                  "true" if multiple_opt else "false",
-                  create
-                  )
-
-        if filter_opt:
-            script = '''%s.multiselectfilter({label:'',placeholder:'%s'})''' % \
-                (script, T("Search"))
-        jquery_ready = current.response.s3.jquery_ready
-        if script not in jquery_ready: # Prevents loading twice when form has errors
-            jquery_ready.append(script)
-
-        return widget
-
-# =============================================================================
 class S3SelectWidget(OptionsWidget):
     """
         Standard OptionsWidget, but using the jQuery UI SelectMenu:
@@ -6633,6 +6545,407 @@ class S3SelectWidget(OptionsWidget):
         return SELECT(*opts, **attr)
 
 # =============================================================================
+class S3MultiSelectWidget(MultipleOptionsWidget):
+    """
+        Standard MultipleOptionsWidget, but using the jQuery UI:
+            http://www.erichynds.com/jquery/jquery-ui-multiselect-widget/
+            static/scripts/ui/multiselect.js
+    """
+
+    def __init__(self,
+                 search = "auto",
+                 header = True,
+                 multiple = True,
+                 selectedList = 3,
+                 noneSelectedText = "Select",
+                 columns = None,
+                 create = None,
+                 ):
+        """
+            Constructor
+
+            @param search: show an input field in the widget to search for options,
+                           can be:
+                                - True (always show search field)
+                                - False (never show the search field)
+                                - "auto" (show search if more than 10 options)
+                                - <number> (show search if more than <number> options)
+            @param header: show a header for the options list, can be:
+                                - True (show the default Select All/Deselect All header)
+                                - False (don't show a header unless required for search field)
+            @param selectedList: maximum number of individual selected options to show
+                                 on the widget button (before collapsing into "<number>
+                                 selected")
+            @param noneSelectedText: text to show on the widget button when no option is
+                                     selected (automatic l10n, no T() required)
+            @param columns: set the columns width class for Foundation forms
+            @param create: options to create a new record {"c": "controller",
+                                                           "f": "function",
+                                                           "label": "label",
+                                                           "parent": "parent", (optional: which function to lookup options from)
+                                                           "child": "child", (optional: which field to lookup options for)
+                                                           }
+            @ToDo: Complete the 'create' feature:
+                * Ensure the Create option doesn't get filtered out when searching for items
+                * Style option to make it clearer that it's an Action item
+        """
+
+        self.search = search
+        self.header = header
+        self.multiple = multiple
+        self.selectedList = selectedList
+        self.noneSelectedText = noneSelectedText
+        self.columns = columns
+        self.create = create
+
+    def __call__(self, field, value, **attr):
+
+        T = current.T
+
+        if isinstance(field, Field):
+            selector = str(field).replace(".", "_")
+        else:
+            selector = field.name.replace(".", "_")
+
+        # Widget
+        _class = attr.get("_class", None)
+        if _class:
+            if "multiselect-widget" not in _class:
+                attr["_class"] = "%s multiselect-widget" % _class
+        else:
+            attr["_class"] = "multiselect-widget"
+
+        multiple_opt = self.multiple
+        if multiple_opt:
+            w = MultipleOptionsWidget
+        else:
+            w = OptionsWidget
+            if value:
+                # Base widget requires single value, so enforce that
+                # if necessary, and convert to string to match options
+                value = str(value[0] if type(value) is list else value)
+
+        # Set explicit columns width for the formstyle
+        if self.columns:
+            attr["s3cols"] = self.columns
+
+        widget = w.widget(field, value, **attr)
+        options_len = len(widget)
+
+        # Search field and header for multiselect options list
+        search_opt = self.search
+        header_opt = self.header
+        if not multiple_opt and header_opt is True:
+            # Select All / Unselect All doesn't make sense if multiple == False
+            header_opt = False
+        if not isinstance(search_opt, bool) and \
+           (search_opt == "auto" or isinstance(search_opt, (int, long))):
+            max_options = 10 if search_opt == "auto" else search_opt
+            if options_len > max_options:
+                search_opt = True
+            else:
+                search_opt = False
+        if search_opt is True and header_opt is False:
+            # Must have at least "" as header to show the search field
+            header_opt = ""
+
+        # Other options:
+        # * Show Selected List
+        if header_opt is True:
+            header = '''checkAllText:'%s',uncheckAllText:"%s"''' % \
+                     (T("Select All"),
+                      T("Clear All"))
+        elif header_opt is False:
+            header = '''header:false'''
+        else:
+            header = '''header:"%s"''' % header_opt
+        noneSelectedText = self.noneSelectedText
+        if not isinstance(noneSelectedText, lazyT):
+            noneSelectedText = T(noneSelectedText)
+        create = self.create or ""
+        if create:
+            tablename = "%s_%s" % (create["c"], create["f"])
+            if current.auth.s3_has_permission("create", tablename):
+                create = ",create:%s" % json.dumps(create, separators=SEPARATORS)
+            else:
+                create = ""
+        script = '''$('#%s').multiselect({allSelectedText:'%s',selectedText:'%s',%s,height:300,minWidth:0,selectedList:%s,noneSelectedText:'%s',multiple:%s%s})''' % \
+                 (selector,
+                  T("All selected"),
+                  T("# selected"),
+                  header,
+                  self.selectedList,
+                  noneSelectedText,
+                  "true" if multiple_opt else "false",
+                  create
+                  )
+
+        if search_opt:
+            script = '''%s.multiselectfilter({label:'',placeholder:'%s'})''' % \
+                (script, T("Search"))
+        jquery_ready = current.response.s3.jquery_ready
+        if script not in jquery_ready: # Prevents loading twice when form has errors
+            jquery_ready.append(script)
+
+        return widget
+
+# =============================================================================
+class S3CascadeSelectWidget(FormWidget):
+    """ Cascade Selector for Hierarchies """
+
+    def __init__(self,
+                 lookup=None,
+                 formstyle=None,
+                 levels=None,
+                 multiple=False,
+                 filter=None,
+                 leafonly=True,
+                 cascade=None,
+                 represent=None,
+                 inline=False,
+                 ):
+        """
+            Constructor
+
+            @param lookup: the name of the hierarchical lookup-table
+            @param formstyle: the formstyle to use for the inline-selectors
+                              (defaults to s3.crud.formstyle)
+            @param levels: list of labels for the hierarchy levels, in
+                           top-down order
+            @param multiple: allow selection of multiple options
+            @param filter: resource filter expression to filter the
+                           selectable options
+            @param leafonly: allow only leaf-nodes to be selected
+            @param cascade: automatically select child-nodes when a
+                            parent node is selected (override option,
+                            implied by leafonly if not set explicitly)
+            @param represent: representation function for the nodes
+                              (defaults to the represent of the field)
+            @param inline: formstyle uses inline-labels, so add a colon
+        """
+
+        self.lookup = lookup
+        self.formstyle = formstyle
+
+        self.levels = levels
+        self.multiple = multiple
+
+        self.filter = filter
+        self.leafonly = leafonly
+        self.cascade = cascade
+
+        self.represent = represent
+        self.inline = inline
+
+    # -------------------------------------------------------------------------
+    def __call__(self, field, value, **attr):
+        """
+            Widget renderer
+
+            @param field: the Field
+            @param value: the current value(s)
+            @param attr: additional HTML attributes for the widget
+        """
+
+        # Get the lookup table
+        lookup = self.lookup
+        if not lookup:
+            lookup = s3_get_foreign_key(field)[0]
+            if not lookup:
+                raise SyntaxError("No lookup table known for %s" % field)
+
+        # Get the representation
+        represent = self.represent
+        if not represent:
+            represent = field.represent
+
+        # Get the hierarchy
+        leafonly = self.leafonly
+        from .s3hierarchy import S3Hierarchy
+        h = S3Hierarchy(tablename = lookup,
+                        represent = represent,
+                        filter = self.filter,
+                        leafonly = leafonly,
+                        )
+        if not h.config:
+            raise AttributeError("No hierarchy configured for %s" % lookup)
+
+        # Get the cascade levels
+        levels = self.levels
+        if not levels:
+            levels = current.s3db.get_config(lookup, "hierarchy_levels")
+        if not levels:
+            levels = [field.label]
+
+        # Get the hierarchy nodes
+        nodes = h.json(max_depth=len(levels)-1)
+
+        # Intended DOM-ID of the input field
+        if isinstance(field, Field):
+            input_id = str(field).replace(".", "_")
+        else:
+            input_id = field.name.replace(".", "_")
+
+        # Prepare labels and selectors
+        selectors = []
+        multiple = "multiple" if self.multiple else None
+        T = current.T
+        for depth, level in enumerate(levels):
+            # The selector for this level
+            selector = SELECT(data = {"level": depth},
+                              _class = "s3-cascade-select",
+                              _disabled = "disabled",
+                              _multiple = multiple,
+                              )
+
+            # The label for the selector
+            row_id = "%s_level_%s" % (input_id, depth)
+            label = T(level) if isinstance(level, basestring) else level
+            if self.inline:
+                label = "%s:" % label
+            label = LABEL(label, _for=row_id, _id="%s__label" % row_id)
+            selectors.append((row_id, label, selector, None))
+
+        # Build inline-rows from labels+selectors
+        formstyle = self.formstyle
+        if not formstyle:
+            formstyle = current.response.s3.crud.formstyle
+        selector_rows = formstyle(None, selectors)
+
+        # Construct the widget
+        widget_id = attr.get("_id")
+        if not widget_id:
+            widget_id = "%s-cascade" % input_id
+        widget = DIV(self.hidden_input(input_id, field, value, **attr),
+                     INPUT(_type = "hidden",
+                           _class = "s3-cascade",
+                           _value = json.dumps(nodes),
+                           ),
+                     selector_rows,
+                     _class = "s3-cascade-select",
+                     _id = widget_id,
+                     )
+
+        # Inject static JS and instantiate UI widget
+        cascade = self.cascade
+        if leafonly and cascade is not False:
+            cascade = True
+
+        widget_opts = {"multiple": True if multiple else False,
+                       "leafonly": leafonly,
+                       "cascade": cascade,
+                       }
+        self.inject_script(widget_id, widget_opts)
+
+        return widget
+
+    # -------------------------------------------------------------------------
+    def hidden_input(self, input_id, field, value, **attr):
+        """
+            Construct the hidden (real) input and populate it with the
+            current field value
+
+            @param input_id: the DOM-ID for the input
+            @param field: the Field
+            @param value: the current value
+            @param attr: widget attributes from caller
+        """
+
+        # Currently selected values
+        selected = []
+        append = selected.append
+        if isinstance(value, basestring) and value and not value.isdigit():
+            value = self.parse(value)[0]
+        if not isinstance(value, (list, tuple, set)):
+            values = [value]
+        else:
+            values = value
+        for v in values:
+            if isinstance(v, (int, long)) or str(v).isdigit():
+                append(v)
+
+        # Prepend value parser to field validator
+        requires = field.requires
+        if isinstance(requires, (list, tuple)):
+            requires = [self.parse] + requires
+        elif requires is not None:
+            requires = [self.parse, requires]
+        else:
+            requires = self.parse
+
+        # The hidden input field
+        hidden_input = INPUT(_type = "hidden",
+                             _name = attr.get("_name") or field.name,
+                             _id = input_id,
+                             _class = "s3-cascade-input",
+                             requires = requires,
+                             value = json.dumps(selected),
+                             )
+
+        return hidden_input
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def inject_script(widget_id, options):
+        """
+            Inject static JS and instantiate client-side UI widget
+
+            @param widget_id: the widget ID
+            @param options: JSON-serializable dict with UI widget options
+        """
+
+        request = current.request
+        s3 = current.response.s3
+
+        # Static script
+        if s3.debug:
+            script = "/%s/static/scripts/S3/s3.ui.cascadeselect.js" % \
+                     request.application
+        else:
+            script = "/%s/static/scripts/S3/s3.ui.cascadeselect.min.js" % \
+                     request.application
+        scripts = s3.scripts
+        if script not in scripts:
+            scripts.append(script)
+
+        # Widget options
+        opts = {}
+        if options:
+            opts.update(options)
+
+        # Widget instantiation
+        script = '''$('#%(widget_id)s').cascadeSelect(%(options)s)''' % \
+                 {"widget_id": widget_id,
+                  "options": json.dumps(opts),
+                  }
+        jquery_ready = s3.jquery_ready
+        if script not in jquery_ready:
+            jquery_ready.append(script)
+
+    # -------------------------------------------------------------------------
+    def parse(self, value):
+        """
+            Value parser for the hidden input field of the widget
+
+            @param value: the value received from the client, JSON string
+
+            @return: a list (if multiple=True) or the value
+        """
+
+        default = [] if self.multiple else None
+
+        if value is None:
+            return None, None
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return default, None
+        if not self.multiple and isinstance(value, list):
+            value = value[0] if value else None
+
+        return value, None
+
+# =============================================================================
 class S3HierarchyWidget(FormWidget):
     """ Selector Widget for Hierarchies """
 
@@ -6723,7 +7036,7 @@ class S3HierarchyWidget(FormWidget):
 
         # Instantiate the hierarchy
         leafonly = self.leafonly
-        from s3hierarchy import S3Hierarchy
+        from .s3hierarchy import S3Hierarchy
         h = S3Hierarchy(tablename = lookup,
                         represent = represent,
                         leafonly = leafonly,
@@ -7896,21 +8209,16 @@ def s3_comments_widget(field, value, **attr):
         to be used by the s3.comments() & gis.desc_field Reusable fields
     """
 
-    if "_id" not in attr:
-        _id = "%s_%s" % (field._tablename, field.name)
-    else:
-        _id = attr["_id"]
+    _id = attr.get("_id", "%s_%s" % (field._tablename, field.name))
 
-    if "_name" not in attr:
-        _name = field.name
-    else:
-        _name = attr["_name"]
+    _name = attr.get("_name", field.name)
 
-    return TEXTAREA(_name=_name,
-                    _id=_id,
-                    _class="comments %s" % (field.type),
-                    value=value,
-                    requires=field.requires)
+    return TEXTAREA(_name = _name,
+                    _id = _id,
+                    _class = "comments %s" % (field.type),
+                    _placeholder = attr.get("_placeholder"),
+                    value = value,
+                    requires = field.requires)
 
 # =============================================================================
 def s3_richtext_widget(field, value):
@@ -7982,7 +8290,7 @@ def search_ac(r, **attr):
 
     limit = int(_vars.limit or 0)
 
-    from s3query import FS
+    from .s3query import FS
     field = FS(fieldname)
 
     # Default fields to return
@@ -8404,6 +8712,65 @@ class S3QuestionWidget(FormWidget):
         return (_label, widget, input_id)
 
 # =============================================================================
+class S3TagCheckboxWidget(FormWidget):
+    """
+        Simple widget to use a checkbox to toggle a string-type Field
+        between two values (default "Y"|"N").
+        Like an S3BooleanWidget but real Booleans cannot be stored in strings.
+        Designed for use with tag.value
+
+        NB it is usually better to use a boolean Field with a context-specific
+           representation function than this.
+
+        NB make sure the field validator accepts the configured on/off values,
+           e.g. IS_IN_SET(("Y", "N")) (also for consistency with imports)
+
+        NB when using this with a filtered key-value-component (e.g.
+           pr_person_tag), make the filtered component multiple=False and
+           embed *.value as subtable-field (do not use S3SQLInlineComponent)
+    """
+
+    def __init__(self, on="Y", off="N"):
+        """
+            Constructor
+
+            @param on: the value of the tag for checkbox=on
+            @param off: the value of the tag for checkbox=off
+        """
+
+        self.on = on
+        self.off = off
+
+    # -------------------------------------------------------------------------
+    def __call__(self, field, value, **attributes):
+        """
+            Widget construction
+
+            @param field: the Field
+            @param value: the current (or default) value
+            @param attributes: overrides for default attributes
+        """
+
+        defaults = {"_type": "checkbox",
+                    "value": str(value) == self.on,
+                    "requires": self.requires,
+                    }
+        attr = self._attributes(field, defaults, **attributes)
+        return INPUT(**attr)
+
+    # -------------------------------------------------------------------------
+    def requires(self, value):
+        """
+            Input-validator to convert the checkbox value into the
+            corresponding tag value
+
+            @param value: the checkbox value ("on" if checked)
+        """
+
+        v = self.on if value == "on" else self.off
+        return v, None
+
+# =============================================================================
 class ICON(I):
     """
         Helper class to render <i> tags for icons, mapping abstract
@@ -8506,6 +8873,7 @@ class ICON(I):
             "remove": "fa-remove",
             "request": "fa-flag",
             "responsibility": "fa-briefcase",
+            "return": "fa-arrow-left",
             "rss": "fa-rss",
             "sent": "fa-check",
             "settings": "fa-wrench",
@@ -8587,6 +8955,7 @@ class ICON(I):
             "remove": "fi-x",
             "request": "fi-flag",
             "responsibility": "fi-sheriff-badge",
+            "return": "fi-arrow-left",
             "rss": "fi-rss",
             "sent": "fi-check",
             "settings": "fi-wrench",
@@ -8666,6 +9035,7 @@ class ICON(I):
             "remove": "icon-remove",
             "request": "icon-flag",
             "responsibility": "icon-briefcase",
+            "return": "icon-arrow-left",
             "rss": "icon-rss",
             "sent": "icon-ok",
             "settings": "icon-wrench",

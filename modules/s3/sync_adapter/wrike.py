@@ -2,7 +2,7 @@
 
 """ S3 Synchronization: Peer Repository Adapter
 
-    @copyright: 2014-2018 (c) Sahana Software Foundation
+    @copyright: 2014-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -672,13 +672,13 @@ class S3SyncAdapter(S3SyncBaseAdapter):
                 f = urllib2.urlopen(req, data=request_data)
             else:
                 f = urllib2.urlopen(req)
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             message = "HTTP %s: %s" % (e.code, e.reason)
         else:
             # Parse the response
             try:
                 response = json.load(f)
-            except ValueError, e:
+            except ValueError as e:
                 message = sys.exc_info()[1]
 
         return response, message

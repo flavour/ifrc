@@ -2,7 +2,7 @@
 
 """ Sahana Eden Inventory Model
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -416,8 +416,9 @@ class S3InventoryModel(S3Model):
         UNKNOWN_OPT = messages.UNKNOWN_OPT
 
         settings = current.deployment_settings
-        WAREHOUSE = T(settings.get_inv_facility_label())
+        direct_stock_edits = settings.get_inv_direct_stock_edits()
         track_pack_values = settings.get_inv_track_pack_values()
+        WAREHOUSE = T(settings.get_inv_facility_label())
 
         inv_source_type = {0: None,
                            1: T("Donated"),
@@ -463,7 +464,7 @@ class S3InventoryModel(S3Model):
                                 represent = lambda v: \
                                     IS_FLOAT_AMOUNT.represent(v, precision=2),
                                 requires = IS_FLOAT_AMOUNT(minimum=0.0),
-                                writable = False,
+                                writable = direct_stock_edits,
                                 ),
                           Field("bin", length=16,
                                 label = T("Bin"),
@@ -678,7 +679,6 @@ $.filterOptionsS3({
                            ]
 
         # Configuration
-        direct_stock_edits = settings.get_inv_direct_stock_edits()
         self.configure(tablename,
                        # Lock the record so that it can't be meddled with
                        # - unless explicitly told to allow this
@@ -945,12 +945,13 @@ class S3InventoryTrackingLabels(S3Model):
         # Overwrite the label until we have a better way to do this
         itn_label = T("CTN")
 
-        settings = current.deployment_settings
-        return dict(inv_tracking_status_labels = tracking_status,
-                    inv_shipment_status_labels = shipment_status,
-                    inv_itn_label = itn_label,
-                    inv_item_status_opts = settings.get_inv_item_status()
-                    )
+        inv_item_status_opts = current.deployment_settings.get_inv_item_status()
+
+        return {"inv_tracking_status_labels": tracking_status,
+                "inv_shipment_status_labels": shipment_status,
+                "inv_itn_label": itn_label,
+                "inv_item_status_opts": inv_item_status_opts,
+                }
 
     # -------------------------------------------------------------------------
     def defaults(self):
@@ -2646,7 +2647,7 @@ $.filterOptionsS3({
                         pdf_hide_comments = True,
                         pdf_header_padding = 12,
                         pdf_footer = inv_send_pdf_footer,
-                        pdf_paper_alignment = "Landscape",
+                        pdf_orientation = "Landscape",
                         pdf_table_autogrow = "B",
                         **attr
                         )
@@ -2798,7 +2799,7 @@ $.filterOptionsS3({
                         pdf_header_padding = 12,
                         pdf_footer = inv_recv_pdf_footer,
                         pdf_table_autogrow = "B",
-                        pdf_paper_alignment = "Landscape",
+                        pdf_orientation = "Landscape",
                         **attr
                         )
 

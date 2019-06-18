@@ -147,13 +147,11 @@ def docss():
     # -------------------------------------------------------------------------
     # Parse theme's css.cfg and build list of CSS files to merge
     #
-    theme = settings.get_theme()
-    location = current.response.s3.theme_location
-    info("Using theme %s" % theme)
-    if location:
-        css_cfg = os.path.join("..", "..", "..", "modules", "templates", location[:-1], theme, "css.cfg")
-    else:
-        css_cfg = os.path.join("..", "..", "..", "modules", "templates", theme, "css.cfg")
+    theme_styles = settings.get_theme_styles()
+    info("Building theme %s" % theme_styles)
+
+    theme_config = settings.get_theme_config()
+    css_cfg = os.path.join("..", "..", "..", "modules", "templates", theme_config, "css.cfg")
 
     with open(css_cfg, "r") as f:
         css_paths = f.readlines()
@@ -171,7 +169,7 @@ def docss():
             path = path[5:]
 
             filename = path.split("/")[-1].split(".")[0]
-            sourcePath = os.path.join("..", "..", "..", location, "templates", theme, "scss")
+            sourcePath = os.path.join("..", "..", "..", "modules", "templates", theme_styles, "scss")
             sourceFilename = os.path.join(sourcePath, "%s.scss" % filename)
 
             with open(sourceFilename, "r") as sourceFile:
@@ -199,26 +197,22 @@ def docss():
     info("Writing to %s." % outputFilenameCSS)
     compressCSS(mergedCSS, outputFilenameCSS)
 
-    info("Deleting %s." % outputFilenameCSS)
+    info("Deleting old %s." % outputFilenameCSS)
     try:
-        if location:
-            os.remove("../../themes/%s%s/%s" % (location, theme, outputFilenameCSS))
-        else:
-            os.remove("../../themes/%s/%s" % (theme, outputFilenameCSS))
+        os.remove("../../themes/%s/%s" % (theme_styles, outputFilenameCSS))
     except:
         pass
 
-    info("Moving new %s." % outputFilenameCSS)
-    if location:
-        info("Adjusting url in %s." % outputFilenameCSS)
+    if "/" in theme_styles:
+        # Theme in sub-folder
+        info("Adjusting relative URLs in %s." % outputFilenameCSS)
         with open(outputFilenameCSS, "r+") as outFile:
             css = outFile.readline()
             outFile.seek(0)
             outFile.write(css.replace("../../", "../../../"))
-        new_path = "../../themes/%s%s/%s" % (location, theme, outputFilenameCSS)
-        shutil.move(outputFilenameCSS, new_path)
-    else:
-        shutil.move(outputFilenameCSS, "../../themes/%s/%s" % (theme, outputFilenameCSS))
+
+    info("Moving new %s." % outputFilenameCSS)
+    shutil.move(outputFilenameCSS, "../../themes/%s/%s" % (theme_styles, outputFilenameCSS))
 
     # -------------------------------------------------------------------------
     # Optional CSS builds
@@ -406,13 +400,9 @@ def dojs(dogis = False, warnings = True):
         ("dataLists",
          "sahana.js.dataLists.cfg", "s3.dataLists.min.js", None),
         ("dataTables",
-         "sahana.js.dataTables.cfg", "s3.dataTables.min.js", None),
+         "sahana.js.datatable.cfg", "s3.ui.datatable.min.js", None),
         ("dataTables (multi)",
          "sahana.js.dataTables_multi.cfg", "s3.dataTables.multi.min.js", None),
-        ("pivotTables",
-         "sahana.js.pivotTables.cfg", "s3.pivotTables.min.js", None),
-        ("timeplot",
-         "sahana.js.timeplot.cfg", "s3.timeplot.min.js", None),
         ("groupedItems",
          "sahana.js.groupeditems.cfg", "s3.groupeditems.min.js", None),
         ("ImageCrop",
@@ -456,11 +446,19 @@ def dojs(dogis = False, warnings = True):
                      "timeline",
                      "ui.addperson",
                      "ui.anonymize",
+                     "ui.cascadeselect",
+                     "ui.charts",
+                     "ui.consent",
                      "ui.contacts",
                      "ui.dashboard",
                      "ui.embeddedcomponent",
                      "ui.locationselector",
+                     "ui.organizer",
+                     "ui.permissions",
+                     "ui.pivottable",
+                     "ui.roles",
                      "ui.sitecheckin",
+                     "ui.timeplot",
                      "work",
                      ):
         info("Compressing s3.%s.js" % filename)
@@ -504,6 +502,18 @@ def dojs(dogis = False, warnings = True):
         sourceDirectory = "../.."
         configFilename = "sahana.js.vulnerability_gis.cfg"
         outputFilename = "OpenLayers.js"
+        merged = mergejs.run(sourceDirectory,
+                             None,
+                             configFilename)
+        minimized = minimize(merged)
+        with open(outputFilename, "w") as outFile:
+            outFile.write(minimized)
+        move_to(outputFilename, "../../themes/Vulnerability/js")
+
+        info("Compressing Vulnerability Datatables")
+        sourceDirectory = "../.."
+        configFilename = "sahana.js.vulnerability_datatables.cfg"
+        outputFilename = "s3.dataTables.min.js"
         merged = mergejs.run(sourceDirectory,
                              None,
                              configFilename)

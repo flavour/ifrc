@@ -2,7 +2,7 @@
 
 """ S3 Query Construction
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -44,8 +44,8 @@ from gluon import current, IS_EMPTY_OR, IS_IN_SET
 from gluon.storage import Storage
 
 from s3dal import Field, Row
-from s3fields import S3RepresentLazy
-from s3utils import s3_get_foreign_key, s3_str, s3_unicode, S3TypeConverter
+from .s3fields import S3RepresentLazy
+from .s3utils import s3_get_foreign_key, s3_str, s3_unicode, S3TypeConverter
 
 ogetattr = object.__getattribute__
 
@@ -1623,7 +1623,7 @@ class S3ResourceQuery(object):
             @param r: the right operand
         """
 
-        from s3hierarchy import S3Hierarchy
+        from .s3hierarchy import S3Hierarchy
 
         tablename = l.tablename
 
@@ -1797,6 +1797,8 @@ class S3ResourceQuery(object):
                         wkt_loads(r)
                     except Exception: #GEOSReadingError:
                         # Invalid WKT => log and let default
+                        # NB This will fail CIRCULARSTRING so maybe convert 1st:
+                        # https://gis.stackexchange.com/questions/256123/how-to-convert-curved-features-into-geojson
                         current.log.error("INTERSECTS: %s" % sys.exc_info()[1])
                     else:
                         expr = l.st_intersects(r)

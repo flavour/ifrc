@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: (c) 2010-2018 Sahana Software Foundation
+    @copyright: (c) 2010-2019 Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -49,7 +49,7 @@ from gluon.languages import lazyT
 from gluon.tools import addrow
 
 from s3dal import Expression, Field, Row, S3DAL
-from s3datetime import ISOFORMAT, s3_decode_iso_datetime, s3_relative_datetime
+from .s3datetime import ISOFORMAT, s3_decode_iso_datetime, s3_relative_datetime
 
 URLSCHEMA = re.compile(r"((?:(())(www\.([^/?#\s]*))|((http(s)?|ftp):)"
                        r"(//([^/?#\s]*)))([^?#\s]*)(\?([^#\s]*))?(#([^\s]*))?)")
@@ -314,8 +314,9 @@ def s3_dev_toolbar():
         dbstats.append(TABLE(*[TR(PRE(row[0]), "%.2fms" %
                                       (row[1] * 1000))
                                        for row in v["dbstats"]]))
-        dbtables[k] = dict(defined=v["dbtables"]["defined"] or "[no defined tables]",
-                           lazy=v["dbtables"]["lazy"] or "[no lazy tables]")
+        dbtables[k] = {"defined": v["dbtables"]["defined"] or "[no defined tables]",
+                       "lazy": v["dbtables"]["lazy"] or "[no lazy tables]",
+                       }
 
     u = web2py_uuid()
     backtotop = A("Back to top", _href="#totop-%s" % u)
@@ -325,6 +326,16 @@ def s3_dev_toolbar():
     request.update(vars=current.request.vars,
                    get_vars=current.request.get_vars,
                    post_vars=current.request.post_vars)
+
+    # Filter out sensitive session details
+    def no_sensitives(key):
+        if key in ("hmac_key", "password") or \
+           key[:8] == "_formkey" or \
+           key[-4:] == "_key" or \
+           key[-5:] == "token":
+            return None
+        return key
+
     return DIV(
         #BUTTON("design", _onclick="document.location='%s'" % admin),
         BUTTON("request",
@@ -341,7 +352,7 @@ def s3_dev_toolbar():
             _class="hide", _id="request-%s" % u),
         #DIV(BEAUTIFY(current.response), backtotop,
         #    _class="hide", _id="response-%s" % u),
-        DIV(BEAUTIFY(current.session), backtotop,
+        DIV(BEAUTIFY(current.session, keyfilter=no_sensitives), backtotop,
             _class="hide", _id="session-%s" % u),
         DIV(BEAUTIFY(dbtables), backtotop,
             _class="hide", _id="db-tables-%s" % u),
@@ -380,7 +391,7 @@ def s3_mark_required(fields,
         # @ToDo: DRY this setting with s3.ui.locationselector.js
         label_html = s3_required_label
 
-    labels = dict()
+    labels = {}
 
     # Do we have any required fields?
     _required = False
@@ -510,7 +521,7 @@ def s3_datatable_truncate(string, maxlength=40):
         @param string: the string
         @param maxlength: the maximum string length
 
-        @note: the JS click-event will be attached by S3.datatables.js
+        @note: the JS click-event will be attached by s3.ui.datatable.js
     """
 
     # Make sure text is multi-byte-aware before truncating it
@@ -633,10 +644,10 @@ def s3_format_fullname(fname=None, mname=None, lname=None, truncate=True):
             mname = "%s" % s3_truncate(mname, 24)
             lname = "%s" % s3_truncate(lname, 24, nice=False)
         name_format = current.deployment_settings.get_pr_name_format()
-        name = name_format % dict(first_name=fname,
-                                  middle_name=mname,
-                                  last_name=lname,
-                                  )
+        name = name_format % {"first_name": fname,
+                              "middle_name": mname,
+                              "last_name": lname,
+                              }
         name = name.replace("  ", " ").rstrip()
         if truncate:
             name = s3_truncate(name, 24, nice=False)
@@ -924,6 +935,22 @@ def s3_yes_no_represent(value):
         return current.messages["NONE"]
 
 # =============================================================================
+def s3_keep_messages():
+    """
+        Retain user messages from previous request - prevents the messages
+        from being swallowed by overhanging Ajax requests or intermediate
+        pages with mandatory redirection (see s3_redirect_default)
+    """
+
+    response = current.response
+    session = current.session
+
+    session.flash = response.flash
+    session.confirmation = response.confirmation
+    session.error = response.error
+    session.warning = response.warning
+
+# =============================================================================
 def s3_redirect_default(location="", how=303, client_side=False, headers=None):
     """
         Redirect preserving response messages, useful when redirecting from
@@ -937,13 +964,7 @@ def s3_redirect_default(location="", how=303, client_side=False, headers=None):
         @param headers: response headers
     """
 
-    response = current.response
-    session = current.session
-
-    session.error = response.error
-    session.warning = response.warning
-    session.confirmation = response.confirmation
-    session.flash = response.flash
+    s3_keep_messages()
 
     redirect(location,
              how=how,
@@ -955,19 +976,15 @@ def s3_redirect_default(location="", how=303, client_side=False, headers=None):
 def s3_include_debug_css():
     """
         Generates html to include the css listed in
-            /modules/templates/<template>/css.cfg
+            /modules/templates/<theme>/css.cfg
     """
 
     request = current.request
 
-    settings = current.deployment_settings
-    location = current.response.s3.theme_location
-    theme = settings.get_theme()
-
-    filename = "%s/modules/templates/%s%s/css.cfg" % (request.folder, location, theme)
+    location = current.response.s3.theme_config
+    filename = "%s/modules/templates/%s/css.cfg" % (request.folder, location)
     if not os.path.isfile(filename):
-        raise HTTP(500, "Theme configuration file missing: modules/templates/%s%s/css.cfg" %
-                        (location, theme))
+        raise HTTP(500, "Theme configuration file missing: modules/templates/%s/css.cfg" % location)
 
     link_template = '<link href="/%s/static/styles/%%s" rel="stylesheet" type="text/css" />' % \
                     request.application
@@ -1776,6 +1793,43 @@ def sort_dict_by_values(adict):
     return OrderedDict(sorted(adict.items(), key = lambda item: item[1]))
 
 # =============================================================================
+class S3PriorityRepresent(object):
+    """
+        Color-coded representation of priorities
+    """
+
+    def __init__(self, options, classes=None):
+        """
+            Constructor
+
+            @param options: the options (as dict or anything that can be
+                            converted into a dict)
+            @param classes: a dict mapping keys to CSS class suffixes
+        """
+
+        self.options = dict(options)
+        self.classes = classes
+
+    def represent(self, value, row=None):
+        """
+            Representation function
+
+            @param value: the value to represent
+        """
+
+        css_class = base_class = "prio"
+
+        classes = self.classes
+        if classes:
+            suffix = classes.get(value)
+            if suffix:
+                css_class = "%s %s-%s" % (css_class, base_class, suffix)
+
+        label = self.options.get(value)
+
+        return DIV(label, _class=css_class)
+
+# =============================================================================
 class Traceback(object):
     """ Generate the traceback for viewing error Tickets """
 
@@ -1872,7 +1926,7 @@ def URL2(a=None, c=None, r=None):
     if c:
         controller = c
     if not (application and controller):
-        raise SyntaxError, "not enough information to build the url"
+        raise SyntaxError("not enough information to build the url")
     #other = ""
     url = "/%s/%s" % (application, controller)
     return url
@@ -1897,20 +1951,18 @@ class S3CustomController(object):
         """
 
         if "." in template:
-            subfolder, template = template.split(".", 1)
-            view = os.path.join(current.request.folder,
-                                current.deployment_settings.get_template_location(),
-                                "templates", subfolder, template, "views", filename)
-        else:
-            view = os.path.join(current.request.folder,
-                                current.deployment_settings.get_template_location(),
-                                "templates", template, "views", filename)
+            template = os.path.join(*(template.split(".")))
+
+        view = os.path.join(current.request.folder, "modules", "templates",
+                            template, "views", filename)
+
         try:
             # Pass view as file not str to work in compiled mode
             current.response.view = open(view, "rb")
         except IOError:
-            raise HTTP(404, "Unable to open Custom View: %s" % view)
-        return
+            msg = "Unable to open Custom View: %s" % view
+            current.log.error("%s (%s)" % (msg, sys.exc_info()[1]))
+            raise HTTP(404, msg)
 
 # =============================================================================
 class S3TypeConverter(object):
@@ -2066,19 +2118,15 @@ class S3TypeConverter(object):
                 else:
                     dt = datetime.datetime(y, m, d, hh, mm, ss)
                 # Validate and convert to UTC (assuming local timezone)
-                from s3validators import IS_UTC_DATETIME
-                dt, error = IS_UTC_DATETIME()(dt)
+                from .s3validators import IS_UTC_DATETIME
+                validator = IS_UTC_DATETIME()
+                dt, error = validator(dt)
                 if error:
                     # dateutil as last resort
                     # NB: this can process ISOFORMAT with time zone specifier,
                     #     returning a timezone-aware datetime, which is then
                     #     properly converted by IS_UTC_DATETIME
-                    try:
-                        dt = s3_decode_iso_datetime(b)
-                    except:
-                        raise ValueError
-                    else:
-                        dt, error = IS_UTC_DATETIME()(dt)
+                    dt, error = validator(s3_decode_iso_datetime(b))
             return dt
         else:
             raise TypeError
@@ -2098,7 +2146,7 @@ class S3TypeConverter(object):
                 if dt:
                     value = dt.date()
             if value is None:
-                from s3validators import IS_UTC_DATE
+                from .s3validators import IS_UTC_DATE
                 # Try ISO format first (e.g. S3DateFilter)
                 value, error = IS_UTC_DATE(format="%Y-%m-%d")(b)
                 if error:

@@ -190,7 +190,7 @@ def index2():
                                                      },
                                         #dt_text_maximum_len = 10,
                                         #dt_text_condense_len = 8,
-                                        #dt_group_space = "true",
+                                        #dt_group_space = True,
                                         dt_shrink_groups = "accordion",
                                         #dt_shrink_groups = "individual",
                                         )
@@ -381,17 +381,17 @@ def warehouse():
                 read_url = URL(f="warehouse", args=["[id]", "inv_item"])
                 update_url = URL(f="warehouse", args=["[id]", "inv_item"])
                 s3_action_buttons(r,
-                                  read_url=read_url,
-                                  update_url=update_url)
+                                  read_url = read_url,
+                                  update_url = update_url)
         else:
             cname = r.component_name
             if cname == "human_resource":
                 # Modify action button to open staff instead of human_resource
                 read_url = URL(c="hrm", f="staff", args=["[id]"])
                 update_url = URL(c="hrm", f="staff", args=["[id]", "update"])
-                s3_action_buttons(r, read_url=read_url,
-                                  #delete_url=delete_url,
-                                  update_url=update_url)
+                s3_action_buttons(r, read_url = read_url,
+                                  #delete_url = delete_url,
+                                  update_url = update_url)
 
         if "add_btn" in output:
             del output["add_btn"]
@@ -590,7 +590,7 @@ def inv_item():
     output = s3_rest_controller(#csv_extra_fields = [dict(label="Organisation",
                                 #                         field=s3db.org_organisation_id(comment=None))
                                 #                    ],
-                                pdf_paper_alignment = "Landscape",
+                                pdf_orientation = "Landscape",
                                 pdf_table_autogrow = "B",
                                 pdf_groupby = "site_id, item_id",
                                 pdf_orderby = "expiry_date, supply_org_id",
@@ -637,7 +637,7 @@ def track_movement():
 # -----------------------------------------------------------------------------
 def inv_item_quantity():
     """
-        
+
 
         Access via the .json representation to avoid work rendering menus, etc
     """

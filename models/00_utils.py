@@ -45,7 +45,7 @@ if not auth.permission.has_permission("read"):
 # =============================================================================
 # Initialize Date/Time Settings
 #
-s3base.s3_get_utc_offset()
+s3base.s3_get_tzinfo()
 
 # =============================================================================
 # Menus
@@ -220,6 +220,7 @@ def s3_rest_controller(prefix=None, resourcename=None, **attr):
     set_handler("import", s3base.S3Importer)
     set_handler("map", s3base.S3Map)
     set_handler("mform", s3base.S3MobileCRUD, representation="json")
+    set_handler("organize", s3base.S3Organizer)
     set_handler("profile", s3base.S3Profile)
     set_handler("report", s3base.S3Report) # For HTML, JSON
     set_handler("report", s3base.S3Report, transform=True) # For GeoJSON
@@ -266,8 +267,23 @@ def s3_rest_controller(prefix=None, resourcename=None, **attr):
             # Get table config
             get_config = s3db.get_config
             listadd = get_config(tablename, "listadd", True)
-            editable = get_config(tablename, "editable", True) and \
-                       not auth.permission.ownership_required("update", table)
+
+            # Which is the standard open-action?
+            if settings.get_ui_open_read_first():
+                # Always read, irrespective permissions
+                editable = False
+            else:
+                editable = get_config(tablename, "editable", True)
+                if editable and \
+                   auth.permission.ownership_required("update", table):
+                    # User cannot edit all records in the table
+                    if settings.get_ui_auto_open_update():
+                        # Decide automatically per-record (implicit method)
+                        editable = "auto"
+                    else:
+                        # Always open read first (explicit read)
+                        editable = False
+
             deletable = get_config(tablename, "deletable", True)
             copyable = get_config(tablename, "copyable", False)
 

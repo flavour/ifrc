@@ -1,7 +1,7 @@
 /**
  * jQuery UI LocationSelector Widget
  *
- * @copyright 2015-2018 (c) Sahana Software Foundation
+ * @copyright 2015-2019 (c) Sahana Software Foundation
  * @license MIT
  *
  * requires jQuery 1.9.1+
@@ -15,7 +15,8 @@
 
     // Global cache for location data (shared with other location selectors)
     var hierarchyLocations = {},
-        hierarchyLabels = {};
+        hierarchyLabels = {},
+        hierarchyReads =  {};
 
     /**
      * LocationSelector widget
@@ -390,7 +391,7 @@
                 // Set this dropdown to this value
                 // - this is being set from outside the dropdown, e.g. an
                 //   update form or using a visible default location
-                dropdown.val(id);
+                dropdown.val(id).trigger('change', 'implicit');
                 if (dropdown.hasClass('multiselect') && dropdown.multiselect('instance')) {
                     dropdown.multiselect('refresh');
                 }
@@ -461,7 +462,7 @@
                     $(s + ' option').remove('[value != ""]');
                     // @ToDo: Read the full set of options via a new call
                 }
-                $(s).val('');
+                $(s).val('').trigger('change', 'implicit');
             }
 
             if (id) {
@@ -589,9 +590,15 @@
                                     }
                                 }
 
-                                // Auto-select single option?
-                                if (numLocations == 1 && locationID) {
-                                    // Only 1 option so select this one
+                                // Automatic selection of next level location
+                                var previous = that.data['L' + next],
+                                    available = locations.map(function(l) {return l.i;});
+                                if (previous && available.indexOf('' + previous) != -1) {
+                                    // Previously selected value is still available,
+                                    // so select it again
+                                    that._lxSelect(next, previous, refresh);
+                                } else if (numLocations == 1 && locationID) {
+                                    // Only one option available, so select this one
                                     that._lxSelect(next, locationID, refresh);
                                 }
                             }
@@ -608,8 +615,12 @@
 
         /**
          * Update the data dict from all inputs
+         *
+         * @param {boolean} mapInput - data collection triggered by map input
+         *                             (must trigger an explicit change-event
+         *                             to enable navigate-away-confirm)
          */
-        _collectData: function() {
+        _collectData: function(mapInput) {
 
             var data = this.data,
                 selector = '#' + this.fieldname,
@@ -655,7 +666,7 @@
 
             if (this.fieldname.slice(0, 4) == 'sub_') {
                 // This is an S3SQLInlineComponent => trigger change event
-                this.input.change();
+                this.input.trigger('change', mapInput && 'user' || 'implicit');
             }
         },
 
@@ -805,6 +816,14 @@
          */
         _readHierarchy: function(read, parent, level, missing) {
 
+            // Check if this lookup has already been started by another instance
+            // (and if yes, then wait for it instead of firing again)
+            var key = '' + parent + ';' + level + ';' + missing,
+                promise = hierarchyReads[key];
+            if (promise !== undefined) {
+                return promise;
+            }
+
             var dfd = $.Deferred();
 
             if (read) {
@@ -880,7 +899,12 @@
                 // No need to read, can Resolve right away
                 dfd.resolve();
             }
-            return dfd.promise();
+
+            // Let other location selectors in the page know we're already
+            // looking it up:
+            promise = hierarchyReads[key] = dfd.promise();
+
+            return promise;
         },
 
         /**
@@ -1306,7 +1330,7 @@
                             // Store the fact that we've now added Marker manually
                             realInput.data('manually_geocoded', true);
                             // Serialize the data dict
-                            self._collectData();
+                            self._collectData(true);
                             // Remove all errors
                             self._removeErrors();
 

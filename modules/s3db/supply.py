@@ -2,7 +2,7 @@
 
 """ Sahana Eden Supply Model
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -480,7 +480,7 @@ $.filterOptionsS3({
         supply_item_represent = supply_ItemRepresent(show_link = True)
 
         # Reusable Field
-        supply_item_tootip = T("Type the name of an existing catalog item OR Click 'Create Item' to add an item which is not in the catalog.")
+        supply_item_tooltip = T("Type the name of an existing catalog item OR Click 'Create Item' to add an item which is not in the catalog.")
         supply_item_id = S3ReusableField("item_id",
             "reference %s" % tablename, # 'item_id' for backwards-compatibility
             label = T("Item"),
@@ -496,7 +496,7 @@ $.filterOptionsS3({
                                   f = "item",
                                   label = ADD_ITEM,
                                   title = T("Item"),
-                                  tooltip = supply_item_tootip,
+                                  tooltip = supply_item_tooltip,
                                   ),
             )
 
@@ -830,7 +830,7 @@ $.filterOptionsS3({
                                                           f = "item",
                                                           label = ADD_ITEM,
                                                           title = T("Item"),
-                                                          tooltip = supply_item_tootip,
+                                                          tooltip = supply_item_tooltip,
                                                           vars = {"child": "alt_item_id"
                                                                   },
                                                           ),
@@ -1762,7 +1762,6 @@ class supply_ItemRepresent(S3Represent):
         self.truncate = truncate
 
         # Need a custom lookup to join with Brand
-        self.lookup_rows = self.custom_lookup_rows
         fields = ["supply_item.id",
                   "supply_item.name",
                   "supply_item.model",
@@ -1779,7 +1778,7 @@ class supply_ItemRepresent(S3Represent):
                              multiple=multiple)
 
     # -------------------------------------------------------------------------
-    def custom_lookup_rows(self, key, values, fields=None):
+    def lookup_rows(self, key, values, fields=None):
         """
             Custom lookup method for item rows, does a
             left join with the brand. Parameters
@@ -1923,7 +1922,6 @@ class supply_ItemCategoryRepresent(S3Represent):
         self.use_code = use_code
 
         # Need a custom lookup to join with Parent/Catalog
-        self.lookup_rows = self.custom_lookup_rows
         fields = ["supply_item_category.id",
                   "supply_item_category.name",
                   # Always-included since used as fallback if no name
@@ -1943,7 +1941,7 @@ class supply_ItemCategoryRepresent(S3Represent):
                              multiple = multiple)
 
     # -------------------------------------------------------------------------
-    def custom_lookup_rows(self, key, values, fields=None):
+    def lookup_rows(self, key, values, fields=None):
         """
             Custom lookup method for item category rows, does a
             left join with the parent category. Parameters
@@ -2528,6 +2526,20 @@ def supply_item_controller():
                 # field = r.table.kit
                 # field.default = True
                 # field.readable = field.writable = False
+
+        elif r.get_vars.get("caller") in ("event_asset_item_id", "event_scenario_asset_item_id"):
+            # Category is mandatory
+            f = s3db.supply_item.item_category_id
+            f.requires = f.requires.other
+            # Need to tell Item Category controller that new categories must be 'Can be Assets'
+            ADD_ITEM_CATEGORY = s3.crud_strings["supply_item_category"].label_create
+            f.comment = S3PopupLink(c = "supply",
+                                    f = "item_category",
+                                    vars = {"assets": 1},
+                                    label = ADD_ITEM_CATEGORY,
+                                    title = current.T("Item Category"),
+                                    tooltip = ADD_ITEM_CATEGORY,
+                                    )
 
         elif r.representation == "xls":
             # Use full Category names in XLS output

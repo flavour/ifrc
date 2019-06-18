@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# vim: ai ts=4 sts=4 et sw=4 encoding=utf-8
 
 """ Messaging API
 
@@ -9,7 +8,7 @@
     Messages get sent to the Outbox (& Log)
     From there, the Scheduler tasks collect them & send them
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -42,11 +41,11 @@ __all__ = ("S3Msg",
 import base64
 import datetime
 import json
+import os
 import re
 import string
 import urllib
 import urllib2
-import os
 
 try:
     from cStringIO import StringIO    # Faster, where available
@@ -63,13 +62,13 @@ except ImportError:
 from gluon import current, redirect
 from gluon.html import *
 
-from s3codec import S3Codec
-from s3crud import S3CRUD
-from s3datetime import s3_decode_iso_datetime
-from s3forms import S3SQLDefaultForm
-from s3utils import s3_unicode
-from s3validators import IS_IN_SET, IS_ONE_OF
-from s3widgets import S3PentityAutocompleteWidget
+#from .s3codec import S3Codec
+from .s3crud import S3CRUD
+from .s3datetime import s3_decode_iso_datetime
+from .s3forms import S3SQLDefaultForm
+from .s3utils import s3_str, s3_unicode
+from .s3validators import IS_IN_SET, IS_ONE_OF
+from .s3widgets import S3PentityAutocompleteWidget
 
 IDENTITYTRANS = ALLCHARS = string.maketrans("", "")
 NOTPHONECHARS = ALLCHARS.translate(IDENTITYTRANS, string.digits)
@@ -80,7 +79,7 @@ TWITTER_MAX_CHARS = 140
 TWITTER_HAS_NEXT_SUFFIX = u' \u2026'
 TWITTER_HAS_PREV_PREFIX = u'\u2026 '
 
-SENDER = re.compile("(.*)\s*\<(.+@.+)\>\s*")
+SENDER = re.compile(r"(.*)\s*\<(.+@.+)\>\s*")
 
 # =============================================================================
 class S3Msg(object):
@@ -199,7 +198,6 @@ class S3Msg(object):
         """
 
         # Deal with missing word separation (thanks Ingmar Hupp)
-        import re
         header = re.sub(r"(=\?.*\?=)(?!$)", r"\1 ", header)
 
         # Decode header
@@ -254,7 +252,7 @@ class S3Msg(object):
            @param function_name: Parser
         """
 
-        from s3parser import S3Parsing
+        from .s3parser import S3Parsing
 
         parser = S3Parsing.parser
         stable = current.s3db.msg_parsing_status
@@ -434,7 +432,7 @@ class S3Msg(object):
             message_id = record["message_id"]
         else:
             # @ToDo
-            raise
+            raise NotImplementedError
 
         # Place the Message in the main OutBox
         table = s3db.msg_outbox
@@ -645,7 +643,7 @@ class S3Msg(object):
             left.append(mailbox.on(mailbox.message_id == outbox.message_id))
         else:
             # @ToDo
-            raise
+            raise NotImplementedError
 
         rows = db(query).select(*fields,
                                 left=left,
@@ -1189,7 +1187,7 @@ class S3Msg(object):
             request.add_header("Authorization", "Basic %s" % base64string)
         try:
             result = urllib2.urlopen(request, query)
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             current.log.error("SMS message send failed: %s" % e)
             return False
         else:
@@ -1339,11 +1337,11 @@ class S3Msg(object):
         """
 
         return self.send_by_pe_id(pe_id,
-                                  message,
-                                  "SMS",
-                                  from_address,
-                                  system_generated,
-                                  subject=""
+                                  subject = "",
+                                  message = message,
+                                  contact_method = "SMS",
+                                  from_address = from_address,
+                                  system_generated = system_generated,
                                   )
 
     # -------------------------------------------------------------------------
@@ -1370,7 +1368,6 @@ class S3Msg(object):
             All chunks, except for first, start with prefix.
         """
 
-        from s3 import s3_str
         res = []
         current_prefix = "" # first chunk has no prefix
         while text:
@@ -1609,7 +1606,9 @@ class S3Msg(object):
             graph = facebook.GraphAPI(c.page_access_token)
             graph.put_object(page_id, "feed", message=text)
         else:
-            graph.put_object(user_id, "feed", message=text)
+            # FIXME user_id does not exist:
+            #graph.put_object(user_id, "feed", message=text)
+            raise NotImplementedError
 
         message_id = log_facebook(text, recipient, channel_id)
 
@@ -1780,14 +1779,14 @@ class S3Msg(object):
                     p = poplib.POP3_SSL(host, port)
                 else:
                     p = poplib.POP3(host, port)
-            except socket.error, e:
+            except socket.error as e:
                 error = "Cannot connect: %s" % e
                 current.log.error(error)
                 # Store status in the DB
                 sinsert(channel_id=channel_id,
                         status=error)
                 return error
-            except poplib.error_proto, e:
+            except poplib.error_proto as e:
                 # Something else went wrong - probably transient (have seen '-ERR EOF' here)
                 current.log.error("Email poll failed: %s" % e)
                 return
@@ -1800,7 +1799,7 @@ class S3Msg(object):
                 try:
                     p.user(username)
                     p.pass_(password)
-                except poplib.error_proto, e:
+                except poplib.error_proto as e:
                     error = "Login failed: %s" % e
                     current.log.error(error)
                     # Store status in the DB
@@ -1830,7 +1829,7 @@ class S3Msg(object):
                     M = imaplib.IMAP4_SSL(host, port)
                 else:
                     M = imaplib.IMAP4(host, port)
-            except socket.error, e:
+            except socket.error as e:
                 error = "Cannot connect: %s" % e
                 current.log.error(error)
                 # Store status in the DB
@@ -1840,7 +1839,7 @@ class S3Msg(object):
 
             try:
                 M.login(username, password)
-            except M.error, e:
+            except M.error as e:
                 error = "Login failed: %s" % e
                 current.log.error(error)
                 # Store status in the DB
@@ -1918,7 +1917,7 @@ class S3Msg(object):
 
         try:
             _response = urllib2.urlopen(url)
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             return "Error: %s" % e.code
         else:
             sms_xml = _response.read()
@@ -1988,7 +1987,7 @@ class S3Msg(object):
 
         try:
             smspage = urllib2.urlopen(url)
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             error = "Error: %s" % e.code
             current.log.error(error)
             # Store status in the DB
@@ -2096,12 +2095,12 @@ class S3Msg(object):
                                  request_headers=request_headers,
                                  response_headers=response_headers,
                                  )
-
         if d.bozo:
             # Something doesn't seem right
             S3Msg.update_channel_status(channel_id,
-                                        status=d.bozo_exception.message,
-                                        period=(300, 3600))
+                                        status = "ERROR: %s" % d.bozo_exception.message,
+                                        period = (300, 3600),
+                                        )
             return
 
         # Update ETag/Last-polled
@@ -2396,7 +2395,7 @@ class S3Msg(object):
                 old_status = old_status.status
                 try:
                     old_status = int(old_status)
-                except:
+                except (ValueError, TypeError):
                     new_status = status
                 else:
                     new_status = old_status + int(status[1:])
@@ -2530,7 +2529,6 @@ class S3Msg(object):
         """ Process results of twitter search with KeyGraph."""
 
         import subprocess
-        import os
         import tempfile
 
         db = current.db
@@ -2568,14 +2566,12 @@ class S3Msg(object):
             with their definitions.
         """
 
-        import re
-
         tagdef = S3Msg.tagdef
         tweet = tweet.lower()
-        tweet = re.sub('((www\.[\s]+)|(https?://[^\s]+))', "", tweet)
-        tweet = re.sub('@[^\s]+', "", tweet)
-        tweet = re.sub('[\s]+', " ", tweet)
-        tweet = re.sub(r'#([^\s]+)', lambda m:tagdef(m.group(0)), tweet)
+        tweet = re.sub(r"((www\.[\s]+)|(https?://[^\s]+))", "", tweet)
+        tweet = re.sub(r"@[^\s]+", "", tweet)
+        tweet = re.sub(r"[\s]+", " ", tweet)
+        tweet = re.sub(r"#([^\s]+)", lambda m:tagdef(m.group(0)), tweet)
         tweet = tweet.strip('\'"')
 
         return tweet
@@ -2648,7 +2644,7 @@ class S3Compose(S3CRUD):
 
         #_vars = r.get_vars
 
-        # Set defaults (used if coming via msg.compose())
+        # Set defaults for when not coming via msg.compose()
         self.contact_method = None
         self.recipient = None
         self.recipients = None
@@ -2764,10 +2760,12 @@ class S3Compose(S3CRUD):
         get_vars = request.get_vars
 
         mtable = s3db.msg_message
+        etable = s3db.msg_email
         otable = s3db.msg_outbox
 
         mtable.body.label = T("Message")
         mtable.body.default = self.message
+        etable.subject.default = self.subject
         mtable.inbound.default = False
         mtable.inbound.writable = False
 

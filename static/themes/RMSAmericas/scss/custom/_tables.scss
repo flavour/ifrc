@@ -55,27 +55,51 @@ table.dataTable {
         }
 
     }
+    // Bulk-select
     .selected-action {
         margin: 5px 0 5px;
     }
+    .bulk-select-options {
+        font-size: 0.7rem;
+        font-weight: normal;
+        input[type=checkbox] {
+            margin-bottom: 0.2rem;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+    }
+    input.bulkcheckbox[type=checkbox] {
+        margin-top: 0.2rem;
+    }
+    .group {
+        span.ui-icon {
+            display: inline-block;
+        }
+        .group-indent {
+            width: 10px;
+        }
+        .group-opened,
+        .group-closed {
+            padding: 0.2rem;
+        }
+        .group-collapse,
+        .group-expand {
+            cursor: pointer;
+            float: right;
+        }
+    }
 
-    &.dtr-inline.collapsed tbody td:first-child::before, 
+    &.dtr-inline.collapsed tbody td:first-child::before,
     &.dtr-inline.collapsed tbody th:first-child::before {
         top: 6px;
         background-color: $primary-color;
     }
-    &.dtr-inline.collapsed tbody tr.parent td:first-child::before, 
+    &.dtr-inline.collapsed tbody tr.parent td:first-child::before,
     &.dtr-inline.collapsed tbody tr.parent th:first-child::before {
         top: 6px;
         background-color: $alert-color;
     }
 }
-#bulk_select_options input[type=checkbox] {
-    margin-bottom: 0.2rem;
-    margin-right: 0.5rem;
-    vertical-align: middle;
-}
-
 .dataTables_processing {
      padding: 14px 0 28px;
 }
@@ -85,25 +109,41 @@ table.dataTable {
     margin-right: 3rem;
     input[type="search"] {
         margin-left: 0.2rem;
-    }    
+    }
 }
 .dt-export-options {
     float: right;
     .list_formats {
         padding-top: 0;
-        margin-left: 5px;
+        margin-left: 0.25rem;
     }
     .dt-export {
-        margin: 0 0.085rem;
+        margin: 0 0.125rem;
+    }
+    .permalink {
+        margin-right: 0.25rem;
+        color: $primary-color;
     }
 }
 
 body.rtl {
-    .dt-export-options {
-        float: left;
-    }
+    .dt-export-options,
     .list_formats div {
         float: left;
+        .list_formats {
+            margin-left: 0;
+            margin-right: 0.25rem;
+        }
+        .permalink {
+            margin-right: 0;
+            margin-left: 0.25rem;
+        }
+    }
+    .dataTable .group {
+        .group-collapse,
+        .group-expand {
+            float: left;
+        }
     }
 }
 

@@ -32,25 +32,10 @@ def config(settings):
     # Uncomment to Hide the language toolbar
     settings.L10n.display_toolbar = False
     # Default timezone for users
-    settings.L10n.utc_offset = "-0500"
-    # Uncomment these to use US-style dates in English
-    settings.L10n.date_format = "%m-%d-%Y"
-    # Start week on Sunday
-    settings.L10n.firstDOW = 0
-    # Number formats (defaults to ISO 31-0)
-    # Decimal separator for numbers (defaults to ,)
-    settings.L10n.decimal_separator = "."
-    # Thousands separator for numbers (defaults to space)
-    settings.L10n.thousands_separator = ","
-    # Default Country Code for telephone numbers
-    settings.L10n.default_country_code = 1
-    # Enable this to change the label for 'Mobile Phone'
-    settings.ui.label_mobile_phone = "Cell Phone"
+    settings.L10n.timezone = "US/Eastern"
     # Uncomment to Disable the Postcode selector in the LocationSelector
     # - using L4 instead
     settings.gis.postcode_selector = False
-    # Enable this to change the label for 'Postcode'
-    #settings.ui.label_postcode = "ZIP Code"
 
     # Icons
     settings.ui.icons = "font-awesome3"
@@ -61,18 +46,11 @@ def config(settings):
         "news": "icon-news",
     }
 
-    # PDF to Letter
-    settings.base.paper_size = T("Letter")
-
     # Restrict the Location Selector to just certain countries
     # NB This can also be over-ridden for specific contexts later
     # e.g. Activities filtered to those of parent Project
     settings.gis.countries = ("US",)
     gis_levels = ("L2", "L3", "L4")
-
-    settings.fin.currencies = {
-        "USD" : "United States Dollars",
-    }
 
     settings.L10n.languages = OrderedDict([
         ("en", "English"),
@@ -103,16 +81,13 @@ def config(settings):
     #settings.auth.registration_link_user_to = {"staff":T("Staff"),
     #                                           #"volunteer":T("Volunteer")
     #                                           }
-    settings.auth.registration_link_user_to_default = "staff"
+    settings.auth.registration_link_user_to_default = ["staff"]
 
     # Record Approval
     settings.auth.record_approval = True
     settings.auth.record_approval_required_for = ("org_organisation",)
 
     settings.security.policy = 8 # Hierarchical Realms + Delegations
-
-    # Hide UTC offset
-    settings.auth.show_utc_offset = False
 
     # Enable this to have Open links in IFrames open a full page in a new tab
     settings.ui.iframe_opens_full = True
@@ -645,9 +620,9 @@ def config(settings):
                 # Create form: Default
                 rss_import = None
 
-        s3db.org_organisation_location.location_id.widget = S3LocationSelector(levels=gis_levels,
-                                                                               show_map=False,
-                                                                               labels=False,
+        s3db.org_organisation_location.location_id.widget = S3LocationSelector(levels = gis_levels,
+                                                                               show_map = False,
+                                                                               labels = False,
                                                                                )
         s3db.org_organisation_tag.value.widget = s3_comments_widget
         mtable = s3db.org_group_membership
@@ -883,10 +858,10 @@ def config(settings):
                         field = table.location_id
                         if r.method in ("create", "update"):
                             field.label = "" # Gets replaced by widget
-                        field.widget = S3LocationSelector(levels=gis_levels,
-                                                          show_address=True,
+                        field.widget = S3LocationSelector(levels = gis_levels,
+                                                          show_address = True,
                                                           # Using L4 instead
-                                                          show_postcode=False,
+                                                          show_postcode = False,
                                                           )
                 elif r.component_name == "human_resource":
                     # Don't assume that user is from same org/site as Contacts they create
@@ -1675,7 +1650,7 @@ $.filterOptionsS3({
                                      comment = T("Search by first, middle or last name. You can use * as wildcard."),
                                      ),
                         S3OptionsFilter("organisation_id",
-                                        filter = True,
+                                        search = True,
                                         header = "",
                                         #hidden = True,
                                         ),
@@ -1690,7 +1665,7 @@ $.filterOptionsS3({
                                         ),
                         S3OptionsFilter("group_membership.group_id$org_group_team.org_group_id",
                                         label = T("Network"),
-                                        #filter = True,
+                                        #search = True,
                                         #header = "",
                                         #hidden = True,
                                         ),
@@ -1701,7 +1676,7 @@ $.filterOptionsS3({
                                          ),
                         S3OptionsFilter("group_membership.group_id",
                                         label = T("Group"),
-                                        filter = True,
+                                        search = True,
                                         header = "",
                                         #hidden = True,
                                         ),

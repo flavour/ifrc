@@ -1,0 +1,32 @@
+<div class='row'>
+ <div class='small-12 columns'>
+ {{try:}}{{=H2(title)}}{{except:}}{{pass}}
+ </div>
+</div>
+<div class='row'>
+ <div class='large-4 columns'>
+  <div id='filter-form' class='form-container'>
+   {{try:}}{{=filter_form}}{{except:}}{{pass}}
+  </div>
+ </div>
+ <div class='large-8 columns'>
+  <div class='row'>
+   <div id='summary-common'>
+    <div class='row'>
+     <div class='columns'>
+      {{try:}}{{for section in common:}}{{=section}}{{pass}}{{except:}}{{pass}}
+     </div>
+    </div>
+   </div>
+   <div id='summary-tabs'>
+    <div id='summary-tab-headers'>
+     {{try:}}{{=tabs}}{{except:}}{{pass}}
+    </div>
+    <div id='summary-sections'>
+     {{try:}}{{for section in sections:}}{{=section}}{{pass}}{{except:}}{{pass}}
+    </div>
+   </div>
+  </div>
+ </div>
+</div>
+{{include "dataTables.html"}}

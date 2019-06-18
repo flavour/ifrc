@@ -15,7 +15,7 @@
     process being removed at a later stage.
     ######################################################################
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -72,10 +72,10 @@ except ImportError:
     sys.stderr.write("ERROR: lxml module needed for XML handling\n")
     raise
 
-from s3datetime import S3DateTime
-from s3rest import S3Method
-from s3utils import s3_represent_value, s3_validate
-import s3codec
+from .s3datetime import S3DateTime
+from .s3rest import S3Method
+from .s3utils import s3_represent_value, s3_validate
+from .s3codec import S3Codec
 
 try:
     from PIL import Image
@@ -119,6 +119,8 @@ MAX_FORM_OPTIONS_LIMIT = 12
 
 # Will be loaded with values during S3PDF apply_method
 ERROR = Storage()
+
+DEBUG = False
 
 # =============================================================================
 def checkDependencies(r):
@@ -343,7 +345,7 @@ class S3PDF(S3Method):
         else:
             content_disposition = "attachment"
 
-        if settings.get_paper_size() == "Letter":
+        if settings.get_pdf_size() == "Letter":
             self.paper_size = LETTER
         else:
             self.paper_size = A4
@@ -2931,7 +2933,7 @@ class S3PDF(S3Method):
                 self.topMargin = 20
                 self.bottomMargin = 20
                 settings = current.deployment_settings
-                if settings.get_paper_size() == "Letter":
+                if settings.get_pdf_size() == "Letter":
                     self.paper_size = LETTER
                 else:
                     self.paper_size = A4
@@ -3103,7 +3105,7 @@ class S3PDFDataSource:
                 fields = [table.id]
             list_fields = [f.name for f in fields]
         else:
-            indices = s3codec.S3Codec.indices
+            indices = S3Codec.indices
             list_fields = [f for f in list_fields if f not in indices]
 
         # Filter and orderby
@@ -3312,7 +3314,7 @@ if reportLabImported:
         def __init__(self, lineThickness):
             Flowable.__init__(self)
             self.lineThickness = 1
-            if current.deployment_settings.get_paper_size() == "Letter":
+            if current.deployment_settings.get_pdf_size() == "Letter":
                 self.paper_size = LETTER
             else:
                 self.paper_size = A4
@@ -3342,7 +3344,7 @@ if reportLabImported:
             self.numBoxes = numBoxes
             self.fontsize = 10
             self.etreeElem = etreeElem
-            if current.deployment_settings.get_paper_size() == "Letter":
+            if current.deployment_settings.get_pdf_size() == "Letter":
                 self.paper_size = LETTER
             else:
                 self.paper_size = A4
@@ -3407,7 +3409,7 @@ if reportLabImported:
             self.sideLength = 15
             self.fontsize = 10
             self.etreeElem = etreeElem
-            if current.deployment_settings.get_paper_size() == "Letter":
+            if current.deployment_settings.get_pdf_size() == "Letter":
                 self.paper_size = LETTER
             else:
                 self.paper_size = A4
@@ -3514,7 +3516,7 @@ if reportLabImported:
             self.sideLength = 15
             self.fontsize = 10
             self.etreeElem = etreeElem
-            if current.deployment_settings.get_paper_size() == "Letter":
+            if current.deployment_settings.get_pdf_size() == "Letter":
                 self.paper_size = LETTER
             else:
                 self.paper_size = A4
@@ -3633,7 +3635,7 @@ if reportLabImported:
             self.labels = labels
             self.text = labels[0]
             self.values = values
-            if current.deployment_settings.get_paper_size() == "Letter":
+            if current.deployment_settings.get_pdf_size() == "Letter":
                 self.paper_size = LETTER
             else:
                 self.paper_size = A4
@@ -3720,7 +3722,7 @@ if reportLabImported:
             self.text = text
             self.fontsize = 6
             self.spaceAfter = 2
-            if current.deployment_settings.get_paper_size() == "Letter":
+            if current.deployment_settings.get_pdf_size() == "Letter":
                 self.paper_size = LETTER
             else:
                 self.paper_size = A4

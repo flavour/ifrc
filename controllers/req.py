@@ -12,9 +12,9 @@ if not settings.has_module(module):
 
 # -----------------------------------------------------------------------------
 def index():
-    """ Module's Home Page """
+    """ Customisable module homepage """
 
-    return s3db.cms_index(module, alt_function="index_alt")
+    return settings.customise_home(module, alt_function="index_alt")
 
 # -----------------------------------------------------------------------------
 def index_alt():
@@ -1895,6 +1895,30 @@ def need():
     s3.prep = prep
 
     return s3_rest_controller(rheader = s3db.req_rheader)
+
+# -----------------------------------------------------------------------------
+def need_line():
+    """
+        RESTful CRUD Controller for Need Lines
+    """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def need_response():
+    """
+        RESTful CRUD Controller for Need Responses (i.e. Activity Groups)
+    """
+
+    return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def need_response_line():
+    """
+        RESTful CRUD Controller for Need Response Lines (i.e. Activities)
+    """
+
+    return s3_rest_controller()
 
 # -----------------------------------------------------------------------------
 def facility():

@@ -155,6 +155,21 @@ def incident():
                     #s3.crud.submit_button = T("Add")
                     s3.crud_labels["DELETE"] = T("Remove")
 
+                    if cname == "asset":
+                        # Filter Assets by Item Type
+                        script = '''
+var fncRepresentAsset = function(record) {
+ return record.number;
+}
+$.filterOptionsS3({
+ 'trigger': 'item_id',
+ 'target': 'asset_id',
+ 'lookupPrefix': 'asset',
+ 'lookupResource': 'asset',
+ 'fncRepresent': fncRepresentAsset
+})'''
+                        s3.jquery_ready.append(script)
+
                     # Default Event in the link to that of the Incident
                     ltable = s3db.table("event_%s" % cname)
                     if ltable:
@@ -163,9 +178,10 @@ def incident():
                         f.readable = f.writable = False
                         if cname in ("asset", "human_resource"):
                             # DateTime
+                            datetime_represent = s3base.S3DateTime.datetime_represent
                             for f in (ltable.start_date, ltable.end_date):
                                 f.requires = IS_EMPTY_OR(IS_UTC_DATETIME())
-                                f.represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+                                f.represent = lambda dt: datetime_represent(dt, utc=True)
                                 f.widget = S3CalendarWidget(timepicker = True)
 
                 elif cname == "incident_asset":
@@ -184,9 +200,10 @@ def incident():
                     f.default = r.record.event_id
                     f.readable = f.writable = False
                     # DateTime
+                    datetime_represent = s3base.S3DateTime.datetime_represent
                     for f in (ltable.start_date, ltable.end_date):
                         f.requires = IS_EMPTY_OR(IS_UTC_DATETIME())
-                        f.represent = lambda dt: S3DateTime.datetime_represent(dt, utc=True)
+                        f.represent = lambda dt: datetime_represent(dt, utc=True)
                         f.widget = S3CalendarWidget(timepicker = True)
 
             elif r.method not in ("read", "update"):
@@ -262,6 +279,52 @@ def incident_report():
     s3.prep = prep
 
     return s3_rest_controller()
+
+# -----------------------------------------------------------------------------
+def job_title():
+    """ Job Titles Controller """
+
+    table = s3db.hrm_job_title
+    s3.crud_strings["hrm_job_title"] = Storage(
+        label_create = T("Add Position"),
+        title_display = T("Position Details"),
+        title_list = T("Positions"),
+        title_update = T("Edit Position"),
+        label_list_button = T("List Positions"),
+        label_delete_button = T("Remove Position"),
+        msg_record_created = T("Position added"),
+        msg_record_modified = T("Position updated"),
+        msg_record_deleted = T("Position removed"),
+        msg_list_empty = T("No Positions currently registered"))
+
+    def prep(r):
+        # Default / Hide type
+        f = table.type
+        f.default = 4 # Deployment
+        f.readable = f.writable = False
+
+        # Positions are never org-specific
+        f = table.organisation_id
+        f.readable = f.writable = False
+
+        if r.representation == "xls":
+            # Export format should match Import format
+            current.messages["NONE"] = ""
+            #f.represent = \
+            #    s3db.org_OrganisationRepresent(acronym=False,
+            #                                   parent=False)
+            #f.label = None
+            table.comments.label = None
+            table.comments.represent = lambda v: v or ""
+        return True
+    s3.prep = prep
+
+    s3.filter = FS("type").belongs((4,))
+
+    if not auth.s3_has_role(ADMIN):
+        s3.filter &= auth.filter_by_root_org(table)
+
+    return s3_rest_controller("hrm")
 
 # -----------------------------------------------------------------------------
 def scenario():

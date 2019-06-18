@@ -2,7 +2,7 @@
 
 """ Sahana Eden Assets Model
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -330,7 +330,7 @@ class S3AssetModel(S3Model):
                                            )
         else:
             org_filter = S3OptionsFilter("organisation_id",
-                                         filter = True,
+                                         search = True,
                                          header = "",
                                          # Can be unhidden in customise_xx_resource if there is a need to use a default_filter
                                          hidden = True,
@@ -1317,9 +1317,6 @@ class asset_AssetRepresent(S3Represent):
                  multiple = False,
                  ):
 
-        # Need a custom lookup
-        self.lookup_rows = self.custom_lookup_rows
-
         super(asset_AssetRepresent,
               self).__init__(lookup="asset_asset",
                              fields=fields,
@@ -1328,7 +1325,7 @@ class asset_AssetRepresent(S3Represent):
                              multiple=multiple)
 
     # -------------------------------------------------------------------------
-    def custom_lookup_rows(self, key, values, fields=None):
+    def lookup_rows(self, key, values, fields=None):
         """
             Custom lookup method for organisation rows, does a
             left join with the parent organisation. Parameters

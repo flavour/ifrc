@@ -163,7 +163,8 @@ def person():
                     msg_list_empty = T("No Cases currently registered")
                     )
 
-            if not r.component:
+            component = r.component
+            if not component:
 
                 from s3 import S3SQLCustomForm, \
                                S3SQLInlineComponent, \
@@ -278,7 +279,7 @@ def person():
                                    filter_widgets = filter_widgets,
                                    )
 
-            elif r.component.tablename == "dvr_case_activity":
+            elif component.tablename == "dvr_case_activity":
 
                 # Set default statuses for components
                 if settings.get_dvr_case_activity_use_status():
@@ -287,13 +288,18 @@ def person():
                 if settings.get_dvr_manage_response_actions():
                     s3db.dvr_response_default_status()
 
+            elif component.tablename == "dvr_response_action":
+
+                if settings.get_dvr_manage_response_actions():
+                    s3db.dvr_response_default_status()
+
             elif r.component_name == "allowance" and \
                  r.method in (None, "update"):
 
-                records = r.component.select(["status"], as_rows=True)
+                records = component.select(["status"], as_rows=True)
                 if len(records) == 1:
                     record = records[0]
-                    table = r.component.table
+                    table = component.table
                     readonly = []
                     if record.status == 2:
                         # Can't change payment details if already paid
@@ -419,17 +425,21 @@ def document():
         ctable = s3db.dvr_case
         auth = current.auth
         has_permission = auth.s3_has_permission
+        accessible_query = auth.s3_accessible_query
+
         if vtablename == "pr_person":
             if not has_permission("read", "pr_person", record_id):
                 r.unauthorised()
             include_activity_docs = settings.get_dvr_case_include_activity_docs()
-            query = auth.s3_accessible_query("read", ctable) & \
+            include_group_docs = settings.get_dvr_case_include_group_docs()
+            query = accessible_query("read", ctable) & \
                     (ctable.person_id == record_id) & \
                     (ctable.deleted == False)
 
         elif vtablename == "dvr_case":
             include_activity_docs = False
-            query = auth.s3_accessible_query("read", ctable) & \
+            include_group_docs = False
+            query = accessible_query("read", ctable) & \
                     (ctable.id == record_id) & \
                     (ctable.deleted == False)
         else:
@@ -442,18 +452,38 @@ def document():
                                 orderby = ~ctable.modified_on,
                                 ).first()
         if case:
-            doc_ids = [case.doc_id]
+            doc_ids = [case.doc_id] if case.doc_id else []
         else:
             # No case found
             r.error(404, "Case not found")
 
+        # Include case groups
+        if include_group_docs:
+
+            # Look up relevant case groups
+            mtable = s3db.pr_group_membership
+            gtable = s3db.pr_group
+            join = gtable.on((gtable.id == mtable.group_id) & \
+                             (gtable.group_type == 7))
+            query = accessible_query("read", mtable) & \
+                    (mtable.person_id == record_id) & \
+                    (mtable.deleted == False)
+            rows = db(query).select(gtable.doc_id,
+                                    join = join,
+                                    orderby = ~mtable.created_on,
+                                    )
+
+            # Append the doc_ids
+            for row in rows:
+                if row.doc_id:
+                    doc_ids.append(row.doc_id)
+
         # Include case activities
-        field = r.table.doc_id
         if include_activity_docs:
 
             # Look up relevant case activities
             atable = s3db.dvr_case_activity
-            query = auth.s3_accessible_query("read", atable) & \
+            query = accessible_query("read", atable) & \
                     (atable.person_id == record_id) & \
                     (atable.deleted == False)
             rows = db(query).select(atable.doc_id,
@@ -462,7 +492,11 @@ def document():
 
             # Append the doc_ids
             for row in rows:
-                doc_ids.append(row.doc_id)
+                if row.doc_id:
+                    doc_ids.append(row.doc_id)
+
+        field = r.table.doc_id
+        if include_activity_docs or include_group_docs:
 
             # Make doc_id readable and visible in table
             field.represent = s3db.dvr_DocEntityRepresent()
@@ -492,6 +526,8 @@ def document():
                                        field.represent,
                                        filterby = "doc_id",
                                        filter_opts = doc_ids,
+                                       orderby = "instance_type",
+                                       sort = False,
                                        )
             r.resource.add_filter(FS("doc_id").belongs(doc_ids))
 
@@ -841,12 +877,61 @@ def response_action():
     def prep(r):
 
         resource = r.resource
+        table = resource.table
 
-        if not r.record:
+        # Beneficiary is required and must have a case file
+        ptable = s3db.pr_person
+        ctable = s3db.dvr_case
+        dbset = db((ptable.id == ctable.person_id) & \
+                   (ctable.archived == False) & \
+                   (ctable.deleted == False))
+        field = table.person_id
+        field.requires = IS_ONE_OF(dbset, "pr_person.id",
+                                   field.represent,
+                                   )
+
+        # Set initial status
+        table.status_id.default = s3db.dvr_response_default_status()
+
+        # Create/delete requires context perspective
+        insertable = deletable = False
+
+        get_vars = r.get_vars
+        if "viewing" in get_vars:
+            try:
+                vtablename, record_id = get_vars["viewing"].split(".")
+            except ValueError:
+                return False
+
+            has_permission = auth.s3_has_permission
+            if vtablename == "pr_person":
+                if not has_permission("read", "pr_person", record_id):
+                    r.unauthorised()
+                query = (FS("person_id") == record_id)
+                resource.add_filter(query)
+
+                field = r.table.case_activity_id
+                field.readable = field.writable = True
+
+                if record_id:
+                    # Restrict case activity selection to the case viewed
+                    atable = s3db.dvr_case_activity
+                    field.requires = IS_ONE_OF(db(atable.person_id == record_id),
+                                               "dvr_case_activity.id",
+                                               field.represent,
+                                               )
+            else:
+                return False
+
+            insertable = deletable = True
+
+        elif not r.record:
+
             # Filter out response actions of archived cases
-            query = (FS("case_activity_id$person_id$dvr_case.archived") == False)
+            query = (FS("person_id$dvr_case.archived") == False)
             resource.add_filter(query)
 
+        # Filter for "mine"
         mine = r.get_vars.get("mine")
         if mine == "a":
             # Filter for response actions assigned to logged-in user
@@ -868,15 +953,15 @@ def response_action():
                 resource.add_filter(mine_selector.belongs(set()))
             s3.crud_strings[resource.tablename]["title_list"] = title_list
 
-        resource.configure(# Must not create or delete actions from here:
-                           insertable = False,
-                           deletable = False,
+        resource.configure(insertable = insertable,
+                           deletable = deletable,
                            )
 
         return True
     s3.prep = prep
 
-    return s3_rest_controller()
+    return s3_rest_controller(rheader = s3db.dvr_rheader,
+                              )
 
 # -----------------------------------------------------------------------------
 def termination_type():
@@ -1022,6 +1107,17 @@ def case_appointment():
             # reaching the deduplicator, so remove the validator here:
             ptable = s3db.pr_person
             ptable.pe_label.requires = None
+
+        else:
+            mine = True if r.get_vars.get("mine") == "1" else False
+            if mine:
+                human_resource_id = auth.s3_logged_in_human_resource()
+                if human_resource_id:
+                    query = (FS("human_resource_id") == human_resource_id)
+                else:
+                    query = (FS("human_resource_id").belongs(set()))
+                r.resource.add_filter(query)
+
         return True
     s3.prep = prep
 

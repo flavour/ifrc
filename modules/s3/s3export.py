@@ -6,7 +6,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -34,9 +34,8 @@
 __all__ = ("S3Exporter",)
 
 from gluon import current
-from gluon.storage import Storage
 
-from s3codec import S3Codec
+from .s3codec import S3Codec
 
 # =============================================================================
 class S3Exporter(object):
@@ -114,7 +113,7 @@ class S3Exporter(object):
             if type(tooltip) is list:
                 tooltip = tooltip[-1]
             import re
-            match = re.match("(\w+)\((\w+),(\w+)\)", tooltip)
+            match = re.match(r"(\w+)\((\w+),(\w+)\)", tooltip)
             if match:
                 function_name, kname, vname = match.groups()
                 # Try to resolve the function name
@@ -182,7 +181,7 @@ class S3Exporter(object):
                     else:
                         # Add tooltips as "_tooltip" to the corresponding rows
                         if isinstance(tooltips, dict):
-                            from s3utils import s3_unicode
+                            from .s3utils import s3_unicode
                             for k, v in tooltips.items():
                                 if k in items:
                                     items[k]["_tooltip"] = s3_unicode(v)
@@ -197,7 +196,7 @@ class S3Exporter(object):
                 else:
                     # Extract the tooltip field from each row
                     # and add it as _tooltip
-                    from s3utils import s3_unicode
+                    from .s3utils import s3_unicode
                     for row in rows:
                         try:
                             value = tooltip_rfield.extract(row)
@@ -219,6 +218,12 @@ class S3Exporter(object):
 
         codec = S3Codec.get_codec("pdf").encode
         return codec(*args, **kwargs)
+
+    # -------------------------------------------------------------------------
+    def pdfcard(self, *args, **kwargs):
+
+        codec = S3Codec.get_codec("card")
+        return codec.encode(*args, **kwargs)
 
     # -------------------------------------------------------------------------
     def shp(self, *args, **kwargs):

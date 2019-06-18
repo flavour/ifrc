@@ -315,7 +315,12 @@ S3.search = {};
 
         // Clear hierarchy filters
         form.find('.hierarchy-filter').each(function() {
-            $(this).hierarchicalopts('reset');
+            var $this = $(this);
+            if ($this.hasClass('s3-cascade-select')) {
+                $this.cascadeSelect('reset');
+            } else {
+                $this.hierarchicalopts('reset');
+            }
         });
 
         // Clear age filters
@@ -605,7 +610,11 @@ S3.search = {};
             urlVar = $('#' + id + '-data').val();
             value = '';
 
-            values = $this.hierarchicalopts('get');
+            if ($this.hasClass('s3-cascade-select')) {
+                values = $this.cascadeSelect('get');
+            } else {
+                values = $this.hierarchicalopts('get');
+            }
             if (values) {
                 for (i=0; i < values.length; i++) {
                     if (value === '') {
@@ -646,6 +655,20 @@ S3.search = {};
                        ('0' + (dt.getMonth() + 1)).slice(-2) + '-' +
                        ('0' + dt.getDate()).slice(-2);
                 queries.push([urlVar, dt]);
+            } else {
+                queries.push([urlVar, null]);
+            }
+        });
+
+        // Value filter widgets
+        $('.value-filter:visible', form).each(function() {
+
+            $this = $(this);
+            id = $this.attr('id');
+            urlVar = $('#' + id + '-data').val();
+
+            if ($this.prop('checked')) {
+                queries.push([urlVar, 'None']);
             } else {
                 queries.push([urlVar, null]);
             }
@@ -906,7 +929,11 @@ S3.search = {};
                     toggleAdvanced(form);
                 }
                 values = q[expression];
-                $this.hierarchicalopts('set', values);
+                if ($this.hasClass('s3-cascade-select')) {
+                    $this.cascadeSelect('set', values);
+                } else {
+                    $this.hierarchicalopts('set', values);
+                }
             }
         });
 
@@ -1293,23 +1320,25 @@ S3.search = {};
             }
             target_data = targets[target_id];
             t = $('#' + target_id);
-            if (t.hasClass('dl')) {
-                t.datalist('ajaxReload', target_data.queries);
-            } else if (t.hasClass('dataTable')) {
+            if (t.hasClass('dataTable')) {
                 // Refresh Data
                 var dt = t.dataTable(),
                     dtAjaxURL = target_data.ajaxurl;
                 dt.fnReloadAjax(dtAjaxURL);
                 updateFormatURLs(dt, queries);
                 $('#' + dt[0].id + '_dataTable_filterURL').val(dtAjaxURL);
+            } else if (t.hasClass('dl')) {
+                t.datalist('ajaxReload', target_data.queries);
             } else if (t.hasClass('map_wrapper')) {
-                S3.gis.refreshLayer('search_results');
+                S3.gis.refreshLayer('search_results', target_data.queries);
             } else if (t.hasClass('gi-container')) {
                 t.groupedItems('reload', null, target_data.queries);
             } else if (t.hasClass('pt-container')) {
                 t.pivottable('reload', null, target_data.queries);
             } else if (t.hasClass('tp-container')) {
                 t.timeplot('reload', null, target_data.queries);
+            } else if (t.hasClass('s3-organizer')) {
+                t.organizer('reload');
             }
         }
     };
@@ -1395,7 +1424,8 @@ S3.search = {};
             t.hasClass('gi-container') ||
             t.hasClass('pt-container') ||
             t.hasClass('tp-container') ||
-            t.hasClass('map_wrapper')) {
+            t.hasClass('map_wrapper') ||
+            t.hasClass('s3-organizer')) {
             // These targets handle their AjaxURL themselves
             ajaxurl = null;
         } else if (t.hasClass('dataTable')) {
@@ -1424,15 +1454,30 @@ S3.search = {};
     S3.search.setup_hidden_widget = setup_hidden_widget;
 
     /**
-     * Helper method to trigger re-calculation of column width in
-     * responsive data tables after unhiding them
+     * Helper method to
+     *
+     * - re-calculate the column width in responsive data tables, or
+     * - adjust the top scrollbar width in non-responsive data tables
+     *
+     * ...after unhiding them on a summary tab
      *
      * @param {jQuery} datatable - the datatable
      */
     var recalcResponsive = function(datatable) {
-        var dt = $(datatable).DataTable();
-        if (dt && dt.responsive) {
-            dt.responsive.recalc();
+
+        var dt = $(datatable);
+
+        if (dt.hasClass('responsive')) {
+            var instance = dt.DataTable();
+            if (instance && instance.responsive) {
+                instance.responsive.recalc();
+            }
+        } else if (dt.hasClass('doublescroll')) {
+            try {
+                dt.dataTableS3('doubleScroll');
+            } catch(e) {
+                // pass
+            }
         }
     };
 
@@ -1479,7 +1524,7 @@ S3.search = {};
             updatePendingTargets(form);
         }
         // Setup any Responsive dataTables
-        section.find('table.dataTable.display.responsive')
+        section.find('table.dataTable.display')
                .each(function() {
             recalcResponsive(this);
         });
@@ -1515,29 +1560,37 @@ S3.search = {};
             }
         }
 
-        // Initialise jQueryUI Tabs
-        $('#summary-tabs').tabs({
-            active: active_tab,
-            activate: function(event, ui) {
-                var newPanel = $(ui.newPanel);
-                // Unhide the section (.ui-tab's display: block overrides anyway but hey ;)
-                newPanel.removeClass('hide');
-                // A New Tab has been selected
-                if (ui.newTab.length) {
-                    // Update the Filter Query URL to show which tab is active
-                    updateFilterSubmitURL(form, 't', $(ui.newTab).index());
+        if (active_tab != undefined) {
+            // Initialise jQueryUI Tabs
+            $('#summary-tabs').tabs({
+                active: active_tab,
+                activate: function(event, ui) {
+                    var newPanel = $(ui.newPanel);
+                    // Unhide the section (.ui-tab's display: block overrides anyway but hey ;)
+                    newPanel.removeClass('hide');
+                    // A New Tab has been selected
+                    if (ui.newTab.length) {
+                        // Update the Filter Query URL to show which tab is active
+                        updateFilterSubmitURL(form, 't', $(ui.newTab).index());
+                    }
+                    unhide_section(form, newPanel);
                 }
-                unhide_section(form, newPanel);
-            }
-        }).css({visibility: 'visible'});
-
-        // Activate not called? Unhide initial section anyway:
-        $('.ui-tabs-panel[aria-hidden="false"]').first()
-                                                .removeClass('hide')
-                                                .find('table.dataTable.display.responsive')
-                                                .each(function() {
-                                                    recalcResponsive(this);
-                                                });
+            }).css({visibility: 'visible'});
+            // Activate not called? Unhide initial section anyway:
+            $('.ui-tabs-panel[aria-hidden="false"]').first()
+                                                    .removeClass('hide')
+                                                    .find('table.dataTable.display')
+                                                    .each(function() {
+                                                        recalcResponsive(this);
+                                                    });
+        } else {
+            // Unhide initial section anyway:
+            $('#summary-tabs').css({visibility: 'visible'})
+                              .find('table.dataTable.display')
+                              .each(function() {
+                                recalcResponsive(this);
+                              });
+        }
     };
 
     /**
@@ -1881,11 +1934,8 @@ S3.search = {};
                 needs_reload = false;
                 ajaxurl = null;
 
-                if (t.hasClass('dl')) {
-                    // data lists do not need page reload
-                    needs_reload = false;
-                } else if (t.hasClass('dataTable')) {
-                    // data tables need page reload if no AjaxURL configured
+                if (t.hasClass('dataTable')) {
+                    // Data tables need page reload if no AjaxURL configured
                     config = $('input#' + targets[i] + '_configurations');
                     if (config.length) {
                         settings = JSON.parse($(config).val());
@@ -1902,35 +1952,29 @@ S3.search = {};
                     } else {
                         needs_reload = true;
                     }
-                } else if (t.hasClass('map_wrapper')) {
-                    // maps do not need page reload
-                    needs_reload = false;
-                } else if (t.hasClass('cms_content')) {
-                    // CMS widgets do not need page reload
-                    needs_reload = false;
-                } else if (t.hasClass('gi-container')) {
-                    // GroupedItems do not need page reload
-                    needs_reload = false;
-                } else if (t.hasClass('pt-container')) {
-                    // PivotTables do not need page reload
-                    needs_reload = false;
-                } else if (t.hasClass('tp-container')) {
-                    // TimePlots do not need page reload
+                } else if (t.hasClass('dl') ||
+                           t.hasClass('map_wrapper') ||
+                           t.hasClass('cms_content') ||
+                           t.hasClass('gi-container') ||
+                           t.hasClass('pt-container') ||
+                           t.hasClass('tp-container') ||
+                           t.hasClass('s3-organizer')) {
+                    // These targets can be Ajax-reloaded
                     needs_reload = false;
                 } else {
-                    // all other targets need page reload
+                    // All other targets need page reload
                     if (visible) {
-                        // reload immediately
+                        // Reload immediately
                         url = filterURL(url, queries);
                         window.location.href = url;
                     } else {
-                        // mark the need for a reload later
+                        // Mark the need for a reload later
                         needs_reload = true;
                     }
                 }
 
                 if (!visible) {
-                    // schedule for later
+                    // Schedule for later
                     pendingTargets[form_id][target_id] = {
                         needs_reload: needs_reload,
                         ajaxurl: ajaxurl,
@@ -1945,14 +1989,14 @@ S3.search = {};
                 t = $('#' + target_id);
                 if (!t.is(':visible')) {
                     continue;
-                } else if (t.hasClass('dl')) {
-                    t.datalist('ajaxReload', queries);
                 } else if (t.hasClass('dataTable')) {
                     var dt = t.dataTable(),
                         dtAjaxURL = dt_ajaxurl[target_id];
                     dt.fnReloadAjax(dtAjaxURL);
                     updateFormatURLs(dt, queries);
                     $('#' + dt[0].id + '_dataTable_filterURL').val(dtAjaxURL);
+                } else if (t.hasClass('dl')) {
+                    t.datalist('ajaxReload', queries);
                 } else if (t.hasClass('map_wrapper')) {
                     S3.gis.refreshLayer('search_results', queries);
                 } else if (t.hasClass('gi-container')) {
@@ -1961,6 +2005,8 @@ S3.search = {};
                     t.pivottable('reload', null, queries);
                 } else if (t.hasClass('tp-container')) {
                     t.timeplot('reload', null, queries);
+                } else if (t.hasClass('s3-organizer')) {
+                    t.organizer('reload');
                 }
             }
         } else {
@@ -2106,7 +2152,7 @@ S3.search = {};
         $('.text-filter, .range-filter-input').on('input.autosubmit', function () {
             $(this).closest('form').trigger('optionChanged');
         });
-        $('.options-filter, .location-filter, .date-filter-input, .age-filter-input, .map-filter').on('change.autosubmit', function () {
+        $('.options-filter, .location-filter, .date-filter-input, .age-filter-input, .map-filter, .value-filter').on('change.autosubmit', function () {
             $(this).closest('form').trigger('optionChanged');
         });
         $('.s3-options-filter-anyall input[type="radio"]').on('change.autosubmit', function() {

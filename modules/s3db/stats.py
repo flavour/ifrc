@@ -2,7 +2,7 @@
 
 """ Sahana Eden Stats Model
 
-    @copyright: 2012-2018 (c) Sahana Software Foundation
+    @copyright: 2012-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -1695,7 +1695,7 @@ class stats_SourceRepresent(S3Represent):
         show_link = show_link and self.show_link
         if show_link and not rows:
             # Retrieve the rows
-            rows = self.custom_lookup_rows(None, values)
+            rows = self.lookup_rows(None, values)
 
         self._setup()
 

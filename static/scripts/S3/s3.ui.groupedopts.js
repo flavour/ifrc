@@ -1,7 +1,7 @@
 /**
  * jQuery UI GroupedOpts Widget for S3GroupedOptionsWidget
  *
- * @copyright 2013-2018 (c) Sahana Software Foundation
+ * @copyright 2013-2019 (c) Sahana Software Foundation
  * @license MIT
  *
  * requires jQuery 1.9.1+
@@ -221,7 +221,7 @@
                 if (table) {
                     var tr = $('<tr/>');
                 } else {
-                    var tr = $('<div/>');
+                    var tr = $('<div class="s3-groupedopts-row"/>');
                 }
                 for (j = 0; j < rows[i].length; j++) {
                     this._renderItem(rows[i][j], tr, table);
@@ -283,7 +283,7 @@
             if (table) {
                 var widget = $('<td>').append(oinput).append($(olabel));
             } else {
-                var widget = $('<div>').append(oinput).append($(olabel));
+                var widget = $('<div class="s3-groupedopts-item">').append(oinput).append($(olabel));
             }
             if (comment) {
                  _.templateSettings = {interpolate: /\{(.+?)\}/g};

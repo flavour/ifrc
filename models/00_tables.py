@@ -15,6 +15,7 @@ current.models = models
 import s3db.assess
 import s3db.asset
 import s3db.auth
+import s3db.br
 import s3db.budget
 import s3db.cap
 import s3db.climate
@@ -28,8 +29,8 @@ import s3db.doc
 import s3db.dvi
 import s3db.dvr
 import s3db.edu
-import s3db.evr
 import s3db.event
+import s3db.fin
 import s3db.fire
 import s3db.gis
 import s3db.hms

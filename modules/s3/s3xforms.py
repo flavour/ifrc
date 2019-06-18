@@ -2,7 +2,7 @@
 
 """ S3 XForms API
 
-    @copyright: 2014-2018 (c) Sahana Software Foundation
+    @copyright: 2014-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -32,8 +32,8 @@ __all__ = ("S3XForms",
            )
 
 from gluon import *
-from s3rest import S3Method
-from s3utils import s3_unicode
+from .s3rest import S3Method
+from .s3utils import s3_unicode
 
 # =============================================================================
 class S3XForms(S3Method):

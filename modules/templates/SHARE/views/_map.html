@@ -1,0 +1,27 @@
+{{try:}}{{=H2(title)}}{{except:}}{{pass}}
+<div id='rheader'>
+{{try:}}
+ {{=XML(rheader)}}
+ </div>
+ <div id='component'>
+{{except:}}
+</div>
+<div>
+{{pass}}
+ <div class='row'>
+  <div class='medium-5 columns'>
+   <div id='filter-form' class='form-container mapview'>
+   {{try:}}{{=form}}{{except:}}{{pass}}
+   </div>
+  </div>
+  <div class='medium-7 columns'>
+   <div class="cluster_legend">
+       <span><img src="/{{=appname}}/static/themes/SHARE/img/cluster_legend.png"/> = {{=T("multiple records at or near this location, zoom in or click on marker to see details")}}</span>
+   </div>
+   <div id='map'>
+   {{=XML(map)}}
+   </div>
+  </div>
+ </div>
+</div>
+

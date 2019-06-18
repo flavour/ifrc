@@ -2,7 +2,7 @@
 
 """ Sahana Eden Members Model
 
-    @copyright: 2012-2018 (c) Sahana Software Foundation
+    @copyright: 2012-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -251,7 +251,6 @@ class S3MembersModel(S3Model):
         if types:
             list_fields.append("membership_type_id")
         list_fields += ["start_date",
-                        # useful for testing the paid virtual field
                         #"membership_paid",
                         (T("Paid"), "paid"),
                         (T("Email"), "email.value"),
@@ -292,7 +291,7 @@ class S3MembersModel(S3Model):
             report_fields.insert(1, (settings.get_hrm_root_organisation_label(), "organisation_id$root_organisation"))
         else:
             org_filter = S3OptionsFilter("organisation_id",
-                                         filter = True,
+                                         search = True,
                                          header = "",
                                          # Can be unhidden in customise_xx_resource if there is a need to use a default_filter
                                          hidden = True,
@@ -608,10 +607,22 @@ def member_rheader(r, tabs=[]):
 
     T = current.T
     resourcename = r.name
+    settings = current.deployment_settings
 
     # Tabs
+    if settings.get_hrm_use_id():
+        id_tab = (T("ID"), "identity")
+    else:
+        id_tab = None
+
+    description_tab = settings.get_hrm_use_description() or None
+    if description_tab:
+        description_tab = (T(description_tab), "physical_description")
+
     tabs = [(T("Person Details"), None),
             (T("Membership Details"), "membership"),
+            id_tab,
+            description_tab,
             (T("Addresses"), "address"),
             #(T("Contacts"), "contact"),
             (T("Contacts"), "contacts"),
@@ -642,7 +653,7 @@ def member_rheader(r, tabs=[]):
             rheader = None
 
     elif resourcename == "person":
-        if current.deployment_settings.get_member_cv_tab():
+        if settings.get_member_cv_tab():
             tabs.append((T("CV"), "cv"))
         rheader_tabs = s3_rheader_tabs(r, tabs)
         rheader = DIV(DIV(s3_avatar_represent(record.id,

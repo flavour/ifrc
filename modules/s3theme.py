@@ -4,7 +4,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -30,7 +30,17 @@
 
 """
 
-from gluon.html import *
+__all__ = ("formstyle_bootstrap",
+           "formstyle_foundation",
+           "formstyle_foundation_2col",
+           "formstyle_foundation_inline",
+           "formstyle_table",
+           "formstyle_table_inline",
+           "FORMSTYLES",
+           )
+
+from gluon import CAT, DIV, FIELDSET, INPUT, LABEL, SELECT, \
+                  TABLE, TAG, TD, TEXTAREA, TR
 from gluon.languages import lazyT
 
 # =============================================================================
@@ -51,10 +61,10 @@ def formstyle_bootstrap(form, fields, *args, **kwargs):
         Formstyle for Bootstrap 2.x themes: http://getbootstrap.com/2.3.2/
     """
 
-    def render_row(id, label, controls, help, hidden=False):
+    def render_row(row_id, label, controls, comment, hidden=False):
         # Based on web2py/gluon/sqhtml.py
         # wrappers
-        _help = DIV(help, _class="help-block")
+        _help = DIV(comment, _class="help-block")
         # embed _help into _controls
         _controls = DIV(controls, _help, _class="controls")
         # submit unflag by default
@@ -91,12 +101,10 @@ def formstyle_bootstrap(form, fields, *args, **kwargs):
 
         if _submit:
             # submit button has unwrapped label and controls, different class
-            return DIV(label, controls, _class="%sform-actions" % _class, _id=id)
-            # unflag submit (possible side effect)
-            _submit = False
+            return DIV(label, controls, _class="%sform-actions" % _class, _id=row_id)
         else:
             # unwrapped label
-            return DIV(label, _controls, _class="%scontrol-group" % _class, _id=id)
+            return DIV(label, _controls, _class="%scontrol-group" % _class, _id=row_id)
 
     if args:
         row_id = form
@@ -217,15 +225,17 @@ def formstyle_foundation_inline(form, fields, *args, **kwargs):
             if submit:
                 submit.add_class("small primary button")
 
-        if isinstance(label, LABEL):
-            label.add_class("left inline")
+        controls_width = "medium-12" if label is False else "medium-10"
+        controls_col = DIV(widget, _class="%s columns controls" % controls_width)
 
-        controls_col = DIV(widget, _class="medium-10 columns controls")
         if label:
+            if isinstance(label, LABEL):
+                label.add_class("left inline")
             label_col = DIV(label, _class="medium-2 columns")
         else:
+            if label is not False:
+                controls_col.add_class("medium-offset-2")
             label_col = ""
-            controls_col.add_class("medium-offset-2")
 
         if comment:
             comment = render_tooltip(label,
@@ -237,9 +247,7 @@ def formstyle_foundation_inline(form, fields, *args, **kwargs):
             controls_col.append(comment)
 
         _class = "form-row row hide" if hidden else "form-row row"
-        return DIV(label_col,
-                   controls_col,
-                   _class=_class, _id=row_id)
+        return DIV(label_col, controls_col, _class=_class, _id=row_id)
 
     if args:
         row_id = form
@@ -333,12 +341,27 @@ def render_tooltip(label, comment, _class="tooltip"):
     if not comment:
         tooltip = ""
     elif isinstance(comment, (lazyT, basestring)):
-        if hasattr(label, "flatten"):
+        if label is False:
+            label = ""
+        elif hasattr(label, "flatten"):
             label = label.flatten().strip("*")
         tooltip = DIV(_class = _class,
                       _title = "%s|%s" % (label, comment))
     else:
         tooltip = comment
     return tooltip
+
+# =============================================================================
+# All formstyles
+#
+FORMSTYLES = {"default": formstyle_foundation,
+              "default_inline": formstyle_foundation_inline,
+              "bootstrap": formstyle_bootstrap,
+              "foundation": formstyle_foundation,
+              "foundation_2col": formstyle_foundation_2col,
+              "foundation_inline": formstyle_foundation_inline,
+              "table": formstyle_table,
+              "table_inline": formstyle_table_inline,
+              }
 
 # END =========================================================================

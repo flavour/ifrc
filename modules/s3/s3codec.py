@@ -2,7 +2,7 @@
 
 """ S3 Encoder/Decoder Base Class
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -34,9 +34,8 @@ import json
 from xml.sax.saxutils import escape, unescape
 
 from gluon import current
-from gluon.storage import Storage
 
-from s3utils import s3_unicode
+from .s3utils import s3_str
 
 # =============================================================================
 class S3Codec(object):
@@ -48,55 +47,62 @@ class S3Codec(object):
     # A list of fields which should be skipped from PDF/XLS exports
     indices = ["id", "pe_id", "site_id", "sit_id", "item_entity_id"]
 
+    CODECS = {"pdf": "S3RL_PDF",
+              "shp": "S3SHP",
+              "svg": "S3SVG",
+              "xls": "S3XLS",
+              "card": "S3PDFCard",
+              }
+
     # -------------------------------------------------------------------------
-    @staticmethod
-    def get_codec(format):
+    @classmethod
+    def get_codec(cls, fmt):
+        """
+            Get a codec by representation format
 
-        # Import the codec classes
-        from s3codecs import S3SHP
-        from s3codecs import S3SVG
-        from s3codecs import S3XLS
-        from s3codecs import S3RL_PDF
+            @param fmt: the representation format (string)
+        """
 
-        # Register the codec classes
-        CODECS = Storage(
-            pdf = S3RL_PDF,
-            shp = S3SHP,
-            svg = S3SVG,
-            xls = S3XLS,
-        )
+        codec = cls
 
-        if format in CODECS:
-            return CODECS[format]()
+        name = cls.CODECS.get(fmt)
+        if name:
+            package = "applications.%s.modules.s3.codecs.%s" % \
+                      (current.request.application, fmt)
+            try:
+                codec = getattr(__import__(package, fromlist=[name]), name)
+            except (ImportError, AttributeError):
+                current.log.error("Codec not available: %s" % name)
         else:
-            return S3Codec()
+            current.log.error("No codec found for '%s' format" % fmt)
+
+        return codec()
 
     # -------------------------------------------------------------------------
     # API
     #--------------------------------------------------------------------------
-
-    def decode(self, resource, source, **attr):
-        """
-            API Method to decode a source into an ElementTree, to be
-            implemented by the subclass
-
-            @param resource: the S3Resource
-            @param source: the source
-
-            @return: an S3XML ElementTree
-        """
-        raise NotImplementedError
-
     def encode(self, resource, **attr):
         """
-            API Method to encode an ElementTree into the target format,
-            to be implemented by the subclass
+            API Method to encode a resource in the target format,
+            to be implemented by the subclass (mandatory)
 
             @param resource: the S3Resource
 
             @return: a handle to the output
         """
         raise NotImplementedError
+
+    def decode(self, resource, source, **attr):
+        """
+            API Method to decode a source into an S3XML ElementTree,
+            to be implemented by the subclass (if the class does decode)
+
+            @param resource: the S3Resource
+            @param source: the source
+
+            @return: an S3XML ElementTree
+        """
+        return current.xml.tree()
 
     # -------------------------------------------------------------------------
     # Utilities
@@ -173,7 +179,7 @@ class S3Codec(object):
 
         tree = kwargs.get("tree", None)
         if message:
-            output["message"] = s3_unicode(message)
+            output["message"] = s3_str(message)
         for k, v in kwargs.items():
             if k != "tree":
                 output[k] = v

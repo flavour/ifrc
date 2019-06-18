@@ -2,7 +2,7 @@
 
 """ Sahana Eden Content Management System Model
 
-    @copyright: 2012-2018 (c) Sahana Software Foundation
+    @copyright: 2012-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -46,6 +46,7 @@ __all__ = ("S3ContentModel",
 
 import datetime
 import json
+import os
 
 from gluon import *
 from gluon.storage import Storage
@@ -220,7 +221,7 @@ class S3ContentModel(S3Model):
         #
 
         if settings.get_cms_richtext():
-            body_represent = lambda body: XML(body)
+            body_represent = XML
             body_widget = s3_richtext_widget
         else:
             body_represent = lambda body: XML(s3_URLise(body))
@@ -333,7 +334,8 @@ class S3ContentModel(S3Model):
                                   sortby = "name",
                                   )
 
-        list_fields = ["title",
+        list_fields = ["post_module.module",
+                       "title",
                        "body",
                        "location_id",
                        "date",
@@ -1244,7 +1246,11 @@ def cms_rheader(r, tabs=None):
     return rheader
 
 # =============================================================================
-def cms_index(module, resource=None, page_name=None, alt_function=None):
+def cms_index(module,
+              resource = None,
+              page_name = None,
+              alt_function = None,
+              view = None):
     """
         Return a module index page retrieved from CMS
         - or run an alternate function if not found
@@ -1326,6 +1332,7 @@ def cms_index(module, resource=None, page_name=None, alt_function=None):
                 run_view_in(response._view_environment)
                 page = response.body.getvalue()
             # Set default headers if not set
+            from gluon.contenttype import contenttype
             default_headers = [
                 ("Content-Type", contenttype("." + request.extension)),
                 ("Cache-Control",
@@ -1340,11 +1347,20 @@ def cms_index(module, resource=None, page_name=None, alt_function=None):
         else:
             item = H2(page_name)
 
-    # tbc
-    report = ""
+    if view is not None:
+        view = os.path.join(*(view.split("/")))
+        view = os.path.join(current.request.folder, "modules", "templates", view)
+        try:
+            # Pass view as file not str to work in compiled mode
+            response.view = open(view, "rb")
+        except IOError as e:
+            raise HTTP(404, "Unable to open Custom View: %s" % view)
+    else:
+        response.view = "index.html"
 
-    response.view = "index.html"
-    return dict(item=item, report=report)
+    return {"item": item,
+            "report": "",
+            }
 
 # =============================================================================
 def cms_documentation(r, default_page, default_url):
@@ -2118,7 +2134,7 @@ class cms_Calendar(S3Method):
         max_rows = []
         mappend = max_rows.append
         # Initialise arrays
-        for day in days:
+        for _ in days:
             cappend([])
             mappend(0)
 

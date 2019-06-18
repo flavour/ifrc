@@ -2,7 +2,7 @@
 
 """ Sahana Eden Survey Tool
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     ADAT - Assessment Data Analysis Tool
@@ -1627,7 +1627,7 @@ class S3SurveySeriesModel(S3Model):
                             question_ids.append(str(question.question_id))
                 items = buildCompletedList(series_id, question_ids)
                 if r.representation == "xls":
-                    from ..s3.s3codecs.xls import S3XLS
+                    from ..s3.codecs.xls import S3XLS
                     exporter = S3XLS()
                     return exporter.encode(items,
                                            title=crud_strings.title_selected,

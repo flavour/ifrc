@@ -2,7 +2,7 @@
 
 """ S3 Profile
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -31,11 +31,11 @@ from gluon import current, redirect
 from gluon.html import *
 from gluon.storage import Storage
 
-from s3crud import S3CRUD
-from s3report import S3Report
-from s3query import FS
-from s3utils import s3_str
-from s3widgets import ICON
+from .s3crud import S3CRUD
+from .s3report import S3Report
+from .s3query import FS
+from .s3utils import s3_str
+from .s3widgets import ICON
 
 # =============================================================================
 class S3Profile(S3CRUD):
@@ -69,7 +69,7 @@ class S3Profile(S3CRUD):
                 self.settings = current.response.s3.crud
                 self.sqlform = sqlform = self._config("crud_form")
                 if not sqlform:
-                    from s3forms import S3SQLDefaultForm
+                    from .s3forms import S3SQLDefaultForm
                     self.sqlform = S3SQLDefaultForm()
 
                 # Render page
@@ -98,9 +98,11 @@ class S3Profile(S3CRUD):
         tablename = self.tablename
         get_config = current.s3db.get_config
 
+        header = get_config(tablename, "profile_header")
+
         # Get the page widgets
         widgets = get_config(tablename, "profile_widgets")
-        if not widgets:
+        if not widgets and not header:
             # Profile page not configured:
             if r.representation not in ("dl", "aadata"):
                 # Redirect to the Read View
@@ -155,13 +157,14 @@ class S3Profile(S3CRUD):
                 title = title(r)
 
             # Page Header
-            header = get_config(tablename, "profile_header")
             if not header:
                 header = H2(title, _class="profile-header")
             elif callable(header):
                 header = header(r)
 
-            output = dict(title=title, header=header)
+            output = {"title": title,
+                      "header": header,
+                      }
 
             # Update Form, if configured
             update = get_config(tablename, "profile_update")
@@ -229,6 +232,8 @@ class S3Profile(S3CRUD):
                     w = self._map(r, widget, widgets, **attr)
                 elif w_type == "report":
                     w = self._report(r, widget, **attr)
+                elif w_type == "organizer":
+                    w = self._organizer(r, widget, **attr)
                 elif w_type == "custom":
                     w = self._custom(r, widget, **attr)
                 else:
@@ -615,7 +620,7 @@ class S3Profile(S3CRUD):
             if s3.dataTable_pageLength:
                 display_length = s3.dataTable_pageLength
             else:
-                display_length = widget.get("pagesize", 10)
+                display_length = widget_get("pagesize", 10)
             dtargs["dt_lengthMenu"] = [[10, 25, 50, -1],
                                        [10, 25, 50, s3_str(current.T("All"))]
                                        ]
@@ -653,6 +658,8 @@ class S3Profile(S3CRUD):
                                              "msg_no_match")
             empty = DIV(empty_str, _class="empty")
 
+            dtargs["dt_searching"] = widget_get("dt_searching", "true")
+
             dtargs["dt_pagination"] = dt_pagination
             dtargs["dt_pageLength"] = display_length
             # @todo: fix base URL (make configurable?) to fix export options
@@ -669,13 +676,13 @@ class S3Profile(S3CRUD):
 
             datatable = dt.html(totalrows,
                                 displayrows,
-                                id=list_id,
+                                id = list_id,
                                 **dtargs)
 
             if dt.data:
-                empty.update(_style="display:none")
+                empty.update(_style = "display:none")
             else:
-                datatable.update(_style="display:none")
+                datatable.update(_style = "display:none")
             contents = DIV(datatable, empty, _class="dt-contents")
 
             # Link for create-popup
@@ -702,11 +709,14 @@ class S3Profile(S3CRUD):
 
             # Render the widget
             output = DIV(create_popup,
-                         H4(icon, label,
-                            _class="profile-sub-header"),
+                         H4(icon,
+                            label,
+                            _class = "profile-sub-header",
+                            ),
                          DIV(contents,
-                             _class="card-holder"),
-                         _class=_class,
+                             _class = "card-holder",
+                             ),
+                         _class = _class,
                          )
 
             return output
@@ -775,7 +785,7 @@ class S3Profile(S3CRUD):
             Generate a Form widget
 
             @param r: the S3Request instance
-            @param widget: the widget as a tuple: (label, type, icon)
+            @param widget: the widget definition as dict
             @param attr: controller attributes for the request
         """
 
@@ -814,7 +824,7 @@ class S3Profile(S3CRUD):
         if not sqlform:
             sqlform = resource.get_config("crud_form")
         if not sqlform:
-            from s3forms import S3SQLDefaultForm
+            from .s3forms import S3SQLDefaultForm
             sqlform = S3SQLDefaultForm()
 
         get_config = current.s3db.get_config
@@ -905,10 +915,10 @@ class S3Profile(S3CRUD):
             # @ToDo: Check permission to access layer (both controller/function & also within Map Config)
             tablename = widget["tablename"]
             list_id = "profile-list-%s-%s" % (tablename, widget["index"])
-            layer = dict(name = T(widget["label"]),
-                         id = list_id,
-                         active = True,
-                         )
+            layer = {"name": T(widget["label"]),
+                     "id": list_id,
+                     "active": True,
+                     }
             filter = widget_get("filter", None)
             marker = widget_get("marker", None)
             if marker:
@@ -1069,6 +1079,135 @@ class S3Profile(S3CRUD):
         return output
 
     # -------------------------------------------------------------------------
+    def _organizer(self, r, widget, **attr):
+        """
+            Generate an Organizer widget
+
+            @param r: the S3Request instance
+            @param widget: the widget configuration (a dict)
+            @param attr: controller attributes for the request
+        """
+
+        from .s3organizer import S3Organizer, S3OrganizerWidget
+
+        widget_get = widget.get
+
+        # Card holder label and icon
+        profile_label = widget_get("label", "")
+        if profile_label and isinstance(profile_label, basestring):
+            profile_label = current.T(profile_label)
+        icon = widget_get("icon", "")
+        if icon:
+            icon = ICON(icon)
+        _class = self._lookup_class(r, widget)
+
+        # Get base URL
+        # - we use an explicit URL here (resource native or component) because
+        #   the create-popup requires it anyway, so we can pass the organizer
+        #   Ajax lookups through it as well
+        # - when accessing the target table as component, remember to also
+        #   specify "master" and "component" (see further down)
+        base_url = widget_get("url")
+        if not base_url:
+            return DIV(H4(icon, profile_label, _class="profile-sub-header"),
+                       DIV(DIV("Error: missing widget URL", _class="error"),
+                           _class="card-holder",
+                           ),
+                       _class = _class,
+                       )
+
+        # Construct Ajax URL from base URL
+        parsed = base_url.split("?")
+        parsed[0] += "/organize.json"
+        ajax_url = "?".join(parsed)
+
+        # Get the target resource (customised+filtered)
+        tablename = widget_get("tablename", None)
+        resource = current.s3db.resource(tablename)
+        r.customise_resource(tablename)
+
+        # Parse the resource organizer config
+        config = S3Organizer.parse_config(resource)
+
+        # Generate organizer config for this resource
+        table = resource.table
+        permitted = current.auth.s3_has_permission
+
+        start = config["start"]
+        end = config["end"]
+
+        resource_config = {
+            "ajaxURL": ajax_url,
+            "useTime": config.get("use_time"),
+            "baseURL": base_url,
+            "labelCreate": s3_str(self.crud_string(tablename, "label_create")),
+            "insertable": resource.get_config("insertable", True) and \
+                          permitted("create", table),
+            "editable": resource.get_config("editable", True) and \
+                        permitted("update", table),
+            "startEditable": start.field and start.field.writable,
+            "durationEditable": end and end.field and end.field.writable,
+            "deletable": resource.get_config("deletable", True) and \
+                         permitted("delete", table),
+            "start": start.selector if start else None,
+            "end": end.selector if end else None,
+            }
+
+        # Description Labels
+        labels = []
+        for rfield in config["description"]:
+            label = rfield.label
+            if label is not None:
+                label = s3_str(label)
+            labels.append((rfield.colname, label))
+        resource_config["columns"] = labels
+
+        # Colors
+        color = config.get("color")
+        if color:
+            resource_config["color"] = color.colname
+            resource_config["colors"] = config.get("colors")
+
+        # Use the widget-index to create a unique ID
+        widget_id = "profile-organizer-%s-%s" % (tablename, widget["index"])
+
+        # Generate form key
+        import uuid
+        formkey = uuid.uuid4().get_hex()
+
+        # Determine the formname (see also S3Organizer.formname)
+        master = widget_get("master")
+        component = widget_get("component")
+        if master and component:
+            # Override default formname when accessing the target
+            # table as a component of another resource:
+            # - master: "master_tablename/master_record_id"
+            # - component: "component_alias"
+            formname = "%s/%s/organizer" % (master, component)
+        else:
+            # Use default formname
+            formname = "%s/organizer" % tablename
+
+        # Store form key in session
+        session = current.session
+        keyname = "_formkey[%s]" % formname
+        session[keyname] = session.get(keyname, [])[-9:] + [formkey]
+
+        # Instantiate Organizer Widget
+        organizer = S3OrganizerWidget([resource_config])
+        contents = organizer.html(widget_id = widget_id,
+                                  formkey = formkey,
+                                  )
+
+        # Render the widget
+        output = DIV(H4(icon, profile_label, _class="profile-sub-header"),
+                     DIV(contents, _class="card-holder profile-organizer"),
+                     _class = _class,
+                     )
+
+        return output
+
+    # -------------------------------------------------------------------------
     @staticmethod
     def _lookup_class(r, widget):
         """
@@ -1084,7 +1223,7 @@ class S3Profile(S3CRUD):
         widget_cols = widget.get("colspan", 1)
         span = int(12 / page_cols) * widget_cols
 
-        formstyle = current.deployment_settings.ui.get("formstyle", "default")
+        #formstyle = current.deployment_settings.ui.get("formstyle", "default")
         if current.deployment_settings.ui.get("formstyle") == "bootstrap":
             # Bootstrap
             return "profile-widget span%s" % span
@@ -1162,6 +1301,11 @@ class S3Profile(S3CRUD):
             # Indicate that popup comes from profile (and which)
             url_vars.profile = r.tablename
 
+            # Add a var to allow special cutomise rules
+            create_var = widget_get("create_var")
+            if create_var:
+                url_vars[create_var] = 1
+
             # CRUD string
             label_create = widget_get("label_create", None)
             # Activate if-required
@@ -1186,15 +1330,15 @@ class S3Profile(S3CRUD):
             elif current.deployment_settings.ui.formstyle == "bootstrap":
                 # Bootstrap-style action icon
                 create = A(ICON("plus-sign", _class="small-add"),
-                           _href=add_url,
-                           _class="s3_modal",
-                           _title=label_create,
+                           _href = add_url,
+                           _class = "s3_modal",
+                           _title = label_create,
                            )
             else:
                 # Standard action button
                 create = A(label_create,
-                           _href=add_url,
-                           _class="action-btn profile-add-btn s3_modal",
+                           _href = add_url,
+                           _class = "action-btn profile-add-btn s3_modal",
                            )
 
             if widget_get("type") == "datalist":
@@ -1204,19 +1348,21 @@ class S3Profile(S3CRUD):
                 multiple = widget_get("multiple", True)
                 if not multiple and hasattr(create, "update"):
                     if numrows:
-                        create.update(_style="display:none")
+                        create.update(_style = "display:none")
                     else:
-                        create.update(_style="display:block")
+                        create.update(_style = "display:block")
                     # Script to hide/unhide the create-button on Ajax
                     # list updates
-                    createid = create["_id"]
-                    if not createid:
-                        createid = "%s-add-button" % list_id
-                        create.update(_id=createid)
+                    create_id = create["_id"]
+                    if not create_id:
+                        create_id = "%s-add-button" % list_id
+                        create.update(_id = create_id)
                     script = \
 '''$('#%(list_id)s').on('listUpdate',function(){
-$('#%(createid)s').css({display:$(this).datalist('getTotalItems')?'none':'block'})
-})''' % dict(list_id=list_id, createid=createid)
+$('#%(create_id)s').css({display:$(this).datalist('getTotalItems')?'none':'block'})
+})''' % {"list_id": list_id,
+         "create_id": create_id,
+         }
                     current.response.s3.jquery_ready.append(script)
 
         return create

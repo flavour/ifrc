@@ -2,7 +2,7 @@
 
 """ S3 Synchronization: Peer Repository Adapter
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -238,7 +238,7 @@ class S3SyncAdapter(S3SyncEdenAdapter):
         opener = self._http_opener(url)
         try:
             f = opener.open(url)
-        except urllib2.HTTPError, e:
+        except urllib2.HTTPError as e:
             # HTTP status (remote error)
             result = log.ERROR
             update["remote"] = True
@@ -269,7 +269,7 @@ class S3SyncAdapter(S3SyncEdenAdapter):
             # Prepend HTTP status code
             error = "[%s] %s" % (e.code, message)
 
-        except urllib2.URLError, e:
+        except urllib2.URLError as e:
             # URL Error (network error)
             result = log.ERROR
             update["remote"] = True

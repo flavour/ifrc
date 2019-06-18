@@ -2,7 +2,7 @@
 
 """ S3 Mobile Forms API
 
-    @copyright: 2016 (c) Sahana Software Foundation
+    @copyright: 2016-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -38,11 +38,11 @@ __all__ = ("S3MobileFormList",
 import json
 
 from gluon import *
-from s3datetime import s3_parse_datetime
-from s3forms import S3SQLForm, S3SQLCustomForm, S3SQLDummyField, S3SQLField
-from s3rest import S3Method
-from s3utils import s3_get_foreign_key, s3_str
-from s3validators import SEPARATORS
+from .s3datetime import s3_parse_datetime
+from .s3forms import S3SQLForm, S3SQLCustomForm, S3SQLDummyField, S3SQLField
+from .s3rest import S3Method
+from .s3utils import s3_get_foreign_key, s3_str
+from .s3validators import SEPARATORS
 
 DEFAULT = lambda: None
 
@@ -189,7 +189,7 @@ class S3MobileFormList(object):
                          "d": row.mobile_data,
                          }
                 formlist.append(mform)
-                formdict[name] = mform
+                formdict[tablename] = mform
 
         self.formlist = formlist
         self.forms = formdict
@@ -335,7 +335,7 @@ class S3MobileSchema(object):
             settings = self._settings = {}
             resource = self.resource
 
-            from s3model import SERIALIZABLE_OPTS
+            from .s3model import SERIALIZABLE_OPTS
             for key in SERIALIZABLE_OPTS:
                 if key not in PREPROCESS_OPTS:
                     setting = resource.get_config(key, DEFAULT)
@@ -656,7 +656,7 @@ class S3MobileSchema(object):
             @return: True|False
         """
 
-        from s3model import DYNAMIC_PREFIX
+        from .s3model import DYNAMIC_PREFIX
         if tablename.startswith(DYNAMIC_PREFIX):
 
             ttable = current.s3db.s3_table
@@ -725,7 +725,7 @@ class S3MobileSchema(object):
 
             mform = resource.get_config("mobile_form")
             if mform is False:
-                from s3fields import S3Represent
+                from .s3fields import S3Represent
                 self._llrepr = S3Represent(lookup=resource.tablename)
                 lookup_only = True
             elif callable(mform) and not isinstance(mform, S3SQLForm):

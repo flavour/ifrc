@@ -1446,7 +1446,7 @@ textarea {
   max-width: 100%;
 }
 /* line 166, ../scss/custom/_forms.scss */
-.form-container form:not(.filter-form):not(.auth_login):not(.auth_register) input[type="text"]:not(.double):not(.datetimepicker):not(.date):not(.dms-input) {
+.form-container form:not(.filter-form):not(.auth_login):not(.auth_register):not(.rm-form) input[type="text"]:not(.double):not(.datetimepicker):not(.date):not(.dms-input) {
   width: 20rem !important;
 }
 
@@ -1903,72 +1903,234 @@ table.dataTable tfoot th, table.dataTable tfoot td {
   border-top: 2px solid #cccccc;
   padding: 0.5em;
 }
-/* line 58, ../scss/custom/_tables.scss */
+/* line 59, ../scss/custom/_tables.scss */
 table.dataTable .selected-action {
   margin: 5px 0 5px;
 }
 /* line 62, ../scss/custom/_tables.scss */
+table.dataTable .bulk-select-options {
+  font-size: 0.7rem;
+  font-weight: normal;
+}
+/* line 65, ../scss/custom/_tables.scss */
+table.dataTable .bulk-select-options input[type=checkbox] {
+  margin-bottom: 0.2rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+/* line 71, ../scss/custom/_tables.scss */
+table.dataTable input.bulkcheckbox[type=checkbox] {
+  margin-top: 0.2rem;
+}
+/* line 75, ../scss/custom/_tables.scss */
+table.dataTable .group span.ui-icon {
+  display: inline-block;
+}
+/* line 78, ../scss/custom/_tables.scss */
+table.dataTable .group .group-indent {
+  width: 10px;
+}
+/* line 81, ../scss/custom/_tables.scss */
+table.dataTable .group .group-opened,
+table.dataTable .group .group-closed {
+  padding: 0.2rem;
+}
+/* line 85, ../scss/custom/_tables.scss */
+table.dataTable .group .group-collapse,
+table.dataTable .group .group-expand {
+  cursor: pointer;
+  float: right;
+}
+/* line 92, ../scss/custom/_tables.scss */
 table.dataTable.dtr-inline.collapsed tbody td:first-child::before, table.dataTable.dtr-inline.collapsed tbody th:first-child::before {
   top: 6px;
   background-color: #4D7EB9;
 }
-/* line 67, ../scss/custom/_tables.scss */
+/* line 97, ../scss/custom/_tables.scss */
 table.dataTable.dtr-inline.collapsed tbody tr.parent td:first-child::before, table.dataTable.dtr-inline.collapsed tbody tr.parent th:first-child::before {
   top: 6px;
   background-color: #FF5959;
 }
 
-/* line 73, ../scss/custom/_tables.scss */
-#bulk_select_options input[type=checkbox] {
-  margin-bottom: 0.2rem;
-  margin-right: 0.5rem;
-  vertical-align: middle;
-}
-
-/* line 79, ../scss/custom/_tables.scss */
+/* line 104, ../scss/custom/_tables.scss */
 .dataTables_processing {
   padding: 14px 0 28px;
 }
 
-/* line 82, ../scss/custom/_tables.scss */
+/* line 107, ../scss/custom/_tables.scss */
 .dataTables_filter {
   text-align: left;
   font-size: 0.75rem;
   margin-right: 3rem;
 }
-/* line 86, ../scss/custom/_tables.scss */
+/* line 111, ../scss/custom/_tables.scss */
 .dataTables_filter input[type="search"] {
   margin-left: 0.2rem;
 }
 
-/* line 90, ../scss/custom/_tables.scss */
+/* line 115, ../scss/custom/_tables.scss */
 .dt-export-options {
   float: right;
 }
-/* line 92, ../scss/custom/_tables.scss */
+/* line 117, ../scss/custom/_tables.scss */
 .dt-export-options .list_formats {
   padding-top: 0;
   margin-left: 5px;
 }
-/* line 96, ../scss/custom/_tables.scss */
+/* line 121, ../scss/custom/_tables.scss */
 .dt-export-options .dt-export {
   margin: 0 0.085rem;
 }
 
-/* line 102, ../scss/custom/_tables.scss */
-body.rtl .dt-export-options {
+/* line 127, ../scss/custom/_tables.scss */
+body.rtl .dt-export-options,
+body.rtl .list_formats div {
   float: left;
 }
-/* line 105, ../scss/custom/_tables.scss */
-body.rtl .list_formats div {
+/* line 132, ../scss/custom/_tables.scss */
+body.rtl .dataTable .group .group-collapse,
+body.rtl .dataTable .group .group-expand {
   float: left;
 }
 
 /* Empty-sections */
-/* line 111, ../scss/custom/_tables.scss */
+/* line 140, ../scss/custom/_tables.scss */
 .empty {
   font-style: italic;
   font-size: 0.8em;
+}
+
+/* Role Manager */
+/* line 3, ../scss/custom/_roles.scss */
+.rm-form .controls {
+  width: 100%;
+}
+/* line 6, ../scss/custom/_roles.scss */
+.rm-form .rm-assign .action-lnk,
+.rm-form .rm-rules .action-lnk {
+  display: inline-block;
+  color: #4D7EB9;
+  font-style: normal;
+}
+/* line 12, ../scss/custom/_roles.scss */
+.rm-form .rm-toggle-all {
+  margin-top: 0.2rem;
+  margin-bottom: 0.5rem;
+}
+/* line 16, ../scss/custom/_roles.scss */
+.rm-form .rm-assign {
+  width: 80%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+/* line 20, ../scss/custom/_roles.scss */
+.rm-form .rm-assign th {
+  min-width: 10rem;
+}
+/* line 23, ../scss/custom/_roles.scss */
+.rm-form .rm-assign th:first-child {
+  width: 25%;
+}
+/* line 26, ../scss/custom/_roles.scss */
+.rm-form .rm-assign td {
+  padding: 0.5rem;
+}
+/* line 29, ../scss/custom/_roles.scss */
+.rm-form .rm-assign tfoot td {
+  border-top: 1px solid #C0C0C0;
+}
+/* line 32, ../scss/custom/_roles.scss */
+.rm-form .rm-assign .rm-item-name,
+.rm-form .rm-assign .rm-item-title {
+  display: block;
+}
+/* line 36, ../scss/custom/_roles.scss */
+.rm-form .rm-assign .rm-item-title {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #A0A0A0;
+}
+/* line 42, ../scss/custom/_roles.scss */
+.rm-form .rm-assign .rm-duplicate td {
+  border-top: 1px solid red;
+  border-bottom: 1px solid red;
+}
+/* line 45, ../scss/custom/_roles.scss */
+.rm-form .rm-assign .rm-duplicate td:first-child {
+  border-left: 1px solid red;
+}
+/* line 48, ../scss/custom/_roles.scss */
+.rm-form .rm-assign .rm-duplicate td:last-child {
+  border-right: 1px solid red;
+}
+/* line 54, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules {
+  width: 100%;
+}
+/* line 56, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-module-header {
+  cursor: pointer;
+  background-color: #F0F0F0;
+}
+/* line 59, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-module-header div {
+  margin-right: 0.3rem;
+  display: inline-block;
+}
+/* line 63, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-module-header .rm-module-toggle {
+  width: 0.5rem;
+}
+/* line 66, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-module-header .rm-module-prefix {
+  width: 6.5rem;
+}
+/* line 69, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-module-header .rm-module-numrules {
+  font-weight: normal;
+}
+/* line 73, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules.hasrules .rm-module-header {
+  background-color: #D0D0D0;
+}
+/* line 77, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules th, .rm-form .rm-module-rules td {
+  padding: 0.5rem;
+}
+/* line 81, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-default-rule td,
+.rm-form .rm-module-rules .rm-default-permissions td {
+  font-style: italic;
+  color: #a0a0a0;
+}
+/* line 86, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-rule-target {
+  width: 20%;
+}
+/* line 88, ../scss/custom/_roles.scss */
+.rm-form .rm-module-rules .rm-rule-target input {
+  width: auto;
+  display: inline-block;
+}
+/* line 94, ../scss/custom/_roles.scss */
+.rm-form input.rm-invalid {
+  background-color: #FFA0A0;
+}
+
+/* line 100, ../scss/custom/_roles.scss */
+body.rtl .rm-form .rm-module-rules .rm-module-header div {
+  margin-right: 0;
+  margin-left: 0.3rem;
+}
+/* line 106, ../scss/custom/_roles.scss */
+body.rtl .rm-form .rm-assign .rm-duplicate td:first-child {
+  border-left: 0;
+  border-right: 1px solid red;
+}
+/* line 110, ../scss/custom/_roles.scss */
+body.rtl .rm-form .rm-assign .rm-duplicate td:last-child {
+  border-right: 0;
+  border-left: 1px solid red;
 }
 
 /* line 1, ../scss/custom/_misc.scss */

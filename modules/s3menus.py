@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 
 """ Sahana Eden Menu Structure and Layout
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -34,10 +33,11 @@ __all__ = ("S3MainMenu",
 
 import re
 
-from gluon import *
+from gluon import current, URL
 from gluon.storage import Storage
-from s3 import *
-from s3layouts import *
+
+from s3 import IS_ISO639_2_LANGUAGE_CODE
+from s3layouts import M, MM, MOA, S3BreadcrumbsLayout, SEP
 
 # =============================================================================
 class S3MainMenu(object):
@@ -92,7 +92,7 @@ class S3MainMenu(object):
                     if not _module.access:
                         menu_modules.append(MM(_module.name_nice, c=module, f="index"))
                     else:
-                        groups = re.split("\|", _module.access)[1:-1]
+                        groups = re.split(r"\|", _module.access)[1:-1]
                         menu_modules.append(MM(_module.name_nice,
                                                c=module,
                                                f="index",
@@ -108,7 +108,7 @@ class S3MainMenu(object):
                 if not _module.access:
                     modules_submenu.append(MM(_module.name_nice, c=module, f="index"))
                 else:
-                    groups = re.split("\|", _module.access)[1:-1]
+                    groups = re.split(r"\|", _module.access)[1:-1]
                     modules_submenu.append(MM(_module.name_nice,
                                               c=module,
                                               f="index",
@@ -130,7 +130,6 @@ class S3MainMenu(object):
         if not settings.get_L10n_display_toolbar():
             return None
 
-        T = current.T
         request = current.request
         languages = settings.get_L10n_languages()
         represent_local = IS_ISO639_2_LANGUAGE_CODE.represent_local
@@ -277,6 +276,7 @@ class S3MainMenu(object):
                                 MM("Settings", f="setting"),
                                 MM("Users", f="user"),
                                 MM("Person Registry", c="pr"),
+                                MM("CMS", c="cms", f="post"),
                                 MM("Database", c="appadmin", f="index"),
                                 MM("Error Tickets", f="errors"),
                                 MM("Synchronization", c="sync", f="index"),
@@ -445,8 +445,9 @@ class S3OptionsMenu(object):
         settings_messaging = self.settings_messaging()
 
         settings = current.deployment_settings
-        translate = settings.has_module("translate")
+        consent_tracking = lambda i: settings.get_auth_consent_tracking()
         is_data_repository = lambda i: settings.get_sync_data_repository()
+        translate = settings.has_module("translate")
 
         # NB: Do not specify a controller for the main menu to allow
         #     re-use of this menu by other controllers
@@ -469,6 +470,12 @@ class S3OptionsMenu(object):
                         M("List All Organization Approvers & Whitelists", f="organisation"),
                         #M("Roles", f="group"),
                         #M("Membership", f="membership"),
+                    ),
+                    M("Consent Tracking", c="admin", link=False, check=consent_tracking)(
+                        M("Processing Types", f="processing_type"),
+                        M("Consent Options", f="consent_option"),
+                        ),
+                    M("CMS", c="cms", f="post")(
                     ),
                     M("Database", c="appadmin", f="index")(
                         M("Raw Database access", c="appadmin", f="index")
@@ -578,6 +585,71 @@ class S3OptionsMenu(object):
                         M("Import", m="import", p="create"),
                     ),
                 )
+
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def br():
+        """ Beneficiary Registry """
+
+        ADMIN = current.auth.get_system_roles().ADMIN
+
+        s3db = current.s3db
+        labels = s3db.br_terminology()
+        crud_strings = s3db.br_crud_strings("pr_person")
+
+        settings = current.deployment_settings
+        use_activities = settings.get_br_case_activities()
+        urgent_activities = use_activities and settings.get_br_case_activity_urgent_option()
+
+        manage_assistance = settings.get_br_manage_assistance()
+
+        return M(c="br")(
+                M(labels.CURRENT, f="person", vars={"closed": "0"})(
+                    M(crud_strings.label_create, m="create"),
+                    M("Activities", f="case_activity", check=use_activities,
+                      ),
+                    M("Emergencies", f="case_activity",
+                      vars={"~.priority": "0"}, check=urgent_activities,
+                      ),
+                    ),
+                 M("Measures", f="assistance_measure", check=manage_assistance)(
+                    #M("Overview"),
+                    ),
+                 #M("Appointments"),
+                 M("Statistics", link=False)(
+                    M("Cases", f="person", m="report"),
+                    M("Activities", f="case_activity", m="report", check=use_activities),
+                    M("Measures", f="assistance_measure", m="report", check=manage_assistance),
+                    ),
+                 M("Compilations", link=False)(
+                    M("All Cases", f="person"),
+                    ),
+                 M("Archive", link=False)(
+                    M(labels.CLOSED, f="person", vars={"closed": "1"}),
+                    M("Invalid Cases", f="person", vars={"invalid": "1"}, restrict=[ADMIN]),
+                    ),
+                 M("Administration", link=False, restrict=[ADMIN])(
+                    M("Case Statuses", f="case_status"),
+                    M("Case Activity Statuses", f="case_activity_status",
+                      check = lambda i: use_activities and settings.get_br_case_activity_status(),
+                      ),
+                    M("Need Types", f="need",
+                      check = lambda i: not settings.get_br_needs_org_specific(),
+                      ),
+                    M("Assistance Statuses", f="assistance_status",
+                      check = manage_assistance,
+                      ),
+                    M("Assistance Types", f="assistance_type",
+                      check = lambda i: manage_assistance and \
+                                        settings.get_br_assistance_types(),
+                      ),
+                    M(labels.THEMES, f="assistance_theme",
+                      check = lambda i: manage_assistance and \
+                                        settings.get_br_assistance_themes() and \
+                                        not settings.get_br_assistance_themes_org_specific(),
+                      ),
+                    ),
+                 )
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -718,7 +790,7 @@ class S3OptionsMenu(object):
     def delphi():
         """ DELPHI / Delphi Decision Maker """
 
-        ADMIN = current.session.s3.system_roles.ADMIN
+        #ADMIN = current.session.s3.system_roles.ADMIN
 
         return M(c="delphi")(
                     M("Active Problems", f="problem")(
@@ -1011,21 +1083,19 @@ class S3OptionsMenu(object):
         def config_menu(i):
             auth = current.auth
             if not auth.is_logged_in():
-                # Anonymous users can never cofnigure the Map
+                # Anonymous users can never configure the Map
                 return False
             s3db = current.s3db
-            if auth.s3_has_permission("create",
-                                      s3db.gis_config):
+            table = s3db.gis_config
+            if auth.s3_has_permission("create", table):
                 # If users can create configs then they can see the menu item
                 return True
             # Look for this user's config
-            table = s3db.gis_config
             query = (table.pe_id == auth.user.pe_id)
             config = current.db(query).select(table.id,
                                               limitby=(0, 1),
                                               cache=s3db.cache).first()
-            if config:
-                return True
+            return True if config else False
 
         def config_args():
             auth = current.auth
@@ -1109,15 +1179,10 @@ class S3OptionsMenu(object):
     def hrm():
         """ HRM / Human Resources Management """
 
-        s3 = current.session.s3
-        ADMIN = s3.system_roles.ADMIN
-
         # Custom conditions for the check-hook, as lambdas in order
         # to have them checked only immediately before rendering:
         skills = lambda i: settings.get_hrm_use_skills()
-        certificates = lambda i: settings.get_hrm_use_certificates()
-        is_org_admin = lambda i: s3.hrm.orgs and True or \
-                                 ADMIN in s3.roles
+
         settings = current.deployment_settings
         teams = settings.get_hrm_teams()
         use_teams = lambda i: teams
@@ -1176,18 +1241,10 @@ class S3OptionsMenu(object):
     def vol():
         """ Volunteer Management """
 
-        s3 = current.session.s3
-        ADMIN = s3.system_roles.ADMIN
-
         # Custom conditions for the check-hook, as lambdas in order
         # to have them checked only immediately before rendering:
-        is_org_admin = lambda i: s3.hrm.orgs and True or \
-                                 ADMIN in s3.roles
-
         settings = current.deployment_settings
         show_programmes = lambda i: settings.get_hrm_vol_experience() == "programme"
-        show_tasks = lambda i: settings.has_module("project") and \
-                               settings.get_project_mode_task()
         skills = lambda i: settings.get_hrm_use_skills()
         certificates = lambda i: settings.get_hrm_use_certificates()
         teams = settings.get_hrm_teams()
@@ -1197,7 +1254,7 @@ class S3OptionsMenu(object):
         return M(c="vol")(
                     M("Volunteers", f="volunteer", m="summary")(
                         M("Create", m="create"),
-                        M("Search by skills", f="competency", check=skills),
+                        M("Search by Skills", f="competency", check=skills),
                         M("Import", f="person", m="import",
                           vars = {"group": "volunteer"},
                           p = "create",
@@ -1546,6 +1603,7 @@ class S3OptionsMenu(object):
         ADMIN = current.session.s3.system_roles.ADMIN
         SECTORS = "Clusters" if settings.get_ui_label_cluster() \
                              else "Sectors"
+        use_sectors = lambda i: settings.get_org_sector()
         stats = lambda i: settings.has_module("stats")
 
         return M(c="org")(
@@ -1579,7 +1637,8 @@ class S3OptionsMenu(object):
                       restrict=[ADMIN])(
                         M("Create", m="create"),
                     ),
-                    M(SECTORS, f="sector", restrict=[ADMIN])(
+                    M(SECTORS, f="sector", check=use_sectors,
+                      restrict=[ADMIN])(
                         M("Create", m="create"),
                     ),
                     M("Resource Types", f="resource_type",

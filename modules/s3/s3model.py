@@ -2,7 +2,7 @@
 
 """ S3 Data Model Extensions
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -39,10 +39,10 @@ from gluon.storage import Storage
 from gluon.tools import callback
 
 from s3dal import Table, Field, original_tablename
-from s3navigation import S3ScriptItem
-from s3resource import S3Resource
-from s3validators import IS_ONE_OF
-from s3widgets import s3_comments_widget, s3_richtext_widget
+from .s3navigation import S3ScriptItem
+from .s3resource import S3Resource
+from .s3validators import IS_ONE_OF
+from .s3widgets import s3_comments_widget, s3_richtext_widget
 
 DYNAMIC_PREFIX = "s3dt"
 DEFAULT = lambda: None
@@ -381,7 +381,7 @@ class S3Model(object):
                     cls.load(name)
 
         # Define importer tables
-        from s3import import S3Importer, S3ImportJob
+        from .s3import import S3Importer, S3ImportJob
         S3Importer.define_upload_table()
         S3ImportJob.define_job_table()
         S3ImportJob.define_item_table()
@@ -1494,7 +1494,7 @@ class S3Model(object):
         get_config = cls.get_config
 
         # Get all super-entities of this table
-        tablename = table._tablename
+        tablename = original_tablename(table)
         supertables = get_config(tablename, "super_entity")
         if not supertables:
             return False
@@ -1615,7 +1615,7 @@ class S3Model(object):
 
         # Get all super-tables
         get_config = cls.get_config
-        supertables = get_config(table._tablename, "super_entity")
+        supertables = get_config(original_tablename(table), "super_entity")
 
         # None? Ok - done!
         if not supertables:
@@ -1657,7 +1657,7 @@ class S3Model(object):
 
             # Delete the super record
             sresource = define_resource(sname, id=value)
-            sresource.delete(cascade=True)
+            sresource.delete(cascade=True, log_errors=True)
 
             if sresource.error:
                 # Restore the super key
@@ -1667,6 +1667,37 @@ class S3Model(object):
                 return False
 
         return True
+
+    # -------------------------------------------------------------------------
+    @classmethod
+    def get_super_keys(cls, table):
+        """
+            Get the super-keys in an instance table
+
+            @param table: the instance table
+            @returns: list of field names
+        """
+
+        tablename = original_tablename(table)
+
+        supertables = cls.get_config(tablename, "super_entity")
+        if not supertables:
+            return []
+        if not isinstance(supertables, (list, tuple)):
+            supertables = [supertables]
+
+        keys = []
+        append = keys.append
+        for s in supertables:
+            if type(s) is not Table:
+                s = cls.table(s)
+            if s is None:
+                continue
+            key = s._id.name
+            if key in table.fields:
+                append(key)
+
+        return keys
 
     # -------------------------------------------------------------------------
     @classmethod
@@ -1763,7 +1794,7 @@ class S3DynamicModel(object):
                 fields.append(field)
 
         # Automatically add standard meta-fields
-        from s3fields import s3_meta_fields
+        from .s3fields import s3_meta_fields
         fields.extend(s3_meta_fields())
 
         # Define the table
@@ -1828,7 +1859,7 @@ class S3DynamicModel(object):
                 # CRUD Form
                 crud_fields = settings.get("form")
                 if crud_fields:
-                    from s3forms import S3SQLCustomForm
+                    from .s3forms import S3SQLCustomForm
                     try:
                         crud_form = S3SQLCustomForm(**crud_fields)
                     except:
@@ -1931,7 +1962,7 @@ class S3DynamicModel(object):
         fieldtype = row.field_type
 
         if row.require_unique:
-            from s3validators import IS_NOT_ONE_OF
+            from .s3validators import IS_NOT_ONE_OF
             requires = IS_NOT_ONE_OF(current.db, "%s.%s" % (tablename,
                                                             fieldname,
                                                             ),
@@ -1982,7 +2013,7 @@ class S3DynamicModel(object):
         translate = settings.get("translate_options", True)
         T = current.T
 
-        from s3utils import s3_str
+        from .s3utils import s3_str
 
         sort = False
         zero = ""
@@ -2030,7 +2061,7 @@ class S3DynamicModel(object):
         else:
             widget = None
 
-        from s3fields import S3Represent
+        from .s3fields import S3Represent
         field = Field(fieldname, fieldtype,
                       default = default,
                       represent = S3Represent(options = options_dict,
@@ -2071,7 +2102,7 @@ class S3DynamicModel(object):
             if default == "now":
                 attr["default"] = default
             else:
-                from s3datetime import s3_decode_iso_datetime
+                from .s3datetime import s3_decode_iso_datetime
                 try:
                     dt = s3_decode_iso_datetime(default)
                 except ValueError:
@@ -2080,7 +2111,7 @@ class S3DynamicModel(object):
                 else:
                     attr["default"] = dt.date()
 
-        from s3fields import s3_date
+        from .s3fields import s3_date
         field = s3_date(fieldname, **attr)
 
         return field
@@ -2112,7 +2143,7 @@ class S3DynamicModel(object):
             if default == "now":
                 attr["default"] = default
             else:
-                from s3datetime import s3_decode_iso_datetime
+                from .s3datetime import s3_decode_iso_datetime
                 try:
                     dt = s3_decode_iso_datetime(default)
                 except ValueError:
@@ -2121,7 +2152,7 @@ class S3DynamicModel(object):
                 else:
                     attr["default"] = dt
 
-        from s3fields import s3_datetime
+        from .s3fields import s3_datetime
         field = s3_datetime(fieldname, **attr)
 
         return field
@@ -2144,7 +2175,7 @@ class S3DynamicModel(object):
         ktablename = fieldtype.split(" ", 1)[1].split(".", 1)[0]
         ktable = current.s3db.table(ktablename)
         if ktable:
-            from s3fields import S3Represent
+            from .s3fields import S3Represent
             if "name" in ktable.fields:
                 represent = S3Represent(lookup = ktablename,
                                         translate = True,
@@ -2271,7 +2302,7 @@ class S3DynamicModel(object):
             # Default single checkbox widget
             widget = None
 
-        from s3utils import s3_yes_no_represent
+        from .s3utils import s3_yes_no_represent
         field = Field(fieldname, fieldtype,
                       default = default,
                       represent = s3_yes_no_represent,

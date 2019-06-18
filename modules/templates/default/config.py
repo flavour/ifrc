@@ -44,6 +44,8 @@ def config(settings):
     #settings.auth.registration_requires_verification = True
     # Do new users need to be approved by an administrator prior to being able to login?
     #settings.auth.registration_requires_approval = True
+    # Disable welcome-emails to newly registered users
+    #settings.auth.registration_welcome_email = False
 
     # Allow a new user to be linked to a record (and a new record will be created if it doesn't already exist)
     #settings.auth.registration_link_user_to = {"staff":T("Staff"),
@@ -81,8 +83,6 @@ def config(settings):
     #settings.auth.registration_requests_site = True
     # Uncomment this to allow Admin to see Organisations in User Admin even if the Registration doesn't request this
     #settings.auth.admin_sees_organisation = True
-    # Uncomment to hide the UTC Offset in Registration/Profile
-    #settings.auth.show_utc_offset = False
     # Uncomment to set the default role UUIDs assigned to newly-registered users
     # This is a dictionary of lists, where the key is the realm that the list of roles applies to
     # The key 0 implies not realm restricted
@@ -112,6 +112,8 @@ def config(settings):
     # https://termsfeed.com/terms-conditions/generator/
     # uses <template>/views/tos.html
     #settings.auth.terms_of_service = True
+    # Enable options for tracking user consent
+    #settings.auth.consent_tracking = True
     # Uncomment this to allow users to Login using Gmail's SMTP
     #settings.auth.gmail_domains = ["gmail.com"]
     # Uncomment this to allow users to Login using Office365's SMTP
@@ -135,6 +137,7 @@ def config(settings):
     settings.L10n.languages = OrderedDict([
         ("ar", "Arabic"),
         ("bs", "Bosnian"),
+        #("crs", "Seychellois Creole"),
         #("dv", "Divehi"), # Maldives
         #("dz", "Dzongkha"), # Bhutan
         ("en", "English"),
@@ -175,7 +178,7 @@ def config(settings):
     # Uncomment to Hide the language toolbar
     #settings.L10n.display_toolbar = False
     # Default timezone for users
-    #settings.L10n.utc_offset = "+0000"
+    #settings.L10n.timezone = "US/Eastern"
     # Uncomment these to use US-style dates in English
     #settings.L10n.date_format = "%m-%d-%Y"
     #settings.L10n.time_format = "%H:%M:%S"
@@ -223,10 +226,14 @@ def config(settings):
     #settings.fin.currency_writable = False # False currently breaks things
 
     # PDF settings
-    # Default page size for reports (defaults to A4)
-    #settings.base.paper_size = T("Letter")
+    # Default page size (defaults to A4)
+    #settings.base.pdf_size = "Letter"
+    # Default page orientation (defaults to "Auto" to auto-adapt for wide tables)
+    #settings.base.pdf_orientation = "Landscape"
     # Location of Logo used in pdfs headers
     #settings.ui.pdf_logo = "static/img/mylogo.png"
+    # Maximum number of records in PDF exports (None for unlimited)
+    #settings.base.pdf_max_rows = 1000
 
     #Uncomment to add a title row to XLS exports
     #settings.base.xls_title_row = True
@@ -454,10 +461,16 @@ def config(settings):
     #settings.ui.default_cancel_button = True
     # Uncomment to disable responsive behavior of datatables
     #settings.ui.datatables_responsive = False
+    # Uncomment to enable double scroll bars on non-responsive datatables
+    #settings.ui.datatables_double_scroll = True
     # Uncomment to modify the label of the Permalink
     #settings.ui.label_permalink = "Permalink"
     # Uncomment to modify the main menu logo
     #settings.ui.menu_logo = URL(c="static", f="img", args=["S3menulogo.png"])
+    # Configure business hours to indicate in organizer (can be a list)
+    #settings.ui.organizer_business_hours = {"dow": [1,2,3,4,5], "start": "08:00", "end": "18:00"}
+    # Configure a time format for organizer events to override locale default
+    #settings.ui.organizer_time_format = "H:mm"
 
     # -------------------------------------------------------------------------
     # Sync
@@ -468,6 +481,115 @@ def config(settings):
     # Asset
     # Uncomment to have a specific asset type for Telephones
     #settings.asset.telephones = True
+
+    # -------------------------------------------------------------------------
+    # Beneficiary Registry
+
+    # --- Terminology ---
+    # Terminology to use when referring to cases (Beneficiary|Client|Case)
+    #settings.br.case_terminology = "Beneficiary"
+    # Terminology to use when referring to measures of assistance (Counseling|Assistance)
+    #settings.br.assistance_terminology = "Counseling"
+
+    # --- Need Categories ---
+    # Use hierarchical need categories
+    #settings.br.needs_hierarchical = True
+    # Let all orgs use a common set of need categories
+    #settings.br.needs_org_specific = False
+
+    # --- Basic Case Options ---
+    # Show the case organisation even if only one option
+    #settings.br.case_hide_default_org = False
+    # Disable assignment of cases to staff
+    #settings.br.case_manager = False
+    # Expose fields to track home address in case file
+    #settings.br.case_address = True
+    # Disable documentation of language details in case file
+    #settings.br.case_language_details = False
+    # Control household size tracking in case files: False, True or "auto" (=default)
+    #settings.br.household_size = "auto"
+    # Layout class for beneficiary ID cards
+    #settings.br.id_card_layout = IDCardLayout
+    # User roles with permission to export beneficiary ID cards
+    #settings.br.id_card_export_roles = ["ORG_ADMIN", "CASE_MANAGEMENT"]
+
+    # --- Case File Tabs ---
+    # Hide the contact info tab in case files
+    #settings.br.case_contacts_tab = False
+    # Show the ID-tab in case files
+    #settings.br.case_id_tab = True
+    # Hide the family members tab in case files
+    #settings.br.case_family_tab = False
+    # Enable case file tab to track service contacts
+    #settings.br.service_contacts = True
+    # Show tab with notes journal
+    #settings.br.case_notes_tab = True
+    # Show the photos-tab in case files
+    #settings.br.case_photos_tab = True
+    # Hide the documents-tab in case files
+    #settings.br.case_documents_tab = False
+
+    # --- Attachments ---
+    # Hide activity attachments from case documents-tab
+    #settings.br.case_include_activity_docs = False
+    # Hide case group attachments from case documents-tab
+    #settings.br.case_include_group_docs = False
+
+    # --- Case Activities ---
+    # Disable tracking of case activities
+    #settings.br.case_activities = False
+    # Disable assignment of case activities to staff
+    #settings.br.case_activity_manager = False
+    # Expose "urgent" priority for case activities (=emergencies)
+    #settings.br.case_activity_urgent_option = True
+    # Disable need categories in case activities
+    #settings.br.case_activity_need = False
+    # Use a free-text subject line in case activities
+    #settings.br.case_activity_subject = True
+    # Use a free-text field to document need details in case activities
+    #settings.br.case_activity_need_details = True
+    # Disable status and end-date for case activities
+    #settings.br.case_activity_status = False
+    # Show end-date of case activites (True=show, "writable"=allow manual edit)
+    #settings.br.case_activity_end_date = True
+    # Enable inline-updates of case activities
+    #settings.br.case_activity_updates = True
+    # Disable fields for outcome documentation
+    #settings.br.case_activity_outcome = False
+    # Allow documents to be attached to case activities
+    #settings.br.case_activity_documents = True
+
+    # --- Assistance Measures ---
+    # Disable tracking of individual assistance measures
+    #settings.br.manage_assistance = False
+    # Use separate tab to track assistance measures
+    #settings.br.assistance_tab = True
+    # Hide inline assistance measures on case activity tab
+    #settings.br.assistance_inline = False
+    # Document date+time (rather than only date) for assistance measures
+    #settings.br.assistance_measures_use_time = True
+    # Set default status of assistance measures to closed
+    #settings.br.assistance_measure_default_closed = True
+    # Disable assignment of assistance measures to staff
+    #settings.br.assistance_manager = False
+    # Disable types of assistance (e.g. if there is only one type)
+    #settings.br.assistance_types = False
+
+    # --- Assistance Themes ---
+    # Enable assistance themes
+    #settings.br.assistance_themes = True
+    # Use a common set of assistance themes rather than org-specific
+    #settings.br.assistance_themes_org_specific = False
+    # Organize assistance themes by org sector
+    #settings.br.assistance_themes_sectors = True
+    # Organize assistance themes by need type
+    #settings.br.assistance_themes_needs = True
+    # Document assistance details per theme
+    #settings.br.assistance_details_per_theme = True
+    # Enable auto-linking of assistance measure details to case activities
+    #settings.br.assistance_activity_autolink = True
+    # Disable tracking of effort (=hours spent) for assistance measures
+    #settings.br.assistance_track_effort = False
 
     # -------------------------------------------------------------------------
     # CMS
@@ -518,9 +640,6 @@ def config(settings):
     # Uncomment to use the term Beneficiary instead of Case
     #settings.dvr.label = "Beneficiary"
 
-    # Uncomment this to allow cases to belong to multiple case groups ("households")
-    #settings.dvr.multiple_case_groups = True
-
     # Uncomment this to enable tracking of transfer origin/destination sites
     #settings.dvr.track_transfer_sites = True
     # Uncomment this to enable features to manage transferability of cases
@@ -551,6 +670,13 @@ def config(settings):
     #settings.dvr.activity_types_hierarchical = True
     # Uncomment this to use status field in case activities
     #settings.dvr.case_activity_use_status = True
+    # Uncomment this to disable follow-up fields in case activities
+    #settings.dvr.case_activity_follow_up = False
+
+    # Uncomment this to include case activity docs on beneficiary documents-tab
+    #settings.dvr.case_include_activity_docs = True
+    # Uncomment this to include case group docs on beneficiary documents-tab
+    #settings.dvr.case_include_group_docs = True
 
     # Uncomment this if Case activities use multiple Needs
     #settings.dvr.case_activity_needs_multiple = True
@@ -563,6 +689,22 @@ def config(settings):
 
     # Uncomment this to manage individual response actions in case activities
     #settings.dvr.manage_response_actions = True
+    # Uncomment this to not use response action types
+    #settings.dvr.response_types = False
+    # Uncomment this to use response themes
+    #settings.dvr.response_themes = True
+    # Uncomment this to not use org-specific response themes
+    #settings.dvr.response_themes_org_specific = False
+    # Uncomment this to link response themes to org sectors
+    #settings.dvr.response_themes_sectors = True
+    # Uncomment this to link response themes to needs
+    #settings.dvr.response_themes_needs = True
+    # Uncomment this to automatically link responses to case activities
+    #settings.dvr.response_activity_autolink = True
+    # Uncomment this to activate features for response planning
+    #settings.dvr.response_planning = True
+    # Uncomment this to use a separate due-date for responses
+    #settings.dvr.response_due_date = True
 
     # Configure a regular expression pattern for ID Codes (QR Codes)
     #settings.dvr.id_code_pattern = "(?P<label>[^,]*),(?P<first_name>[^,]*),(?P<last_name>[^,]*),(?P<date_of_birth>[^,]*)"
@@ -634,6 +776,8 @@ def config(settings):
     #settings.pr.use_address = False
     # Show separate Public and Private Contacts Tabs
     #settings.pr.contacts_tabs = ("public", "private")
+    # Uncomment this to allow persons to belong to multiple case groups ("households")
+    #settings.pr.multiple_case_groups = True
 
     # -------------------------------------------------------------------------
     # Organisations
@@ -715,7 +859,7 @@ def config(settings):
     #settings.hrm.email_required = False
     # Uncomment to allow Staff & Volunteers to be registered without an Organisation
     #settings.hrm.org_required = False
-    # Uncomment to if their are only Staff & Volunteers from a single Organisation with no Branches
+    # Uncomment if their are only Staff & Volunteers from a single Organisation with no Branches
     #settings.hrm.multiple_orgs = False
     # Uncomment to disable the 'Send Message' action button
     #settings.hrm.compose_button = False
@@ -727,6 +871,8 @@ def config(settings):
     #settings.hrm.multiple_job_titles = True
     # Uncomment to have each root Org use a different Job Title Catalog
     #settings.hrm.org_dependent_job_titles = True
+    # Uncomment to display & search by National ID
+    #settings.hrm.use_national_id = True
     # Uncomment to hide the Staff resource
     #settings.hrm.show_staff = False
     # Uncomment to have Staff use their Home Address as fallback if they have no Site defined
@@ -1198,18 +1344,18 @@ def config(settings):
             restricted = True,
             module_type = 2
         )),
-        ("survey", Storage(
-            name_nice = T("Surveys"),
-            #description = "Create, enter, and manage surveys.",
-            restricted = True,
-            module_type = 5,
-        )),
-        #("dc", Storage(
-        #   name_nice = T("Data Collection"),
-        #   #description = "Data collection tool",
-        #   restricted = True,
-        #   module_type = 10
+        #("survey", Storage(
+        #    name_nice = T("Surveys"),
+        #    #description = "Create, enter, and manage surveys.",
+        #    restricted = True,
+        #    module_type = 5,
         #)),
+        ("dc", Storage(
+           name_nice = T("Assessments"),
+           #description = "Data collection tool",
+           restricted = True,
+           module_type = 5
+        )),
         ("cr", Storage(
             name_nice = T("Shelters"),
             #description = "Tracks the location, capacity and breakdown of victims in Shelters",
@@ -1228,11 +1374,17 @@ def config(settings):
         #    restricted = True,
         #    module_type = 10
         #)),
+        #("br", Storage(
+        #    name_nice = T("Beneficiary Registry"),
+        #    #description = "Beneficiary Registry and Case Management",
+        #    restricted = True,
+        #    module_type = 10,
+        #)),
         ("dvr", Storage(
-        name_nice = T("Disaster Victim Registry"),
-        #description = "Allow affected individuals & households to register to receive compensation and distributions",
-        restricted = True,
-        module_type = 10,
+            name_nice = T("Disaster Victim Registry"),
+            #description = "Allow affected individuals & households to register to receive compensation and distributions",
+            restricted = True,
+            module_type = 10,
         )),
         ("event", Storage(
             name_nice = T("Events"),
@@ -1241,9 +1393,9 @@ def config(settings):
             module_type = 10,
         )),
         ("transport", Storage(
-        name_nice = T("Transport"),
-        restricted = True,
-        module_type = 10,
+            name_nice = T("Transport"),
+            restricted = True,
+            module_type = 10,
         )),
         ("stats", Storage(
             name_nice = T("Statistics"),
@@ -1252,10 +1404,10 @@ def config(settings):
             module_type = None,
         )),
         ("member", Storage(
-        name_nice = T("Members"),
-        #description = "Membership Management System",
-        restricted = True,
-        module_type = 10,
+            name_nice = T("Members"),
+            #description = "Membership Management System",
+            restricted = True,
+            module_type = 10,
         )),
         ("budget", Storage(
             name_nice = T("Budgeting Module"),

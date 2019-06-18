@@ -59,16 +59,16 @@ class S3MainMenu(default.S3MainMenu):
             MM("Facilities", c="org", f="facility", m="summary",
                restrict=[AUTHENTICATED])(
             ),
-            MM("Services", c="cms", f="page", vars={"name": "Services"}),
+            #MM("Services", c="cms", f="page", vars={"name": "Services"}),
             MM("News", c="cms", f="newsfeed", m="datalist",
-               icon="icon-news",
+               #icon="icon-news",
                restrict=[AUTHENTICATED],
                ),
             MM("Map", c="gis", f="index",
-               icon="icon-map",
+               #icon="icon-map",
                restrict=[AUTHENTICATED],
                ),
-            MM("Data", c="cms", f="page", vars={"name": "Data"}),
+            #MM("Data", c="cms", f="page", vars={"name": "Data"}),
             MM("Get Involved", link=False)(
                 MM("Events",
                    url="http://nycprepared.org/events",
@@ -90,7 +90,7 @@ class S3MainMenu(default.S3MainMenu):
     def menu_help(cls, **attr):
         """ Help Menu """
 
-        ADMIN = current.auth.get_system_roles().ADMIN
+        #ADMIN = current.auth.get_system_roles().ADMIN
 
         menu_help = MM("Help", c="default", f="help", link=False, **attr)(
             MM("User Guide", f="help"),

@@ -15,7 +15,7 @@
 """
 
 module = request.controller
-resourcename = request.function
+#resourcename = request.function
 
 if not settings.has_module(module):
     raise HTTP(404, body="Module disabled: %s" % module)
@@ -38,6 +38,6 @@ def plan():
 
     return s3_rest_controller(rheader = s3db.proc_rheader,
                               hide_filter = True,
-                             )
+                              )
 
 # END =========================================================================

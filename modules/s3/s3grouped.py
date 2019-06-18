@@ -2,7 +2,7 @@
 
 """ S3 Grouped Items Report Method
 
-    @copyright: 2015-2018 (c) Sahana Software Foundation
+    @copyright: 2015-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -38,8 +38,8 @@ import math
 
 from gluon import current, DIV, H2, INPUT, SPAN, TABLE, TBODY, TD, TFOOT, TH, THEAD, TR
 
-from s3rest import S3Method
-from s3utils import s3_strip_markup, s3_unicode
+from .s3rest import S3Method
+from .s3utils import s3_strip_markup, s3_unicode
 
 # Compact JSON encoding
 SEPARATORS = (",", ":")
@@ -114,7 +114,7 @@ class S3GroupedItemsReport(S3Method):
             filter_widgets = get_config("filter_widgets", None)
             if filter_widgets and not self.hide_filter:
                 show_filter_form = True
-                from s3filter import S3FilterForm
+                from .s3filter import S3FilterForm
                 S3FilterForm.apply_filter_defaults(r, resource)
 
         # Get the report configuration
@@ -642,7 +642,7 @@ class S3GroupedItemsTable(object):
 
         pdf_footer = self.pdf_footer
 
-        from s3.s3export import S3Exporter
+        from .s3export import S3Exporter
         exporter = S3Exporter().pdf
         return exporter(self.resource,
                         request = r,
@@ -652,7 +652,7 @@ class S3GroupedItemsTable(object):
                         pdf_footer = pdf_footer,
                         pdf_callback = lambda r: self.html(),
                         pdf_table_autogrow = "B",
-                        pdf_paper_alignment = "Landscape",
+                        pdf_orientation = "Landscape",
                         pdf_html_styles = styles,
                         pdf_filename = filename,
                         )
@@ -706,7 +706,7 @@ class S3GroupedItemsTable(object):
                    }
 
         # Export as XLS
-        from s3.s3export import S3Exporter
+        from .s3export import S3Exporter
         exporter = S3Exporter().xls
         return exporter(xlsdata,
                         title = self.title,

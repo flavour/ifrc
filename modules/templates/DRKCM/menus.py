@@ -9,6 +9,8 @@ except ImportError:
     pass
 import s3menus as default
 
+from .config import get_ui_options
+
 # =============================================================================
 class S3MainMenu(default.S3MainMenu):
     """ Custom Application Main Menu """
@@ -37,13 +39,18 @@ class S3MainMenu(default.S3MainMenu):
         """ Modules Menu """
 
         auth = current.auth
+        ui_options = get_ui_options()
 
         case_vars = {"closed": "0"}
-        if auth.s3_logged_in_human_resource() and \
+        if not ui_options.get("case_collaboration") and \
+           auth.s3_logged_in_human_resource() and \
            auth.s3_has_role("CASE_MANAGEMENT"):
             case_vars["mine"] = "1"
 
-        return [MM("Cases", c=("dvr", "pr"), f="person", vars=case_vars),
+        return [MM("Cases", c=("dvr", "pr"), f=("person", "case_activity", "response_action"),
+                   t = "dvr_case",
+                   vars = case_vars,
+                   ),
                 MM("Case Consulting", c="dvr", f="index",
                    check = lambda this: not this.preceding()[-1].check_permission(),
                    ),
@@ -100,7 +107,7 @@ class S3MainMenu(default.S3MainMenu):
         """ Personal Menu """
 
         auth = current.auth
-        s3 = current.response.s3
+        #s3 = current.response.s3
         settings = current.deployment_settings
 
         ADMIN = current.auth.get_system_roles().ADMIN
@@ -189,6 +196,7 @@ class S3OptionsMenu(default.S3OptionsMenu):
     def dvr():
         """ DVR / Disaster Victim Registry """
 
+        T = current.T
         auth = current.auth
 
         sysroles = auth.get_system_roles()
@@ -197,89 +205,128 @@ class S3OptionsMenu(default.S3OptionsMenu):
         ORG_ADMIN = sysroles.ORG_ADMIN
         ORG_GROUP_ADMIN = sysroles.ORG_GROUP_ADMIN
 
-        due_followups = current.s3db.dvr_due_followups
+        ui_options = get_ui_options()
+
+        due_followups_label = T("Due Follow-ups")
+        followups = ui_options.get("activity_follow_up")
+        if followups:
+            due_followups = current.s3db.dvr_due_followups
+            all_due_followups = due_followups() or "0"
 
         human_resource_id = auth.s3_logged_in_human_resource()
         if human_resource_id and auth.s3_has_role("CASE_MANAGEMENT"):
 
-            due_followups = due_followups(human_resource_id = human_resource_id) or "0"
-            follow_ups_label = "%s (%s)" % (current.T("Due Follow-ups"),
-                                            due_followups,
-                                            )
+            # Follow-up labels
+            if followups:
+                my_due_followups = due_followups(human_resource_id = human_resource_id) or "0"
+                my_due_followups_label = "%s (%s)" % (due_followups_label,
+                                                      my_due_followups,
+                                                      )
+                all_due_followups_label = "%s (%s)" % (T("All Follow-ups"),
+                                                       all_due_followups,
+                                                       )
+            else:
+                my_due_followups_label = all_due_followups_label = due_followups_label
 
-            my_cases = M("My Cases", c=("dvr", "pr"), f="person",
-                         vars = {"closed": "0", "mine": "1"})(
-                            M("Create Case", m="create", t="pr_person", p="create"),
-                            # FIXME crashing (incorrect join order in S3GIS):
-                            #M("Map", f="person", m="map",
-                            #  vars = {"closed": "0", "mine": "1"},
-                            #  ),
-                            M("Activities", f="case_activity",
-                              vars = {"mine": "1"},
-                              ),
-                            M(follow_ups_label, f="due_followups",
-                              vars = {"mine": "1"},
-                              ),
-                            )
+            # Cases sub-menu
+            case_collaboration = ui_options.get("case_collaboration")
+            if case_collaboration:
+                # Current Cases as lead item
+                case_menu = M("Current Cases", c=("dvr", "pr"), f="person", t="dvr_case",
+                              vars = {"closed": "0"},
+                              )
+            else:
+                # My Cases as lead item (Current Cases in Overviews)
+                case_menu = M("My Cases", c=("dvr", "pr"), f="person", t="dvr_case",
+                              vars = {"closed": "0", "mine": "1"},
+                              )
 
-            my_actions = M("Actions", c="dvr", f="response_action")(
-                            M("Assigned to me", vars = {"mine": "a"}),
-                            M("Managed by me", vars = {"mine": "r"}),
-                            )
-
-            all_cases = M("Current Cases", c=("dvr", "pr"), f="person",
-                          vars = {"closed": "0"})(
-                            #M("Create Case", m="create", t="pr_person", p="create"),
-                            M("All Cases", vars = {}),
-                            #M("Actions", f="response_action"),
-                            )
-
-            all_activities = M("Activities", f="case_activity")(
-                                M("Emergencies", vars = {"~.priority": "0"}),
-                                M("All Activities"),
+            # Actions sub-menu
+            if ui_options.get("response_use_organizer"):
+                my_actions = M("My Actions", c="dvr", f="response_action",
+                               t="dvr_response_action", vars={"mine": "a"})(
+                                M("Calendar", m="organize", vars={"mine": "a"}),
+                                )
+            else:
+                my_actions = M("Actions", c="dvr", f="response_action",
+                               t="dvr_response_action", link=False)(
+                                M("Assigned to me", vars = {"mine": "a"}),
+                                M("Managed by me", vars = {"mine": "r"}),
                                 )
 
-        else:
-            due_followups = due_followups() or "0"
-            follow_ups_label = "%s (%s)" % (current.T("Due Follow-ups"),
-                                            due_followups,
-                                            )
-
-            my_cases = None
-            my_actions = None
-            all_cases = M("Current Cases", c=("dvr", "pr"), f="person",
-                          vars = {"closed": "0"})(
-                            M("Create Case", m="create", t="pr_person", p="create"),
-                            # FIXME crashing (incorrect join order in S3GIS):
-                            #M("Map", f="person", m="map", vars = {"closed": "0"}),
-                            M("All Cases", vars = {}),
-                            M("Actions", f="response_action"),
-                            )
-
-            all_activities = M("Activities", f="case_activity")(
-                                M("Emergencies", vars = {"~.priority": "0"}),
-                                M(follow_ups_label, f="due_followups"),
-                                M("All Activities"),
-                                )
-
-        return M(c="dvr")(
-                    my_cases,
-                    my_actions,
-                    all_cases,
-                    all_activities,
-                    M("Appointments", f="case_appointment")(
-                        M("Overview"),
+            menu = M(c="dvr")(
+                    case_menu(
+                        M("Create Case", m="create", t="pr_person", p="create"),
+                        M("My Cases", f="person", t="dvr_case",
+                          vars = {"closed": "0", "mine": "1"},
+                          check = case_collaboration,
+                          ),
+                        M("My Activities", c="dvr", f="case_activity", vars={"mine": "1"}),
+                        M(my_due_followups_label, c="dvr", f="due_followups",
+                          vars = {"mine": 1},
+                          check = followups,
+                          ),
                         ),
-                    M("Statistics", c="dvr", link=False)(
-                        M("Actions", f="response_action", m="report"),
-                        M("Activities", f="case_activity", m="report"),
-                        M("Cases", f="person", m="report", vars={"closed": "0"}),
+                    my_actions,
+                    M("Overviews", c=("dvr", "pr"), link=False)(
+                        M("Current Cases", f="person", t="dvr_case",
+                          vars = {"closed": "0"},
+                          check = case_collaboration,
+                          ),
+                        M("All Cases", f="person", t="dvr_case"),
+                        M("All Activities", f="case_activity", t="dvr_case_activity"),
+                        M(all_due_followups_label, f="due_followups", check=followups),
+                        M("Emergencies", f="case_activity", vars = {"~.priority": "0"}),
+                        M("All Actions", f="response_action"),
+                        ),
+                    )
+        else:
+            # Reduced menu for other users
+            if followups:
+                all_due_followups_label = "%s (%s)" % (due_followups_label,
+                                                       all_due_followups,
+                                                       )
+
+            menu = M(c="dvr")(
+                    M("Current Cases", c=("dvr", "pr"), f="person", t="dvr_case",
+                      vars = {"closed": "0"})(
+                        M("Create Case", m="create", t="pr_person", p="create"),
+                        M("All Cases", vars = {}),
+                        M("Actions", f="response_action"),
+                        ),
+                    M("Activities", f="case_activity")(
+                        M("Emergencies", f="case_activity", vars = {"~.priority": "0"}),
+                        M(due_followups_label, f="due_followups", check=followups),
+                        M("All Activities"),
+                        ),
+                    )
+
+        # Appointments sub-menu (optional)
+        if ui_options.get("case_use_appointments"):
+            appointments_menu = M("Appointments", f="case_appointment")(
+                                    M("Overview"),
+                                    )
+            # Show personal calendar if using staff link and organizer
+            if ui_options.get("appointments_staff_link") and \
+               ui_options.get("appointments_use_organizer"):
+                appointments_menu(M("My Appointments", m="organize", p="read",
+                                    vars = {"mine": "1"},
+                                    check = ui_options.get("appointments_staff_link"),
+                                    )
+                                  )
+
+            menu(appointments_menu)
+
+        return menu(M("Statistics", c="dvr", link=False)(
+                        M("Actions", f="response_action", t="dvr_response_action", m="report"),
+                        M("Activities", f="case_activity", t="dvr_case_activity", m="report"),
+                        M("Cases", f="person", m="report", t="dvr_case", vars={"closed": "0"}),
                         ),
                     M("Archive", link=False)(
-                        M("Closed Cases", f="person",
+                        M("Closed Cases", f="person", t="dvr_case",
                           vars={"closed": "1"},
                           ),
-                        M("Invalid Cases", f="person",
+                        M("Invalid Cases", f="person", t="dvr_case",
                           restrict = (ADMIN, ORG_ADMIN),
                           vars={"archived": "1"},
                           ),
@@ -287,8 +334,6 @@ class S3OptionsMenu(default.S3OptionsMenu):
                     M("Administration", restrict=(ADMIN, ORG_GROUP_ADMIN))(
                         M("Flags", f="case_flag"),
                         M("Case Status", f="case_status"),
-                        #M("Need Types", f="need"),
-                        #M("Intervention Types", f="response_type", m="hierarchy"),
                         M("Appointment Types", f="case_appointment_type"),
                         M("Residence Status Types", f="residence_status_type"),
                         M("Residence Permit Types", f="residence_permit_type"),

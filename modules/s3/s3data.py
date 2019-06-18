@@ -2,7 +2,7 @@
 
 """ S3 Data Views
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -39,7 +39,7 @@ from gluon.html import *
 from gluon.storage import Storage
 
 from s3dal import Expression, S3DAL
-from s3utils import s3_orderby_fields, s3_str, s3_unicode, s3_set_extension
+from .s3utils import s3_orderby_fields, s3_str, s3_unicode, s3_set_extension
 
 # =============================================================================
 class S3DataTable(object):
@@ -479,6 +479,25 @@ class S3DataTable(object):
             append_icon = icons.append
             for fmt in export_formats:
 
+                # CSS classes and on-hover title
+                title = None
+                if isinstance(fmt, tuple):
+                    if len(fmt) >= 3:
+                        title = fmt[2]
+                    fmt, css = fmt[:2] if len(fmt) >= 2 else (fmt[0], "")
+                else:
+                    css = ""
+
+                class_ = "dt-export export_%s" % fmt
+                if css:
+                    class_ = "%s %s" % (class_, css)
+
+                if title is None:
+                    if fmt == "map":
+                        title = T("Show on Map")
+                    else:
+                        title = EXPORT % dict(format=fmt.upper())
+
                 # Export format URL
                 if fmt in default_formats:
                     url = formats.get(fmt, default_url)
@@ -487,16 +506,10 @@ class S3DataTable(object):
                 if not url:
                     continue
 
-                # Onhover title for the icon
-                if fmt == "map":
-                    title = T("Show on Map")
-                else:
-                    title = EXPORT % dict(format=fmt.upper())
-
-                append_icon(DIV(_class="dt-export export_%s" % fmt,
-                                _title=title,
+                append_icon(DIV(_class = class_,
+                                _title = title,
                                 data = {"url": url,
-                                        "extension": fmt,
+                                        "extension": fmt.split(".")[-1],
                                         },
                                 ))
 
@@ -504,12 +517,14 @@ class S3DataTable(object):
 
         # Append the permalink (if any)
         if permalink is not None:
-            link = A(settings.get_ui_label_permalink(),
-                     _href=permalink,
-                     _class="permalink")
-            export_options.append(link)
-            if len(icons):
-                export_options.append(" | ")
+            label = settings.get_ui_label_permalink()
+            if label:
+                link = A(T(label),
+                         _href=permalink,
+                         _class="permalink")
+                export_options.append(link)
+                if len(icons):
+                    export_options.append(" | ")
 
         # Append the icons
         export_options.append(icons)
@@ -536,7 +551,7 @@ class S3DataTable(object):
             @ToDo: DRY with S3CRUD.action_buttons()
         """
 
-        from s3crud import S3CRUD
+        from .s3crud import S3CRUD
 
         s3 = current.response.s3
         auth = current.auth
@@ -640,8 +655,14 @@ class S3DataTable(object):
                               for example:
                               {"warning" : [1,3,6,7,9],
                                "alert" : [2,10,13]}
+                   dt_col_widths: dictionary of columns to apply a width to
+                                  for example:
+                                  {1 : 15,
+                                   2 : 20}
                    dt_text_maximum_len: The maximum length of text before it is condensed
                    dt_text_condense_len: The length displayed text is condensed down to
+                   dt_double_scroll: Render double scroll bars (top+bottom), only available
+                                     with settings.ui.datatables_responsive=False
                    dt_shrink_groups: If set then the rows within a group will be hidden
                                      two types are supported, 'individual' and 'accordion'
                    dt_group_types: The type of indicator for groups that can be 'shrunk'
@@ -654,6 +675,7 @@ class S3DataTable(object):
 
         from gluon.serializers import json as jsons
 
+        request = current.request
         s3 = current.response.s3
         settings = current.deployment_settings
 
@@ -668,22 +690,21 @@ class S3DataTable(object):
         # will then be parsed by s3.dataTable.js and the values used.
         config = Storage()
         config.id = id
-        _aget = attr.get
-        config.dom = _aget("dt_dom", settings.get_ui_datatables_dom())
-        config.lengthMenu = _aget("dt_lengthMenu",
-                                  [[25, 50, -1],
-                                   [25, 50, s3_str(current.T("All"))]
-                                   ]
-                                  )
-        config.pageLength = _aget("dt_pageLength", s3.ROWSPERPAGE)
-        config.pagination = _aget("dt_pagination", "true")
-        config.pagingType = _aget("dt_pagingType",
-                                  settings.get_ui_datatables_pagingType())
-        config.searching = _aget("dt_searching", "true")
+        attr_get = attr.get
+        config.dom = attr_get("dt_dom", settings.get_ui_datatables_dom())
+        config.lengthMenu = attr_get("dt_lengthMenu",
+                                     [[25, 50, -1],
+                                      [25, 50, s3_str(current.T("All"))]
+                                      ]
+                                     )
+        config.pageLength = attr_get("dt_pageLength", s3.ROWSPERPAGE)
+        config.pagination = attr_get("dt_pagination", "true")
+        config.pagingType = attr_get("dt_pagingType",
+                                     settings.get_ui_datatables_pagingType())
+        config.searching = attr_get("dt_searching", "true")
 
-        ajaxUrl = _aget("dt_ajax_url", None)
+        ajaxUrl = attr_get("dt_ajax_url", None)
         if not ajaxUrl:
-            request = current.request
             url = URL(c=request.controller,
                       f=request.function,
                       args=request.args,
@@ -692,24 +713,31 @@ class S3DataTable(object):
             ajaxUrl = s3_set_extension(url, "aadata")
         config.ajaxUrl = ajaxUrl
 
-        config.rowStyles = _aget("dt_styles", [])
+        config.rowStyles = attr_get("dt_styles", [])
 
-        rowActions = _aget("dt_row_actions", s3.actions)
+        colWidths = attr_get("dt_col_widths")
+        if colWidths is not None:
+            # NB This requires "table-layout:fixed" in your CSS
+            # You will likely need to specify all column widths if you do this
+            # & won't have responsiveness
+            config.colWidths = colWidths
+
+        rowActions = attr_get("dt_row_actions", s3.actions)
         if rowActions:
             config.rowActions = rowActions
         else:
             config.rowActions = []
-        bulkActions = _aget("dt_bulk_actions", None)
+        bulkActions = attr_get("dt_bulk_actions", None)
         if bulkActions and not isinstance(bulkActions, list):
             bulkActions = [bulkActions]
         config.bulkActions = bulkActions
-        config.bulkCol = bulkCol = _aget("dt_bulk_col", 0)
-        action_col = _aget("dt_action_col", 0)
+        config.bulkCol = bulkCol = attr_get("dt_bulk_col", 0)
+        action_col = attr_get("dt_action_col", 0)
         if bulkActions and bulkCol <= action_col:
             action_col += 1
         config.actionCol = action_col
 
-        group_list = _aget("dt_group", [])
+        group_list = attr_get("dt_group", [])
         if not isinstance(group_list, list):
             group_list = [group_list]
         dt_group = []
@@ -720,9 +748,9 @@ class S3DataTable(object):
                 group -= 1
             dt_group.append([group, "asc"])
         config.group = dt_group
-        config.groupTotals = _aget("dt_group_totals", [])
-        config.groupTitles = _aget("dt_group_titles", [])
-        config.groupSpacing = _aget("dt_group_space", "false")
+        config.groupTotals = attr_get("dt_group_totals", [])
+        config.groupTitles = attr_get("dt_group_titles", [])
+        config.groupSpacing = attr_get("dt_group_space")
         for order in orderby:
             if bulkActions:
                 if bulkCol <= order[0]:
@@ -730,10 +758,24 @@ class S3DataTable(object):
             if action_col > 0 and action_col >= order[0]:
                 order[0] -= 1
         config.order = orderby
-        config.textMaxLength = _aget("dt_text_maximum_len", 80)
-        config.textShrinkLength = _aget("dt_text_condense_len", 75)
-        config.shrinkGroupedRows = _aget("dt_shrink_groups", "false")
-        config.groupIcon = _aget("dt_group_types", [])
+        config.textMaxLength = attr_get("dt_text_maximum_len", 80)
+        config.textShrinkLength = attr_get("dt_text_condense_len", 75)
+        config.shrinkGroupedRows = attr_get("dt_shrink_groups")
+        config.groupIcon = attr_get("dt_group_types", [])
+
+        # Activate double scroll and inject jQuery plugin
+        if not settings.get_ui_datatables_responsive():
+            double_scroll = attr.get("dt_double_scroll")
+            if double_scroll is None:
+                double_scroll = settings.get_ui_datatables_double_scroll()
+            if double_scroll:
+                if s3.debug:
+                    script = "/%s/static/scripts/jquery.doubleScroll.js" % request.application
+                else:
+                    script = "/%s/static/scripts/jquery.doubleScroll.min.js" % request.application
+                if script not in s3.scripts:
+                    s3.scripts.append(script)
+                html.add_class("doublescroll")
 
         # Wrap the table in a form and add some data in hidden fields
         form = FORM(_class="dt-wrapper")
@@ -742,8 +784,8 @@ class S3DataTable(object):
             # @todo: poor UX with onclick-JS, better to render real
             #        links which can be bookmarked, and then update them
             #        in drawCallback()
-            permalink = _aget("dt_permalink", None)
-            base_url = _aget("dt_base_url", None)
+            permalink = attr_get("dt_permalink", None)
+            base_url = attr_get("dt_base_url", None)
             export_formats = S3DataTable.export_formats(rfields,
                                                         permalink=permalink,
                                                         base_url=base_url)
@@ -771,7 +813,7 @@ class S3DataTable(object):
                               _id="%s_dataTable_bulkMode" % id,
                               _name="mode",
                               _value="Inclusive"))
-            bulk_selected = _aget("dt_bulk_selected", "")
+            bulk_selected = attr_get("dt_bulk_selected", "")
             if isinstance(bulk_selected, list):
                 bulk_selected = ",".join(bulk_selected)
             form.append(INPUT(_type="hidden",
@@ -783,6 +825,11 @@ class S3DataTable(object):
                               _class="dataTable_filterURL",
                               _name="filterURL",
                               _value="%s" % config.ajaxUrl))
+
+        # Form key (CSRF protection for Ajax actions)
+        formkey = attr_get("dt_formkey")
+        if formkey:
+            form["hidden"] = {"_formkey": formkey}
 
         # Set callback?
         initComplete = settings.get_ui_datatables_initComplete()
@@ -839,14 +886,15 @@ class S3DataTable(object):
                 for field in flist:
                     # Insert a checkbox for bulk select
                     if field == "BULK":
-                        tr.append(TD(INPUT(_id="select%s" % row[flist[action_col]],
-                                           _type="checkbox",
+                        tr.append(TD(INPUT(_type="checkbox",
                                            _class="bulkcheckbox",
+                                           data = {"dbid": row[flist[action_col]]},
                                            )))
                     else:
                         tr.append(TD(row[field]))
                 body.append(tr)
         table = TABLE([header, body], _id=id, _class="dataTable display")
+
         if current.deployment_settings.get_ui_datatables_responsive():
             table.add_class("responsive")
         return table
@@ -897,8 +945,8 @@ class S3DataTable(object):
             details = []
             for field in flist:
                 if field == "BULK":
-                    details.append("<INPUT id='select%s' type='checkbox' class='bulkcheckbox'>" % \
-                        row[flist[action_col]])
+                    details.append("<INPUT type='checkbox' class='bulkcheckbox' data-dbid='%s'>" % \
+                                   row[flist[action_col]])
                 else:
                     details.append(s3_unicode(row[field]))
             aadata.append(details)

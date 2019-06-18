@@ -11,83 +11,72 @@ def index():
 
     module_name = settings.modules["admin"].name_nice
     response.title = module_name
-    return dict(module_name=module_name)
+
+    return {"module_name": module_name}
 
 # =============================================================================
 @auth.s3_requires_membership(1)
 def setting():
     """
-        Custom page to link to those Settings which can be edited through the web interface
+        Custom page to link to those Settings which can be edited through
+        the web interface
     """
 
-    return dict()
+    return {}
 
 # =============================================================================
 # AAA
 # =============================================================================
 @auth.s3_requires_membership(1)
 def role():
-    """
-        Role Manager
-    """
-
-    # ACLs as component of roles
-    s3db.add_components("auth_group",
-                        **{auth.permission.TABLENAME: "group_id"}
-                        )
+    """ Role Manager """
 
     def prep(r):
-        if r.representation != "html":
+        if r.representation not in ("html", "aadata", "csv", "json"):
             return False
-        handler = s3base.S3RoleManager()
-        modules = settings.modules
-        handler.controllers = Storage([(m, modules[m])
-                                        for m in modules
-                                        if modules[m].restricted])
+
         # Configure REST methods
-        set_handler = r.set_handler
-        set_handler("users", handler)
-        set_handler("read", handler)
-        set_handler("list", handler)
-        set_handler("copy", handler)
-        set_handler("create", handler)
-        set_handler("update", handler)
-        set_handler("delete", handler)
+        methods = ("read",
+                   "list",
+                   "create",
+                   "update",
+                   "delete",
+                   "users",
+                   "copy",
+                   "datatable",
+                   "datalist",
+                   "import",
+                   )
+        r.set_handler(methods, s3base.S3RoleManager)
         return True
     s3.prep = prep
 
-    s3.stylesheets.append( "S3/role.css" )
-    output = s3_rest_controller("auth", "group")
-    return output
+    return s3_rest_controller("auth", "group")
 
 # -----------------------------------------------------------------------------
 def user():
     """ RESTful CRUD controller """
 
     table = auth.settings.table_user
+    sr = auth.get_system_roles()
 
-    if s3_has_role("ADMIN"):
-        # Needed as Admin has all roles
+    # Check for ADMIN first since ADMINs have all roles
+    if s3_has_role(sr.ADMIN):
         pe_ids = None
-    elif s3_has_role("ORG_ADMIN"):
-        if settings.get_security_policy() < 6:
-            # Filter users to just those belonging to the Org Admin's Org & Descendants
+
+    elif s3_has_role(sr.ORG_ADMIN):
+        pe_ids = auth.get_managed_orgs()
+        if pe_ids is None:
+            # OrgAdmin with default realm, but user not affiliated with any org
+            auth.permission.fail()
+        elif pe_ids is not True:
+            # OrgAdmin for certain organisations
             otable = s3db.org_organisation
-            pe_id = db(otable.id == auth.user.organisation_id).select(otable.pe_id,
-                                                                      limitby=(0, 1),
-                                                                      cache=s3db.cache,
-                                                                      ).first().pe_id
-            pe_ids = s3db.pr_get_descendants(pe_id, entity_types="org_organisation")
-            pe_ids.append(pe_id)
             s3.filter = (otable.pe_id.belongs(pe_ids)) & \
                         (table.organisation_id == otable.id)
         else:
-            # Filter users to just those belonging to the Org Admin's Realms
-            pe_ids = auth.user.realms[auth.get_system_roles().ORG_ADMIN]
-            if pe_ids:
-                otable = s3db.org_organisation
-                s3.filter = (otable.pe_id.belongs(pe_ids)) & \
-                            (table.organisation_id == otable.id)
+            # OrgAdmin with site-wide permission
+            pe_ids = None
     else:
         auth.permission.fail()
 
@@ -117,6 +106,8 @@ def user():
     link_user_to = settings.get_auth_registration_link_user_to()
     if link_user_to and len(link_user_to) > 1 and settings.get_auth_show_link():
         lappend("link_user_to")
+        table.link_user_to.represent = lambda v: ", ".join([s3_str(link_user_to[opt]) for opt in v]) \
+                                                 if v else current.messages["NONE"]
     lappend((T("Registration"), "created_on"))
     table.created_on.represent = s3base.S3DateTime.date_represent
     lappend((T("Roles"), "membership.group_id"))
@@ -168,7 +159,7 @@ def user():
     set_method = s3db.set_method
     set_method("auth", "user",
                method = "roles",
-               action = s3base.S3RoleManager())
+               action = s3base.S3RoleManager)
 
     set_method("auth", "user",
                method = "disable",
@@ -194,52 +185,53 @@ def user():
         msg_record_created = T("User added"),
         msg_record_modified = T("User updated"),
         msg_record_deleted = T("User deleted"),
-        msg_list_empty = T("No Users currently registered"))
+        msg_list_empty = T("No Users currently registered"),
+        )
 
     def rheader(r):
-        if r.representation != "html":
+        if r.representation != "html" or not r.record:
             return None
 
         rheader = DIV()
 
-        if r.record:
-            id = r.id
-            registration_key = r.record.registration_key
-            if not registration_key:
-                btn = A(T("Disable"),
+        id = r.id
+        registration_key = r.record.registration_key
+        if not registration_key:
+            btn = A(T("Disable"),
+                    _class = "action-btn",
+                    _title = "Disable User",
+                    _href = URL(args=[id, "disable"])
+                    )
+            rheader.append(btn)
+            if settings.get_auth_show_link():
+                btn = A(T("Link"),
                         _class = "action-btn",
-                        _title = "Disable User",
-                        _href = URL(args=[id, "disable"])
+                        _title = "Link (or refresh link) between User, Person & HR Record",
+                        _href = URL(args=[id, "link"])
                         )
                 rheader.append(btn)
-                if settings.get_auth_show_link():
-                    btn = A(T("Link"),
-                            _class = "action-btn",
-                            _title = "Link (or refresh link) between User, Person & HR Record",
-                            _href = URL(args=[id, "link"])
-                            )
-                    rheader.append(btn)
-            #elif registration_key == "pending":
-            #    btn = A(T("Approve"),
-            #            _class = "action-btn",
-            #            _title = "Approve User",
-            #            _href = URL(args=[id, "approve"])
-            #            )
-            #    rheader.append(btn)
-            else:
-                # Verify & Approve
-                btn = A(T("Approve"),
-                        _class = "action-btn",
-                        _title = "Approve User",
-                        _href = URL(args=[id, "approve"])
-                        )
-                rheader.append(btn)
+        #elif registration_key == "pending":
+        #    btn = A(T("Approve"),
+        #            _class = "action-btn",
+        #            _title = "Approve User",
+        #            _href = URL(args=[id, "approve"])
+        #            )
+        #    rheader.append(btn)
+        else:
+            # Verify & Approve
+            btn = A(T("Approve"),
+                    _class = "action-btn",
+                    _title = "Approve User",
+                    _href = URL(args=[id, "approve"])
+                    )
+            rheader.append(btn)
 
-            tabs = [(T("User Details"), None),
-                    (T("Roles"), "roles")
-                    ]
-            rheader_tabs = s3_rheader_tabs(r, tabs)
-            rheader.append(rheader_tabs)
+        tabs = [(T("User Details"), None),
+                (T("Roles"), "roles")
+                ]
+        rheader_tabs = s3_rheader_tabs(r, tabs)
+        rheader.append(rheader_tabs)
+
         return rheader
 
     # Pre-processor
@@ -273,7 +265,8 @@ def user():
     s3.prep = prep
 
     def postp(r, output):
-        if r.interactive and isinstance(output, dict):
+        if r.interactive and isinstance(output, dict) and \
+           r.method in (None, "update", "create"):
             # Only show the disable button if the user is not currently disabled
             table = r.table
             query = (table.registration_key == None) | \
@@ -312,12 +305,11 @@ def user():
                     (table.registration_key != "")
             rows = db(query).select(table.id)
             restrict = [str(row.id) for row in rows]
-            s3.actions.append(
-                    dict(label=str(T("Approve")), _class="action-btn",
-                         url=URL(c="admin", f="user",
-                                 args=["[id]", "approve"]),
-                         restrict = restrict)
-                )
+            s3.actions.append({"label": str(T("Approve")),
+                               "url": URL(c="admin", f="user", args=["[id]", "approve"]),
+                               "restrict": restrict,
+                               "_class": "action-btn",
+                               })
             # Add some highlighting to the rows
             query = (table.registration_key.belongs(["disabled", "pending"]))
             rows = db(query).select(table.id,
@@ -420,7 +412,8 @@ def group():
         msg_record_created = T("Role added"),
         msg_record_modified = T("Role updated"),
         msg_record_deleted = T("Role deleted"),
-        msg_list_empty = T("No Roles defined"))
+        msg_list_empty = T("No Roles defined"),
+        )
 
     s3db.configure(tablename, main="role")
     return s3_rest_controller("auth", "group")
@@ -448,10 +441,9 @@ def organisation():
         msg_record_modified = T("Organization Domain updated"),
         msg_record_deleted = T("Organization Domain deleted"),
         msg_list_empty = T("No Organization Domains currently registered")
-    )
+        )
 
-    output = s3_rest_controller("auth", "organisation")
-    return output
+    return s3_rest_controller("auth", "organisation")
 
 # -----------------------------------------------------------------------------
 def user_create_onvalidation (form):
@@ -460,6 +452,132 @@ def user_create_onvalidation (form):
         form.request_vars.password != form.request_vars.password_two):
         form.errors.password = T("Password fields don't match")
     return True
+
+# =============================================================================
+# Consent Tracking
+#
+@auth.s3_requires_membership(1)
+def processing_type():
+    """ Types of Data Processing: RESTful CRUD Controller """
+
+    return s3_rest_controller("auth", "processing_type",
+                              csv_template = ("auth", "processing_type"),
+                              csv_stylesheet = ("auth", "processing_type.xsl"),
+                              )
+
+# -----------------------------------------------------------------------------
+@auth.s3_requires_membership(1)
+def consent_option():
+    """ Consent Options: RESTful CRUD Controller """
+
+    def prep(r):
+
+        resource = r.resource
+        table = resource.table
+
+        # Make hash-fields writable while no consent reference exists
+        editable = False
+        if not r.record:
+            editable = True
+        else:
+            ctable = s3db.auth_consent
+            query = (ctable.option_id == r.id) & (ctable.deleted == False)
+            editable = db(query).count() == 0
+        if editable:
+            for fn in s3db.auth_consent_option_hash_fields:
+                table[fn].writable = True
+        else:
+            # Prevent deletion when referenced in consent record
+            resource.configure(deletable=False)
+
+        return True
+    s3.prep = prep
+
+    def postp(r, output):
+
+        if not r.record:
+            # No delete-button by default
+            s3_action_buttons(r, deletable=False)
+
+            # Add delete-button only for options not yet referenced
+            # by any consent record:
+            table = r.table
+            ctable = s3db.auth_consent
+            left = ctable.on(table.id == ctable.option_id)
+            consent_count = ctable.id.count()
+            rows = db(table.deleted == False).select(table.id,
+                                                     consent_count,
+                                                     groupby = table.id,
+                                                     having = consent_count == 0,
+                                                     left = left,
+                                                     )
+            deletable = [str(row.auth_consent_option.id) for row in rows]
+            s3.actions.append({"label": s3_str(T("Delete")),
+                               "restrict": deletable,
+                               "url": URL(args = ["[id]", "delete"]),
+                               "_class": "action-btn delete-btn",
+                               })
+        return output
+    s3.postp = postp
+
+    return s3_rest_controller("auth", "consent_option",
+                              csv_template = ("auth", "consent_option"),
+                              csv_stylesheet = ("auth", "consent_option.xsl"),
+                              )
+
+# -----------------------------------------------------------------------------
+@auth.s3_requires_membership(1)
+def consent_question():
+    """
+        Controller to request consent on data processing from
+        the currently logged-in user
+
+        - currently only for TESTING
+        - to be moved into default/user/consent once completed (WIP)
+        - can be used as standalone controller for consent renewal after expiry
+     """
+
+    person_id = auth.s3_logged_in_person()
+    if not person_id:
+        redirect(URL(c="default", f="user", args=["login"], vars={"_next": URL()}))
+
+    output = {}
+
+    widget_id = "consent_question"
+
+    consent = s3db.auth_Consent()
+    formfields = [Field("question",
+                        label = T("Consent"),
+                        widget = consent.widget,
+                        ),
+                  ]
+
+    # Generate the form and add it to the output
+    formstyle = settings.get_ui_formstyle()
+    form = SQLFORM.factory(record = None,
+                           showid = False,
+                           formstyle = formstyle,
+                           table_name = "auth_consent",
+                           #buttons = buttons,
+                           #hidden = hidden,
+                           _id = widget_id,
+                           *formfields)
+
+    # Process the form
+    formname = "consent_question/None"
+    if form.accepts(request.post_vars,
+                    current.session,
+                    formname = formname,
+                    keepvalues = False,
+                    hideerror = False,
+                    ):
+
+        consent.track(person_id, form.vars.question)
+
+    output["form"] = form
+    response.view = "create.html"
+
+    return output
 
 # =============================================================================
 @auth.s3_requires_membership(1)
@@ -530,34 +648,11 @@ def acl_represent(acl, options):
 
 # =============================================================================
 # Ticket viewing
-# =============================================================================
-@auth.s3_requires_membership(1)
-def ticket():
-    """ Ticket handler """
-
-    import traceback
-    from gluon.restricted import RestrictedError
-
-    if len(request.args) != 2:
-        session.error = T("Invalid ticket")
-        redirect(URL(r=request))
-
-    app = request.args[0]
-    ticket = request.args[1]
-    e = RestrictedError()
-    e.load(request, app, ticket)
-
-    return dict(app=app,
-                ticket=ticket,
-                traceback=s3base.Traceback(e.traceback),
-                code=e.code,
-                layer=e.layer)
-
-# -----------------------------------------------------------------------------
-# Web2Py Ticket Viewer functions Borrowed from admin application of web2py
+# - web2Py ticket viewer functions borrowed from admin application of web2py
+#
 @auth.s3_requires_membership(1)
 def errors():
-    """ Error handler """
+    """ Error ticket list """
 
     from gluon.admin import apath
     from gluon.fileutils import listdir
@@ -571,7 +666,32 @@ def errors():
                      key=func,
                      reverse=True)
 
-    return dict(app=appname, tickets=tickets)
+    return {"app": appname,
+            "tickets": tickets,
+            }
+
+# -----------------------------------------------------------------------------
+@auth.s3_requires_membership(1)
+def ticket():
+    """ Ticket viewer """
+
+    if len(request.args) != 2:
+        session.error = T("Invalid ticket")
+        redirect(URL(r=request))
+
+    app = request.args[0]
+    ticket = request.args[1]
+
+    from gluon.restricted import RestrictedError
+    e = RestrictedError()
+    e.load(request, app, ticket)
+
+    return {"app": app,
+            "ticket": ticket,
+            "traceback": s3base.Traceback(e.traceback),
+            "code": e.code,
+            "layer": e.layer,
+            }
 
 # =============================================================================
 # Create portable app
@@ -662,11 +782,11 @@ def portable():
 
     else:
         download_last_form = None
-    return dict(
-            web2py_form=web2py_form,
-            generator_form=generator_form,
-            download_last_form=download_last_form
-        )
+
+    return {"web2py_form": web2py_form,
+            "generator_form": generator_form,
+            "download_last_form": download_last_form,
+            }
 
 # -----------------------------------------------------------------------------
 def create_portable_app(web2py_source, copy_database=False, copy_uploads=False):
@@ -775,7 +895,7 @@ def translate():
     opt = get_vars.get("opt", None)
     if not opt:
         # Show index page
-        return dict()
+        return {}
 
     # For the one which actually uses CRUD (opt 2)
     s3.crud.submit_button = T("Upload")

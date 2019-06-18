@@ -1,0 +1,23 @@
+// ============================================================================
+// Styles for Theme-specific Elements and Layouts
+// ============================================================================
+// VARIABLES
+
+// -- variables and their defaults go here --
+
+// ============================================================================
+// STYLES
+
+.service-link {
+    margin-left: 1.25rem;
+    font-size: 1.2rem;
+}
+
+#strapline {
+    text-align: right;
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: $primary-color;
+}
+
+// END ========================================================================

@@ -15,13 +15,15 @@ def config(settings):
 
     # Uncomment to restrict to specific country/countries
     settings.gis.countries.append("MV")
+    # Disable the Postcode selector in the LocationSelector
+    #settings.gis.postcode_selector = False
 
     # L10n (Localization) settings
     settings.L10n.languages["dv"] = "Divehi"
     # Default Language (put this in custom template if-required)
     #settings.L10n.default_language = "dv"
     # Default timezone for users
-    settings.L10n.utc_offset = "+0500"
+    settings.L10n.timezone = "Indian/Maldives"
     # Default Country Code for telephone numbers
     settings.L10n.default_country_code = 960
 

@@ -23,6 +23,7 @@ def config(settings):
 
     # Theme (folder to use for views/layout.html)
     settings.base.theme = "SCPHIMS"
+    settings.base.theme_base = "default"
     settings.ui.menu_logo = "/%s/static/themes/SCPHIMS/img/logo.png" % current.request.application
 
     # Authentication settings
@@ -57,7 +58,7 @@ def config(settings):
     # Uncomment to Hide the language toolbar
     settings.L10n.display_toolbar = False
     # Default timezone for users
-    settings.L10n.utc_offset = "+0800"
+    settings.L10n.timezone = "Asia/Manila"
     # Number formats (defaults to ISO 31-0)
     # Decimal separator for numbers (defaults to ,)
     settings.L10n.decimal_separator = "."

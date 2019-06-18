@@ -5,7 +5,7 @@
     @requires: U{B{I{gluon}} <http://web2py.com>}
     @requires: U{B{I{shapely}} <http://trac.gispython.org/lab/wiki/Shapely>}
 
-    @copyright: (c) 2010-2018 Sahana Software Foundation
+    @copyright: (c) 2010-2019 Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -69,11 +69,11 @@ from gluon.settings import global_settings
 from gluon.storage import Storage
 
 from s3dal import Rows
-from s3datetime import s3_format_datetime, s3_parse_datetime
-from s3fields import s3_all_meta_field_names
-from s3rest import S3Method
-from s3track import S3Trackable
-from s3utils import s3_include_ext, s3_include_underscore, s3_str
+from .s3datetime import s3_format_datetime, s3_parse_datetime
+from .s3fields import s3_all_meta_field_names
+from .s3rest import S3Method
+from .s3track import S3Trackable
+from .s3utils import s3_include_ext, s3_include_underscore, s3_str
 
 # Map WKT types to db types
 GEOM_TYPES = {"point": 1,
@@ -252,7 +252,7 @@ class GIS(object):
 
         self.relevant_hierarchy_levels = None
 
-        self.google_geocode_retry = True
+        #self.google_geocode_retry = True
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -484,7 +484,7 @@ class GIS(object):
 
     # -------------------------------------------------------------------------
     @staticmethod
-    def geocode(address, postcode=None, Lx_ids=None, geocoder="google"):
+    def geocode(address, postcode=None, Lx_ids=None, geocoder=None):
         """
             Geocode an Address
             - used by S3LocationSelector
@@ -496,34 +496,45 @@ class GIS(object):
             @param geocoder: which geocoder service to use
         """
 
-        from geopy import geocoders
+        try:
+            from geopy import geocoders
+        except ImportError:
+            current.log.error("S3GIS unresolved dependency: geopy required for Geocoder support")
+            return "S3GIS unresolved dependency: geopy required for Geocoder support"
 
-        if geocoder == "google" or geocoder is True:
-            g = geocoders.GoogleV3()
-            if current.gis.google_geocode_retry:
-                # Retry when reaching maximum requests per second
-                import time
-                from geopy.geocoders.googlev3 import GTooManyQueriesError
-                def geocode_(names, g=g, **kwargs):
-                    attempts = 0
-                    while attempts < 3:
-                        try:
-                            result = g.geocode(names, **kwargs)
-                        except GTooManyQueriesError:
-                            if attempts == 2:
-                                # Daily limit reached
-                                current.gis.google_geocode_retry = False
-                                raise
-                            time.sleep(1)
-                        else:
-                            break
-                        attempts += 1
-                    return result
-            else:
-                geocode_ = lambda names, g=g, **kwargs: g.geocode(names, **kwargs)
-        elif geocoder == "yahoo":
-            apikey = current.deployment_settings.get_gis_api_yahoo()
-            g = geocoders.Yahoo(apikey)
+        settings = current.deployment_settings
+        if geocoder is None:
+            geocoder = settings.get_gis_geocode_service()
+
+        if geocoder == "nominatim":
+            g = geocoders.Nominatim(user_agent = "Sahana Eden")
+            geocode_ = lambda names, g=g, **kwargs: g.geocode(names, **kwargs)
+        elif geocoder == "google":
+            api_key = settings.get_gis_api_google()
+            if not api_key:
+                current.log.error("Geocoder: No API Key")
+                return "No API Key"
+            g = geocoders.GoogleV3(api_key = api_key)
+            #if current.gis.google_geocode_retry:
+            #    # Retry when reaching maximum requests per second
+            #    import time
+            #    from geopy.geocoders.googlev3 import GTooManyQueriesError
+            #    def geocode_(names, g=g, **kwargs):
+            #        attempts = 0
+            #        while attempts < 3:
+            #            try:
+            #                result = g.geocode(names, **kwargs)
+            #            except GTooManyQueriesError:
+            #                if attempts == 2:
+            #                    # Daily limit reached
+            #                    current.gis.google_geocode_retry = False
+            #                    raise
+            #                time.sleep(1)
+            #            else:
+            #                break
+            #            attempts += 1
+            #        return result
+            #else:
             geocode_ = lambda names, g=g, **kwargs: g.geocode(names, **kwargs)
         else:
             # @ToDo
@@ -582,7 +593,16 @@ class GIS(object):
 
         try:
             results = geocode_(location, exactly_one=False)
-            if len(results) == 1:
+        except:
+            error = sys.exc_info()[1]
+            output = str(error)
+        else:
+            if results is None:
+                output = "No results found"
+            elif len(results) > 1:
+                output = "Multiple results found"
+                # @ToDo: Iterate through the results to see if just 1 is within the right bounds
+            else:
                 place, (lat, lon) = results[0]
                 if Lx:
                     output = None
@@ -671,18 +691,14 @@ class GIS(object):
                             # We'll just have to trust it!
                             ok = True
                         if ok:
-                            output = dict(lat=lat, lon=lon)
+                            output = {"lat": lat,
+                                      "lon": lon,
+                                      }
                 else:
                     # We'll just have to trust it!
-                    output = dict(lat=lat, lon=lon)
-            elif len(results):
-                output = "Multiple results found"
-                # @ToDo: Iterate through the results to see if just 1 is within the right bounds
-            else:
-                output = "No results found"
-        except:
-            error = sys.exc_info()[1]
-            output = str(error)
+                    output = {"lat": lat,
+                              "lon": lon,
+                              }
 
         return output
 
@@ -776,7 +792,6 @@ class GIS(object):
     # -------------------------------------------------------------------------
     def get_bounds(self,
                    features = None,
-                   parent = None,
                    bbox_min_size = None,
                    bbox_inset = None):
         """
@@ -884,8 +899,11 @@ class GIS(object):
             else:
                 lon_max = 180
 
-        return dict(lon_min=lon_min, lat_min=lat_min,
-                    lon_max=lon_max, lat_max=lat_max)
+        return {"lon_min": lon_min,
+                "lat_min": lat_min,
+                "lon_max": lon_max,
+                "lat_max": lat_max,
+                }
 
     # -------------------------------------------------------------------------
     def get_parent_bounds(self, parent=None):
@@ -942,8 +960,9 @@ class GIS(object):
                 path = parent.path
             else:
                 # This will return None during prepopulate.
-                path = GIS.update_location_tree(dict(id=parent.id,
-                                                     level=parent.level))
+                path = GIS.update_location_tree({"id": parent.id,
+                                                 "level": parent.level,
+                                                 })
             if path:
                 path_list = map(int, path.split("/"))
                 rows = db(table.id.belongs(path_list)).select(table.level,
@@ -1656,7 +1675,7 @@ class GIS(object):
         if level:
             try:
                 return all_levels[level]
-            except Exception, e:
+            except Exception as e:
                 return level
         else:
             return all_levels
@@ -2050,10 +2069,11 @@ class GIS(object):
         maxLat = degrees(maxLat)
         maxLon = degrees(maxLon)
 
-        return dict(lat_min = minLat,
-                    lat_max = maxLat,
-                    lon_min = minLon,
-                    lon_max = maxLon)
+        return {"lat_min": minLat,
+                "lat_max": maxLat,
+                "lon_min": minLon,
+                "lon_max": maxLon,
+                }
 
     # -------------------------------------------------------------------------
     def get_features_in_radius(self, lat, lon, radius, tablename=None, category=None):
@@ -2231,7 +2251,9 @@ class GIS(object):
         # Zero is an allowed value, hence explicit test for None.
         if "lon" in feature and "lat" in feature and \
            (feature.lat is not None) and (feature.lon is not None):
-            return dict(lon=feature.lon, lat=feature.lat)
+            return {"lon": feature.lon,
+                    "lat": feature.lat,
+                    }
 
         else:
             # Step through ancestors to first with lon, lat.
@@ -2241,7 +2263,9 @@ class GIS(object):
                     lon = row.get("lon", None)
                     lat = row.get("lat", None)
                     if (lon is not None) and (lat is not None):
-                        return dict(lon=lon, lat=lat)
+                        return {"lon": lon,
+                                "lat": lat,
+                                }
 
         # Invalid feature_id
         return None
@@ -2761,13 +2785,13 @@ class GIS(object):
         #           )
 
         # Used by S3XML's gis_encode()
-        return dict(geojsons = geojsons,
-                    latlons = _latlons,
-                    #wkts = wkts,
-                    attributes = attributes,
-                    markers = markers,
-                    styles = styles,
-                    )
+        return {"geojsons": geojsons,
+                "latlons": _latlons,
+                #"wkts": wkts,
+                "attributes": attributes,
+                "markers": markers,
+                "styles": styles,
+                }
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -2825,11 +2849,11 @@ class GIS(object):
             if layer:
                 _marker = layer["gis_marker"]
                 if _marker.image:
-                    marker = dict(image=_marker.image,
-                                  height=_marker.height,
-                                  width=_marker.width,
-                                  gps_marker=layer["gis_style"].gps_marker
-                                  )
+                    marker = {"image": _marker.image,
+                              "height": _marker.height,
+                              "width": _marker.width,
+                              "gps_marker": layer["gis_style"].gps_marker,
+                              }
 
         if not marker:
             # Default
@@ -2886,7 +2910,7 @@ class GIS(object):
         if not os.path.exists(cachepath):
             try:
                 os.mkdir(cachepath)
-            except OSError, os_error:
+            except OSError as os_error:
                 error = "GIS: JPEG files cannot be saved: %s %s" % \
                                   (cachepath, os_error)
                 current.log.error(error)
@@ -2944,14 +2968,14 @@ class GIS(object):
             test = '''return S3.gis.maps['%s'].s3.loaded''' % map_id
             try:
                 result = driver.execute_script(test)
-            except WebDriverException, e:
+            except WebDriverException as e:
                 result = False
             return result
 
         try:
             # Wait for up to 100s (large screenshots take a long time for layers to load)
             WebDriverWait(driver, 100).until(map_loaded)
-        except TimeoutException, e:
+        except TimeoutException as e:
             driver.quit()
             current.log.error("Timeout: %s" % e)
             return None
@@ -2983,13 +3007,13 @@ page.clipRect = {top: 10,
                  height: %(height)s
                  };
 page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
-                    dict(width = width,
-                         height = height,
-                         filename = filename,
-                         )
+                    {"width": width,
+                     "height": height,
+                     "filename": filename,
+                     }
         try:
             result = driver.execute_phantomjs(script)
-        except WebDriverException, e:
+        except WebDriverException as e:
             driver.quit()
             current.log.error("WebDriver crashed: %s" % e)
             return None
@@ -3079,8 +3103,9 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
         _geojsons[tablename] = geojsons
 
         # return 'locations'
-        return dict(attributes = _attributes,
-                    geojsons = _geojsons)
+        return {"attributes": _attributes,
+                "geojsons": _geojsons,
+                }
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3135,7 +3160,8 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
         _geojsons[tablename] = geojsons
 
         # Return 'locations'
-        return dict(geojsons = _geojsons)
+        return {"geojsons": _geojsons,
+                }
 
     # -------------------------------------------------------------------------
     @staticmethod
@@ -3342,16 +3368,16 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     # Compact Encoding
                     geojson = dumps(shape, separators=SEPARATORS)
                 if geojson:
-                    f = dict(type = "Feature",
-                             properties = {"id": id},
-                             geometry = json.loads(geojson)
-                             )
+                    f = {"type": "Feature",
+                         "properties": {"id": id},
+                         "geometry": json.loads(geojson),
+                         }
                     append(f)
 
             if features:
-                data = dict(type = "FeatureCollection",
-                            features = features
-                            )
+                data = {"type": "FeatureCollection",
+                        "features": features,
+                        }
                 # Output to file
                 filename = os.path.join(folder, "countries.geojson")
                 File = open(filename, "w")
@@ -3411,16 +3437,16 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                         # Compact Encoding
                         geojson = dumps(shape, separators=SEPARATORS)
                     if geojson:
-                        f = dict(type = "Feature",
-                                 properties = {"id": id},
-                                 geometry = json.loads(geojson)
-                                 )
+                        f = {"type": "Feature",
+                             "properties": {"id": id},
+                             "geometry": json.loads(geojson)
+                             }
                         append(f)
 
                 if features:
-                    data = dict(type = "FeatureCollection",
-                                features = features
-                                )
+                    data = {"type": "FeatureCollection",
+                            "features": features
+                            }
                     # Output to file
                     filename = os.path.join(folder, "1_%s.geojson" % _id)
                     File = open(filename, "w")
@@ -3472,16 +3498,16 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                             # Compact Encoding
                             geojson = dumps(shape, separators=SEPARATORS)
                         if geojson:
-                            f = dict(type = "Feature",
-                                     properties = {"id": id},
-                                     geometry = json.loads(geojson)
-                                     )
+                            f = {"type": "Feature",
+                                 "properties": {"id": id},
+                                 "geometry": json.loads(geojson),
+                                 }
                             append(f)
 
                     if features:
-                        data = dict(type = "FeatureCollection",
-                                    features = features
-                                    )
+                        data = {"type": "FeatureCollection",
+                                "features": features,
+                                }
                         # Output to file
                         filename = os.path.join(folder, "2_%s.geojson" % l1.id)
                         File = open(filename, "w")
@@ -3536,16 +3562,16 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                                 # Compact Encoding
                                 geojson = dumps(shape, separators=SEPARATORS)
                             if geojson:
-                                f = dict(type = "Feature",
-                                         properties = {"id": id},
-                                         geometry = json.loads(geojson)
-                                         )
+                                f = {"type": "Feature",
+                                     "properties": {"id": id},
+                                     "geometry": json.loads(geojson),
+                                     }
                                 append(f)
 
                         if features:
-                            data = dict(type = "FeatureCollection",
-                                        features = features
-                                        )
+                            data = {"type": "FeatureCollection",
+                                    "features": features,
+                                    }
                             # Output to file
                             filename = os.path.join(folder, "3_%s.geojson" % l2.id)
                             File = open(filename, "w")
@@ -3603,16 +3629,16 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                                     # Compact Encoding
                                     geojson = dumps(shape, separators=SEPARATORS)
                                 if geojson:
-                                    f = dict(type = "Feature",
-                                             properties = {"id": id},
-                                             geometry = json.loads(geojson)
-                                             )
+                                    f = {"type": "Feature",
+                                         "properties": {"id": id},
+                                         "geometry": json.loads(geojson),
+                                         }
                                     append(f)
 
                             if features:
-                                data = dict(type = "FeatureCollection",
-                                            features = features
-                                            )
+                                data = {"type": "FeatureCollection",
+                                        "features": features,
+                                        }
                                 # Output to file
                                 filename = os.path.join(folder, "4_%s.geojson" % l3.id)
                                 File = open(filename, "w")
@@ -3732,7 +3758,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
             current.log.debug("Downloading %s" % url)
             try:
                 file = fetch(url)
-            except urllib2.URLError, exception:
+            except urllib2.URLError as exception:
                 current.log.error(exception)
                 return
             fp = StringIO(file)
@@ -3809,7 +3835,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                         #ttable.insert(location_id = location_id,
                         #              tag = "area",
                         #              value = area)
-                    except db._adapter.driver.OperationalError, e:
+                    except db._adapter.driver.OperationalError as e:
                         current.log.error(sys.exc_info[1])
 
             else:
@@ -3936,7 +3962,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
             current.log.debug("Downloading %s" % url)
             try:
                 file = fetch(url)
-            except urllib2.URLError, exception:
+            except urllib2.URLError as exception:
                 current.log.error(exception)
                 # Revert back to the working directory as before.
                 os.chdir(cwd)
@@ -4270,7 +4296,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
             current.log.debug("Downloading %s" % url)
             try:
                 file = fetch(url)
-            except urllib2.URLError, exception:
+            except urllib2.URLError as exception:
                 current.log.error(exception)
                 return
             fp = StringIO(file)
@@ -4338,7 +4364,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                                          wkt=wkt)
                                          #code2=code2,
                                          #area=area
-                    except db._adapter.driver.OperationalError, exception:
+                    except db._adapter.driver.OperationalError as exception:
                         current.log.error(exception)
 
             else:
@@ -4650,7 +4676,6 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
             table = db.gis_location
         except:
             table = current.s3db.gis_location
-        spatial = current.deployment_settings.get_gis_spatialdb()
         update_location_tree = GIS.update_location_tree
         wkt_centroid = GIS.wkt_centroid
 
@@ -4764,10 +4789,12 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
             # Nothing we can do
             raise ValueError
 
+        feature_get = feature.get
+
         # L0
-        level = feature.get("level", False)
-        name = feature.get("name", False)
-        path = feature.get("path", False)
+        level = feature_get("level", False)
+        name = feature_get("name", False)
+        path = feature_get("path", False)
         # If we're processing all locations, and this is a hierarchy location,
         # and has already been processed (as evidenced by having a path) do not
         # process it again. Locations with a gap in their ancestor levels will
@@ -4777,10 +4804,10 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
         if all_locations and path and level:
             # This hierarchy location is already finalized.
             return path
-        lat = feature.get("lat", False)
-        lon = feature.get("lon", False)
-        wkt = feature.get("wkt", False)
-        L0 = feature.get("L0", False)
+        lat = feature_get("lat", False)
+        lon = feature_get("lon", False)
+        wkt = feature_get("wkt", False)
+        L0 = feature_get("L0", False)
         if level == "L0":
             if name is False or path is False or lat is False or lon is False or \
                wkt is False or L0 is False:
@@ -4807,18 +4834,18 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     lat = None
                 if lon is False:
                     lon = None
-                fix_vars = dict(inherited = False,
-                                path = path,
-                                lat = lat,
-                                lon = lon,
-                                wkt = wkt or None,
-                                L0 = name,
-                                L1 = None,
-                                L2 = None,
-                                L3 = None,
-                                L4 = None,
-                                L5 = None,
-                                )
+                fix_vars = {"inherited": False,
+                            "path": path,
+                            "lat": lat,
+                            "lon": lon,
+                            "wkt": wkt or None,
+                            "L0": name,
+                            "L1": None,
+                            "L2": None,
+                            "L3": None,
+                            "L4": None,
+                            "L5": None,
+                            }
                 feature.update(**fix_vars)
                 fixup(feature)
 
@@ -4832,9 +4859,9 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
         fixup_required = False
 
         # L1
-        inherited = feature.get("inherited", None)
-        parent = feature.get("parent", False)
-        L1 = feature.get("L1", False)
+        inherited = feature_get("inherited", None)
+        parent = feature_get("parent", False)
+        L1 = feature_get("L1", False)
         if level == "L1":
             if inherited is None or name is False or parent is False or path is False or \
                lat is False or lon is False or wkt is False or \
@@ -4890,18 +4917,18 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     lat = None
                 if lon is False:
                     lon = None
-                fix_vars = dict(inherited = inherited,
-                                path = _path,
-                                lat = lat,
-                                lon = lon,
-                                wkt = wkt or None,
-                                L0 = L0_name,
-                                L1 = name,
-                                L2 = None,
-                                L3 = None,
-                                L4 = None,
-                                L5 = None,
-                                )
+                fix_vars = {"inherited": inherited,
+                            "path": _path,
+                            "lat": lat,
+                            "lon": lon,
+                            "wkt": wkt or None,
+                            "L0": L0_name,
+                            "L1": name,
+                            "L2": None,
+                            "L3": None,
+                            "L4": None,
+                            "L5": None,
+                            }
                 feature.update(**fix_vars)
                 fixup(feature)
 
@@ -4913,7 +4940,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
 
 
         # L2
-        L2 = feature.get("L2", False)
+        L2 = feature_get("L2", False)
         if level == "L2":
             if inherited is None or name is False or parent is False or path is False or \
                lat is False or lon is False or wkt is False or \
@@ -4994,18 +5021,18 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     lat = None
                 if lon is False:
                     lon = None
-                fix_vars = dict(inherited = inherited,
-                                path = _path,
-                                lat = lat,
-                                lon = lon,
-                                wkt = wkt or None,
-                                L0 = L0_name,
-                                L1 = L1_name,
-                                L2 = name,
-                                L3 = None,
-                                L4 = None,
-                                L5 = None,
-                                )
+                fix_vars = {"inherited": inherited,
+                            "path": _path,
+                            "lat": lat,
+                            "lon": lon,
+                            "wkt": wkt or None,
+                            "L0": L0_name,
+                            "L1": L1_name,
+                            "L2": name,
+                            "L3": None,
+                            "L4": None,
+                            "L5": None,
+                            }
                 feature.update(**fix_vars)
                 fixup(feature)
 
@@ -5017,7 +5044,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
 
 
         # L3
-        L3 = feature.get("L3", False)
+        L3 = feature_get("L3", False)
         if level == "L3":
             if inherited is None or name is False or parent is False or path is False or \
                lat is False or lon is False or wkt is False or \
@@ -5134,18 +5161,18 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     lat = None
                 if lon is False:
                     lon = None
-                fix_vars = dict(inherited = inherited,
-                                path = _path,
-                                lat = lat,
-                                lon = lon,
-                                wkt = wkt or None,
-                                L0 = L0_name,
-                                L1 = L1_name,
-                                L2 = L2_name,
-                                L3 = name,
-                                L4 = None,
-                                L5 = None,
-                                )
+                fix_vars = {"inherited": inherited,
+                            "path": _path,
+                            "lat": lat,
+                            "lon": lon,
+                            "wkt": wkt or None,
+                            "L0": L0_name,
+                            "L1": L1_name,
+                            "L2": L2_name,
+                            "L3": name,
+                            "L4": None,
+                            "L5": None,
+                            }
                 feature.update(**fix_vars)
                 fixup(feature)
 
@@ -5157,7 +5184,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
 
 
         # L4
-        L4 = feature.get("L4", False)
+        L4 = feature_get("L4", False)
         if level == "L4":
             if inherited is None or name is False or parent is False or path is False or \
                lat is False or lon is False or wkt is False or \
@@ -5305,18 +5332,18 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     lat = None
                 if lon is False:
                     lon = None
-                fix_vars = dict(inherited = inherited,
-                                path = _path,
-                                lat = lat,
-                                lon = lon,
-                                wkt = wkt or None,
-                                L0 = L0_name,
-                                L1 = L1_name,
-                                L2 = L2_name,
-                                L3 = L3_name,
-                                L4 = name,
-                                L5 = None,
-                                )
+                fix_vars = {"inherited": inherited,
+                            "path": _path,
+                            "lat": lat,
+                            "lon": lon,
+                            "wkt": wkt or None,
+                            "L0": L0_name,
+                            "L1": L1_name,
+                            "L2": L2_name,
+                            "L3": L3_name,
+                            "L4": name,
+                            "L5": None,
+                            }
                 feature.update(**fix_vars)
                 fixup(feature)
 
@@ -5328,7 +5355,7 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
 
 
         # L5
-        L5 = feature.get("L5", False)
+        L5 = feature_get("L5", False)
         if level == "L5":
             if inherited is None or name is False or parent is False or path is False or \
                lat is False or lon is False or wkt is False or \
@@ -5511,18 +5538,18 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     lat = None
                 if lon is False:
                     lon = None
-                fix_vars = dict(inherited = inherited,
-                                path = _path,
-                                lat = lat,
-                                lon = lon,
-                                wkt = wkt or None,
-                                L0 = L0_name,
-                                L1 = L1_name,
-                                L2 = L2_name,
-                                L3 = L3_name,
-                                L4 = L4_name,
-                                L5 = name,
-                                )
+                fix_vars = {"inherited": inherited,
+                            "path": _path,
+                            "lat": lat,
+                            "lon": lon,
+                            "wkt": wkt or None,
+                            "L0": L0_name,
+                            "L1": L1_name,
+                            "L2": L2_name,
+                            "L3": L3_name,
+                            "L4": L4_name,
+                            "L5": name,
+                            }
                 feature.update(**fix_vars)
                 fixup(feature)
 
@@ -5741,18 +5768,18 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                 lat = None
             if lon is False:
                 lon = None
-            fix_vars = dict(inherited = inherited,
-                            path = _path,
-                            lat = lat,
-                            lon = lon,
-                            wkt = wkt or None,
-                            L0 = L0_name,
-                            L1 = L1_name,
-                            L2 = L2_name,
-                            L3 = L3_name,
-                            L4 = L4_name,
-                            L5 = L5_name,
-                            )
+            fix_vars = {"inherited": inherited,
+                        "path": _path,
+                        "lat": lat,
+                        "lon": lon,
+                        "wkt": wkt or None,
+                        "L0": L0_name,
+                        "L1": L1_name,
+                        "L2": L2_name,
+                        "L3": L3_name,
+                        "L4": L4_name,
+                        "L5": L5_name,
+                        }
             feature.update(**fix_vars)
             fixup(feature)
 
@@ -6042,11 +6069,11 @@ page.render('%(filename)s', {format: 'jpeg', quality: '100'});''' % \
                     current.log.error("Error reading WKT", location.wkt)
                     continue
                 bounds = shape.bounds
-                table[location.id] = dict(lon_min = bounds[0],
-                                          lat_min = bounds[1],
-                                          lon_max = bounds[2],
-                                          lat_max = bounds[3],
-                                          )
+                table[location.id] = {"lon_min": bounds[0],
+                                      "lat_min": bounds[1],
+                                      "lon_max": bounds[2],
+                                      "lat_max": bounds[3],
+                                      }
 
         # Anything left, we assume is a Point, so set the bounds to be the same
         db(no_bounds).update(lon_min=table.lon,
@@ -6555,7 +6582,7 @@ class MAP(DIV):
                         # Create it
                         try:
                             f = open(projpath, "w")
-                        except IOError, e:
+                        except IOError as e:
                             response.error =  \
                         T("Map not available: Cannot write projection file - %s") % e
                         else:
@@ -6564,8 +6591,9 @@ class MAP(DIV):
                     else:
                         response.warning =  \
     T("Map not available: Projection %(projection)s not supported - please add definition to %(path)s") % \
-        dict(projection = "'%s'" % projection,
-             path= "/static/scripts/gis/proj4js/lib/defs")
+        {"projection": "'%s'" % projection,
+         "path": "/static/scripts/gis/proj4js/lib/defs",
+         }
                 else:
                     response.error =  \
                         T("Map not available: No Projection configured")
@@ -6578,10 +6606,10 @@ class MAP(DIV):
         ########
 
         if config.marker_image:
-            options["marker_default"] = dict(i = config.marker_image,
-                                             h = config.marker_height,
-                                             w = config.marker_width,
-                                             )
+            options["marker_default"] = {"i": config.marker_image,
+                                         "h": config.marker_height,
+                                         "w": config.marker_width,
+                                         }
         # @ToDo: show_map() opts with fallback to settings
         # Keep these in sync with scaleImage() in s3.gis.js
         marker_max_height = settings.get_gis_marker_max_height()
@@ -7042,7 +7070,7 @@ class MAP(DIV):
                 layer.as_dict(options)
                 for script in layer.scripts:
                     scripts_append(script)
-            except Exception, exception:
+            except Exception as exception:
                 error = "%s not shown: %s" % (LayerType.__name__, exception)
                 current.log.error(error)
                 if s3.debug:
@@ -7095,7 +7123,9 @@ class MAP(DIV):
         """
 
         if not self.setup:
-            self._setup()
+            result = self._setup()
+            if result is None:
+                return ""
 
         # Add ExtJS
         # @ToDo: Do this conditionally on whether Ext UI is used
@@ -7155,7 +7185,7 @@ class MAP(DIV):
         projection = options["projection"]
         try:
             options = dumps(options, separators=SEPARATORS)
-        except Exception, exception:
+        except Exception as exception:
             current.log.error("Map %s failed to initialise" % map_id, exception)
         plugin_callbacks = '''\n'''.join(self.plugin_callbacks)
         if callback:
@@ -7183,11 +7213,11 @@ class MAP(DIV):
                 callback = '''null'''
         loader = \
 '''s3_gis_loadjs(%(debug)s,%(projection)s,%(callback)s,%(scripts)s)''' \
-            % dict(debug = "true" if debug else "false",
-                   projection = projection,
-                   callback = callback,
-                   scripts = self.scripts
-                   )
+            % {"debug": "true" if debug else "false",
+               "projection": projection,
+               "callback": callback,
+               "scripts": self.scripts,
+               }
         jquery_ready = s3.jquery_ready
         if loader not in jquery_ready:
             jquery_ready.append(loader)
@@ -7210,8 +7240,9 @@ def addFeatures(features):
     for feature in features:
         geojson = simplify(feature, output="geojson")
         if geojson:
-            f = dict(type = "Feature",
-                     geometry = json.loads(geojson))
+            f = {"type": "Feature",
+                 "geometry": json.loads(geojson),
+                 }
             append(f)
     return _f
 
@@ -7249,7 +7280,7 @@ def addFeatureQueries(feature_queries):
     append = layers_feature_query.append
     for layer in feature_queries:
         name = str(layer["name"])
-        _layer = dict(name=name)
+        _layer = {"name": name}
         name_safe = re.sub("\W", "_", name)
 
         # Lat/Lon via Join or direct?
@@ -7370,7 +7401,7 @@ def addFeatureResources(feature_resources):
     append = layers_feature_resource.append
     for layer in feature_resources:
         name = s3_str(layer["name"])
-        _layer = dict(name=name)
+        _layer = {"name": name}
         _id = layer.get("id")
         if _id:
             _id = str(_id)
@@ -7905,9 +7936,10 @@ class LayerCoordinate(Layer):
         if sublayers:
             sublayer = sublayers[0]
             name_safe = re.sub("'", "", sublayer.name)
-            ldict = dict(name = name_safe,
-                         visibility = sublayer.visible,
-                         id = sublayer.layer_id)
+            ldict = {"name": name_safe,
+                     "visibility": sublayer.visible,
+                     "id": sublayer.layer_id,
+                     }
             if options:
                 # Used by Map._setup()
                 options[self.dictname] = ldict
@@ -7933,8 +7965,9 @@ class LayerEmpty(Layer):
             sublayer = sublayers[0]
             name = s3_str(current.T(sublayer.name))
             name_safe = re.sub("'", "", name)
-            ldict = dict(name = name_safe,
-                         id = sublayer.layer_id)
+            ldict = {"name": name_safe,
+                     "id": sublayer.layer_id,
+                     }
             if sublayer._base:
                 ldict["base"] = True
             if options:
@@ -8162,7 +8195,7 @@ class LayerGeoRSS(Layer):
                         query = (cachetable.source == url) & \
                                 (cachetable.modified_on < cutoff)
                         db(query).delete()
-                except Exception, exception:
+                except Exception as exception:
                     current.log.error("GeoRSS %s download error" % url, exception)
                     # Feed down
                     if existing_cached_copy:
@@ -8389,7 +8422,7 @@ class LayerKML(Layer):
         else:
             try:
                 os.mkdir(cachepath)
-            except OSError, os_error:
+            except OSError as os_error:
                 current.log.error("GIS: KML layers cannot be cached: %s %s" % \
                                   (cachepath, os_error))
                 cacheable = False
@@ -8450,10 +8483,10 @@ class LayerKML(Layer):
                 url = self.url
 
             # Mandatory attributes
-            output = dict(id = self.layer_id,
-                          name = self.safe_name,
-                          url = url,
-                          )
+            output = {"id": self.layer_id,
+                      "name": self.safe_name,
+                      "url": url,
+                      }
 
             # Attributes which are defaulted client-side if not set
             self.add_attributes_if_not_default(
@@ -8678,12 +8711,12 @@ class LayerWFS(Layer):
     class SubLayer(Layer.SubLayer):
         def as_dict(self):
             # Mandatory attributes
-            output = dict(id = self.layer_id,
-                          name = self.safe_name,
-                          url = self.url,
-                          title = self.title,
-                          featureType = self.featureType,
-                          )
+            output = {"id": self.layer_id,
+                      "name": self.safe_name,
+                      "url": self.url,
+                      "title": self.title,
+                      "featureType": self.featureType,
+                      }
 
             # Attributes which are defaulted client-side if not set
             self.add_attributes_if_not_default(
@@ -8735,11 +8768,11 @@ class LayerWMS(Layer):
             if self.queryable:
                 current.response.s3.gis.get_feature_info = True
             # Mandatory attributes
-            output = dict(id = self.layer_id,
-                          name = self.safe_name,
-                          url = self.url,
-                          layers = self.layers
-                          )
+            output = {"id": self.layer_id,
+                      "name": self.safe_name,
+                      "url": self.url,
+                      "layers": self.layers,
+                      }
 
             # Attributes which are defaulted client-side if not set
             legend_url = self.legend_url
@@ -8748,22 +8781,22 @@ class LayerWMS(Layer):
                     (current.deployment_settings.get_base_public_url(),
                      current.request.application,
                      legend_url)
-            attr = dict(transparent = (self.transparent, (True,)),
-                        version = (self.version, ("1.1.1",)),
-                        format = (self.img_format, ("image/png",)),
-                        map = (self.map, (None, "")),
-                        username = (self.username, (None, "")),
-                        password = (self.password, (None, "")),
-                        buffer = (self.buffer, (0,)),
-                        base = (self.base, (False,)),
-                        _base = (self._base, (False,)),
-                        style = (self.style, (None, "")),
-                        bgcolor = (self.bgcolor, (None, "")),
-                        tiled = (self.tiled, (False,)),
-                        legendURL = (legend_url, (None, "")),
-                        queryable = (self.queryable, (False,)),
-                        desc = (self.description, (None, "")),
-                        )
+            attr = {"transparent": (self.transparent, (True,)),
+                    "version": (self.version, ("1.1.1",)),
+                    "format": (self.img_format, ("image/png",)),
+                    "map": (self.map, (None, "")),
+                    "username": (self.username, (None, "")),
+                    "password": (self.password, (None, "")),
+                    "buffer": (self.buffer, (0,)),
+                    "base": (self.base, (False,)),
+                    "_base": (self._base, (False,)),
+                    "style": (self.style, (None, "")),
+                    "bgcolor": (self.bgcolor, (None, "")),
+                    "tiled": (self.tiled, (False,)),
+                    "legendURL": (legend_url, (None, "")),
+                    "queryable": (self.queryable, (False,)),
+                    "desc": (self.description, (None, "")),
+                    }
 
             if current.deployment_settings.get_gis_layer_metadata():
                 # Use CMS to add info about sources
@@ -8934,10 +8967,10 @@ class Marker(object):
         """
 
         if self.image:
-            marker = dict(i = self.image,
-                          h = self.height,
-                          w = self.width,
-                          )
+            marker = {"i": self.image,
+                      "h": self.height,
+                      "w": self.width,
+                      }
         else:
             marker = None
         return marker
@@ -9154,7 +9187,7 @@ class S3Map(S3Method):
                         break
 
                 request = self.request
-                from s3filter import S3FilterForm
+                from .s3filter import S3FilterForm
                 # Apply filter defaults (before rendering the data!)
                 S3FilterForm.apply_filter_defaults(r, resource)
                 filter_formstyle = get_config("filter_formstyle", None)
@@ -9296,7 +9329,7 @@ class S3ExportPOI(S3Method):
             @param attr: controller options for this request
         """
 
-        output = dict()
+        output = {}
 
         if r.http == "GET":
             output = self.export(r, **attr)
@@ -9481,7 +9514,7 @@ class S3ExportPOI(S3Method):
             @param resource: the resource
         """
 
-        from s3query import FS
+        from .s3query import FS
         query = (FS("location_id$path").contains("/%s/" % lx)) | \
                 (FS("location_id$path").like("%s/%%" % lx))
         resource.add_filter(query)
@@ -9515,7 +9548,7 @@ class S3ImportPOI(S3Method):
 
             resources_list = settings.get_gis_poi_export_resources()
             uploadpath = os.path.join(request.folder,"uploads/")
-            from s3utils import s3_yes_no_represent
+            from .s3utils import s3_yes_no_represent
 
             fields = [Field("text1", # Dummy Field to add text inside the Form
                             label = "",
@@ -9552,15 +9585,15 @@ class S3ImportPOI(S3Method):
                       ]
 
             if not r.id:
-                from s3validators import IS_LOCATION
-                from s3widgets import S3LocationAutocompleteWidget
+                from .s3validators import IS_LOCATION
+                from .s3widgets import S3LocationAutocompleteWidget
                 # dummy field
                 field = s3db.org_office.location_id
                 field.requires = IS_EMPTY_OR(IS_LOCATION())
                 field.widget = S3LocationAutocompleteWidget()
                 fields.insert(3, field)
 
-            from s3utils import s3_mark_required
+            from .s3utils import s3_mark_required
             labels, required = s3_mark_required(fields, ["file", "location_id"])
             s3.has_required = True
 
@@ -9573,8 +9606,9 @@ class S3ImportPOI(S3Method):
                                    )
 
             response.view = "create.html"
-            output = dict(title=title,
-                          form=form)
+            output = {"title": title,
+                      "form": form,
+                      }
 
             if form.accepts(request.vars, current.session):
                 form_vars = form.vars
@@ -9624,7 +9658,7 @@ class S3ImportPOI(S3Method):
                     try:
                         #result = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
                         subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-                    except subprocess.CalledProcessError, e:
+                    except subprocess.CalledProcessError as e:
                         current.session.error = T("OSM file generation failed: %s") % e.output
                         redirect(URL(args=r.id))
                     except AttributeError:

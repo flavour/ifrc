@@ -1,0 +1,111 @@
+// ============================================================================
+// Styles for Theme-specific Elements and Layouts
+// ============================================================================
+// VARIABLES
+
+// -- variables and their defaults go here --
+
+// ============================================================================
+// STYLES
+
+#home {
+    h1 {
+        background: transparent;
+        padding: 0;
+    }
+    .button a {
+        color: white;
+    }
+}
+
+#intro {
+    background: url(img/intro.jpg) left center no-repeat !important;
+    min-height: 500px;
+    h1 {
+        color: white;
+        background: transparent;
+    }
+    h1, .button-group {
+        margin-left: 2rem;
+    }
+    h1:first-child, .button-group {
+        margin-top: 2rem;
+    }
+    .button-group a {
+        font-weight: bold;
+    }
+}
+#about-platform {
+    padding: 1rem 2.5rem;
+    text-align: center;
+    background: $secondary-color;
+    img.logo {
+        padding: 0.5rem;
+    }
+}
+#active-events {
+    padding: 1rem 2.5rem;
+    line-height: 1rem;
+    background: $primary-color;
+
+    color: white;
+    h1, h3, p {
+        color: white;
+        margin-bottom: 0.3rem;
+    }
+    h1 {
+        font-size: 1.2rem;
+    }
+    h3 {
+        font-size: 1rem;
+        font-weight: bolder;
+    }
+    p {
+        font-size: 0.8rem;
+    }
+    a {
+        color: #afefef;
+        text-decoration: underline;
+        &:hover {
+            color: #7fefef;
+        }
+    }
+    hr {
+        border-top: 2px dashed white;
+        margin: 0.5rem 0;
+    }
+}
+
+#current-needs {
+    padding: 1rem 2.5rem;
+    text-align: center;
+}
+
+#resources {
+    padding: 1rem 2.5rem;
+    text-align: center;
+    background: $white;
+    h1 {
+        margin-bottom: 1rem;
+    }
+    ul {
+        list-style-type: none;
+        list-style-position: inside;
+        margin-left: 0;
+    }
+}
+
+.last-stats-update {
+    font-size: 0.7rem;
+}
+
+.filter-form .ui-multiselect.ui-widget.ui-state-default.ui-corner-all,
+.form-container .ui-multiselect.ui-widget.ui-state-default.ui-corner-all {
+    min-width: 0;
+}
+
+#filter-form.mapview {
+    margin-bottom: 1rem;
+}
+
+// END ========================================================================

@@ -2,7 +2,7 @@
 
 """ S3 Synchronization
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -39,11 +39,11 @@ except ImportError:
 from gluon import current, URL, DIV
 from gluon.storage import Storage
 
-from s3datetime import s3_parse_datetime, s3_utc
-from s3rest import S3Method
-from s3import import S3ImportItem
-from s3query import S3URLQuery
-from s3utils import s3_str
+from .s3datetime import s3_parse_datetime, s3_utc
+from .s3rest import S3Method
+from .s3import import S3ImportItem
+from .s3query import S3URLQuery
+from .s3utils import s3_str
 
 # =============================================================================
 class S3Sync(S3Method):
@@ -117,7 +117,7 @@ class S3Sync(S3Method):
         """
 
         # Parse the request parameters
-        from s3validators import JSONERRORS
+        from .s3validators import JSONERRORS
         source = r.read_body()
         if not source:
             r.error(400, "Missing parameters")

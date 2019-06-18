@@ -16,7 +16,7 @@
 
     @requires: U{B{I{gluon}} <http://web2py.com>}
 
-    @copyright: 2011-2018 (c) Sahana Software Foundation
+    @copyright: 2011-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -49,9 +49,9 @@ import json
 from gluon import current, HTTP, IS_EMPTY_OR
 from gluon.storage import Storage
 
-from s3datetime import S3DateTime
-from s3validators import IS_TIME_INTERVAL_WIDGET, IS_UTC_DATETIME
-from s3widgets import S3CalendarWidget, S3TimeIntervalWidget
+from .s3datetime import S3DateTime
+from .s3validators import IS_TIME_INTERVAL_WIDGET, IS_UTC_DATETIME
+from .s3widgets import S3CalendarWidget, S3TimeIntervalWidget
 
 # -----------------------------------------------------------------------------
 class S3Task(object):

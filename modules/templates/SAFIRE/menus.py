@@ -18,15 +18,19 @@ class S3MainMenu(default.S3MainMenu):
     def menu_modules(cls):
         """ Custom Modules Menu """
 
-        menu= [MM("Incident Reports", c="event", f="incident_report"),
-               MM("Incidents", c="event", f="incident"),
+        menu= [MM("Call Logs", c="event", f="incident_report"),
+               MM("Incidents", c="event", f="incident", m="summary"),
                MM("Scenarios", c="event", f="scenario"),
                MM("more", link=False)(
                 MM("Events", c="event", f="event"),
                 MM("Staff", c="hrm", f="staff"),
+                MM("Volunteers", c="vol", f="volunteer"),
                 MM("Assets", c="asset", f="asset"),
                 MM("Organizations", c="org", f="organisation"),
                 MM("Facilities", c="org", f="facility"),
+                MM("Hospitals", c="hms", f="hospital", m="summary"),
+                MM("Shelters", c="cr", f="shelter"),
+                MM("Warehouses", c="inv", f="warehouse"),
                 MM("Item Catalog", c="supply", f="catalog_item"),
                 ),
                ]
@@ -66,6 +70,10 @@ class S3OptionsMenu(default.S3OptionsMenu):
                        M("Create", m="create"),
                    ),
                    M("Incident Types", c="event", f="incident_type")(
+                       M("Create", m="create"),
+                       #M("Import", m="import", p="create"),
+                   ),
+                   M("Positions", c="event", f="job_title")(
                        M("Create", m="create"),
                        #M("Import", m="import", p="create"),
                    ),

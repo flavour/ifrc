@@ -2,7 +2,7 @@
 
 """ Sahana Eden GIS Model
 
-    @copyright: 2009-2018 (c) Sahana Software Foundation
+    @copyright: 2009-2019 (c) Sahana Software Foundation
     @license: MIT
 
     Permission is hereby granted, free of charge, to any person
@@ -125,7 +125,7 @@ class S3LocationModel(S3Model):
         else:
             meta_spatial_fields = (s3_meta_fields())
 
-        gis_location_represent = gis_LocationRepresent(show_link=True)
+        gis_location_represent = gis_LocationRepresent(show_link = True)
 
         tablename = "gis_location"
         self.define_table(tablename,
@@ -514,7 +514,7 @@ class S3LocationModel(S3Model):
                         Lx_ids = [parent]
                 else:
                     Lx_ids = None
-                results = gis.geocode(addr_street, postcode, Lx_ids, geocoder)
+                results = gis.geocode(addr_street, postcode, Lx_ids)
                 if isinstance(results, basestring):
                     # Error
                     if settings.get_gis_ignore_geocode_errors():
@@ -5122,6 +5122,8 @@ class gis_LocationRepresent(S3Represent):
                  address_only = False,
                  sep = None,
                  show_name = False, # Show name in location for level==None when sep is used
+                 controller = None, # Override default controller for s3_viewMap() lookup of Popup
+                 func = None,       # Override default function for s3_viewMap() lookup of Popup
                  ):
 
         settings = current.deployment_settings
@@ -5141,16 +5143,17 @@ class gis_LocationRepresent(S3Represent):
         if sep:
             self.multi_country = len(settings.get_gis_countries()) != 1
         self.show_name = show_name
+        self.controller = controller
+        self.func = func
 
         super(gis_LocationRepresent,
-              self).__init__(lookup="gis_location",
-                             show_link=show_link,
-                             translate=translate,
-                             multiple=multiple)
+              self).__init__(lookup = "gis_location",
+                             show_link = show_link,
+                             translate = translate,
+                             multiple = multiple)
 
     # -------------------------------------------------------------------------
-    @staticmethod
-    def link(k, v, row=None):
+    def link(self, k, v, row=None):
         """
             Represent a (key, value) as hypertext link.
 
@@ -5158,16 +5161,27 @@ class gis_LocationRepresent(S3Represent):
             @param v: the representation of the key
             @param row: the row with this key (unused here)
         """
+
         if k is None:
             return "-"
+
         settings = current.deployment_settings
         iheight = settings.get_gis_map_selector_height()
         popup = settings.get_gis_popup_location_link()
+        if self.controller:
+            opts = ",'%s'" % self.controller
+            func = self.func
+            if func:
+                opts = "%s,'%s'" % (opts, self.func)
+        else:
+            opts = ''
         return A(v,
                  _style="cursor:pointer;cursor:hand",
-                 _onclick="s3_viewMap(%i,%i,'%s');return false" % (k,
-                                                                   iheight,
-                                                                   popup),
+                 _onclick="s3_viewMap(%i,%i,'%s'%s);return false" % (k,
+                                                                     iheight,
+                                                                     popup,
+                                                                     opts
+                                                                     ),
                  )
 
     # -------------------------------------------------------------------------
